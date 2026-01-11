@@ -11,6 +11,11 @@ final class OnboardingUIState {
     var currentStatusMessage: String?
     var isActive: Bool = false
 
+    // MARK: - Stop State
+    /// When true, ALL incoming processing is silenced (tool calls discarded, messages ignored)
+    /// Set by Stop button, cleared when user takes purposeful action
+    var isStopped: Bool = false
+
     // MARK: - Streaming State (for chatbox glow)
     /// True only when LLM text is actively streaming (incoming or outgoing user-visible text).
     /// Does NOT activate for background tool execution or coordinator messages.
@@ -30,6 +35,8 @@ final class OnboardingUIState {
     // MARK: - Chat Queue State
     /// Number of messages waiting in the queue (for Queue button display)
     var queuedMessageCount: Int = 0
+    /// IDs of messages that are queued but not yet sent to the LLM
+    var queuedMessageIds: Set<UUID> = []
 
     // MARK: - Chat State
     var messages: [OnboardingMessage] = []

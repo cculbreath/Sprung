@@ -15,6 +15,7 @@ struct OnboardingMessage: Identifiable, Codable {
     let timestamp: Date
     let isSystemGenerated: Bool  // True for app-generated trigger messages
     var toolCalls: [ToolCallInfo]?  // Tool calls made in this message (for assistant messages)
+    var isQueued: Bool  // True when message is queued but not yet sent to LLM
 
     /// Represents a tool call and its result (paired storage for Anthropic compatibility)
     struct ToolCallInfo: Codable {
@@ -42,7 +43,8 @@ struct OnboardingMessage: Identifiable, Codable {
         text: String,
         timestamp: Date = Date(),
         isSystemGenerated: Bool = false,
-        toolCalls: [ToolCallInfo]? = nil
+        toolCalls: [ToolCallInfo]? = nil,
+        isQueued: Bool = false
     ) {
         self.id = id
         self.role = role
@@ -50,6 +52,7 @@ struct OnboardingMessage: Identifiable, Codable {
         self.timestamp = timestamp
         self.isSystemGenerated = isSystemGenerated
         self.toolCalls = toolCalls
+        self.isQueued = isQueued
     }
 
     // MARK: - Tool Result Pairing

@@ -557,6 +557,9 @@ final class UIResponseCoordinator {
         // This prevents race conditions with ongoing tool execution
         userActionQueue.enqueue(.chatboxMessage(text: text, id: messageId), priority: .normal)
 
+        // Track this message as queued for UI display
+        ui.queuedMessageIds.insert(messageId)
+
         // Update UI queue count for reactive display
         ui.queuedMessageCount = userActionQueue.pendingChatMessageIds().count
 

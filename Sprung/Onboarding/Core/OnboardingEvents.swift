@@ -121,6 +121,7 @@ extension OnboardingEvent {
 
         // Queue state (for reactive UI updates)
         case queuedMessageCountChanged(count: Int)
+        case queuedMessageSent(messageId: UUID)
 
         // Batch upload state
         case batchUploadStarted(expectedCount: Int)
@@ -409,6 +410,8 @@ extension OnboardingEvent.ProcessingEvent {
             return "processing.gitAgentProgress(turn \(turn)): \(message.prefix(50))"
         case .queuedMessageCountChanged(let count):
             return "processing.queuedMessageCountChanged(\(count))"
+        case .queuedMessageSent(let messageId):
+            return "processing.queuedMessageSent(\(messageId.uuidString.prefix(8)))"
         }
     }
 }

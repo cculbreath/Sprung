@@ -18,15 +18,18 @@ actor ToolExecutionCoordinator: OnboardingEventEmitter {
     let eventBus: EventCoordinator
     private let toolExecutor: ToolExecutor
     private let stateCoordinator: StateCoordinator
+    private let ui: OnboardingUIState
     // MARK: - Initialization
     init(
         eventBus: EventCoordinator,
         toolExecutor: ToolExecutor,
-        stateCoordinator: StateCoordinator
+        stateCoordinator: StateCoordinator,
+        ui: OnboardingUIState
     ) {
         self.eventBus = eventBus
         self.toolExecutor = toolExecutor
         self.stateCoordinator = stateCoordinator
+        self.ui = ui
         Logger.info("🔧 ToolExecutionCoordinator initialized", category: .ai)
     }
     // MARK: - Event Subscriptions
@@ -53,6 +56,20 @@ actor ToolExecutionCoordinator: OnboardingEventEmitter {
     // MARK: - Tool Execution
     /// Execute a tool call
     private func handleToolCall(_ call: ToolCall) async {
+        // Check if processing is stopped - discard tool call silently
+        let isStopped = await MainActor.run { ui.isStopped }
+        if isStopped {
+            Logger.info("🛑 Tool call \(call.name) discarded (processing stopped)", category: .ai)
+            // Fill a placeholder result so the conversation log doesn't have orphan tool calls
+            await stateCoordinator.fillToolResponseSlot(
+                callId: call.callId,
+                result: "[Discarded - processing stopped]",
+                status: .skipped
+            )
+            await emit(.tool(.resultEmitted(callId: call.callId, result: "[Discarded - processing stopped]", statusMessage: nil)))
+            return
+        }
+
         // Validate tool availability using centralized gating logic
         let availability = await stateCoordinator.checkToolAvailability(call.name)
 

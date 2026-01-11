@@ -96,6 +96,8 @@ actor QueueDrainCoordinator {
             // Emit queue count update for reactive UI
             let remainingCount = await MainActor.run { queue.pendingChatMessageIds().count }
             await eventBus.publish(.processing(.queuedMessageCountChanged(count: remainingCount)))
+            // Mark this message as no longer queued (being sent now)
+            await eventBus.publish(.processing(.queuedMessageSent(messageId: id)))
             await processChatMessage(text: text, id: id)
 
         case .phaseAdvance(let from, let to):

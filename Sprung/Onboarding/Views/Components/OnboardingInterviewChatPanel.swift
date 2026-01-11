@@ -66,6 +66,9 @@ struct OnboardingInterviewChatPanel: View {
                 },
                 onInterrupt: { text in
                     interrupt(text)
+                },
+                onStop: {
+                    stop()
                 }
             )
             .padding(.top, sectionSpacing)
@@ -123,6 +126,12 @@ struct OnboardingInterviewChatPanel: View {
         state.userInput = ""
         Task {
             await coordinator.interruptWithMessage(trimmed)
+        }
+    }
+
+    private func stop() {
+        Task {
+            await coordinator.stopProcessing()
         }
     }
 }

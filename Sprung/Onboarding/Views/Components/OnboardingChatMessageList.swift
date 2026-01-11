@@ -15,14 +15,45 @@ struct OnboardingChatMessageList: View {
 
     private let bubbleShape = RoundedRectangle(cornerRadius: 24, style: .continuous)
 
+    /// Sent messages (not queued) - shown in chronological order
+    private var sentMessages: [OnboardingMessage] {
+        let queuedIds = coordinator.ui.queuedMessageIds
+        return coordinator.ui.messages.filter {
+            !$0.isSystemGenerated &&
+            !($0.role == .assistant && $0.text.isEmpty) &&
+            !queuedIds.contains($0.id)
+        }
+    }
+
+    /// Queued messages - shown at bottom with special styling
+    private var queuedMessages: [OnboardingMessage] {
+        let queuedIds = coordinator.ui.queuedMessageIds
+        return coordinator.ui.messages.filter {
+            queuedIds.contains($0.id) && !$0.isSystemGenerated
+        }
+    }
+
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 16) {
-                    ForEach(coordinator.ui.messages.filter { !$0.isSystemGenerated && !($0.role == .assistant && $0.text.isEmpty) }) { message in
+                    // Sent messages in chronological order
+                    ForEach(sentMessages) { message in
                         MessageBubble(message: message)
                             .id(message.id)
                     }
+
+                    // Queued messages section (at bottom with dimmed styling)
+                    if !queuedMessages.isEmpty {
+                        Divider()
+                            .padding(.vertical, 8)
+
+                        ForEach(queuedMessages) { message in
+                            QueuedMessageBubble(message: message)
+                                .id(message.id)
+                        }
+                    }
+
                     // Add invisible spacer at the bottom for smooth scrolling
                     Color.clear
                         .frame(height: 1)
@@ -286,6 +317,28 @@ private struct ScrollViewOffsetObserver: NSViewRepresentable {
             observation?.invalidate()
             observation = nil
             scrollView = nil
+        }
+    }
+}
+
+/// Message bubble for queued messages - dimmed styling with clock icon
+private struct QueuedMessageBubble: View {
+    let message: OnboardingMessage
+
+    var body: some View {
+        HStack {
+            Spacer()
+            HStack(alignment: .top, spacing: 6) {
+                Image(systemName: "clock")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Text(message.text)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+            }
+            .background(Color.accentColor.opacity(0.15))
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .opacity(0.6)
         }
     }
 }

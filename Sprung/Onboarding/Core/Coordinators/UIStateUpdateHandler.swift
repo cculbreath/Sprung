@@ -73,6 +73,9 @@ final class UIStateUpdateHandler {
         case .processing(.queuedMessageCountChanged(let count)):
             ui.queuedMessageCount = count
 
+        case .processing(.queuedMessageSent(let messageId)):
+            ui.queuedMessageIds.remove(messageId)
+
         default:
             break
         }

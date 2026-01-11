@@ -339,6 +339,17 @@ actor ConversationLog {
         Logger.info("ConversationLog: Reset", category: .ai)
     }
 
+    /// Clean up any orphaned tool calls in the current conversation.
+    /// Called when user stops processing mid-stream.
+    func cleanupOrphanedToolCalls() {
+        let beforeCount = entries.count
+        entries = removeOrphanedToolCalls(from: entries)
+        let afterCount = entries.count
+        if beforeCount != afterCount {
+            Logger.info("ConversationLog: Cleaned up entries (\(beforeCount) → \(afterCount))", category: .ai)
+        }
+    }
+
     // MARK: - UI Compatibility
 
     /// Convert entries to OnboardingMessage format for UI display

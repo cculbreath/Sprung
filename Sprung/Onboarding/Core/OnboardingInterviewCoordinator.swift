@@ -759,6 +759,11 @@ final class OnboardingInterviewCoordinator {
         return JSON(obj)
     }
     func sendChatMessage(_ text: String) async {
+        // Clear stopped flag - user took purposeful action
+        if ui.isStopped {
+            ui.isStopped = false
+            Logger.info("🔓 Stop state cleared by user action", category: .ai)
+        }
         await uiResponseCoordinator.sendChatMessage(text)
     }
 
@@ -775,6 +780,40 @@ final class OnboardingInterviewCoordinator {
 
         // 3. Send the message (it will be queued and processed immediately since gate is clear)
         await sendChatMessage(text)
+    }
+
+    /// Stop all processing, clear queue, and silence incoming until next user action.
+    /// Cleans up orphan tool calls and cancels active agents.
+    func stopProcessing() async {
+        Logger.info("🛑 Stop processing requested", category: .ai)
+
+        // 1. Set stopped flag - silences all incoming processing
+        ui.isStopped = true
+
+        // 2. Cancel current LLM operation
+        await requestCancelLLM()
+
+        // 3. Kill all active agents
+        await agentActivityTracker.killAllAgents()
+
+        // 4. Clear the message queue
+        await queueDrainCoordinator.reset()
+
+        // 5. Clear queued message IDs from UI state
+        ui.queuedMessageIds.removeAll()
+        ui.queuedMessageCount = 0
+
+        // 6. Clean up orphan tool calls from conversation history
+        state.conversationLog.cleanupOrphanedToolCalls()
+
+        // 7. Clear all drain gate blocks
+        drainGate.clearAllBlocks()
+
+        // 8. Clear processing state
+        ui.isProcessing = false
+        ui.isStreaming = false
+
+        Logger.info("🛑 Stop processing complete - silenced until next user action", category: .ai)
     }
 
     func sendCoordinatorMessage(title: String, details: [String: String] = [:]) async {

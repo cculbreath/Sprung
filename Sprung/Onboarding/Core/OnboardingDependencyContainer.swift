@@ -293,7 +293,8 @@ final class OnboardingDependencyContainer {
         // 6. Initialize tool router components
         let tools = Self.createToolRouterComponents(
             eventBus: core.eventBus, toolRegistry: core.toolRegistry, state: state,
-            uploadStorage: docs.uploadStorage, applicantProfileStore: applicantProfileStore, dataStore: dataStore
+            uploadStorage: docs.uploadStorage, applicantProfileStore: applicantProfileStore, dataStore: dataStore,
+            ui: ui
         )
         self.toolRouter = tools.toolRouter
         self.toolExecutor = tools.toolExecutor
@@ -533,11 +534,11 @@ final class OnboardingDependencyContainer {
     private static func createToolRouterComponents(
         eventBus: EventCoordinator, toolRegistry: ToolRegistry, state: StateCoordinator,
         uploadStorage: OnboardingUploadStorage, applicantProfileStore: ApplicantProfileStore,
-        dataStore: InterviewDataStore
+        dataStore: InterviewDataStore, ui: OnboardingUIState
     ) -> ToolRouterComponents {
         let toolExecutor = ToolExecutor(registry: toolRegistry)
         let toolExecutionCoordinator = ToolExecutionCoordinator(
-            eventBus: eventBus, toolExecutor: toolExecutor, stateCoordinator: state
+            eventBus: eventBus, toolExecutor: toolExecutor, stateCoordinator: state, ui: ui
         )
         let uploadHandler = UploadInteractionHandler(
             uploadFileService: UploadFileService(), uploadStorage: uploadStorage,

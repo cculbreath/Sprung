@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Chat input composer with send/queue/interrupt buttons
+/// Chat input composer with send/queue/interrupt/stop buttons
 struct OnboardingChatComposerView: View {
     @Binding var text: String
     let isEditable: Bool
@@ -9,6 +9,7 @@ struct OnboardingChatComposerView: View {
     let queuedMessageCount: Int
     let onSend: (String) -> Void
     let onInterrupt: (String) -> Void
+    let onStop: () -> Void
 
     @State private var composerHeight: CGFloat = ChatComposerTextView.minimumHeight
 
@@ -49,7 +50,7 @@ struct OnboardingChatComposerView: View {
             )
 
             if isProcessing {
-                // When busy: Queue button + Interrupt button (stacked vertically)
+                // When busy: Queue button + Interrupt button + Stop button (stacked vertically)
                 VStack(spacing: 4) {
                     Button(action: {
                         onSend(text)
@@ -71,6 +72,16 @@ struct OnboardingChatComposerView: View {
                     .tint(.orange)
                     .disabled(isSendDisabled)
                     .help("Stop current operation and send this message immediately")
+
+                    Button(action: {
+                        onStop()
+                    }, label: {
+                        Label("Stop", systemImage: "stop.fill")
+                            .frame(maxWidth: .infinity)
+                    })
+                    .buttonStyle(.borderedProminent)
+                    .tint(.red)
+                    .help("Stop all processing, clear queue, and silence incoming tool calls")
                 }
                 .frame(width: 100)
             } else {
