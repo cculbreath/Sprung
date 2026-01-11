@@ -58,6 +58,13 @@ final class OnboardingPersistenceService {
 
         Logger.info("✅ [persistWritingCorpus] Persisted \(writingSamples.count) writing samples to CoverRefStore", category: .ai)
 
+        // Delete writing sample artifacts from session after persisting
+        // They've been copied to CoverRefStore and are no longer needed
+        for sample in writingSamples {
+            artifactRecordStore.deleteArtifact(sample)
+        }
+        Logger.info("🗑️ [persistWritingCorpus] Deleted \(writingSamples.count) writing sample artifacts from session", category: .ai)
+
         // Note: Candidate dossier is persisted directly to CandidateDossierStore by SubmitCandidateDossierTool
 
         // Emit events for persistence completion
