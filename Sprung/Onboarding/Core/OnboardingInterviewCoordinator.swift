@@ -804,7 +804,7 @@ final class OnboardingInterviewCoordinator {
         ui.queuedMessageCount = 0
 
         // 6. Clean up orphan tool calls from conversation history
-        state.conversationLog.cleanupOrphanedToolCalls()
+        await state.getConversationLog().cleanupOrphanedToolCalls()
 
         // 7. Clear all drain gate blocks
         drainGate.clearAllBlocks()

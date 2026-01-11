@@ -474,6 +474,17 @@ class AgentActivityTracker {
         Logger.info("⏹️ Agent killed: \(agents[index].name)", category: .ai)
     }
 
+    /// Kill all running agents
+    func killAllAgents() async {
+        let runningAgentIds = agents.filter { $0.status == .running }.map { $0.id }
+        for agentId in runningAgentIds {
+            await killAgent(agentId: agentId)
+        }
+        if !runningAgentIds.isEmpty {
+            Logger.info("⏹️ Killed \(runningAgentIds.count) running agent(s)", category: .ai)
+        }
+    }
+
     /// Check if an agent has been cancelled. Agents should call this periodically to support cancellation.
     /// - Returns: true if the agent has been cancelled and should stop work
     func isCancelled(agentId: String) -> Bool {

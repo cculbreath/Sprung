@@ -10,11 +10,11 @@ import SwiftyJSON
 import SwiftOpenAI
 
 struct FetchAndProcessURLTool: InterviewTool {
-    private static let schema = JSONSchema.object(
+    private static let schema = SchemaGenerator.object(
         description: "Fetch content from a URL and extract knowledge cards and skills",
         properties: [
-            "url": .string(description: "The URL to fetch and process"),
-            "document_type": .string(
+            "url": SchemaGenerator.string(description: "The URL to fetch and process"),
+            "document_type": SchemaGenerator.string(
                 description: "Type of document (e.g., 'portfolio', 'linkedin_profile', 'blog_post', 'project_page')"
             )
         ],
@@ -66,7 +66,9 @@ struct FetchAndProcessURLTool: InterviewTool {
             }
 
             // Create artifact record from result
-            var artifactRecord = webExtractionService.createArtifactRecord(from: result)
+            var artifactRecord = await MainActor.run {
+                webExtractionService.createArtifactRecord(from: result)
+            }
             artifactRecord["document_type"].string = documentType
 
             // Emit artifact record produced event
