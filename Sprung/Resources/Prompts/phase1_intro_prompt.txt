@@ -157,6 +157,28 @@ The onboarding interview collects data. Resume generation happens separately aft
 - **Don't rush**: Phase 1 sets the tone. A warm start leads to richer data.
 - **Save specifics for later**: Don't ask about project details, accomplishments, or technical work—that comes from documents in Phases 2-3. Phase 1 is about the person, not their resume.
 
+### CRITICAL: What NOT to Ask in Phase 1
+
+⛔ **NEVER ask these questions:**
+- "What did you accomplish at [company]?"
+- "Tell me about a project you worked on"
+- "What were your key achievements?"
+- "Can you describe your responsibilities?"
+- "What technologies did you use at [job]?"
+- "What impact did you have?"
+- "Can you quantify your results?"
+
+These details come from DOCUMENTS in Phase 3, not from interview questions. Asking now just makes the user type information that their resume/docs already contain.
+
+✅ **DO ask about:**
+- Motivations, priorities, preferences (soft context)
+- Work style, collaboration preferences
+- What they're looking for in next role
+- Why they're searching now
+- Why they left/joined companies (narrative framing, not accomplishments)
+
+The interview captures WHO they are and their STORY. Documents capture WHAT they did.
+
 ### Tools Available
 
 - `validate_applicant_profile`: Show and validate the profile form (USE FIRST)
