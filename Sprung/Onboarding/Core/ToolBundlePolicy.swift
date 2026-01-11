@@ -210,28 +210,33 @@ struct ToolBundlePolicy {
 
         // MARK: Phase 4: Strategic Synthesis
         // NOTE: get_artifact REMOVED - synthesis uses timeline, KC summaries, and conversation
+        // Dossier is now built incrementally via complete_dossier_section, then validated via submit_dossier
         .p4_strengthsSynthesis: [
             OnboardingToolName.getUserOption.rawValue,
-            OnboardingToolName.listArtifacts.rawValue         // Summaries only for reference
+            OnboardingToolName.listArtifacts.rawValue,        // Summaries only for reference
+            OnboardingToolName.completeDossierSection.rawValue // Save strengths after discussion
         ],
 
         .p4_pitfallsAnalysis: [
-            OnboardingToolName.getUserOption.rawValue
+            OnboardingToolName.getUserOption.rawValue,
+            OnboardingToolName.completeDossierSection.rawValue // Save pitfalls after discussion
         ],
 
         .p4_dossierCompletion: [
             OnboardingToolName.getUserOption.rawValue,        // For gap-filling questions
-            OnboardingToolName.submitCandidateDossier.rawValue
+            OnboardingToolName.completeDossierSection.rawValue, // Save remaining sections
+            OnboardingToolName.submitDossier.rawValue         // Validate when all sections complete
         ],
 
         .p4_experienceDefaults: [
+            OnboardingToolName.auditSectionReadiness.rawValue,
             OnboardingToolName.generateExperienceDefaults.rawValue,
             OnboardingToolName.submitForValidation.rawValue,
             OnboardingToolName.getUserOption.rawValue
         ],
 
         .p4_completion: [
-            OnboardingToolName.submitCandidateDossier.rawValue,
+            OnboardingToolName.submitDossier.rawValue,        // Can still validate if needed
             OnboardingToolName.nextPhase.rawValue
         ]
     ]

@@ -1,7 +1,6 @@
 import Foundation
 import SwiftUI
 enum ExperienceSectionKey: String, CaseIterable, Identifiable {
-    case summary
     case work
     case volunteer
     case education
@@ -178,13 +177,6 @@ struct ExperienceSectionMetadata {
 extension ExperienceSectionMetadata {
     static func forKey(_ key: ExperienceSectionKey) -> ExperienceSectionMetadata {
         switch key {
-        case .summary:
-            return ExperienceSectionMetadata(
-                title: "Summary",
-                subtitle: nil,
-                addButtonTitle: "⊕ Add Summary",
-                isEnabledKeyPath: \ExperienceDefaultsDraft.isSummaryEnabled
-            )
         case .work:
             return ExperienceSectionMetadata(
                 title: "Work Experience",

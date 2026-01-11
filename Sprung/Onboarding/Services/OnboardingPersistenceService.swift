@@ -280,13 +280,6 @@ final class OnboardingPersistenceService {
             Logger.info("📋 Added \(pubsArray.count) publications", category: .ai)
         }
 
-        // Process professional summary
-        if let summary = defaults["professionalSummary"].string,
-           !summary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            draft.summary = summary.trimmingCharacters(in: .whitespacesAndNewlines)
-            Logger.info("📋 Added professional summary", category: .ai)
-        }
-
         // Process custom fields (keys starting with "custom.")
         // LLM can send either scalar strings or arrays of strings
         var customFields: [CustomFieldValue] = []

@@ -55,7 +55,9 @@ enum OnboardingToolName: String, CaseIterable {
     // Phase 3/4 Tools
     case ingestWritingSample = "ingest_writing_sample"
     case generateExperienceDefaults = "generate_experience_defaults"
-    case submitCandidateDossier = "submit_candidate_dossier"
+    case completeDossierSection = "complete_dossier_section"
+    case submitDossier = "submit_dossier"
+    case auditSectionReadiness = "audit_section_readiness"
 
     // Filesystem Tools (for browsing exported artifacts)
     // These use familiar ls/grep/glob patterns - responses are ephemeral (pruned after N turns)

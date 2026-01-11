@@ -6,11 +6,8 @@ import SwiftData
 @Model
 final class ExperienceDefaults {
     @Attribute(.unique) var id: UUID
-    /// Professional summary for resume headers and cover letter introductions
-    var summary: String = ""
 
     // Section enablement flags
-    var isSummaryEnabled: Bool = false
     var isWorkEnabled: Bool = false
     var isVolunteerEnabled: Bool = false
     var isEducationEnabled: Bool = false
@@ -40,8 +37,6 @@ final class ExperienceDefaults {
 
     init(
         id: UUID = UUID(),
-        summary: String = "",
-        isSummaryEnabled: Bool = false,
         isWorkEnabled: Bool = false,
         isVolunteerEnabled: Bool = false,
         isEducationEnabled: Bool = false,
@@ -68,8 +63,6 @@ final class ExperienceDefaults {
         references: [ReferenceExperienceDraft] = []
     ) {
         self.id = id
-        self.summary = summary
-        self.isSummaryEnabled = isSummaryEnabled
         self.isWorkEnabled = isWorkEnabled
         self.isVolunteerEnabled = isVolunteerEnabled
         self.isEducationEnabled = isEducationEnabled

@@ -5,10 +5,6 @@ enum ExperienceDefaultsDecoder {
         var draft = ExperienceDefaultsDraft()
         let dictionary = json.dictionaryValue
 
-        // Decode professional summary (non-array field)
-        if let summary = dictionary["professional_summary"]?.string {
-            draft.summary = summary.trimmingCharacters(in: .whitespacesAndNewlines)
-        }
         decodeCustomSection(from: dictionary["custom"], into: &draft)
 
         // Decode array-based sections

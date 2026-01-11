@@ -5,7 +5,6 @@ import SwiftyJSON
 ///
 /// This maps the resume's mustache rendering context back into the ExperienceDefaults schema:
 /// - Sections: work/education/projects/etc are transferred when present.
-/// - Summary: resume.summary -> professional_summary
 /// - Custom fields: resume.custom.* -> custom
 @MainActor
 enum ExperienceDefaultsImportService {
@@ -14,11 +13,6 @@ enum ExperienceDefaultsImportService {
         let contextJSON = JSON(context)
 
         var payload = JSON()
-
-        if let summary = contextJSON["summary"].string?.trimmingCharacters(in: .whitespacesAndNewlines),
-           !summary.isEmpty {
-            payload["professional_summary"].string = summary
-        }
 
         for codec in ExperienceSectionCodecs.all {
             let key = codec.key.rawValue
@@ -37,11 +31,6 @@ enum ExperienceDefaultsImportService {
 
     static func merged(current: ExperienceDefaultsDraft, imported: ExperienceDefaultsDraft) -> ExperienceDefaultsDraft {
         var merged = current
-
-        // Merge summary if imported has one (prefer imported).
-        if imported.summary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
-            merged.summary = imported.summary
-        }
 
         // Merge section arrays by simple append; leave de-dup to user if needed.
         if imported.isWorkEnabled { merged.isWorkEnabled = true; merged.work.append(contentsOf: imported.work) }

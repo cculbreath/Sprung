@@ -115,48 +115,97 @@ final class ExperienceDefaultsWorkspaceService {
         try exportConfig(enabledSections: enabledSections, customFields: customFields, selectedTitles: selectedTitles)
         let includeTitleSets = customFields.contains { $0.key.lowercased() == "custom.jobtitles" }
         try exportGuidance(includeTitleSets: includeTitleSets)
+
+        // Compute KC counts by type for OVERVIEW.md
+        var kcCountsByType: [String: Int] = [:]
+        for card in knowledgeCards {
+            let cardType = card.cardType?.rawValue ?? "other"
+            kcCountsByType[cardType, default: 0] += 1
+        }
+
         try writeOverviewDocument(
             kcCount: knowledgeCards.count,
             skillCount: skills.count,
             timelineCount: timelineEntries.count,
             enabledSections: enabledSections,
             includeTitleSets: includeTitleSets,
-            selectedTitles: selectedTitles
+            selectedTitles: selectedTitles,
+            kcCountsByType: kcCountsByType
         )
     }
 
-    /// Exports knowledge cards with index summary
+    /// Exports knowledge cards with index summary and by-type organization
     private func exportKnowledgeCards(_ cards: [KnowledgeCard]) throws {
         guard let kcDir = knowledgeCardsPath else { throw WorkspaceError.workspaceNotCreated }
 
+        // Create by_type subdirectories
+        let byTypeDir = kcDir.appendingPathComponent("by_type")
+        let cardTypes = ["employment", "education", "project", "achievement", "other"]
+        for cardType in cardTypes {
+            let typeDir = byTypeDir.appendingPathComponent(cardType)
+            try FileManager.default.createDirectory(at: typeDir, withIntermediateDirectories: true)
+        }
+
         var indexEntries: [[String: Any]] = []
+        var typeCounts: [String: Int] = [:]
 
         for card in cards {
-            // Write full card to {uuid}.json
+            let cardType = card.cardType?.rawValue ?? "other"
+
+            // Write full card to flat {uuid}.json
             let cardFile = kcDir.appendingPathComponent("\(card.id.uuidString).json")
             let cardData = try encoder.encode(card)
             try cardData.write(to: cardFile)
 
+            // Also write to by_type/{type}/{uuid}.json for organized access
+            let typeDir = byTypeDir.appendingPathComponent(cardType)
+            let typeCardFile = typeDir.appendingPathComponent("\(card.id.uuidString).json")
+            try cardData.write(to: typeCardFile)
+
+            // Track counts
+            typeCounts[cardType, default: 0] += 1
+
             // Build summary for index
             let summary: [String: Any] = [
                 "id": card.id.uuidString,
-                "card_type": card.cardType?.rawValue ?? "other",
+                "cardType": cardType,
                 "title": card.title,
                 "organization": card.organization ?? "",
-                "date_range": card.dateRange ?? "",
-                "narrative_preview": String(card.narrative.prefix(150)),
-                "facts_count": card.facts.count,
-                "technologies": Array(card.technologies.prefix(5))
+                "dateRange": card.dateRange ?? "",
+                "narrativePreview": String(card.narrative.prefix(200)),
+                "factsCount": card.facts.count,
+                "technologies": Array(card.technologies.prefix(8)),
+                "suggestedBulletsCount": card.suggestedBullets.count,
+                "location": card.location ?? ""
             ]
             indexEntries.append(summary)
         }
 
-        // Write index
+        // Write main index
         let indexFile = kcDir.appendingPathComponent("index.json")
-        let indexData = try JSONSerialization.data(withJSONObject: indexEntries, options: [.prettyPrinted, .sortedKeys])
+        let indexPayload: [String: Any] = [
+            "totalCount": cards.count,
+            "byType": typeCounts,
+            "cards": indexEntries
+        ]
+        let indexData = try JSONSerialization.data(withJSONObject: indexPayload, options: [.prettyPrinted, .sortedKeys])
         try indexData.write(to: indexFile)
 
-        Logger.info("📤 Exported \(cards.count) knowledge cards to workspace", category: .ai)
+        // Write per-type index files for quick access
+        for cardType in cardTypes {
+            let typeCards = indexEntries.filter { ($0["cardType"] as? String) == cardType }
+            if !typeCards.isEmpty {
+                let typeIndexFile = byTypeDir.appendingPathComponent(cardType).appendingPathComponent("index.json")
+                let typeIndexData = try JSONSerialization.data(withJSONObject: [
+                    "cardType": cardType,
+                    "count": typeCards.count,
+                    "cards": typeCards
+                ], options: [.prettyPrinted, .sortedKeys])
+                try typeIndexData.write(to: typeIndexFile)
+            }
+        }
+
+        Logger.info("📤 Exported \(cards.count) knowledge cards to workspace (by type: \(typeCounts))", category: .ai)
     }
 
     /// Exports skills with summary
@@ -297,7 +346,8 @@ final class ExperienceDefaultsWorkspaceService {
         timelineCount: Int,
         enabledSections: [String],
         includeTitleSets: Bool,
-        selectedTitles: [String]?
+        selectedTitles: [String]?,
+        kcCountsByType: [String: Int] = [:]
     ) throws {
         guard let workspace = workspacePath else { throw WorkspaceError.workspaceNotCreated }
 
@@ -337,11 +387,20 @@ final class ExperienceDefaultsWorkspaceService {
             titleInstruction = "custom.jobTitles is NOT enabled: do not output identity titles."
         }
 
+        // Build KC type breakdown string
+        var kcTypeBreakdown = ""
+        if !kcCountsByType.isEmpty {
+            let sortedTypes = kcCountsByType.sorted { $0.value > $1.value }
+            let breakdownParts = sortedTypes.map { "\($0.key): \($0.value)" }
+            kcTypeBreakdown = " (\(breakdownParts.joined(separator: ", ")))"
+        }
+
         let overview = """
         # Experience Defaults Workspace
 
         ## Your Task
-        Generate resume-ready content for the Experience Editor based on the collected evidence.
+        Generate high-quality, generally applicable resume content from the collected evidence.
+        This content will be the default for all resumes, customized per-job later.
 
         ## Guidance (REQUIRED READING)
 
@@ -360,10 +419,21 @@ final class ExperienceDefaultsWorkspaceService {
 
         ## Available Data
 
-        ### Knowledge Cards (\(kcCount) cards)
+        ### Knowledge Cards (\(kcCount) cards)\(kcTypeBreakdown)
         Location: `knowledge_cards/`
-        - `index.json` - Summary of all cards (id, title, organization, date_range, narrative_preview)
-        - Individual card files: `{uuid}.json` - Full card with facts, bullets, technologies, outcomes
+
+        **Organized by type for efficient access:**
+        - `index.json` - Summary of ALL cards with cardType, title, organization, narrativePreview
+        - `by_type/employment/` - KCs for work history (use for work highlights)
+        - `by_type/education/` - KCs for education entries
+        - `by_type/project/` - KCs for projects section
+        - `by_type/achievement/` - KCs for awards, publications, certificates
+        - `{uuid}.json` - Direct access to any card by ID
+
+        **Workflow for KCs:**
+        1. Read `index.json` to see all available cards and their types
+        2. For work section: read `by_type/employment/index.json` for relevant KCs
+        3. Read individual KC files when you need full narrative details
 
         ### Skills Bank (\(skillCount) skills)
         Location: `skills/`
@@ -373,38 +443,91 @@ final class ExperienceDefaultsWorkspaceService {
         ### Timeline Entries (\(timelineCount) entries)
         Location: `timeline/`
         - `index.json` - All timeline entries (work, education, projects, etc.)
-        - Individual entry files for details
 
         ### Configuration
         Location: `config/`
         - `enabled_sections.json` - Sections to include: \(enabledSections.joined(separator: ", "))
         - `custom_fields.json` - Custom fields defined by user (if any)
 
-        ## Output Requirements
+        ## Section-by-Section Workflow
 
-        Write your output to: `output/experience_defaults.json`
+        Process ONE section at a time to manage context:
 
-        The output should be a JSON object with these sections (only include enabled ones):
-        - `work`: Array of work entries with 3-4 bullet highlights each
-        - `education`: Array of education entries with highlights
-        - `projects`: Array of 2-5 selected projects with summaries
-        - `skills`: Object with 5 categories, 25-35 total skills
-        - `volunteer`, `awards`, `certificates`, `publications`: As applicable
+        ### Step 1: Configuration
+        1. Read this OVERVIEW.md (done!)
+        2. Read `guidance/voice_profile.json`
+        3. Read `config/enabled_sections.json`
+        4. Read `config/custom_fields.json`
 
-        ## Workflow
+        ### Step 2: Work Section (if enabled)
+        1. Read `knowledge_cards/by_type/employment/index.json`
+        2. For each work timeline entry, find matching KCs by organization
+        3. Read full KCs to extract specific details for bullets
+        4. Generate 3-4 high-quality highlights per entry
 
-        1. Read `knowledge_cards/index.json` to understand what evidence exists
-        2. Read `timeline/index.json` to see the career structure
-        3. Read `config/enabled_sections.json` to know which sections to generate
-        4. For each timeline entry, find matching KCs and generate content
-        5. For skills, read `skills/summary.json` and curate top 25-35
-        6. Write final output to `output/experience_defaults.json`
+        ### Step 3: Other Sections
+        - Education: Use timeline + `by_type/education/` KCs
+        - Projects: Use `by_type/project/` KCs
+        - Skills: Use `skills/summary.json`, create 3-6 dynamic categories
+        - Awards/Certs/Publications: Use `by_type/achievement/` KCs
 
-        ## Quality Guidelines
+        ### Step 4: Write Output
+        Write to `output/experience_defaults.json`
 
-        - Work highlights: 3-4 bullets per entry, start with action verbs, include quantified impact
-        - Projects: 2-5 selected, 2-3 sentence summaries, list technologies
-        - Skills: 25-35 total in 5 categories, no duplicates, every skill has KC evidence
+        ## Work Highlights: Quality Standards
+
+        Each work bullet MUST:
+
+        **1. Be Generally Applicable**
+        BAD: "Optimized database queries for e-commerce checkout"
+        GOOD: "Optimized critical database queries, reducing response times by 60%"
+
+        **2. Include Specific Evidence from KCs**
+        BAD: "Improved system performance significantly"
+        GOOD: "Reduced API latency from 800ms to 120ms through query optimization"
+
+        **3. Show Problem-Solving**
+        BAD: "Developed automated testing framework"
+        GOOD: "Noticed manual testing consuming 40% of sprint time - built framework that cut cycles from 2 days to 4 hours"
+
+        **4. Quantify When Possible**
+        BAD: "Handled large-scale data processing"
+        GOOD: "Processed 2TB of sensor data daily, identifying 12% more defects"
+
+        ## Output Schema
+
+        Write valid JSON to `output/experience_defaults.json`:
+
+        ```json
+        {
+          "isWorkEnabled": true,
+          "work": [
+            {
+              "name": "Company Name",
+              "position": "Job Title",
+              "location": "City, State",
+              "startDate": "YYYY-MM",
+              "endDate": "YYYY-MM",
+              "highlights": [
+                "High-quality bullet with specifics",
+                "Another bullet with metrics"
+              ]
+            }
+          ],
+          "isSkillsEnabled": true,
+          "skills": [
+            {
+              "name": "Category Name",
+              "level": "Expert",
+              "keywords": ["Skill1", "Skill2"]
+            }
+          ],
+          "custom.objective": "5-6 sentence objective statement",
+          "custom.jobTitles": ["Title1", "Title2", "Title3", "Title4"]
+        }
+        ```
+
+        Include only enabled sections. Use simple string arrays for highlights and keywords.
 
         When done, call `complete_generation` with a summary of what was generated.
         """

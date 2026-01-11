@@ -10,9 +10,6 @@ struct CustomFieldValue: Codable, Equatable, Identifiable {
     }
 }
 struct ExperienceDefaultsDraft: Codable, Equatable {
-    /// Professional summary for resume headers and cover letter introductions
-    var summary: String = ""
-    var isSummaryEnabled: Bool = false
     var isWorkEnabled: Bool = false
     var isVolunteerEnabled: Bool = false
     var isEducationEnabled: Bool = false
@@ -41,8 +38,6 @@ struct ExperienceDefaultsDraft: Codable, Equatable {
 extension ExperienceDefaultsDraft {
     /// Initialize draft from model - now a direct copy since model stores Draft structs
     init(model: ExperienceDefaults) {
-        summary = model.summary
-        isSummaryEnabled = model.isSummaryEnabled
         isWorkEnabled = model.isWorkEnabled
         isVolunteerEnabled = model.isVolunteerEnabled
         isEducationEnabled = model.isEducationEnabled
@@ -71,8 +66,6 @@ extension ExperienceDefaultsDraft {
 
     /// Apply draft changes to model - now a direct copy since model stores Draft structs
     func apply(to model: ExperienceDefaults) {
-        model.summary = summary
-        model.isSummaryEnabled = isSummaryEnabled
         model.isWorkEnabled = isWorkEnabled
         model.isVolunteerEnabled = isVolunteerEnabled
         model.isEducationEnabled = isEducationEnabled
