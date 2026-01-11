@@ -69,6 +69,21 @@ final class KnowledgeCardWorkflowService {
     func handleDoneWithUploadsClicked() async {
         Logger.info("📋 Processing Done with Uploads - aggregating cards and skills", category: .ai)
 
+        // Register the card merge agent IMMEDIATELY so it appears in status bar right away
+        let cardMergeAgentId = UUID().uuidString
+        agentActivityTracker.trackAgent(
+            id: cardMergeAgentId,
+            type: .cardMerge,
+            name: "Card Merge",
+            task: nil as Task<Void, Never>?
+        )
+        agentActivityTracker.markRunning(agentId: cardMergeAgentId)
+        agentActivityTracker.appendTranscript(
+            agentId: cardMergeAgentId,
+            entryType: .system,
+            content: "Starting card aggregation and deduplication"
+        )
+
         // Deactivate document collection UI and indicate aggregation is in progress
         ui.isDocumentCollectionActive = false
         ui.isMergingCards = true
@@ -90,22 +105,19 @@ final class KnowledgeCardWorkflowService {
         }
 
         // STEP 1: Card merge (aggregate and deduplicate narrative cards)
-        let cardMergeAgentId = UUID().uuidString
-        agentActivityTracker.trackAgent(
-            id: cardMergeAgentId,
-            type: .cardMerge,
-            name: "Card Merge",
-            task: nil as Task<Void, Never>?
-        )
-        agentActivityTracker.appendTranscript(
-            agentId: cardMergeAgentId,
-            entryType: .system,
-            content: "Starting card aggregation and deduplication"
-        )
 
-        let rawCards = await cardMergeService.getAllNarrativeCardsFlat()
+        // Get narrative card collections (includes artifact IDs for duplicate prevention)
+        let cardCollections = await cardMergeService.getAllNarrativeCards()
+        let rawCards = cardCollections.flatMap { $0.cards }
         let rawCardCount = rawCards.count
         Logger.info("📖 Found \(rawCardCount) raw narrative cards", category: .ai)
+
+        // Delete old approved cards from artifacts that have narrative cards
+        // This prevents duplicates when KCs are regenerated for an artifact
+        let artifactIds = Set(cardCollections.map { $0.documentId })
+        if !artifactIds.isEmpty {
+            knowledgeCardStore.deleteApprovedCardsFromArtifacts(artifactIds)
+        }
         agentActivityTracker.appendTranscript(
             agentId: cardMergeAgentId,
             entryType: .system,
@@ -117,7 +129,7 @@ final class KnowledgeCardWorkflowService {
 
         // Run deduplication to merge similar cards across documents
         do {
-            let dedupeResult = try await cardMergeService.getAllNarrativeCardsDeduped()
+            let dedupeResult = try await cardMergeService.getAllNarrativeCardsDeduped(parentAgentId: cardMergeAgentId)
             cardsToAdd = dedupeResult.cards
             let mergeCount = dedupeResult.mergeLog.filter { $0.action == .merged }.count
             Logger.info("🔀 Deduplication: \(rawCardCount) → \(dedupeResult.cards.count) cards (\(mergeCount) merges)", category: .ai)

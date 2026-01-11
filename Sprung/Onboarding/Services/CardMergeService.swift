@@ -162,7 +162,8 @@ actor CardMergeService {
 
     /// Get all narrative cards, deduplicated across documents
     /// Uses LLM to make intelligent merge decisions while preserving detail
-    func getAllNarrativeCardsDeduped() async throws -> DeduplicationResult {
+    /// - Parameter parentAgentId: Optional agent ID to use for tracking (avoids creating a duplicate agent)
+    func getAllNarrativeCardsDeduped(parentAgentId: String? = nil) async throws -> DeduplicationResult {
         let allCards = await getAllNarrativeCardsFlat()
 
         guard allCards.count > 1 else {
@@ -171,7 +172,7 @@ actor CardMergeService {
 
         Logger.info("🔀 Starting narrative card deduplication: \(allCards.count) cards", category: .ai)
         let service = await getDeduplicationService()
-        return try await service.deduplicateCards(allCards)
+        return try await service.deduplicateCards(allCards, parentAgentId: parentAgentId)
     }
 
     /// Deduplicate an arbitrary list of narrative cards
