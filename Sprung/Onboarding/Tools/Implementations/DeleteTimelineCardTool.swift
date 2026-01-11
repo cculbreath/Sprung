@@ -39,6 +39,12 @@ struct DeleteTimelineCardTool: InterviewTool {
 
         // Delete timeline card via coordinator (which emits events)
         let result = await coordinator.timeline.deleteTimelineCard(id: id)
+
+        // Signal UI to auto-switch to Timeline tab
+        await MainActor.run {
+            coordinator.ui.timelineToolWasUsed = true
+        }
+
         return .immediate(result)
     }
 }

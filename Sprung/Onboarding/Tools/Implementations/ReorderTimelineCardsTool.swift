@@ -45,6 +45,12 @@ struct ReorderTimelineCardsTool: InterviewTool {
 
         // Reorder timeline cards via coordinator (which emits events)
         let result = await coordinator.timeline.reorderTimelineCards(orderedIds: orderedIds)
+
+        // Signal UI to auto-switch to Timeline tab
+        await MainActor.run {
+            coordinator.ui.timelineToolWasUsed = true
+        }
+
         return .immediate(result)
     }
 }

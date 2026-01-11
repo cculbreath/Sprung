@@ -79,6 +79,12 @@ struct CreateTimelineCardTool: InterviewTool {
 
         // Create timeline card via timeline service (which emits events)
         let result = await coordinator.timeline.createTimelineCard(fields: normalizedFields)
+
+        // Signal UI to auto-switch to Timeline tab
+        await MainActor.run {
+            coordinator.ui.timelineToolWasUsed = true
+        }
+
         return .immediate(result)
     }
 }

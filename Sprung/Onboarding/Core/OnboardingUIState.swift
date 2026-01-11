@@ -44,6 +44,8 @@ final class OnboardingUIState {
     var timelineUIChangeToken: Int = 0
     /// True when LLM has activated the timeline editor (via display_timeline_entries_for_review)
     var isTimelineEditorActive: Bool = false
+    /// Flag set when a timeline CRUD tool is used (create, update, delete, reorder) to trigger tab auto-switch
+    var timelineToolWasUsed: Bool = false
     /// ID of the currently expanded/editing timeline entry (nil = all collapsed)
     var editingTimelineEntryId: String?
     // MARK: - Wizard State

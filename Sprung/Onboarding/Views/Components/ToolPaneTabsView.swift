@@ -55,6 +55,15 @@ struct ToolPaneTabsView<InterviewContent: View>: View {
                 }
             }
         }
+        // Auto-switch to Timeline tab when any timeline CRUD tool is used
+        .onChange(of: coordinator.ui.timelineToolWasUsed) { _, wasUsed in
+            if wasUsed && selectedTab != .timeline {
+                withAnimation(OnboardingAnimations.ToolPane.tabAutoSwitch) {
+                    selectedTab = .timeline
+                }
+                coordinator.ui.timelineToolWasUsed = false
+            }
+        }
     }
 
     private func tabButton(for tab: Tab) -> some View {
