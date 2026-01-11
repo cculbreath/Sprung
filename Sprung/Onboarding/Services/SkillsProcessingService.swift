@@ -40,6 +40,10 @@ struct DuplicateGroup: Codable {
 /// Response from deduplication analysis
 struct DeduplicationResponse: Codable {
     let duplicateGroups: [DuplicateGroup]
+    /// Set to true if there are more duplicate groups that couldn't fit in this response
+    let hasMore: Bool
+    /// IDs of skills that have been processed (included in a duplicate group) in this response
+    let processedSkillIds: [String]
 }
 
 // MARK: - ATS Expansion Types
@@ -141,38 +145,126 @@ final class SkillsProcessingService {
         return result
     }
 
-    /// Analyze all skills in a single LLM call with max tokens
+    /// Analyze all skills for duplicates, handling multi-part responses if output exceeds token limit.
+    /// The LLM sees ALL skills in input but can output in multiple parts if needed.
     private func analyzeAllSkillsForDuplicates(
         skills: [String],
         facade: LLMFacade
     ) async throws -> [DuplicateGroup] {
-        let prompt = """
-        Analyze the following \(skills.count) skills and identify groups of duplicates that should be merged.
+        var allDuplicateGroups: [DuplicateGroup] = []
+        var processedSkillIds: Set<String> = []
+        var partNumber = 1
+        var hasMore = true
 
-        Skills (format: "uuid: name [category]"):
-        \(skills.joined(separator: "\n"))
+        while hasMore {
+            let isFirstPart = partNumber == 1
+            let prompt = buildDeduplicationPrompt(
+                skills: skills,
+                processedSkillIds: processedSkillIds,
+                isFirstPart: isFirstPart,
+                partNumber: partNumber
+            )
 
-        Identify skills that are semantically the same but may have:
-        - Different casing (e.g., "python" vs "Python")
-        - Different formatting (e.g., "JavaScript" vs "Javascript" vs "JS")
-        - Abbreviations vs full names (e.g., "ML" vs "Machine Learning")
-        - Version numbers that don't matter (e.g., "Python 3" vs "Python")
-        - Synonyms in professional context (e.g., "React.js" vs "ReactJS")
+            Logger.info("🔧 Deduplication part \(partNumber): analyzing skills (already processed: \(processedSkillIds.count))", category: .ai)
 
-        For each duplicate group, provide:
-        - The canonical (best) name to use
-        - All skill IDs that should be merged into one
-        - Brief reasoning for the merge
+            let response: DeduplicationResponse = try await facade.executeStructuredWithDictionarySchema(
+                prompt: prompt,
+                modelId: modelId,
+                as: DeduplicationResponse.self,
+                schema: deduplicationSchema,
+                schemaName: "deduplication_analysis",
+                maxOutputTokens: 32768,  // Reduced to encourage multi-part
+                backend: .gemini
+            )
 
-        IMPORTANT:
-        - Only include actual duplicates - skills with similar but distinct meanings should NOT be grouped
-        - "AWS" and "Azure" are NOT duplicates (different platforms)
-        - "React" and "React Native" are NOT duplicates (different frameworks)
-        - "Python" and "Python 3" ARE duplicates (same language)
-        - If no duplicates are found, return an empty duplicateGroups array
-        """
+            allDuplicateGroups.append(contentsOf: response.duplicateGroups)
+            processedSkillIds.formUnion(response.processedSkillIds)
+            hasMore = response.hasMore
+            partNumber += 1
 
-        let schema: [String: Any] = [
+            Logger.info("🔧 Part \(partNumber - 1) complete: \(response.duplicateGroups.count) groups, hasMore: \(hasMore)", category: .ai)
+
+            // Safety limit
+            if partNumber > 20 {
+                Logger.warning("⚠️ Deduplication exceeded 20 parts, stopping", category: .ai)
+                break
+            }
+        }
+
+        Logger.info("🔧 Deduplication analysis complete: \(allDuplicateGroups.count) total groups across \(partNumber - 1) parts", category: .ai)
+        return allDuplicateGroups
+    }
+
+    /// Build the prompt for deduplication, adjusting for continuation if needed
+    private func buildDeduplicationPrompt(
+        skills: [String],
+        processedSkillIds: Set<String>,
+        isFirstPart: Bool,
+        partNumber: Int
+    ) -> String {
+        let skillsList = skills.joined(separator: "\n")
+
+        if isFirstPart {
+            return """
+            Analyze the following \(skills.count) skills and identify groups of duplicates that should be merged.
+
+            Skills (format: "uuid: name [category]"):
+            \(skillsList)
+
+            Identify skills that are semantically the same but may have:
+            - Different casing (e.g., "python" vs "Python")
+            - Different formatting (e.g., "JavaScript" vs "Javascript" vs "JS")
+            - Abbreviations vs full names (e.g., "ML" vs "Machine Learning")
+            - Version numbers that don't matter (e.g., "Python 3" vs "Python")
+            - Synonyms in professional context (e.g., "React.js" vs "ReactJS")
+
+            For each duplicate group, provide:
+            - The canonical (best) name to use
+            - All skill IDs that should be merged into one
+            - Brief reasoning for the merge
+
+            IMPORTANT:
+            - Only include actual duplicates - skills with similar but distinct meanings should NOT be grouped
+            - "AWS" and "Azure" are NOT duplicates (different platforms)
+            - "React" and "React Native" are NOT duplicates (different frameworks)
+            - "Python" and "Python 3" ARE duplicates (same language)
+            - If no duplicates are found, return an empty duplicateGroups array
+
+            OUTPUT BATCHING (critical):
+            - Process at most 100 skills per response to avoid output truncation
+            - Set "hasMore" to true if you haven't finished analyzing all skills
+            - Set "hasMore" to false only when you've checked ALL skills for duplicates
+            - Include all skill IDs you've processed (checked for duplicates) in "processedSkillIds"
+            - Skills not in any duplicate group should still be listed in processedSkillIds if you've checked them
+            """
+        } else {
+            let alreadyProcessed = processedSkillIds.joined(separator: ", ")
+            let remainingCount = skills.count - processedSkillIds.count
+            return """
+            CONTINUATION (Part \(partNumber)) - Continue analyzing the same skill list for duplicates.
+            Approximately \(remainingCount) skills remaining to process.
+
+            Skills (format: "uuid: name [category]"):
+            \(skillsList)
+
+            ALREADY PROCESSED SKILL IDs (skip these - \(processedSkillIds.count) total):
+            \(alreadyProcessed)
+
+            Continue identifying duplicate groups from the remaining skills. Do NOT re-report duplicates involving the already-processed IDs.
+
+            OUTPUT BATCHING (critical):
+            - Process at most 100 NEW skills per response
+            - Set "hasMore" to true if you haven't finished analyzing all remaining skills
+            - Set "hasMore" to false only when you've checked ALL remaining skills
+            - Include all NEW skill IDs you've processed in "processedSkillIds"
+            - Skills not in any duplicate group should still be listed in processedSkillIds if you've checked them
+            """
+        }
+    }
+
+    /// Schema for deduplication response with multi-part support
+    private var deduplicationSchema: [String: Any] {
+        [
             "type": "object",
             "properties": [
                 "duplicateGroups": [
@@ -197,23 +289,19 @@ final class SkillsProcessingService {
                         ],
                         "required": ["canonicalName", "skillIds", "reasoning"]
                     ]
+                ],
+                "hasMore": [
+                    "type": "boolean",
+                    "description": "Set to true if there are more duplicate groups that couldn't fit in this response. Set false when done."
+                ],
+                "processedSkillIds": [
+                    "type": "array",
+                    "description": "IDs of all skills included in duplicate groups in THIS response",
+                    "items": ["type": "string"]
                 ]
             ],
-            "required": ["duplicateGroups"]
+            "required": ["duplicateGroups", "hasMore", "processedSkillIds"]
         ]
-
-        // Use 65536 tokens (Gemini Flash max) to handle large skill sets
-        let response: DeduplicationResponse = try await facade.executeStructuredWithDictionarySchema(
-            prompt: prompt,
-            modelId: modelId,
-            as: DeduplicationResponse.self,
-            schema: schema,
-            schemaName: "deduplication_analysis",
-            maxOutputTokens: 65536,
-            backend: .gemini
-        )
-
-        return response.duplicateGroups
     }
 
     private func applyDuplicateMerges(groups: [DuplicateGroup]) -> Int {
