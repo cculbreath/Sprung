@@ -497,6 +497,22 @@ struct EventDumpView: View {
             .help("Re-extract voice profile from writing samples")
         }
         ToolbarItem(placement: .automatic) {
+            Button("Dedupe Skills") {
+                Task {
+                    await coordinator.deduplicateSkills()
+                }
+            }
+            .help("Run LLM-powered deduplication on skills")
+        }
+        ToolbarItem(placement: .automatic) {
+            Button("ATS Expand Skills") {
+                Task {
+                    await coordinator.expandATSSkills()
+                }
+            }
+            .help("Generate ATS synonym variants for skills")
+        }
+        ToolbarItem(placement: .automatic) {
             Button("Reset All Data", role: .destructive) {
                 Task {
                     await coordinator.resetAllOnboardingData()

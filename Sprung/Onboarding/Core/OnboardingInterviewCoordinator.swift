@@ -995,6 +995,44 @@ final class OnboardingInterviewCoordinator {
         await container.voiceProfileExtractionHandler.triggerExtraction()
     }
 
+    /// Run LLM-powered skill deduplication manually
+    func deduplicateSkills() async {
+        guard let facade = llmFacade else {
+            Logger.warning("Cannot deduplicate skills: LLM facade not available", category: .ai)
+            return
+        }
+        let service = SkillsProcessingService(
+            skillStore: skillStore,
+            facade: facade,
+            agentActivityTracker: agentActivityTracker
+        )
+        do {
+            let result = try await service.consolidateDuplicates()
+            Logger.info("✅ Skills deduplication complete: \(result.details)", category: .ai)
+        } catch {
+            Logger.error("❌ Skills deduplication failed: \(error.localizedDescription)", category: .ai)
+        }
+    }
+
+    /// Run LLM-powered ATS synonym expansion manually
+    func expandATSSkills() async {
+        guard let facade = llmFacade else {
+            Logger.warning("Cannot expand ATS skills: LLM facade not available", category: .ai)
+            return
+        }
+        let service = SkillsProcessingService(
+            skillStore: skillStore,
+            facade: facade,
+            agentActivityTracker: agentActivityTracker
+        )
+        do {
+            let result = try await service.expandATSSynonyms()
+            Logger.info("✅ ATS expansion complete: \(result.details)", category: .ai)
+        } catch {
+            Logger.error("❌ ATS expansion failed: \(error.localizedDescription)", category: .ai)
+        }
+    }
+
     func resetAllOnboardingData() async {
         Logger.info("🗑️ Resetting all onboarding data", category: .ai)
         // Delete SwiftData session
