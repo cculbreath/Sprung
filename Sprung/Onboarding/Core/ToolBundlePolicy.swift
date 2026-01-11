@@ -62,7 +62,8 @@ struct ToolBundlePolicy {
     static let artifactAccessTools: Set<String> = [
         OnboardingToolName.listArtifacts.rawValue,     // Metadata only - summaries for orchestration
         OnboardingToolName.requestRawFile.rawValue,    // For user download requests
-        OnboardingToolName.createWebArtifact.rawValue  // For saving web_search content
+        OnboardingToolName.createWebArtifact.rawValue, // For saving web_search content
+        OnboardingToolName.fetchAndProcessURL.rawValue // For fetching and processing web content
     ]
 
     // MARK: - Filesystem Browsing Tools
@@ -181,6 +182,7 @@ struct ToolBundlePolicy {
             OnboardingToolName.cancelUserUpload.rawValue,
             OnboardingToolName.listArtifacts.rawValue,        // Summaries only
             OnboardingToolName.createWebArtifact.rawValue,
+            OnboardingToolName.fetchAndProcessURL.rawValue,   // Fetch and process web content
             OnboardingToolName.getUserOption.rawValue         // For dossier questions during waits
         ],
 

@@ -83,6 +83,7 @@ final class OnboardingDependencyContainer {
     // MARK: - Document Processing
     let uploadStorage: OnboardingUploadStorage
     let documentProcessingService: DocumentProcessingService
+    let webExtractionService: WebExtractionService
     let documentArtifactHandler: DocumentArtifactHandler
     let documentArtifactMessenger: DocumentArtifactMessenger
     let profilePersistenceHandler: ProfilePersistenceHandler
@@ -289,6 +290,7 @@ final class OnboardingDependencyContainer {
         self.documentProcessingService = docs.documentProcessingService
         self.documentArtifactHandler = docs.documentArtifactHandler
         self.documentArtifactMessenger = docs.documentArtifactMessenger
+        self.webExtractionService = WebExtractionService(llmFacade: llmFacade)
 
         // 6. Initialize tool router components
         let tools = Self.createToolRouterComponents(
@@ -610,7 +612,8 @@ final class OnboardingDependencyContainer {
             phaseRegistry: phaseRegistry,
             todoStore: todoStore,
             artifactFilesystemContext: artifactFilesystemContext,
-            candidateDossierStore: candidateDossierStore
+            candidateDossierStore: candidateDossierStore,
+            webExtractionService: webExtractionService
         )
         // Register tools
         toolRegistrar.registerTools(

@@ -50,6 +50,7 @@ enum OnboardingToolName: String, CaseIterable {
 
     // Web Browsing Tools
     case createWebArtifact = "create_web_artifact"
+    case fetchAndProcessURL = "fetch_and_process_url"
 
     // Phase 3/4 Tools
     case ingestWritingSample = "ingest_writing_sample"
