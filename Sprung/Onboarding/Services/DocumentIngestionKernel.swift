@@ -75,7 +75,7 @@ actor DocumentIngestionKernel {
 
             let artifactRecord = try await documentProcessingService.processDocument(
                 fileURL: fileURL,
-                documentType: metadata["document_type"].string ?? "evidence",
+                documentType: metadata["documentType"].string ?? "evidence",
                 callId: nil,
                 metadata: metadata,
                 statusCallback: { [weak self] status in
@@ -88,7 +88,7 @@ actor DocumentIngestionKernel {
             // Add plan item ID to artifact record
             var record = artifactRecord
             if let planItemId = planItemId {
-                record["plan_item_id"].string = planItemId
+                record["planItemId"].string = planItemId
             }
 
             let result = IngestionResult(artifactRecord: record)

@@ -83,10 +83,10 @@ final class CardMergeWorkspaceService {
             // Add summary to index
             let summary: [String: Any] = [
                 "id": card.id.uuidString,
-                "card_type": card.cardType?.rawValue ?? "other",
+                "cardType": card.cardType?.rawValue ?? "other",
                 "title": card.title,
                 "organization": card.organization ?? "",
-                "date_range": card.dateRange ?? "",
+                "dateRange": card.dateRange ?? "",
                 "narrative_preview": String(card.narrative.prefix(200))
             ]
             indexEntries.append(summary)
@@ -147,10 +147,10 @@ final class CardMergeWorkspaceService {
         var index = try listCards().arrayValue
         let summary: [String: Any] = [
             "id": cardId,
-            "card_type": cardJSON["card_type"].stringValue,
+            "cardType": cardJSON["cardType"].stringValue,
             "title": cardJSON["title"].stringValue,
             "organization": cardJSON["organization"].stringValue,
-            "date_range": cardJSON["date_range"].stringValue,
+            "dateRange": cardJSON["dateRange"].stringValue,
             "narrative_preview": String(cardJSON["narrative"].stringValue.prefix(200))
         ]
         index.append(JSON(summary))

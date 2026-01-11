@@ -56,7 +56,7 @@ struct UpdateDossierNotesTool: InterviewTool {
 
         var response = JSON()
         response["status"].string = "updated"
-        response["notes_length"].int = notes.count
+        response["notesLength"].int = notes.count
         response["mode"].string = shouldAppend ? "append" : "replace"
 
         return .immediate(response)

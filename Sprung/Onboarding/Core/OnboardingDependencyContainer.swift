@@ -320,7 +320,8 @@ final class OnboardingDependencyContainer {
             skillStore: skillStore,
             coverRefStore: coverRefStore,
             experienceDefaultsStore: experienceDefaultsStore,
-            applicantProfileStore: applicantProfileStore
+            applicantProfileStore: applicantProfileStore,
+            artifactRecordStore: artifactRecordStore
         )
 
         // 7d. Initialize artifact archive manager

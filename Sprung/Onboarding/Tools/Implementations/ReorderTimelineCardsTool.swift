@@ -6,7 +6,7 @@ struct ReorderTimelineCardsTool: InterviewTool {
         type: .object,
         description: """
             Reorder existing skeleton timeline cards by supplying a complete list of card identifiers in the desired new order.
-            CRITICAL: You MUST provide ALL existing timeline card IDs in the ordered_ids array. Any cards omitted from the list will be PERMANENTLY REMOVED from the timeline. This is a complete replacement operation, not a partial reorder.
+            CRITICAL: You MUST provide ALL existing timeline card IDs in the orderedIds array. Any cards omitted from the list will be PERMANENTLY REMOVED from the timeline. This is a complete replacement operation, not a partial reorder.
             Use this when user wants to change the chronological order of timeline entries (e.g., sorting by date, grouping education separately, prioritizing certain roles).
             RETURNS: { "success": true, "count": <number-of-cards> }
             USAGE: First, retrieve all current card IDs (via display_timeline_entries_for_review or by tracking create_timeline_card responses). Then, reorder the complete list and call this tool with ALL IDs in the new order.
@@ -16,13 +16,13 @@ struct ReorderTimelineCardsTool: InterviewTool {
             3. Reorder the complete ID list according to user's preference
             4. Call reorder_timeline_cards with ALL IDs in new order
             5. Timeline updates immediately to reflect new order
-            ERROR: Will fail if ordered_ids is empty. Cards with IDs not in the list will be silently dropped.
+            ERROR: Will fail if orderedIds is empty. Cards with IDs not in the list will be silently dropped.
             DO NOT: Provide a partial list thinking other cards will stay in place - they will be removed.
             """,
         properties: [
-            "ordered_ids": TimelineCardSchema.orderedIds
+            "orderedIds": TimelineCardSchema.orderedIds
         ],
-        required: ["ordered_ids"],
+        required: ["orderedIds"],
         additionalProperties: false
     )
     private weak var coordinator: OnboardingInterviewCoordinator?
@@ -36,11 +36,11 @@ struct ReorderTimelineCardsTool: InterviewTool {
         guard let coordinator else {
             return .error(ToolError.executionFailed("Coordinator unavailable"))
         }
-        let orderedIdsArray = try ToolResultHelpers.requireNonEmptyArray(params["ordered_ids"].array, named: "ordered_ids")
+        let orderedIdsArray = try ToolResultHelpers.requireNonEmptyArray(params["orderedIds"].array, named: "orderedIds")
 
         let orderedIds = orderedIdsArray.compactMap { $0.string }
         guard orderedIds.count == orderedIdsArray.count else {
-            throw ToolError.invalidParameters("All elements in ordered_ids must be strings")
+            throw ToolError.invalidParameters("All elements in orderedIds must be strings")
         }
 
         // Reorder timeline cards via coordinator (which emits events)

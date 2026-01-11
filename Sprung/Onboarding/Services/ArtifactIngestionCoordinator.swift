@@ -44,7 +44,7 @@ actor ArtifactIngestionCoordinator {
 
         do {
             var metadata = JSON()
-            metadata["evidence_requirement_id"].string = requirementId
+            metadata["evidenceRequirementId"].string = requirementId
 
             let record = try await documentProcessingService.processDocument(
                 fileURL: url,
@@ -170,7 +170,7 @@ actor ArtifactIngestionCoordinator {
         payload["filename"].string = filename
         payload["source"].string = source.rawValue
         if let planItemId = planItemId {
-            payload["plan_item_id"].string = planItemId
+            payload["planItemId"].string = planItemId
         }
         payload["error"].string = error
 

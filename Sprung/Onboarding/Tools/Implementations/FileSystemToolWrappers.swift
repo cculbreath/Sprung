@@ -103,16 +103,16 @@ struct ReadArtifactFileTool: InterviewTool {
             var response = JSON()
             response["status"].string = "success"
             response["content"].string = result.content
-            response["total_lines"].int = result.totalLines
-            response["start_line"].int = result.startLine
-            response["end_line"].int = result.endLine
-            response["has_more"].bool = result.hasMore
+            response["totalLines"].int = result.totalLines
+            response["startLine"].int = result.startLine
+            response["endLine"].int = result.endLine
+            response["hasMore"].bool = result.hasMore
             if result.hasMore {
-                response["next_offset"].int = result.endLine + 1
+                response["nextOffset"].int = result.endLine + 1
                 response["hint"].string = "Use offset=\(result.endLine + 1) to continue reading"
             }
             response["ephemeral"].bool = true  // Mark for context pruning
-            response["ephemeral_turns"].int = 3
+            response["ephemeralTurns"].int = 3
 
             return .immediate(response)
         } catch {
@@ -185,7 +185,7 @@ struct ListArtifactDirectoryTool: InterviewTool {
             var response = JSON()
             response["status"].string = "success"
             response["tree"].string = result.formattedTree
-            response["total_entries"].int = result.totalCount
+            response["totalEntries"].int = result.totalCount
             response["truncated"].bool = result.truncated
 
             return .immediate(response)
@@ -260,14 +260,14 @@ struct GlobArtifactSearchTool: InterviewTool {
             for file in result.files {
                 var entry = JSON()
                 entry["path"].string = file.relativePath
-                entry["size_bytes"].int64 = file.size
+                entry["sizeBytes"].int64 = file.size
                 files.arrayObject?.append(entry)
             }
 
             var response = JSON()
             response["status"].string = "success"
             response["files"] = files
-            response["total_matches"].int = result.totalMatches
+            response["totalMatches"].int = result.totalMatches
             response["truncated"].bool = result.truncated
 
             return .immediate(response)

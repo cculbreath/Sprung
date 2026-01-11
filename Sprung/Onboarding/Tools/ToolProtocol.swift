@@ -16,7 +16,10 @@ protocol InterviewTool {
     func execute(_ params: JSON) async throws -> ToolResult
 }
 extension InterviewTool {
-    var isStrict: Bool { false }
+    /// Default to strict mode for guaranteed schema validation.
+    /// Per Anthropic best practices: "Add strict: true to your tool definitions to ensure
+    /// Claude's tool calls always match your schema exactly—no more type mismatches or missing fields."
+    var isStrict: Bool { true }
     func isAvailable() async -> Bool { true }
 }
 enum ToolResult {

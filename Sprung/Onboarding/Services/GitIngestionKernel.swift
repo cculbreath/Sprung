@@ -157,25 +157,25 @@ actor GitIngestionKernel {
             var record = JSON()
             record["id"].string = UUID().uuidString
             record["type"].string = "git_analysis"
-            record["source_type"].string = "git_repository"
+            record["sourceType"].string = "git_repository"
             record["filename"].string = repoName
-            record["file_path"].string = repoPath
-            record["created_at"].string = ISO8601DateFormatter().string(from: Date())
+            record["filePath"].string = repoPath
+            record["createdAt"].string = ISO8601DateFormatter().string(from: Date())
             if let planItemId = planItemId {
-                record["plan_item_id"].string = planItemId
+                record["planItemId"].string = planItemId
             }
 
             // Store skills and narrative cards as JSON strings
             record["skills"].string = skillsString
-            record["narrative_cards"].string = narrativeCardsString
-            record["raw_data"] = gitData
+            record["narrativeCards"].string = narrativeCardsString
+            record["rawData"] = gitData
 
             // Store git metadata for SwiftData persistence
             var metadata = JSON()
-            metadata["git_metadata"] = gitData
+            metadata["gitMetadata"] = gitData
             record["metadata"] = metadata
 
-            // Build extracted_text for display
+            // Build extractedText for display
             var extractedParts: [String] = []
             extractedParts.append("## Repository: \(repoName)")
 
@@ -200,7 +200,7 @@ actor GitIngestionKernel {
                 extractedParts.append("\n## Notable Achievements\n" + bullets.joined(separator: "\n"))
             }
 
-            record["extracted_text"].string = extractedParts.joined(separator: "\n")
+            record["extractedText"].string = extractedParts.joined(separator: "\n")
             Logger.info("✅ Git knowledge extraction: \(analysis.skills.count) skills, \(analysis.narrativeCards.count) narrative cards", category: .ai)
 
             let result = IngestionResult(artifactRecord: record)
@@ -245,13 +245,13 @@ actor GitIngestionKernel {
 
         // Get file types breakdown
         let files = try await runGitCommand(["ls-files"], in: repoPath)
-        data["file_types"] = parseFileTypes(files)
+        data["fileTypes"] = parseFileTypes(files)
 
         // Get recent commits (last 50)
         let commits = try await runGitCommand([
             "log", "--oneline", "-50", "--format=%h|%an|%s"
         ], in: repoPath)
-        data["recent_commits"] = parseCommits(commits)
+        data["recentCommits"] = parseCommits(commits)
 
         // Get branch info
         let branches = try await runGitCommand(["branch", "-a"], in: repoPath)
@@ -259,13 +259,13 @@ actor GitIngestionKernel {
 
         // Get repo stats
         let totalCommits = try await runGitCommand(["rev-list", "--count", "HEAD"], in: repoPath)
-        data["total_commits"].int = Int(totalCommits.trimmingCharacters(in: .whitespacesAndNewlines)) ?? 0
+        data["totalCommits"].int = Int(totalCommits.trimmingCharacters(in: .whitespacesAndNewlines)) ?? 0
 
         // Get first and last commit dates
         let firstCommit = try await runGitCommand(["log", "--reverse", "--format=%ci", "-1"], in: repoPath)
         let lastCommit = try await runGitCommand(["log", "--format=%ci", "-1"], in: repoPath)
-        data["first_commit"].string = firstCommit.trimmingCharacters(in: .whitespacesAndNewlines)
-        data["last_commit"].string = lastCommit.trimmingCharacters(in: .whitespacesAndNewlines)
+        data["firstCommit"].string = firstCommit.trimmingCharacters(in: .whitespacesAndNewlines)
+        data["lastCommit"].string = lastCommit.trimmingCharacters(in: .whitespacesAndNewlines)
 
         return data
     }

@@ -51,7 +51,7 @@ final class UIResponseCoordinator {
         let result = buildCompletionResult(
             status: "completed",
             message: "User selected 'Other' and provided: \(otherText)",
-            data: JSON(["other_response": otherText])
+            data: JSON(["otherResponse": otherText])
         )
         completeUITool(toolName: OnboardingToolName.getUserOption.rawValue, result: result)
         Logger.info("✅ Choice selection (Other) completed", category: .ai)
@@ -113,7 +113,7 @@ final class UIResponseCoordinator {
             completionResult = buildCompletionResult(
                 status: "completed",
                 message: "User selected option(s): \(selectionIds.joined(separator: ", "))",
-                data: JSON(["selected_ids": selectionIds])
+                data: JSON(["selectedIds": selectionIds])
             )
         }
 
@@ -215,7 +215,7 @@ final class UIResponseCoordinator {
             message += ". Notes: \(notes)"
         }
         if statusDescription == "confirmed" {
-            message += ". Next step: call configure_enabled_sections to let the user choose which resume sections to include."
+            message += ". Next step: call configure_enabledSections to let the user choose which resume sections to include."
         }
 
         let result = buildCompletionResult(status: "completed", message: message)
@@ -233,7 +233,7 @@ final class UIResponseCoordinator {
 
         // Build the result with timeline info
         var resultData = JSON()
-        resultData["timeline_summary"].string = timelineInfo.isEmpty ? "No timeline cards" : timelineInfo
+        resultData["timelineSummary"].string = timelineInfo.isEmpty ? "No timeline cards" : timelineInfo
 
         var resultMessage = message
         if !timelineInfo.isEmpty {
@@ -347,7 +347,7 @@ final class UIResponseCoordinator {
             notes: "Profile confirmed via intake card",
             details: ["method": "intake_card"]
         )))
-        // Mark the main applicant_profile_complete objective as complete
+        // Mark the main applicantProfile_complete objective as complete
         await eventBus.publish(.objective(.statusUpdateRequested(
             id: OnboardingObjectiveId.applicantProfileComplete.rawValue,
             status: "completed",
@@ -355,12 +355,12 @@ final class UIResponseCoordinator {
             notes: "Applicant profile validated and saved",
             details: ["method": "intake_card"]
         )))
-        Logger.info("✅ applicant_profile_complete objective marked complete", category: .ai)
+        Logger.info("✅ applicantProfile_complete objective marked complete", category: .ai)
 
         // Build result with profile data for the LLM
         var resultData = JSON()
         resultData["profile"] = profileData
-        resultData["validation_status"].string = status
+        resultData["validationStatus"].string = status
 
         // Format a human-readable summary
         var summaryParts: [String] = ["Profile confirmed:"]
@@ -437,7 +437,7 @@ final class UIResponseCoordinator {
             notes: "Applicant profile validated and saved",
             details: nil
         )))
-        Logger.info("✅ applicant_profile_complete objective marked complete via draft submission", category: .ai)
+        Logger.info("✅ applicantProfile_complete objective marked complete via draft submission", category: .ai)
 
         // Build result with profile data for the LLM
         // Omit binary photo data to avoid token waste
@@ -447,8 +447,8 @@ final class UIResponseCoordinator {
         }
 
         var resultData = JSON()
-        resultData["applicant_profile"] = llmSafeProfile
-        resultData["validation_status"].string = "validated_by_user"
+        resultData["applicantProfile"] = llmSafeProfile
+        resultData["validationStatus"].string = "validated_by_user"
 
         let result = buildCompletionResult(
             status: "completed",
@@ -484,7 +484,7 @@ final class UIResponseCoordinator {
         ui.shouldGenerateTitleSets = hasJobTitles
         Logger.info("🏷️ Title set curation \(hasJobTitles ? "enabled" : "disabled") via custom.jobTitles", category: .ai)
 
-        // Mark enabled_sections objective as complete
+        // Mark enabledSections objective as complete
         await eventBus.publish(.objective(.statusUpdateRequested(
             id: OnboardingObjectiveId.enabledSections.rawValue,
             status: "completed",
@@ -506,9 +506,9 @@ final class UIResponseCoordinator {
         message += ". Phase has been advanced to Phase 3 (Evidence Collection)."
 
         var resultData = JSON()
-        resultData["enabled_sections"] = JSON(enabled)
+        resultData["enabledSections"] = JSON(enabled)
         if !customFields.isEmpty {
-            resultData["custom_fields"] = JSON(customFields.map { ["key": $0.key, "description": $0.description] })
+            resultData["customFields"] = JSON(customFields.map { ["key": $0.key, "description": $0.description] })
         }
 
         let result = buildCompletionResult(status: "phase_advanced", message: message, data: resultData)
@@ -634,7 +634,7 @@ final class UIResponseCoordinator {
             var metadata = JSON()
             metadata["title"].string = "Writing sample"
             metadata["instructions"].string = "Transcribe this writing sample verbatim"
-            metadata["verbatim_transcription"].bool = true  // Flag for verbatim mode
+            metadata["verbatimTranscription"].bool = true  // Flag for verbatim mode
 
             // Convert to ProcessedUploadInfo for the event
             // Use item.filename (original name) not storageURL.lastPathComponent (UUID)

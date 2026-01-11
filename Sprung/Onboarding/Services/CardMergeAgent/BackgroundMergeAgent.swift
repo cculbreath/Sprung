@@ -173,7 +173,7 @@ class BackgroundMergeAgent {
         2. Weave in unique content from other cards (don't just append)
         3. Preserve ALL specific numbers, dates, technologies
         4. Union all metadata (domains, scale, keywords, evidence_anchors)
-        5. Use the widest date_range that covers all cards
+        5. Use the widest dateRange that covers all cards
         6. Keep the most descriptive title
 
         ## SOURCE CARDS
@@ -265,10 +265,10 @@ class BackgroundMergeAgent {
            let cardDict = try? JSONSerialization.jsonObject(with: cardData) as? [String: Any] {
             let summary: [String: Any] = [
                 "id": newCardId,
-                "card_type": cardDict["card_type"] as? String ?? "",
+                "cardType": cardDict["cardType"] as? String ?? "",
                 "title": cardDict["title"] as? String ?? "",
                 "organization": cardDict["organization"] as? String ?? "",
-                "date_range": cardDict["date_range"] as? String ?? "",
+                "dateRange": cardDict["dateRange"] as? String ?? "",
                 "narrative_preview": String((cardDict["narrative"] as? String ?? "").prefix(200))
             ]
             index.append(summary)

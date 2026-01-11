@@ -78,7 +78,7 @@ actor ChatInventoryService {
                 modelId: modelId,
                 as: [KnowledgeCard].self,
                 schema: Self.narrativeCardsSchema,
-                schemaName: "chat_narrative_cards",
+                schemaName: "chat_narrativeCards",
                 temperature: 0.2,
                 backend: .openRouter
             )
@@ -108,10 +108,10 @@ actor ChatInventoryService {
         var artifactRecord = JSON()
         artifactRecord["id"].string = artifactId
         artifactRecord["filename"].string = "Interview Conversation"
-        artifactRecord["source_type"].string = "chat"
-        artifactRecord["upload_time"].string = ISO8601DateFormatter().string(from: Date())
+        artifactRecord["sourceType"].string = "chat"
+        artifactRecord["uploadTime"].string = ISO8601DateFormatter().string(from: Date())
         artifactRecord["skills"].string = skillsJSON
-        artifactRecord["narrative_cards"].string = narrativeCardsJSON
+        artifactRecord["narrativeCards"].string = narrativeCardsJSON
 
         // Store in artifact repository
         await artifactRepository.addArtifactRecord(artifactRecord)

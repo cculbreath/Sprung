@@ -100,6 +100,7 @@ final class SkillsProcessingService {
     /// LLM-powered intelligent deduplication of skills.
     /// Identifies semantically equivalent skills even with different names/casing.
     /// Uses model max tokens to handle large skill sets in a single pass.
+    /// Tracks as an agent for visibility in the agent tab.
     func consolidateDuplicates() async throws -> SkillsProcessingResult {
         guard let facade = facade else {
             throw SkillsProcessingError.llmNotConfigured
@@ -115,41 +116,77 @@ final class SkillsProcessingService {
             )
         }
 
+        // Register as an agent for visibility in agent tab
+        let agentId = UUID().uuidString
+        agentActivityTracker?.trackAgent(
+            id: agentId,
+            type: .skillsProcessing,
+            name: "Skills Deduplication",
+            task: nil as Task<Void, Never>?
+        )
+        agentActivityTracker?.appendTranscript(
+            agentId: agentId,
+            entryType: .system,
+            content: "Starting deduplication of \(allSkills.count) skills"
+        )
+
         status = .processing("Analyzing \(allSkills.count) skills for duplicates...")
         Logger.info("🔧 Starting deduplication of \(allSkills.count) skills", category: .ai)
 
-        // Build compact skill list for LLM analysis (all skills in one pass)
-        let skillDescriptions = allSkills.map { skill in
-            "\(skill.id.uuidString): \(skill.canonical) [\(skill.category.rawValue)]"
+        do {
+            // Build compact skill list for LLM analysis (all skills in one pass)
+            let skillDescriptions = allSkills.map { skill in
+                "\(skill.id.uuidString): \(skill.canonical) [\(skill.category.rawValue)]"
+            }
+
+            let duplicateGroups = try await analyzeAllSkillsForDuplicates(
+                skills: skillDescriptions,
+                facade: facade,
+                agentId: agentId
+            )
+
+            // Apply deduplication
+            status = .processing("Merging \(duplicateGroups.count) duplicate groups...")
+            agentActivityTracker?.appendTranscript(
+                agentId: agentId,
+                entryType: .system,
+                content: "Merging \(duplicateGroups.count) duplicate groups"
+            )
+            let mergeCount = applyDuplicateMerges(groups: duplicateGroups)
+
+            let result = SkillsProcessingResult(
+                operation: "Deduplication",
+                skillsProcessed: allSkills.count,
+                skillsModified: mergeCount,
+                details: "Found \(duplicateGroups.count) duplicate groups, merged \(mergeCount) skills"
+            )
+
+            status = .completed("Merged \(mergeCount) duplicate skills")
+            Logger.info("🔧 Deduplication complete: \(result.details)", category: .ai)
+
+            agentActivityTracker?.appendTranscript(
+                agentId: agentId,
+                entryType: .system,
+                content: "Deduplication complete",
+                details: result.details
+            )
+            agentActivityTracker?.markCompleted(agentId: agentId)
+
+            return result
+        } catch {
+            status = .failed(error.localizedDescription)
+            agentActivityTracker?.markFailed(agentId: agentId, error: error.localizedDescription)
+            throw error
         }
-
-        let duplicateGroups = try await analyzeAllSkillsForDuplicates(
-            skills: skillDescriptions,
-            facade: facade
-        )
-
-        // Apply deduplication
-        status = .processing("Merging \(duplicateGroups.count) duplicate groups...")
-        let mergeCount = applyDuplicateMerges(groups: duplicateGroups)
-
-        let result = SkillsProcessingResult(
-            operation: "Deduplication",
-            skillsProcessed: allSkills.count,
-            skillsModified: mergeCount,
-            details: "Found \(duplicateGroups.count) duplicate groups, merged \(mergeCount) skills"
-        )
-
-        status = .completed("Merged \(mergeCount) duplicate skills")
-        Logger.info("🔧 Deduplication complete: \(result.details)", category: .ai)
-
-        return result
     }
 
     /// Analyze all skills for duplicates, handling multi-part responses if output exceeds token limit.
     /// The LLM sees ALL skills in input but can output in multiple parts if needed.
+    /// Handles MAX_TOKENS errors by automatically continuing with unprocessed skills.
     private func analyzeAllSkillsForDuplicates(
         skills: [String],
-        facade: LLMFacade
+        facade: LLMFacade,
+        agentId: String
     ) async throws -> [DuplicateGroup] {
         var allDuplicateGroups: [DuplicateGroup] = []
         var processedSkillIds: Set<String> = []
@@ -166,23 +203,45 @@ final class SkillsProcessingService {
             )
 
             Logger.info("🔧 Deduplication part \(partNumber): analyzing skills (already processed: \(processedSkillIds.count))", category: .ai)
-
-            let response: DeduplicationResponse = try await facade.executeStructuredWithDictionarySchema(
-                prompt: prompt,
-                modelId: modelId,
-                as: DeduplicationResponse.self,
-                schema: deduplicationSchema,
-                schemaName: "deduplication_analysis",
-                maxOutputTokens: 32768,  // Reduced to encourage multi-part
-                backend: .gemini
+            agentActivityTracker?.appendTranscript(
+                agentId: agentId,
+                entryType: .system,
+                content: "Part \(partNumber): analyzing \(skills.count - processedSkillIds.count) remaining skills"
             )
 
-            allDuplicateGroups.append(contentsOf: response.duplicateGroups)
-            processedSkillIds.formUnion(response.processedSkillIds)
-            hasMore = response.hasMore
-            partNumber += 1
+            do {
+                let response: DeduplicationResponse = try await facade.executeStructuredWithDictionarySchema(
+                    prompt: prompt,
+                    modelId: modelId,
+                    as: DeduplicationResponse.self,
+                    schema: deduplicationSchema,
+                    schemaName: "deduplication_analysis",
+                    maxOutputTokens: 65536,  // 64k - Gemini 2.5 Flash limit
+                    backend: .gemini
+                )
 
-            Logger.info("🔧 Part \(partNumber - 1) complete: \(response.duplicateGroups.count) groups, hasMore: \(hasMore)", category: .ai)
+                allDuplicateGroups.append(contentsOf: response.duplicateGroups)
+                processedSkillIds.formUnion(response.processedSkillIds)
+                hasMore = response.hasMore
+                partNumber += 1
+
+                Logger.info("🔧 Part \(partNumber - 1) complete: \(response.duplicateGroups.count) groups, hasMore: \(hasMore)", category: .ai)
+            } catch let error as GoogleContentGenerator.ContentGeneratorError {
+                // Handle MAX_TOKENS by forcing continuation
+                if case .extractionBlocked(let finishReason) = error, finishReason == "MAX_TOKENS" {
+                    Logger.warning("⚠️ Deduplication part \(partNumber) hit MAX_TOKENS, will retry with remaining skills", category: .ai)
+                    agentActivityTracker?.appendTranscript(
+                        agentId: agentId,
+                        entryType: .system,
+                        content: "Part \(partNumber) hit MAX_TOKENS, continuing with remaining skills"
+                    )
+                    // Force continuation - the next iteration will use a continuation prompt
+                    partNumber += 1
+                    hasMore = processedSkillIds.count < skills.count
+                    continue
+                }
+                throw error
+            }
 
             // Safety limit
             if partNumber > 20 {
@@ -592,7 +651,7 @@ final class SkillsProcessingService {
             as: ATSExpansionResponse.self,
             schema: schema,
             schemaName: "ats_expansion",
-            maxOutputTokens: 32768,
+            maxOutputTokens: 65536,  // 64k - Gemini 2.5 Flash limit
             backend: .gemini
         )
 

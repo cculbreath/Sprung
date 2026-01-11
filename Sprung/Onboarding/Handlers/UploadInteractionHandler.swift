@@ -99,9 +99,9 @@ final class UploadInteractionHandler {
             "📤 Upload handling started",
             category: .diagnostics,
             metadata: [
-                "request_id": id.uuidString,
+                "requestId": id.uuidString,
                 "kind": request.kind.rawValue,
-                "file_count": "\(fileURLs.count)",
+                "fileCount": "\(fileURLs.count)",
                 "title": request.metadata.title
             ]
         )
@@ -138,10 +138,10 @@ final class UploadInteractionHandler {
         }
         var metadata = JSON()
         metadata["title"].string = request.metadata.title
-        metadata["allow_multiple"].bool = request.metadata.allowMultiple
-        metadata["allow_url"].bool = request.metadata.allowURL
+        metadata["allowMultiple"].bool = request.metadata.allowMultiple
+        metadata["allowUrl"].bool = request.metadata.allowURL
         if let cancelMessage = request.metadata.cancelMessage {
-            metadata["cancel_message"].string = cancelMessage
+            metadata["cancelMessage"].string = cancelMessage
         }
         payload["metadata"] = metadata
         do {
@@ -150,7 +150,7 @@ final class UploadInteractionHandler {
                     payload["status"].string = "cancelled"
                     let trimmed = cancelReason.trimmingCharacters(in: .whitespacesAndNewlines)
                     if !trimmed.isEmpty {
-                        payload["cancel_reason"].string = trimmed
+                        payload["cancelReason"].string = trimmed
                     }
                 } else {
                     payload["status"].string = "skipped"
@@ -161,22 +161,22 @@ final class UploadInteractionHandler {
                 uploadMetadata["title"].string = request.metadata.title
                 uploadMetadata["instructions"].string = request.metadata.instructions
                 if let targetKey = request.metadata.targetKey {
-                    uploadMetadata["target_key"].string = targetKey
+                    uploadMetadata["targetKey"].string = targetKey
                 }
                 if let targetPhaseObjectives = request.metadata.targetPhaseObjectives {
-                    uploadMetadata["target_phase_objectives"] = JSON(targetPhaseObjectives)
+                    uploadMetadata["targetPhaseObjectives"] = JSON(targetPhaseObjectives)
                 }
                 if let targetDeliverable = request.metadata.targetDeliverable {
-                    uploadMetadata["target_deliverable"].string = targetDeliverable
+                    uploadMetadata["targetDeliverable"].string = targetDeliverable
                 }
                 if let userValidated = request.metadata.userValidated {
-                    uploadMetadata["user_validated"].bool = userValidated
+                    uploadMetadata["userValidated"].bool = userValidated
                 }
                 if let url = originalURL, fileURLs.isEmpty {
                     // Handle URL-only artifact
                     var urlJSON = JSON()
                     urlJSON["source"].string = "url"
-                    urlJSON["original_url"].string = url.absoluteString
+                    urlJSON["originalUrl"].string = url.absoluteString
                     urlJSON["filename"].string = url.host ?? "link"
                     payload["status"].string = "uploaded"
                     payload["files"] = JSON([urlJSON])
@@ -205,7 +205,7 @@ final class UploadInteractionHandler {
                         var json = item.toJSON()
                         if let originalURL {
                             json["source"].string = "url"
-                            json["original_url"].string = originalURL.absoluteString
+                            json["originalUrl"].string = originalURL.absoluteString
                         }
                         filesJSON.append(json)
                     }
@@ -234,7 +234,7 @@ final class UploadInteractionHandler {
                         metadata: uploadMetadata
                     )))
                 } else {
-                    Logger.debug("ℹ️ Upload has no target_key (generic upload)", category: .ai)
+                    Logger.debug("ℹ️ Upload has no targetKey (generic upload)", category: .ai)
                 }
             }
             if shouldReportProgress && !fileURLs.isEmpty {
@@ -267,7 +267,7 @@ final class UploadInteractionHandler {
             Logger.info("⚠️ Upload skipped by user", category: .ai)
         case "cancelled":
             Logger.info("⚠️ Upload cancelled by assistant", category: .ai, metadata: [
-                "reason": payload["cancel_reason"].stringValue
+                "reason": payload["cancelReason"].stringValue
             ])
         case "failed":
             let errorDescription = payload["error"].stringValue
@@ -280,9 +280,9 @@ final class UploadInteractionHandler {
             "📤 Upload handling finished",
             category: .diagnostics,
             metadata: [
-                "request_id": id.uuidString,
+                "requestId": id.uuidString,
                 "status": status,
-                "duration_ms": "\(totalMs)"
+                "durationMs": "\(totalMs)"
             ]
         )
         return payload
@@ -327,9 +327,9 @@ final class UploadInteractionHandler {
             var devPayload = JSON()
             devPayload["title"].string = "Profile photo uploaded"
             var details = JSON()
-            details["target_key"].string = "basics.image"
+            details["targetKey"].string = "basics.image"
             details["filename"].string = first.filename
-            details["content_type"].string = first.contentType
+            details["contentType"].string = first.contentType
             details["note"].string = "Photo stored in ApplicantProfile; binary image data is not sent to the LLM."
             devPayload["details"] = details
             await eventBus.publish(.llm(.sendCoordinatorMessage(payload: devPayload)))
@@ -343,7 +343,7 @@ final class UploadInteractionHandler {
                 details: nil
             )))
         default:
-            throw ToolError.invalidParameters("Unsupported target_key: \(target)")
+            throw ToolError.invalidParameters("Unsupported targetKey: \(target)")
         }
     }
     private func removeUploadRequest(id: UUID) {

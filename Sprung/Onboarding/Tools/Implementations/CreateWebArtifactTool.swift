@@ -34,8 +34,8 @@ struct CreateWebArtifactTool: InterviewTool {
         guard let content = params["content"].string, !content.isEmpty else {
             return ToolResultHelpers.invalidParameters("content is required")
         }
-        guard let documentType = params["document_type"].string, !documentType.isEmpty else {
-            return ToolResultHelpers.invalidParameters("document_type is required")
+        guard let documentType = params["documentType"].string, !documentType.isEmpty else {
+            return ToolResultHelpers.invalidParameters("documentType is required")
         }
 
         let summary = params["summary"].string ?? ""
@@ -48,28 +48,28 @@ struct CreateWebArtifactTool: InterviewTool {
         artifactRecord["id"].string = artifactId
         artifactRecord["filename"].string = "web_\(documentType)_\(artifactId.prefix(8)).txt"
         artifactRecord["title"].string = title
-        artifactRecord["document_type"].string = documentType
-        artifactRecord["content_type"].string = "text/plain"
-        artifactRecord["extracted_text"].string = content
+        artifactRecord["documentType"].string = documentType
+        artifactRecord["contentType"].string = "text/plain"
+        artifactRecord["extractedText"].string = content
         artifactRecord["summary"].string = summary.isEmpty ? String(content.prefix(200)) : summary
-        artifactRecord["brief_description"].string = summary.isEmpty ? "Web content from \(documentType)" : summary
-        artifactRecord["source_url"].string = url
-        artifactRecord["created_at"].string = ISO8601DateFormatter().string(from: Date())
+        artifactRecord["briefDescription"].string = summary.isEmpty ? "Web content from \(documentType)" : summary
+        artifactRecord["sourceUrl"].string = url
+        artifactRecord["createdAt"].string = ISO8601DateFormatter().string(from: Date())
 
         // Add metadata
         var metadata = JSON()
-        metadata["source_type"].string = "web_search"
-        metadata["source_url"].string = url
-        metadata["document_type"].string = documentType
-        metadata["extraction"]["character_count"].int = content.count
-        metadata["extraction"]["extraction_method"].string = "web_search"
+        metadata["sourceType"].string = "web_search"
+        metadata["sourceUrl"].string = url
+        metadata["documentType"].string = documentType
+        metadata["extraction"]["characterCount"].int = content.count
+        metadata["extraction"]["extractionMethod"].string = "web_search"
         artifactRecord["metadata"] = metadata
 
         // Summary metadata for consistency with other artifacts
         var summaryMetadata = JSON()
-        summaryMetadata["document_type"].string = documentType
-        summaryMetadata["brief_description"].string = artifactRecord["brief_description"].stringValue
-        artifactRecord["summary_metadata"] = summaryMetadata
+        summaryMetadata["documentType"].string = documentType
+        summaryMetadata["briefDescription"].string = artifactRecord["briefDescription"].stringValue
+        artifactRecord["summaryMetadata"] = summaryMetadata
 
         // Emit artifact record produced event for StateCoordinator to process
         await eventBus.publish(.artifact(.recordProduced(record: artifactRecord)))
@@ -80,9 +80,9 @@ struct CreateWebArtifactTool: InterviewTool {
         var response = JSON()
         response["status"].string = "completed"
         response["success"].bool = true
-        response["artifact_id"].string = artifactId
+        response["artifactId"].string = artifactId
         response["title"].string = title
-        response["document_type"].string = documentType
+        response["documentType"].string = documentType
         response["message"].string = "Web artifact created successfully from \(url)"
 
         return .immediate(response)

@@ -116,15 +116,15 @@ actor ToolExecutionCoordinator: OnboardingEventEmitter {
 
             // Special handling for extract_document tool - emit artifact record produced event
             // DocumentArtifactMessenger will batch and send the extracted content to the LLM
-            if toolName == "extract_document", output["artifact_record"] != .null {
-                await emit(.artifact(.recordProduced(record: output["artifact_record"])))
+            if toolName == "extract_document", output["artifactRecord"] != .null {
+                await emit(.artifact(.recordProduced(record: output["artifactRecord"])))
             }
 
             // Tool completed - send response to LLM (result already stored in ConversationLog above)
             await emitToolResponse(callId: callId, toolName: toolName)
 
             // Special handling for bootstrap tools - remove from allowed tools after use
-            if output["disable_after_use"].bool == true {
+            if output["disableAfterUse"].bool == true {
                 if let name = toolName {
                     await stateCoordinator.excludeTool(name)
                     Logger.info("🚀 Bootstrap tool '\(name)' excluded from future tool calls", category: .ai)

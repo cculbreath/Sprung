@@ -73,13 +73,13 @@ struct OpenDocumentCollectionTool: InterviewTool {
         // Build minimal response
         var response = JSON()
         response["status"].string = "completed"
-        response["ui_displayed"].bool = true
-        response["artifact_count"].int = artifactCount
-        response["narrative_card_count"].int = narrativeCardCount
-        response["await_user_action"].string = "done_with_uploads"
+        response["uiDisplayed"].bool = true
+        response["artifactCount"].int = artifactCount
+        response["narrativeCardCount"].int = narrativeCardCount
+        response["awaitUserAction"].string = "done_with_uploads"
 
         if let message = message {
-            response["displayed_message"].string = message
+            response["displayedMessage"].string = message
         }
 
         return .immediate(response)

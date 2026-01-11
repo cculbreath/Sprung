@@ -93,7 +93,7 @@ enum ArtifactExporter {
            let metadataJSON = artifact.metadataJSON,
            let metadataData = metadataJSON.data(using: .utf8),
            let metadata = try? JSONSerialization.jsonObject(with: metadataData) as? [String: Any],
-           let rawData = metadata["raw_data"] as? [String: Any] {
+           let rawData = metadata["rawData"] as? [String: Any] {
             try exportGitAnalysis(rawData, to: artifactDir)
         }
     }
@@ -117,9 +117,9 @@ enum ArtifactExporter {
         }
 
         // Commit stats
-        let totalCommits = rawData["total_commits"] as? Int ?? 0
-        let firstCommit = rawData["first_commit"] as? String ?? ""
-        let lastCommit = rawData["last_commit"] as? String ?? ""
+        let totalCommits = rawData["totalCommits"] as? Int ?? 0
+        let firstCommit = rawData["firstCommit"] as? String ?? ""
+        let lastCommit = rawData["lastCommit"] as? String ?? ""
         if totalCommits > 0 {
             report += "## Commit Statistics\n"
             report += "- Total commits: \(totalCommits)\n"
@@ -129,7 +129,7 @@ enum ArtifactExporter {
         }
 
         // Recent commits
-        if let recentCommits = rawData["recent_commits"] as? [[String: Any]], !recentCommits.isEmpty {
+        if let recentCommits = rawData["recentCommits"] as? [[String: Any]], !recentCommits.isEmpty {
             report += "## Recent Commits\n"
             for commit in recentCommits.prefix(20) {
                 let hash = commit["hash"] as? String ?? ""
@@ -141,7 +141,7 @@ enum ArtifactExporter {
         }
 
         // File types
-        if let fileTypes = rawData["file_types"] as? [String: Int], !fileTypes.isEmpty {
+        if let fileTypes = rawData["fileTypes"] as? [String: Int], !fileTypes.isEmpty {
             report += "## File Types & Technologies\n"
             let sorted = fileTypes.sorted { $0.value > $1.value }
             for (ext, count) in sorted.prefix(15) {

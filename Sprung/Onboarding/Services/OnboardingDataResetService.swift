@@ -19,6 +19,7 @@ final class OnboardingDataResetService {
     private let coverRefStore: CoverRefStore
     private let experienceDefaultsStore: ExperienceDefaultsStore
     private let applicantProfileStore: ApplicantProfileStore
+    private let artifactRecordStore: ArtifactRecordStore
 
     init(
         sessionPersistenceHandler: SwiftDataSessionPersistenceHandler,
@@ -26,7 +27,8 @@ final class OnboardingDataResetService {
         skillStore: SkillStore,
         coverRefStore: CoverRefStore,
         experienceDefaultsStore: ExperienceDefaultsStore,
-        applicantProfileStore: ApplicantProfileStore
+        applicantProfileStore: ApplicantProfileStore,
+        artifactRecordStore: ArtifactRecordStore
     ) {
         self.sessionPersistenceHandler = sessionPersistenceHandler
         self.knowledgeCardStore = knowledgeCardStore
@@ -34,6 +36,7 @@ final class OnboardingDataResetService {
         self.coverRefStore = coverRefStore
         self.experienceDefaultsStore = experienceDefaultsStore
         self.applicantProfileStore = applicantProfileStore
+        self.artifactRecordStore = artifactRecordStore
     }
 
     /// Delete the current SwiftData session
@@ -45,8 +48,15 @@ final class OnboardingDataResetService {
 
     /// Clear all onboarding data: session, knowledge cards, skills, CoverRefs, ExperienceDefaults, and ApplicantProfile.
     /// Used when user chooses "Start Over" to begin fresh.
+    /// Writing sample artifacts are deleted while non-writing artifacts are preserved in the archive.
     func clearAllOnboardingData() {
         Logger.info("🗑️ Clearing all onboarding data", category: .ai)
+
+        // Handle artifact cleanup before deleting the session
+        // Writing samples are deleted, non-writing artifacts are demoted to archive
+        if let session = sessionPersistenceHandler.getActiveSession() {
+            cleanupSessionArtifacts(session: session)
+        }
 
         // Delete session
         deleteCurrentSession()
@@ -69,6 +79,27 @@ final class OnboardingDataResetService {
         // Reset ApplicantProfile to defaults (including photo)
         applicantProfileStore.reset()
         Logger.debug("🗑️ Reset ApplicantProfile", category: .ai)
+    }
+
+    /// Clean up session artifacts: delete writing samples, demote others to archive
+    private func cleanupSessionArtifacts(session: OnboardingSession) {
+        let artifacts = artifactRecordStore.artifacts(for: session)
+        var deletedCount = 0
+        var archivedCount = 0
+
+        for artifact in artifacts {
+            if ArtifactRecordService.isWritingSample(artifact) {
+                // Writing samples are deleted on "start over"
+                artifactRecordStore.deleteArtifact(artifact)
+                deletedCount += 1
+            } else {
+                // Non-writing artifacts are demoted to archive for reuse
+                artifactRecordStore.demoteArtifact(artifact)
+                archivedCount += 1
+            }
+        }
+
+        Logger.info("🗑️ Artifact cleanup: deleted \(deletedCount) writing samples, archived \(archivedCount) documents", category: .ai)
     }
 
     /// Clear only session-specific data (keep skills/cards for reuse)

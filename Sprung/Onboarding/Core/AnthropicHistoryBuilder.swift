@@ -51,7 +51,7 @@ struct AnthropicHistoryBuilder {
                         }
 
                         // Check for PDF attachment that needs to be re-included (resume uploads)
-                        // The user message text contains <ui-action-result> with pdf_attachment.storage_url
+                        // The user message text contains <ui-action-result> with pdfAttachment.storageUrl
                         if let pdfBlocks = extractPDFFromUserMessage(text) {
                             var contentBlocks: [AnthropicContentBlock] = [.text(AnthropicTextBlock(text: text))]
                             contentBlocks.append(contentsOf: pdfBlocks)
@@ -95,13 +95,13 @@ struct AnthropicHistoryBuilder {
                 // Check for PDF attachment that needs to be re-included
                 if let outputData = output.output.data(using: .utf8) {
                     let json = JSON(outputData)
-                    if json["pdf_attachment"].exists(),
-                       let storagePath = json["pdf_attachment"]["storage_url"].string,
+                    if json["pdfAttachment"].exists(),
+                       let storagePath = json["pdfAttachment"]["storageUrl"].string,
                        let pdfData = try? Data(contentsOf: URL(fileURLWithPath: storagePath)) {
                         let pdfBase64 = pdfData.base64EncodedString()
                         let docSource = AnthropicDocumentSource(mediaType: "application/pdf", data: pdfBase64)
                         contentBlocks.append(.document(AnthropicDocumentBlock(source: docSource)))
-                        let filename = json["pdf_attachment"]["filename"].string ?? "resume.pdf"
+                        let filename = json["pdfAttachment"]["filename"].string ?? "resume.pdf"
                         Logger.info("📄 Re-including PDF in history: \(filename) (\(pdfData.count / 1024) KB)", category: .ai)
                     }
                 }
@@ -191,11 +191,11 @@ struct AnthropicHistoryBuilder {
     // MARK: - PDF Re-inclusion
 
     /// Extract PDF attachment from user message text if present.
-    /// User messages containing resume uploads have <ui-action-result> tags with pdf_attachment info.
+    /// User messages containing resume uploads have <ui-action-result> tags with pdfAttachment info.
     /// Returns document blocks to append if PDF found, nil otherwise.
     private func extractPDFFromUserMessage(_ text: String) -> [AnthropicContentBlock]? {
-        // Look for <ui-action-result> tag containing pdf_attachment
-        guard text.contains("pdf_attachment") else { return nil }
+        // Look for <ui-action-result> tag containing pdfAttachment
+        guard text.contains("pdfAttachment") else { return nil }
 
         // Extract JSON content from the ui-action-result tag
         guard let startRange = text.range(of: "<ui-action-result"),
@@ -214,16 +214,16 @@ struct AnthropicHistoryBuilder {
         guard let jsonData = jsonContent.data(using: .utf8) else { return nil }
         let json = JSON(jsonData)
 
-        // Check for pdf_attachment with storage_url
-        guard json["pdf_attachment"].exists(),
-              let storagePath = json["pdf_attachment"]["storage_url"].string,
+        // Check for pdfAttachment with storageUrl
+        guard json["pdfAttachment"].exists(),
+              let storagePath = json["pdfAttachment"]["storageUrl"].string,
               let pdfData = try? Data(contentsOf: URL(fileURLWithPath: storagePath)) else {
             return nil
         }
 
         let pdfBase64 = pdfData.base64EncodedString()
         let docSource = AnthropicDocumentSource(mediaType: "application/pdf", data: pdfBase64)
-        let filename = json["pdf_attachment"]["filename"].string ?? "resume.pdf"
+        let filename = json["pdfAttachment"]["filename"].string ?? "resume.pdf"
         Logger.info("📄 Re-including PDF in user message history: \(filename) (\(pdfData.count / 1024) KB)", category: .ai)
 
         return [.document(AnthropicDocumentBlock(source: docSource))]

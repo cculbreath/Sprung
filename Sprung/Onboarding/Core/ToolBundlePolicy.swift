@@ -96,7 +96,8 @@ struct ToolBundlePolicy {
             OnboardingToolName.agentReady.rawValue,           // Initial handshake at interview start
             OnboardingToolName.getUserOption.rawValue,        // For structured questions
             OnboardingToolName.getApplicantProfile.rawValue,  // Profile form (agent_ready directs here)
-            OnboardingToolName.validateApplicantProfile.rawValue  // For URL/document extraction validation
+            OnboardingToolName.validateApplicantProfile.rawValue,  // For URL/document extraction validation
+            OnboardingToolName.fetchAndProcessURL.rawValue    // For fetching LinkedIn/website from profile
         ],
 
         .p1_writingSamples: [

@@ -103,7 +103,7 @@ actor ArtifactRepository: OnboardingEventEmitter {
     /// Query artifacts by target_phase_objective
     func getArtifactsForPhaseObjective(_ objectiveId: String) -> [JSON] {
         artifacts.artifactRecords.filter { artifact in
-            let targetObjectives = artifact["metadata"]["target_phase_objectives"].arrayValue
+            let targetObjectives = artifact["metadata"]["targetPhaseObjectives"].arrayValue
             return targetObjectives.contains { $0.stringValue == objectiveId }
         }
     }
@@ -147,26 +147,26 @@ actor ArtifactRepository: OnboardingEventEmitter {
         // Emit confirmation event for persistence
         await emit(.artifact(.metadataUpdated(artifact: artifact)))
     }
-    /// List artifact summaries (id, filename, size, content_type, summary)
+    /// List artifact summaries (id, filename, size, contentType, summary)
     /// Used by main coordinator to see all docs at a glance without full text
     func listArtifactSummaries() -> [JSON] {
         artifacts.artifactRecords.map { artifact in
             var summary = JSON()
             summary["id"].string = artifact["id"].string ?? artifact["sha256"].string
             summary["filename"].string = artifact["filename"].string
-            summary["size_bytes"].int = artifact["size_bytes"].int
-            summary["content_type"].string = artifact["content_type"].string
+            summary["sizeBytes"].int = artifact["sizeBytes"].int
+            summary["contentType"].string = artifact["contentType"].string
             // Include the brief description if available (short ~10 word description)
-            if let briefDesc = artifact["brief_description"].string, !briefDesc.isEmpty {
-                summary["brief_description"].string = briefDesc
+            if let briefDesc = artifact["briefDescription"].string, !briefDesc.isEmpty {
+                summary["briefDescription"].string = briefDesc
             }
             // Include the summary if available (from summarization step)
             if let docSummary = artifact["summary"].string, !docSummary.isEmpty {
                 summary["summary"].string = docSummary
             }
-            // Include summary_metadata (document_type, time_period, companies, roles, skills, etc.)
-            if !artifact["summary_metadata"].dictionaryValue.isEmpty {
-                summary["summary_metadata"] = artifact["summary_metadata"]
+            // Include summaryMetadata (document_type, time_period, companies, roles, skills, etc.)
+            if !artifact["summaryMetadata"].dictionaryValue.isEmpty {
+                summary["summaryMetadata"] = artifact["summaryMetadata"]
             }
             // Include metadata for additional context
             if let title = artifact["metadata"]["title"].string, !title.isEmpty {

@@ -40,7 +40,7 @@ struct GenerateExperienceDefaultsTool: InterviewTool {
                     type: .string,
                     description: "Optional notes or special instructions for the agent"
                 ),
-                "selected_titles": JSONSchema(
+                "selectedTitles": JSONSchema(
                     type: .array,
                     description: "The 4 identity titles selected from the curated title sets (required if custom.jobTitles was enabled). Example: [\"Engineer\", \"Developer\", \"Builder\", \"Maker\"]",
                     items: JSONSchema(type: .string)
@@ -91,14 +91,14 @@ struct GenerateExperienceDefaultsTool: InterviewTool {
                 ))
             }
 
-            // Require selected_titles parameter when title sets are enabled
-            let titlesArray = params["selected_titles"].array?.compactMap { $0.string }
+            // Require selectedTitles parameter when title sets are enabled
+            let titlesArray = params["selectedTitles"].array?.compactMap { $0.string }
             if let titles = titlesArray, titles.count == 4 {
                 selectedTitles = titles
                 Logger.info("🗂️ Selected identity titles: \(titles.joined(separator: ", "))", category: .ai)
             } else {
                 return .error(.executionFailed(
-                    "Missing or invalid selected_titles. Provide an array of exactly 4 title strings " +
+                    "Missing or invalid selectedTitles. Provide an array of exactly 4 title strings " +
                     "chosen from the curated title sets."
                 ))
             }
@@ -131,9 +131,9 @@ struct GenerateExperienceDefaultsTool: InterviewTool {
             // Build success response
             var response = JSON()
             response["status"].string = "completed"
-            response["sections_generated"].arrayObject = result.sectionsGenerated
+            response["sectionsGenerated"].arrayObject = result.sectionsGenerated
             response["summary"].string = result.summary
-            response["turns_used"].int = result.turnsUsed
+            response["turnsUsed"].int = result.turnsUsed
 
             // The agent already persisted to ExperienceDefaultsStore and marked objective complete
 

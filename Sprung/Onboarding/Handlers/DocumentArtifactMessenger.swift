@@ -100,7 +100,7 @@ actor DocumentArtifactMessenger: OnboardingEventEmitter {
         switch event {
         case .artifact(.uploadCompleted(let files, _, _, let metadata)):
             // Skip targeted uploads (e.g., profile photos)
-            if metadata["target_key"].string != nil {
+            if metadata["targetKey"].string != nil {
                 return
             }
             // Count extractable document files (PDFs and text files)
@@ -171,9 +171,9 @@ actor DocumentArtifactMessenger: OnboardingEventEmitter {
     }
 
     private func handleArtifactProduced(_ record: JSON) async {
-        let contentType = record["content_type"].stringValue
+        let contentType = record["contentType"].stringValue
         // Handle git repository artifacts directly (no batching)
-        if record["source_type"].stringValue == "git_repository" || record["type"].stringValue == "git_analysis" {
+        if record["sourceType"].stringValue == "git_repository" || record["type"].stringValue == "git_analysis" {
             await sendGitArtifact(record)
             // Track as skipped so batch can complete (git repos bypass batching but still count toward expected)
             if pendingBatch != nil {
@@ -209,7 +209,7 @@ actor DocumentArtifactMessenger: OnboardingEventEmitter {
             return
         }
 
-        let extractedText = record["extracted_text"].stringValue
+        let extractedText = record["extractedText"].stringValue
         guard !extractedText.isEmpty else {
             Logger.warning("⚠️ Skipping artifact - no extracted text", category: .ai)
             // Track skipped artifact so batch completion works correctly
@@ -289,7 +289,7 @@ actor DocumentArtifactMessenger: OnboardingEventEmitter {
         var result = JSON()
         result["status"].string = "completed"
         result["message"].string = "Document extraction complete. \(artifacts.count) document(s) processed."
-        result["extracted_content"].string = messageText
+        result["extractedContent"].string = messageText
 
         let resultString = result.rawString() ?? "{}"
 
@@ -315,19 +315,19 @@ actor DocumentArtifactMessenger: OnboardingEventEmitter {
         for (index, artifact) in artifacts.enumerated() {
             let filename = artifact["filename"].stringValue
             let artifactId = artifact["id"].stringValue
-            let extractedText = artifact["extracted_text"].stringValue
+            let extractedText = artifact["extractedText"].stringValue
             let summary = artifact["summary"].string ?? "Summary not available"
-            let briefDescription = artifact["brief_description"].string
-            let sizeBytes = artifact["size_bytes"].int ?? 0
+            let briefDescription = artifact["briefDescription"].string
+            let sizeBytes = artifact["sizeBytes"].int ?? 0
             let sizeKB = sizeBytes / 1024
 
             // Prefer detected type from classification over user-provided metadata
-            let docTypeDetected = artifact["document_type_detected"].string
-                ?? artifact["metadata"]["document_type"].string
+            let docTypeDetected = artifact["documentTypeDetected"].string
+                ?? artifact["metadata"]["documentType"].string
 
             // Check if full content should be sent to LLM (set at ingestion time)
             // True for writing samples and resume uploads - helps with voice matching
-            let includeFullContent = artifact["interview_context"].bool ?? false
+            let includeFullContent = artifact["interviewContext"].bool ?? false
 
             if artifacts.count > 1 {
                 messageText += "### Document \(index + 1): \(filename)\n"
@@ -367,14 +367,14 @@ actor DocumentArtifactMessenger: OnboardingEventEmitter {
 
     /// Build inventory stats section from artifact record
     private func buildInventoryStatsSection(_ artifact: JSON) -> String {
-        let inventoryStats = artifact["inventory_stats"]
+        let inventoryStats = artifact["inventoryStats"]
         guard inventoryStats.exists() else { return "" }
 
         let total = inventoryStats["total"].intValue
         guard total > 0 else { return "" }
 
-        let byType = inventoryStats["by_type"].dictionaryValue
-        let primaryCount = inventoryStats["primary_count"].intValue
+        let byType = inventoryStats["byType"].dictionaryValue
+        let primaryCount = inventoryStats["primaryCount"].intValue
 
         var section = "**Card Inventory** (\(total) potential cards):\n"
 
@@ -426,7 +426,7 @@ actor DocumentArtifactMessenger: OnboardingEventEmitter {
         var result = JSON()
         result["status"].string = "completed"
         result["message"].string = "Document extraction complete."
-        result["extracted_content"].string = messageText
+        result["extractedContent"].string = messageText
 
         let resultString = result.rawString() ?? "{}"
 
@@ -443,7 +443,7 @@ actor DocumentArtifactMessenger: OnboardingEventEmitter {
     private func sendImageArtifact(_ record: JSON) async {
         let artifactId = record["id"].stringValue
         let filename = record["filename"].stringValue
-        let storageURLString = record["storage_url"].stringValue
+        let storageURLString = record["storageUrl"].stringValue
 
         guard let storageURL = URL(string: storageURLString),
               FileManager.default.fileExists(atPath: storageURL.path) else {
@@ -469,9 +469,9 @@ actor DocumentArtifactMessenger: OnboardingEventEmitter {
         // Send as user message with image attachment
         var payload = JSON()
         payload["text"].string = messageText
-        payload["image_data"].string = imageData.base64EncodedString()
-        payload["image_filename"].string = filename
-        payload["content_type"].string = record["content_type"].stringValue
+        payload["imageData"].string = imageData.base64EncodedString()
+        payload["imageFilename"].string = filename
+        payload["contentType"].string = record["contentType"].stringValue
 
         await emit(.llm(.sendUserMessage(payload: payload, isSystemGenerated: true)))
         Logger.info("🖼️ Image artifact sent to LLM: \(artifactId)", category: .ai)
@@ -521,27 +521,27 @@ actor DocumentArtifactMessenger: OnboardingEventEmitter {
         messageText += "- **Artifact ID**: `\(artifactId)`\n"
 
         // Repository summary (brief)
-        let repoSummary = analysis["repository_summary"]
+        let repoSummary = analysis["repositorySummary"]
         if repoSummary.exists() {
             messageText += "- **Project**: \(repoSummary["name"].stringValue)\n"
-            messageText += "- **Domain**: \(repoSummary["primary_domain"].stringValue)\n"
-            messageText += "- **Type**: \(repoSummary["project_type"].stringValue)\n\n"
+            messageText += "- **Domain**: \(repoSummary["primaryDomain"].stringValue)\n"
+            messageText += "- **Type**: \(repoSummary["projectType"].stringValue)\n\n"
             if let description = repoSummary["description"].string, !description.isEmpty {
                 messageText += "\(description)\n\n"
             }
         }
 
         // Key skills (just names, not full details)
-        if let skills = analysis["technical_skills"].array, !skills.isEmpty {
-            let skillNames = skills.prefix(10).compactMap { $0["skill_name"].string }
+        if let skills = analysis["technicalSkills"].array, !skills.isEmpty {
+            let skillNames = skills.prefix(10).compactMap { $0["skillName"].string }
             if !skillNames.isEmpty {
                 messageText += "**Key Technologies**: \(skillNames.joined(separator: ", "))\n\n"
             }
         }
 
         // Achievement count
-        let achievementCount = analysis["notable_achievements"].arrayValue.count
-        let competencyCount = analysis["architectural_competencies"].arrayValue.count
+        let achievementCount = analysis["notableAchievements"].arrayValue.count
+        let competencyCount = analysis["architecturalCompetencies"].arrayValue.count
         messageText += "**Analysis includes**: \(achievementCount) notable achievements, \(competencyCount) architectural competencies\n\n"
 
         messageText += """

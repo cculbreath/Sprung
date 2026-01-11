@@ -21,8 +21,8 @@ struct GetArtifactRecordTool: InterviewTool {
             return .error(ToolError.executionFailed("Coordinator unavailable"))
         }
         let artifactId = try ToolResultHelpers.requireString(
-            params["artifact_id"].string?.trimmingCharacters(in: .whitespacesAndNewlines),
-            named: "artifact_id"
+            params["artifactId"].string?.trimmingCharacters(in: .whitespacesAndNewlines),
+            named: "artifactId"
         )
 
         // Get artifact record from coordinator state
@@ -33,40 +33,40 @@ struct GetArtifactRecordTool: InterviewTool {
         // IMPORTANT: Do NOT include artifact["metadata"] - it can be 70KB+ for git repos
         var response = JSON()
         response["status"].string = "completed"
-        response["artifact_id"].string = artifactId
+        response["artifactId"].string = artifactId
         response["filename"].string = artifact["filename"].string
-        response["content_type"].string = artifact["content_type"].string
-        response["source_type"].string = artifact["source_type"].string
+        response["contentType"].string = artifact["contentType"].string
+        response["sourceType"].string = artifact["sourceType"].string
 
         // Return full extracted text up to limit
-        let extractedText = artifact["extracted_text"].stringValue
+        let extractedText = artifact["extractedText"].stringValue
         let originalLength = extractedText.count
         if !extractedText.isEmpty {
             if originalLength > maxExtractedChars {
-                response["extracted_text"].string = String(extractedText.prefix(maxExtractedChars))
+                response["extractedText"].string = String(extractedText.prefix(maxExtractedChars))
                 response["truncated"].bool = true
-                response["original_length"].int = originalLength
+                response["originalLength"].int = originalLength
             } else {
-                response["extracted_text"].string = extractedText
+                response["extractedText"].string = extractedText
                 response["truncated"].bool = false
             }
         } else {
-            response["extracted_text"].string = ""
+            response["extractedText"].string = ""
         }
 
         // Include summary metadata if available
-        if let briefDesc = artifact["summary_metadata"]["brief_description"].string {
-            response["brief_description"].string = briefDesc
+        if let briefDesc = artifact["summaryMetadata"]["briefDescription"].string {
+            response["briefDescription"].string = briefDesc
         }
-        if let docType = artifact["summary_metadata"]["document_type"].string {
-            response["document_type"].string = docType
+        if let docType = artifact["summaryMetadata"]["documentType"].string {
+            response["documentType"].string = docType
         }
 
         // For git repos, extract repository description from analysis
-        let sourceType = artifact["source_type"].stringValue
+        let sourceType = artifact["sourceType"].stringValue
         if sourceType == "git_repository" {
-            if let repoDesc = artifact["metadata"]["analysis"]["repository_summary"]["description"].string {
-                response["repository_description"].string = String(repoDesc.prefix(500))
+            if let repoDesc = artifact["metadata"]["analysis"]["repositorySummary"]["description"].string {
+                response["repositoryDescription"].string = String(repoDesc.prefix(500))
             }
         }
 

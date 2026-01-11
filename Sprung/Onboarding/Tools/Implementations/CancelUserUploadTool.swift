@@ -8,7 +8,7 @@ struct CancelUserUploadTool: InterviewTool {
             description: """
                 Dismiss the currently active upload request card without requiring user to provide files.
                 Use this when user indicates they don't have files to upload or want to skip the upload step. The upload card is removed and workflow continues.
-                RETURNS: { "status": "cancelled", "upload_id": "<id>", "cancel_message": "<message-if-provided>" }
+                RETURNS: { "status": "cancelled", "uploadId": "<id>", "cancelMessage": "<message-if-provided>" }
                 USAGE: Call when user explicitly declines upload ("I don't have that", "skip this", "do it manually instead"). Allows workflow to proceed without files.
                 WORKFLOW:
                 1. get_user_upload presented upload card
@@ -59,13 +59,13 @@ struct CancelUserUploadTool: InterviewTool {
         var response = JSON()
         response["status"].string = "completed"
         response["cancelled"].bool = true
-        response["upload_id"].string = firstRequest.id.uuidString
+        response["uploadId"].string = firstRequest.id.uuidString
         if let reason {
             response["reason"].string = reason
         }
         // Include the cancel message if it was provided in the upload metadata
         if let cancelMessage = firstRequest.metadata.cancelMessage {
-            response["cancel_message"].string = cancelMessage
+            response["cancelMessage"].string = cancelMessage
         }
         return .immediate(response)
     }

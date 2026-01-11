@@ -467,8 +467,8 @@ final class OnboardingInterviewCoordinator {
         var result = JSON()
         result["status"].string = "completed"
         result["success"].boolValue = true
-        result["objective_id"].stringValue = objectiveId
-        result["new_status"].stringValue = status.lowercased()
+        result["objectiveId"].stringValue = objectiveId
+        result["newStatus"].stringValue = status.lowercased()
         return result
     }
     // MARK: - Timeline Management

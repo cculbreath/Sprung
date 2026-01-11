@@ -164,7 +164,7 @@ actor DocumentExtractionService {
             category: .diagnostics,
             metadata: [
                 "filename": filename,
-                "size_bytes": "\(sizeInBytes)",
+                "sizeBytes": "\(sizeInBytes)",
                 "purpose": request.purpose
             ]
         )
@@ -246,7 +246,7 @@ actor DocumentExtractionService {
             graphicsExtractionStatus: .skipped  // Non-PDF documents
         )
 
-        let status: ExtractionResult.Status = initialIssues.contains("text_extraction_warning") ? .partial : .ok
+        let status: ExtractionResult.Status = initialIssues.contains("textExtractionWarning") ? .partial : .ok
 
         let quality = Quality(confidence: confidence, issues: initialIssues)
 
@@ -294,7 +294,7 @@ actor DocumentExtractionService {
 
         if ext == "pdf" {
             guard let document = PDFDocument(url: url) else {
-                return (nil, ["text_extraction_warning"], nil)
+                return (nil, ["textExtractionWarning"], nil)
             }
             let pageCount = document.pageCount
             var text = ""
@@ -306,7 +306,7 @@ actor DocumentExtractionService {
                 }
             }
             if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                return (nil, ["text_extraction_warning"], pageCount)
+                return (nil, ["textExtractionWarning"], pageCount)
             }
             return (text, issues, pageCount)
         }
@@ -318,11 +318,11 @@ actor DocumentExtractionService {
             if let attributed = try? NSAttributedString(url: url, options: options, documentAttributes: nil) {
                 let text = attributed.string
                 if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    return (nil, ["text_extraction_warning"], nil)
+                    return (nil, ["textExtractionWarning"], nil)
                 }
                 return (text, issues, nil)
             } else {
-                issues.append("text_extraction_warning")
+                issues.append("textExtractionWarning")
                 if let plain = try? String(contentsOf: url, encoding: .utf8) {
                     return (plain, issues, nil)
                 }
@@ -334,7 +334,7 @@ actor DocumentExtractionService {
             return (text, issues, nil)
         }
 
-        return (nil, ["text_extraction_warning"], nil)
+        return (nil, ["textExtractionWarning"], nil)
     }
 
     private func estimateConfidence(for text: String, issues: [String]) -> Double {
@@ -342,7 +342,7 @@ actor DocumentExtractionService {
         if issues.contains(where: { $0.hasPrefix("llm_failure") }) {
             confidence = min(confidence, 0.4)
         }
-        if issues.contains("text_extraction_warning") {
+        if issues.contains("textExtractionWarning") {
             confidence = min(confidence, 0.5)
         }
         return max(0.1, min(confidence, 0.95))

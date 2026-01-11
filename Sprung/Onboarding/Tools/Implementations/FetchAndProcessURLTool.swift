@@ -14,11 +14,11 @@ struct FetchAndProcessURLTool: InterviewTool {
         description: "Fetch content from a URL and extract knowledge cards and skills",
         properties: [
             "url": SchemaGenerator.string(description: "The URL to fetch and process"),
-            "document_type": SchemaGenerator.string(
+            "documentType": SchemaGenerator.string(
                 description: "Type of document (e.g., 'portfolio', 'linkedin_profile', 'blog_post', 'project_page')"
             )
         ],
-        required: ["url", "document_type"]
+        required: ["url", "documentType"]
     )
 
     private let eventBus: EventCoordinator
@@ -53,8 +53,8 @@ struct FetchAndProcessURLTool: InterviewTool {
         guard let url = URL(string: urlString) else {
             return ToolResultHelpers.invalidParameters("Invalid URL format")
         }
-        guard let documentType = params["document_type"].string, !documentType.isEmpty else {
-            return ToolResultHelpers.invalidParameters("document_type is required")
+        guard let documentType = params["documentType"].string, !documentType.isEmpty else {
+            return ToolResultHelpers.invalidParameters("documentType is required")
         }
 
         Logger.info("🌐 FetchAndProcessURLTool: Starting extraction for \(urlString)", category: .ai)
@@ -69,7 +69,7 @@ struct FetchAndProcessURLTool: InterviewTool {
             var artifactRecord = await MainActor.run {
                 webExtractionService.createArtifactRecord(from: result)
             }
-            artifactRecord["document_type"].string = documentType
+            artifactRecord["documentType"].string = documentType
 
             // Emit artifact record produced event
             await eventBus.publish(.artifact(.recordProduced(record: artifactRecord)))
@@ -80,13 +80,13 @@ struct FetchAndProcessURLTool: InterviewTool {
             var response = JSON()
             response["status"].string = "completed"
             response["success"].bool = true
-            response["artifact_id"].string = result.id
+            response["artifactId"].string = result.id
             response["url"].string = urlString
             response["title"].string = result.title ?? urlString
-            response["document_type"].string = documentType
-            response["extracted_text_length"].int = result.extractedText.count
-            response["skills_count"].int = result.skills.count
-            response["narrative_cards_count"].int = result.narrativeCards.count
+            response["documentType"].string = documentType
+            response["extractedTextLength"].int = result.extractedText.count
+            response["skillsCount"].int = result.skills.count
+            response["narrativeCardsCount"].int = result.narrativeCards.count
             response["message"].string = """
                 Successfully processed \(urlString). \
                 Extracted \(result.extractedText.count) characters, \

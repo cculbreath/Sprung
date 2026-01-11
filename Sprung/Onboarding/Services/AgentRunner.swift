@@ -266,12 +266,12 @@ actor AgentRunner {
                     You must call the `return_result` tool to submit your completed knowledge card.
 
                     Do not respond with text only - you MUST call `return_result` with a JSON object containing:
-                    - card_type: one of job/skill/education/project/employment/achievement
+                    - cardType: one of job/skill/education/project/employment/achievement
                     - title: non-empty card title
                     - facts: array of extracted facts (minimum 3) with category, statement, confidence, source
                     - suggested_bullets: resume bullet templates
                     - technologies: tools and skills mentioned
-                    - sources_used: artifact filenames used as evidence
+                    - sourcesUsed: artifact filenames used as evidence
 
                     Call `return_result` now with your completed card.
                     """
@@ -362,12 +362,12 @@ actor AgentRunner {
                         \(errorMessage)
 
                         Fix the JSON and call `return_result` again. Requirements:
-                        - result.card_type: one of job/skill/education/project/employment/achievement
+                        - result.cardType: one of job/skill/education/project/employment/achievement
                         - result.title: non-empty
                         - result.facts: array of extracted facts with category, statement, confidence, source
                         - result.suggested_bullets: array of resume bullet templates
                         - result.technologies: array of technologies/tools mentioned
-                        - result.sources_used: artifact IDs used as evidence
+                        - result.sourcesUsed: artifact IDs used as evidence
                         """
                         messages.append(buildUserMessage(content: correctionMessage))
                         await logTranscript(type: .system, content: "Sent return_result correction request")
@@ -476,13 +476,13 @@ actor AgentRunner {
             return "Missing required top-level key `result` (object)."
         }
 
-        let cardType = result["card_type"].stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cardType = result["cardType"].stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
         if cardType.isEmpty {
-            return "Missing `result.card_type` (job/skill/education/project/employment)."
+            return "Missing `result.cardType` (job/skill/education/project/employment)."
         }
         let validTypes = ["job", "skill", "education", "project", "employment", "achievement"]
         if !validTypes.contains(cardType) {
-            return "Invalid `result.card_type` value '\(cardType)'."
+            return "Invalid `result.cardType` value '\(cardType)'."
         }
 
         let title = result["title"].stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -499,12 +499,12 @@ actor AgentRunner {
             return "`result.facts` has too few items (\(facts.count)). Extract all relevant facts from the artifacts."
         }
 
-        let sourcesUsed = result["sources_used"].arrayValue
+        let sourcesUsed = result["sourcesUsed"].arrayValue
             .map { $0.stringValue.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
 
         if sourcesUsed.isEmpty {
-            return "No evidence sources provided. Include `result.sources_used` (artifact IDs used)."
+            return "No evidence sources provided. Include `result.sourcesUsed` (artifact IDs used)."
         }
 
         return nil

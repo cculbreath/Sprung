@@ -281,7 +281,7 @@ final class OnboardingPersistenceService {
         }
 
         // Process professional summary
-        if let summary = defaults["professional_summary"].string,
+        if let summary = defaults["professionalSummary"].string,
            !summary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             draft.summary = summary.trimmingCharacters(in: .whitespacesAndNewlines)
             Logger.info("📋 Added professional summary", category: .ai)

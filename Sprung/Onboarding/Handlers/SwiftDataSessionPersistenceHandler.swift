@@ -299,21 +299,21 @@ final class SwiftDataSessionPersistenceHandler {
 
     private func persistArtifact(session: OnboardingSession, record: JSON) {
         let artifactIdString = record["id"].string
-        let sourceType = record["source_type"].stringValue
+        let sourceType = record["sourceType"].stringValue
         let filename = record["filename"].stringValue
-        let extractedContent = record["extracted_text"].stringValue
-        let sha256 = record["source_hash"].string
-        let contentType = record["content_type"].string
-        let sizeInBytes = record["size_bytes"].intValue
+        let extractedContent = record["extractedText"].stringValue
+        let sha256 = record["sourceHash"].string
+        let contentType = record["contentType"].string
+        let sizeInBytes = record["sizeBytes"].intValue
         let summary = record["summary"].string
-        let briefDescription = record["brief_description"].string
+        let briefDescription = record["briefDescription"].string
         let title = record["title"].string ?? record["metadata"]["title"].string
         let skillsJSON = record["skills"].string
-        let narrativeCardsJSON = record["narrative_cards"].string
+        let narrativeCardsJSON = record["narrativeCards"].string
         // Persist the full record JSON for metadata
         let metadataJSON = record.rawString()
-        let rawFileRelativePath = record["raw_file_path"].string
-        let planItemId = record["plan_item_id"].string
+        let rawFileRelativePath = record["rawFilePath"].string
+        let planItemId = record["planItemId"].string
 
         // Check if this is a promoted artifact (already exists with this ID globally)
         if let existingId = artifactIdString,
@@ -362,7 +362,7 @@ final class SwiftDataSessionPersistenceHandler {
         if let summary = record["summary"].string {
             artifact.summary = summary
         }
-        if let briefDescription = record["brief_description"].string {
+        if let briefDescription = record["briefDescription"].string {
             artifact.briefDescription = briefDescription
         }
         if let title = record["title"].string ?? record["metadata"]["title"].string {
@@ -371,7 +371,7 @@ final class SwiftDataSessionPersistenceHandler {
         if let skillsJSON = record["skills"].string {
             artifact.skillsJSON = skillsJSON
         }
-        if let narrativeCardsJSON = record["narrative_cards"].string {
+        if let narrativeCardsJSON = record["narrativeCards"].string {
             artifact.narrativeCardsJSON = narrativeCardsJSON
         }
         // Update full metadata JSON

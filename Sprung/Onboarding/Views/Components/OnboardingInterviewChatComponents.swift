@@ -84,10 +84,10 @@ struct MessageBubble: View {
     private func parseAssistantReply(from text: String) -> String {
         if let data = text.data(using: .utf8),
            let json = try? JSON(data: data),
-           let reply = json["assistant_reply"].string {
+           let reply = json["assistantReply"].string {
             return reply
         }
-        if let range = text.range(of: "\"assistant_reply\":") {
+        if let range = text.range(of: "\"assistantReply\":") {
             let substring = text[range.upperBound...]
             if let closingQuote = substring.firstIndex(of: "\"") {
                 let trimmed = substring[closingQuote...].dropFirst()

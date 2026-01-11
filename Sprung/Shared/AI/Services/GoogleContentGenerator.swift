@@ -221,7 +221,6 @@ actor GoogleContentGenerator {
         }
 
         let decoder = JSONDecoder()
-        decoder.keyDecodingStrategy = .convertFromSnakeCase
 
         do {
             let summary = try decoder.decode(DocumentSummary.self, from: jsonData)

@@ -93,9 +93,10 @@ final class ProfileInteractionHandler {
             The user has provided the following URLs in their profile:
             - \(urlDescriptions)
 
-            Please retrieve these pages using web_search as a source of context during the interview. \
-            Understanding their background, projects, and accomplishments from these sources will help \
-            you conduct a more informed and personalized interview.
+            Please use the fetch_and_process_url tool to retrieve each of these pages. The extracted content \
+            will be preserved as artifacts and provide valuable context for the interview. Understanding their \
+            background, projects, and accomplishments from these sources will help you conduct a more informed \
+            and personalized interview.
             """
 
         await eventBus.publish(.llm(.executeCoordinatorMessage(payload: payload)))
@@ -253,9 +254,9 @@ final class ProfileInteractionHandler {
     // MARK: - Metadata Helpers
     private func attachingValidationMetadata(to json: JSON, via channel: String) -> JSON {
         var enriched = json
-        enriched["meta"]["validation_state"].string = "user_validated"
-        enriched["meta"]["validated_via"].string = channel
-        enriched["meta"]["validated_at"].string = isoFormatter.string(from: Date())
+        enriched["meta"]["validationState"].string = "user_validated"
+        enriched["meta"]["validatedVia"].string = channel
+        enriched["meta"]["validatedAt"].string = isoFormatter.string(from: Date())
         return enriched
     }
     // MARK: - Profile Summary Management

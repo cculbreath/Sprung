@@ -12,22 +12,6 @@ struct GetUserUploadTool: InterviewTool {
     private static let schema: JSONSchema = {
         JSONSchema(
             type: .object,
-            description: """
-                Present an upload card in the tool pane to request files or URLs from the user.
-                Users can upload files directly or paste URLs. Uploaded files are automatically processed - \
-                text is extracted and packaged as ArtifactRecords.
-                RETURNS: { "message": "UI presented. Awaiting user input.", "status": "completed" }
-                The tool completes immediately after presenting UI. User uploads arrive as new user messages with artifact metadata.
-                USAGE: Use during skeletonTimeline to gather resume/LinkedIn/transcripts, or for profile photos. \
-                Always set targetPhaseObjectives to help route artifacts to correct workflow stages.
-                WORKFLOW:
-                1. Call get_user_upload with appropriate prompt
-                2. Tool returns immediately - card is now active in tool pane
-                3. User uploads file(s) or pastes URL
-                4. System extracts text and creates ArtifactRecord(s)
-                5. You receive artifact notification and can process contents
-                ERROR: Will fail if promptToUser is empty or uploadType is invalid.
-                """,
             properties: [
                 "uploadType": UserInteractionSchemas.uploadType,
                 "title": UserInteractionSchemas.uploadTitle,
@@ -48,7 +32,14 @@ struct GetUserUploadTool: InterviewTool {
     }
     var name: String { OnboardingToolName.getUserUpload.rawValue }
     var description: String {
-        "Present upload card for files/URLs. Returns immediately - uploads arrive as artifacts. Use for resume, LinkedIn, transcripts, photos."
+        """
+        Present upload card for files/URLs in tool pane. Users can upload files or paste URLs; \
+        uploaded content is auto-extracted as ArtifactRecords. \
+        RETURNS: { "message": "UI presented...", "status": "completed" } - completes immediately, \
+        uploads arrive as new messages with artifact metadata. \
+        Use for resume, LinkedIn, transcripts, photos. Set uploadType to route artifacts correctly. \
+        ERROR: Fails if promptToUser empty or uploadType invalid.
+        """
     }
     var parameters: JSONSchema { Self.schema }
     func execute(_ params: JSON) async throws -> ToolResult {

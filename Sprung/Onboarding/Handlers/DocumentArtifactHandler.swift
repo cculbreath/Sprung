@@ -83,10 +83,10 @@ actor DocumentArtifactHandler: OnboardingEventEmitter {
         guard case .artifact(.uploadCompleted(let files, let requestKind, let callId, let metadata)) = event else {
             return
         }
-        // Skip targeted uploads (e.g., profile photos with target_key="basics.image")
+        // Skip targeted uploads (e.g., profile photos with targetKey="basics.image")
         // These are handled directly by UploadInteractionHandler and don't need text extraction
-        if metadata["target_key"].string != nil {
-            Logger.debug("📄 Skipping targeted upload (target_key present) - not a document for extraction", category: .ai)
+        if metadata["targetKey"].string != nil {
+            Logger.debug("📄 Skipping targeted upload (targetKey present) - not a document for extraction", category: .ai)
             return
         }
 
@@ -311,27 +311,27 @@ actor DocumentArtifactHandler: OnboardingEventEmitter {
         var record = JSON()
         record["id"].string = UUID().uuidString
         record["filename"].string = file.filename
-        record["content_type"].string = file.contentType ?? "image/\(file.storageURL.pathExtension.lowercased())"
-        record["storage_url"].string = file.storageURL.absoluteString
-        record["document_type"].string = requestKind
+        record["contentType"].string = file.contentType ?? "image/\(file.storageURL.pathExtension.lowercased())"
+        record["storageUrl"].string = file.storageURL.absoluteString
+        record["documentType"].string = requestKind
 
         // Get file size
         if let attrs = try? FileManager.default.attributesOfItem(atPath: file.storageURL.path),
            let size = attrs[.size] as? Int {
-            record["size_bytes"].int = size
+            record["sizeBytes"].int = size
         }
 
-        record["extracted_content"].string = "[Image file - no text extraction]"
-        record["extraction_method"].string = "none"
-        record["created_at"].string = ISO8601DateFormatter().string(from: Date())
+        record["extractedContent"].string = "[Image file - no text extraction]"
+        record["extractionMethod"].string = "none"
+        record["createdAt"].string = ISO8601DateFormatter().string(from: Date())
 
         if let callId {
-            record["call_id"].string = callId
+            record["callId"].string = callId
         }
 
         // Copy relevant metadata
-        if let targetObjectives = metadata["target_phase_objectives"].array {
-            record["metadata"]["target_phase_objectives"] = JSON(targetObjectives)
+        if let targetObjectives = metadata["targetPhaseObjectives"].array {
+            record["metadata"]["targetPhaseObjectives"] = JSON(targetObjectives)
         }
 
         return record
@@ -368,10 +368,10 @@ actor DocumentArtifactHandler: OnboardingEventEmitter {
         result["status"].string = "completed"
         result["message"].string = "Resume PDF attached below. Please review to understand the user's professional background."
         var pdfAttachment = JSON()
-        pdfAttachment["storage_url"].string = file.storageURL.path
+        pdfAttachment["storageUrl"].string = file.storageURL.path
         pdfAttachment["filename"].string = filename
-        pdfAttachment["size_kb"].int = sizeKB
-        result["pdf_attachment"] = pdfAttachment
+        pdfAttachment["sizeKb"].int = sizeKB
+        result["pdfAttachment"] = pdfAttachment
 
         let resultString = result.rawString() ?? "{}"
 
@@ -380,9 +380,9 @@ actor DocumentArtifactHandler: OnboardingEventEmitter {
         var payload = JSON()
         payload["text"].string = taggedMessage
         // Include PDF data for LLM to see the document
-        payload["pdf_data"].string = pdfBase64
-        payload["pdf_filename"].string = filename
-        payload["pdf_size_kb"].int = sizeKB
+        payload["pdfData"].string = pdfBase64
+        payload["pdfFilename"].string = filename
+        payload["pdfSizeKb"].int = sizeKB
 
         await emit(.llm(.sendUserMessage(payload: payload, isSystemGenerated: true)))
         Logger.info("✅ Resume PDF sent as ui-action-result: \(filename) (\(sizeKB) KB)", category: .ai)

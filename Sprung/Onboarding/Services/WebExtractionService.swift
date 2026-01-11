@@ -100,10 +100,10 @@ final class WebExtractionService {
         if let title = result.title {
             artifactRecord["title"].string = title
         }
-        artifactRecord["document_type"].string = "web_page"
-        artifactRecord["source_url"].string = result.url
-        artifactRecord["extracted_text"].string = result.extractedText
-        artifactRecord["interview_context"].bool = false
+        artifactRecord["documentType"].string = "web_page"
+        artifactRecord["sourceUrl"].string = result.url
+        artifactRecord["extractedText"].string = result.extractedText
+        artifactRecord["interviewContext"].bool = false
 
         // Add skill bank
         if !result.skills.isEmpty {
@@ -127,7 +127,7 @@ final class WebExtractionService {
                 }
                 return skillDict
             })
-            artifactRecord["skill_bank"] = skillBank
+            artifactRecord["skillBank"] = skillBank
         }
 
         // Add narrative cards
@@ -144,7 +144,7 @@ final class WebExtractionService {
                 }
                 cardsArray.append(cardJSON)
             }
-            artifactRecord["narrative_cards"] = JSON(cardsArray.map { $0.rawValue })
+            artifactRecord["narrativeCards"] = JSON(cardsArray.map { $0.rawValue })
         }
 
         return artifactRecord

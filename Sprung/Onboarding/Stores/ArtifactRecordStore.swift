@@ -258,9 +258,20 @@ final class ArtifactRecordStore {
 
     // MARK: - Delete Operations
 
-    /// Delete an artifact permanently
+    /// Delete an artifact permanently, including its raw file from disk
     func deleteArtifact(_ artifact: ArtifactRecord) {
         let filename = artifact.filename
+
+        // Delete the raw file from disk if it exists
+        if let rawFilePath = artifact.rawFileRelativePath {
+            let fileURL = URL(fileURLWithPath: rawFilePath)
+            do {
+                try FileManager.default.removeItem(at: fileURL)
+                Logger.info("Deleted raw file: \(fileURL.lastPathComponent)", category: .ai)
+            } catch {
+                Logger.warning("Failed to delete raw file at \(rawFilePath): \(error.localizedDescription)", category: .ai)
+            }
+        }
 
         // Remove from session if attached
         if let session = artifact.session,

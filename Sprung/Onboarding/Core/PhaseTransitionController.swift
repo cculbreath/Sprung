@@ -86,7 +86,7 @@ final class PhaseTransitionController {
                 let id = artifact["id"].stringValue
                 let filename = artifact["filename"].stringValue
                 let purpose = artifact["metadata"]["purpose"].stringValue
-                let targetObjectives = artifact["metadata"]["target_phase_objectives"].arrayValue
+                let targetObjectives = artifact["metadata"]["targetPhaseObjectives"].arrayValue
                     .map { $0.stringValue }
                     .joined(separator: ", ")
                 artifactSummaries.append(

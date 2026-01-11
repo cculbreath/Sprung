@@ -185,7 +185,7 @@ actor ObjectiveWorkflowEngine: OnboardingEventEmitter {
         // Build developer message that instructs LLM to request photo upload
         let title = "Contact data validated successfully. Now request a profile photo using get_user_upload with target_key=\"basics.image\". The user may provide or skip this step."
         var details = extraDetails
-        details["next_objective"] = OnboardingObjectiveId.contactPhotoCollected.rawValue
+        details["nextObjective"] = OnboardingObjectiveId.contactPhotoCollected.rawValue
         details["instruction"] = "Call get_user_upload tool to request photo"
         await sendCoordinatorMessage(title: title, details: details, payload: nil)
     }

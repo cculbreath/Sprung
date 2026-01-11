@@ -194,7 +194,7 @@ final class ExperienceDefaultsAgentService {
 
         // Filter to entries marked for inclusion
         return experiences.filter { entry in
-            entry["include_in_resume"].boolValue
+            entry["includeInResume"].boolValue
         }
     }
 

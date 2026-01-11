@@ -184,13 +184,13 @@ actor LLMMessenger: OnboardingEventEmitter {
         // PDF data takes precedence if both are present
         let fileData: String?
         let fileContentType: String?
-        if let pdfData = payload["pdf_data"].string {
+        if let pdfData = payload["pdfData"].string {
             fileData = pdfData
             fileContentType = "application/pdf"
             Logger.info("📄 PDF attachment detected in user message payload", category: .ai)
         } else {
-            fileData = payload["image_data"].string
-            fileContentType = payload["content_type"].string
+            fileData = payload["imageData"].string
+            fileContentType = payload["contentType"].string
         }
 
         do {
@@ -372,8 +372,8 @@ actor LLMMessenger: OnboardingEventEmitter {
             let instruction = payload["instruction"].string  // Anthropic-native guidance
 
             // Extract PDF attachment if present (for resume uploads)
-            let pdfBase64 = payload["pdf_data"].string
-            let pdfFilename = payload["pdf_filename"].string
+            let pdfBase64 = payload["pdfData"].string
+            let pdfFilename = payload["pdfFilename"].string
 
             Logger.debug("📤 Anthropic tool response: callId=\(callId), tool=\(toolName)", category: .ai)
             if let instruction = instruction {

@@ -15,7 +15,7 @@ struct AgentReadyTool: InterviewTool {
 
     var name: String { OnboardingToolName.agentReady.rawValue }
     var description: String {
-        "Signal ready to begin. Returns {status, next_required_tool, disable_after_use}."
+        "Signal ready to begin. Returns {status, nextRequiredTool, disableAfterUse}."
     }
     var parameters: JSONSchema { Self.schema }
 
@@ -26,9 +26,9 @@ struct AgentReadyTool: InterviewTool {
         await todoStore.setItemsFromScript(phaseOneScript.initialTodoItems)
 
         var additionalData = JSON()
-        additionalData["next_required_tool"].string = OnboardingToolName.getApplicantProfile.rawValue
-        additionalData["disable_after_use"].bool = true
-        additionalData["workflow_summary"].string = PromptLibrary.agentReadyWorkflow
+        additionalData["nextRequiredTool"].string = OnboardingToolName.getApplicantProfile.rawValue
+        additionalData["disableAfterUse"].bool = true
+        additionalData["workflowSummary"].string = PromptLibrary.agentReadyWorkflow
 
         return ToolResultHelpers.statusResponse(
             status: "completed",

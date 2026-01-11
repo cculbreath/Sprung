@@ -9,7 +9,7 @@ struct ListArtifactsTool: InterviewTool {
         self.coordinator = coordinator
     }
     var name: String { OnboardingToolName.listArtifacts.rawValue }
-    var description: String { "List artifacts with pagination. Returns {total, artifacts: [{id, filename, content_type}]}." }
+    var description: String { "List artifacts with pagination. Returns {total, artifacts: [{id, filename, contentType}]}." }
     var parameters: JSONSchema { Self.schema }
     func isAvailable() async -> Bool {
         guard let coordinator else { return false }
@@ -25,7 +25,7 @@ struct ListArtifactsTool: InterviewTool {
         // Parse pagination parameters
         let limit = min(params["limit"].int ?? 10, 50)  // Default 10, max 50
         let offset = max(params["offset"].int ?? 0, 0)
-        let includeSummary = params["include_summary"].bool ?? false
+        let includeSummary = params["includeSummary"].bool ?? false
 
         // Apply pagination
         let totalCount = allSummaries.count
@@ -37,10 +37,10 @@ struct ListArtifactsTool: InterviewTool {
             var entry = JSON()
             entry["id"].string = summary["id"].string
             entry["filename"].string = summary["filename"].string
-            entry["content_type"].string = summary["content_type"].string
+            entry["contentType"].string = summary["contentType"].string
             if includeSummary {
                 // Include brief description (truncated)
-                if let desc = summary["brief_description"].string, !desc.isEmpty {
+                if let desc = summary["briefDescription"].string, !desc.isEmpty {
                     entry["description"].string = String(desc.prefix(100))
                 } else if let summ = summary["summary"].string, !summ.isEmpty {
                     entry["description"].string = String(summ.prefix(100))

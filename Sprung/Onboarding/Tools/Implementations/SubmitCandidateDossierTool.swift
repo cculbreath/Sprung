@@ -3,7 +3,7 @@
 //  Sprung
 //
 //  Submit the finalized candidate dossier with explicit schema validation.
-//  Auto-generates dossier_id and timestamps.
+//  Auto-generates dossierId and timestamps.
 //
 import Foundation
 import SwiftyJSON
@@ -146,7 +146,7 @@ struct SubmitCandidateDossierTool: InterviewTool {
 
         // Emit event for downstream handling
         var eventPayload = JSON()
-        eventPayload["dossier_id"].string = dossier.id.uuidString
+        eventPayload["dossierId"].string = dossier.id.uuidString
         await eventBus.publish(.artifact(.candidateDossierPersisted(dossier: eventPayload)))
 
         // Mark all Phase 4 synthesis objectives as completed
@@ -186,8 +186,8 @@ struct SubmitCandidateDossierTool: InterviewTool {
         // Build response
         var response = JSON()
         response["status"].string = "completed"
-        response["dossier_id"].string = dossier.id.uuidString
-        response["word_count"].int = dossier.wordCount
+        response["dossierId"].string = dossier.id.uuidString
+        response["wordCount"].int = dossier.wordCount
 
         // List which fields were included
         var includedFields: [String] = ["jobSearchContext"]
@@ -197,7 +197,7 @@ struct SubmitCandidateDossierTool: InterviewTool {
         if params["availability"].string != nil { includedFields.append("availability") }
         if params["uniqueCircumstances"].string != nil { includedFields.append("uniqueCircumstances") }
         if notesValue != nil { includedFields.append("notes") }
-        response["fields_included"].arrayObject = includedFields
+        response["fieldsIncluded"].arrayObject = includedFields
 
         // Include validation warnings if any
         if !validationWarnings.isEmpty {

@@ -30,18 +30,18 @@ struct IngestWritingSampleTool: InterviewTool {
                 3. The tool creates an artifact record (or returns duplicate_detected if content exists)
 
                 RETURNS:
-                - Success: { "status": "ingested", "artifact_id": "<uuid>", "name": "<name>", "character_count": <n> }
-                - Duplicate: { "status": "duplicate_detected", "existing_artifact_id": "<uuid>", "message": "..." }
+                - Success: { "status": "ingested", "artifactId": "<uuid>", "name": "<name>", "characterCount": <n> }
+                - Duplicate: { "status": "duplicate_detected", "existingArtifactId": "<uuid>", "message": "..." }
 
                 NOTE: This is ONLY for text pasted in chat. Uploaded files are already artifacts.
                 """,
             properties: [
                 "name": MiscSchemas.writingSampleName,
                 "content": MiscSchemas.writingSampleContent,
-                "writing_type": MiscSchemas.writingSampleType,
+                "writingType": MiscSchemas.writingSampleType,
                 "context": MiscSchemas.writingSampleContext
             ],
-            required: ["name", "content", "writing_type"],
+            required: ["name", "content", "writingType"],
             additionalProperties: false
         )
     }()
@@ -64,7 +64,7 @@ struct IngestWritingSampleTool: InterviewTool {
         }
         let sampleName = try ToolResultHelpers.requireString(params["name"].string, named: "name")
         let content = try ToolResultHelpers.requireString(params["content"].string, named: "content")
-        let writingType = try ToolResultHelpers.requireString(params["writing_type"].string, named: "writing_type")
+        let writingType = try ToolResultHelpers.requireString(params["writingType"].string, named: "writingType")
 
         let context = params["context"].string
 
@@ -75,16 +75,16 @@ struct IngestWritingSampleTool: InterviewTool {
         let existingArtifacts = await coordinator.listArtifactSummaries()
         for artifact in existingArtifacts {
             // Check by hash if available
-            if artifact["source_hash"].string == contentHash {
+            if artifact["sourceHash"].string == contentHash {
                 let existingName = artifact["filename"].stringValue
                 Logger.warning("📝 Duplicate writing sample detected (hash match): \(existingName)", category: .ai)
                 return duplicateResponse(existingName: existingName, existingId: artifact["id"].stringValue)
             }
             // Check by content substring (handles case where original upload didn't have hash)
-            // Need to fetch full artifact to get extracted_text
+            // Need to fetch full artifact to get extractedText
             if let artifactId = artifact["id"].string,
                let fullArtifact = await coordinator.getArtifactRecord(id: artifactId) {
-                let existingContent = fullArtifact["extracted_text"].stringValue
+                let existingContent = fullArtifact["extractedText"].stringValue
                 if !existingContent.isEmpty && contentMatchesExisting(content, existingContent) {
                     let existingName = fullArtifact["filename"].stringValue
                     Logger.warning("📝 Duplicate writing sample detected (content match): \(existingName)", category: .ai)
@@ -97,19 +97,19 @@ struct IngestWritingSampleTool: InterviewTool {
         let artifactId = UUID()
         var artifactRecord = JSON()
         artifactRecord["id"].string = artifactId.uuidString
-        artifactRecord["source_type"].string = "writing_sample"
+        artifactRecord["sourceType"].string = "writing_sample"
         artifactRecord["filename"].string = "\(sampleName).txt"
-        artifactRecord["extracted_text"].string = content
-        artifactRecord["source_hash"].string = contentHash
-        artifactRecord["interview_context"].bool = true  // Full content sent to LLM
-        artifactRecord["ingested_at"].string = ISO8601DateFormatter().string(from: Date())
+        artifactRecord["extractedText"].string = content
+        artifactRecord["sourceHash"].string = contentHash
+        artifactRecord["interviewContext"].bool = true  // Full content sent to LLM
+        artifactRecord["ingestedAt"].string = ISO8601DateFormatter().string(from: Date())
 
         // Build metadata
         var metadata = JSON()
         metadata["name"].string = sampleName
-        metadata["writing_type"].string = writingType
-        metadata["character_count"].int = content.count
-        metadata["word_count"].int = content.split(separator: " ").count
+        metadata["writingType"].string = writingType
+        metadata["characterCount"].int = content.count
+        metadata["wordCount"].int = content.split(separator: " ").count
         metadata["source"].string = "chat_paste"
         if let context {
             metadata["context"].string = context
@@ -124,13 +124,13 @@ struct IngestWritingSampleTool: InterviewTool {
         // Build response
         var response = JSON()
         response["status"].string = "ingested"
-        response["artifact_id"].string = artifactId.uuidString
+        response["artifactId"].string = artifactId.uuidString
         response["name"].string = sampleName
-        response["writing_type"].string = writingType
-        response["character_count"].int = content.count
-        response["word_count"].int = content.split(separator: " ").count
+        response["writingType"].string = writingType
+        response["characterCount"].int = content.count
+        response["wordCount"].int = content.split(separator: " ").count
 
-        response["next_action"].string = """
+        response["nextAction"].string = """
             Writing sample captured successfully. Evaluate quality:
             - Is it substantial (150+ words of prose)?
             - Does it show the candidate's authentic voice?
@@ -182,10 +182,10 @@ struct IngestWritingSampleTool: InterviewTool {
     private func duplicateResponse(existingName: String, existingId: String) -> ToolResult {
         var response = JSON()
         response["status"].string = "duplicate_detected"
-        response["existing_artifact_id"].string = existingId
-        response["existing_artifact_name"].string = existingName
+        response["existingArtifactId"].string = existingId
+        response["existingArtifactName"].string = existingName
         response["message"].string = "This content already exists as artifact '\(existingName)'. Do NOT call ingest_writing_sample again with this content."
-        response["next_action"].string = """
+        response["nextAction"].string = """
             STOP: This writing sample already exists as '\(existingName)'.
             Do NOT attempt to re-ingest it with a different name.
             The uploaded files have already been processed as artifacts.

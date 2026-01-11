@@ -596,23 +596,23 @@ struct ArtifactRow: View {
     private func gitAnalysisSection(analysis: JSON) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             // Repository summary
-            if let repoSummary = analysis["repository_summary"].dictionary {
+            if let repoSummary = analysis["repositorySummary"].dictionary {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack {
                         Image(systemName: "folder.fill")
                             .foregroundStyle(.blue)
-                        Text(analysis["repository_summary"]["name"].stringValue)
+                        Text(analysis["repositorySummary"]["name"].stringValue)
                             .font(.caption.weight(.semibold))
                     }
-                    Text(analysis["repository_summary"]["description"].stringValue)
+                    Text(analysis["repositorySummary"]["description"].stringValue)
                         .font(.caption2)
                         .foregroundStyle(.secondary)
 
                     HStack(spacing: 8) {
-                        if let domain = repoSummary["primary_domain"]?.stringValue, !domain.isEmpty {
+                        if let domain = repoSummary["primaryDomain"]?.stringValue, !domain.isEmpty {
                             badgePill(domain, color: .blue)
                         }
-                        if let projectType = repoSummary["project_type"]?.stringValue, !projectType.isEmpty {
+                        if let projectType = repoSummary["projectType"]?.stringValue, !projectType.isEmpty {
                             badgePill(projectType, color: .purple)
                         }
                     }
@@ -623,7 +623,7 @@ struct ArtifactRow: View {
             }
 
             // Technical skills
-            if let skills = analysis["technical_skills"].array, !skills.isEmpty {
+            if let skills = analysis["technicalSkills"].array, !skills.isEmpty {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Technical Skills (\(skills.count))")
                         .font(.caption.weight(.medium))
@@ -632,16 +632,16 @@ struct ArtifactRow: View {
                     FlowLayout(spacing: 4) {
                         ForEach(skills.prefix(20).indices, id: \.self) { index in
                             let skill = skills[index]
-                            let proficiency = skill["proficiency_level"].stringValue
+                            let proficiency = skill["proficiencyLevel"].stringValue
                             let color = proficiencyColor(proficiency)
-                            badgePill(skill["skill_name"].stringValue, color: color)
+                            badgePill(skill["skillName"].stringValue, color: color)
                         }
                     }
                 }
             }
 
             // Notable achievements
-            if let achievements = analysis["notable_achievements"].array, !achievements.isEmpty {
+            if let achievements = analysis["notableAchievements"].array, !achievements.isEmpty {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Notable Achievements (\(achievements.count))")
                         .font(.caption.weight(.medium))
@@ -654,7 +654,7 @@ struct ArtifactRow: View {
                                 Text("•")
                                     .font(.caption2)
                                     .foregroundStyle(.green)
-                                Text(achievement["resume_bullet"].stringValue)
+                                Text(achievement["resumeBullet"].stringValue)
                                     .font(.caption2)
                                     .foregroundStyle(.primary)
                             }
@@ -664,8 +664,8 @@ struct ArtifactRow: View {
             }
 
             // AI collaboration profile
-            if analysis["ai_collaboration_profile"]["detected_ai_usage"].exists() {
-                let aiProfile = analysis["ai_collaboration_profile"]
+            if analysis["aiCollaborationProfile"]["detectedAiUsage"].exists() {
+                let aiProfile = analysis["aiCollaborationProfile"]
                 VStack(alignment: .leading, spacing: 4) {
                     HStack {
                         Image(systemName: "brain")
@@ -677,10 +677,10 @@ struct ArtifactRow: View {
                     }
 
                     HStack(spacing: 8) {
-                        let detected = aiProfile["detected_ai_usage"].boolValue
+                        let detected = aiProfile["detectedAiUsage"].boolValue
                         badgePill(detected ? "AI Usage Detected" : "No AI Detected",
                                   color: detected ? .purple : .gray)
-                        if let rating = aiProfile["collaboration_quality_rating"].string {
+                        if let rating = aiProfile["collaborationQualityRating"].string {
                             badgePill(rating.replacingOccurrences(of: "_", with: " ").capitalized,
                                       color: .orange)
                         }
@@ -689,7 +689,7 @@ struct ArtifactRow: View {
             }
 
             // Keyword cloud
-            if let keywords = analysis["keyword_cloud"]["primary"].array, !keywords.isEmpty {
+            if let keywords = analysis["keywordCloud"]["primary"].array, !keywords.isEmpty {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Keywords")
                         .font(.caption.weight(.medium))

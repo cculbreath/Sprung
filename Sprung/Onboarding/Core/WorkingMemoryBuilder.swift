@@ -66,7 +66,7 @@ struct WorkingMemoryBuilder {
             xml.append("  <artifacts count=\"\(artifactSummaries.count)\">")
             for record in artifactSummaries.prefix(6) {
                 let filename = record["filename"].stringValue
-                let desc = record["brief_description"].string ?? record["summary"].string ?? ""
+                let desc = record["briefDescription"].string ?? record["summary"].string ?? ""
                 let shortDesc = desc.isEmpty ? "" : ": \(String(desc.prefix(40)))"
                 xml.append("    <artifact>\(escapeXML(filename))\(escapeXML(shortDesc))</artifact>")
             }

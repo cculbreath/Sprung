@@ -17,6 +17,8 @@ struct EventDumpView: View {
     @State private var selectedTab = 0
     @State private var showRegenDialog = false
     @State private var isDeduping = false
+    @State private var isDedupingSkills = false
+    @State private var isExpandingATS = false
 
     var body: some View {
         NavigationStack {
@@ -497,19 +499,47 @@ struct EventDumpView: View {
             .help("Re-extract voice profile from writing samples")
         }
         ToolbarItem(placement: .automatic) {
-            Button("Dedupe Skills") {
+            Button {
                 Task {
+                    isDedupingSkills = true
                     await coordinator.deduplicateSkills()
+                    isDedupingSkills = false
+                }
+            } label: {
+                if isDedupingSkills {
+                    HStack(spacing: 4) {
+                        ProgressView()
+                            .scaleEffect(0.6)
+                            .frame(width: 12, height: 12)
+                        Text("Deduping...")
+                    }
+                } else {
+                    Text("Dedupe Skills")
                 }
             }
+            .disabled(isDedupingSkills)
             .help("Run LLM-powered deduplication on skills")
         }
         ToolbarItem(placement: .automatic) {
-            Button("ATS Expand Skills") {
+            Button {
                 Task {
+                    isExpandingATS = true
                     await coordinator.expandATSSkills()
+                    isExpandingATS = false
+                }
+            } label: {
+                if isExpandingATS {
+                    HStack(spacing: 4) {
+                        ProgressView()
+                            .scaleEffect(0.6)
+                            .frame(width: 12, height: 12)
+                        Text("Expanding...")
+                    }
+                } else {
+                    Text("ATS Expand Skills")
                 }
             }
+            .disabled(isExpandingATS)
             .help("Generate ATS synonym variants for skills")
         }
         ToolbarItem(placement: .automatic) {

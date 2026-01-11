@@ -152,3 +152,15 @@ For a substantial repository, include 10-30 cards:
 5. **Cross-Reference Cards:** A project card should reference the skill cards for its technologies.
 
 6. **Aim for 15-20 turns** to complete analysis efficiently.
+
+---
+
+<use_parallel_tool_calls>
+For maximum efficiency, invoke multiple independent tools simultaneously rather than sequentially.
+Examples:
+- When exploring multiple directories, call list_directory for all of them in parallel
+- When reading multiple config files (package.json, Cargo.toml, build.gradle), read them in parallel
+- When searching for multiple patterns, call grep_search for all patterns in parallel
+- When reading multiple source files to assess skill depth, read them in parallel
+Prioritize parallel tool calls whenever the operations don't depend on each other's results.
+</use_parallel_tool_calls>

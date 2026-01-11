@@ -16,11 +16,11 @@ enum DocumentExtractionPrompts {
     static let summaryJsonSchema: [String: Any] = [
         "type": "object",
         "properties": [
-            "document_type": [
+            "documentType": [
                 "type": "string",
                 "description": "Type of document (resume, performance_review, project_doc, cover_letter, recommendation, technical_report, grant_proposal, other)"
             ],
-            "brief_description": [
+            "briefDescription": [
                 "type": "string",
                 "description": "Brief one-line description (~10 words) for quick reference"
             ],
@@ -28,7 +28,7 @@ enum DocumentExtractionPrompts {
                 "type": "string",
                 "description": "~500 word narrative summary of the document content"
             ],
-            "time_period": [
+            "timePeriod": [
                 "type": "string",
                 "description": "Time period covered by the document (e.g., '2019-2023'), empty string if not applicable"
             ],
@@ -52,12 +52,12 @@ enum DocumentExtractionPrompts {
                 "items": ["type": "string"],
                 "description": "Key achievements mentioned"
             ],
-            "relevance_hints": [
+            "relevanceHints": [
                 "type": "string",
                 "description": "Hints about what types of knowledge cards this doc could support"
             ]
         ],
-        "required": ["document_type", "brief_description", "summary", "time_period", "companies", "roles", "skills", "achievements", "relevance_hints"]
+        "required": ["documentType", "briefDescription", "summary", "timePeriod", "companies", "roles", "skills", "achievements", "relevanceHints"]
     ]
 
     // MARK: - Extraction Prompts

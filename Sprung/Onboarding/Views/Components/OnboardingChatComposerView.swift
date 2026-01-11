@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Chat input composer with send/queue/interrupt/stop buttons
+/// Chat input composer with send/queue and context-aware stop/interrupt button
 struct OnboardingChatComposerView: View {
     @Binding var text: String
     let isEditable: Bool
@@ -50,7 +50,7 @@ struct OnboardingChatComposerView: View {
             )
 
             if isProcessing {
-                // When busy: Queue button + Interrupt button + Stop button (stacked vertically)
+                // When busy: Queue button + merged Stop/Interrupt button (stacked vertically)
                 VStack(spacing: 4) {
                     Button(action: {
                         onSend(text)
@@ -62,26 +62,31 @@ struct OnboardingChatComposerView: View {
                     .disabled(isSendDisabled)
                     .help("Add message to queue - will be sent when current operation completes")
 
-                    Button(action: {
-                        onInterrupt(text)
-                    }, label: {
-                        Label("Interrupt", systemImage: "exclamationmark.bubble.fill")
-                            .frame(maxWidth: .infinity)
-                    })
-                    .buttonStyle(.borderedProminent)
-                    .tint(.orange)
-                    .disabled(isSendDisabled)
-                    .help("Stop current operation and send this message immediately")
-
-                    Button(action: {
-                        onStop()
-                    }, label: {
-                        Label("Stop", systemImage: "stop.fill")
-                            .frame(maxWidth: .infinity)
-                    })
-                    .buttonStyle(.borderedProminent)
-                    .tint(.red)
-                    .help("Stop all processing, clear queue, and silence incoming tool calls")
+                    // Merged Stop/Interrupt button:
+                    // - No text: "Stop" (red) - stops all processing
+                    // - Has text: "Interrupt" (orange) - stops and sends message
+                    if hasText {
+                        Button(action: {
+                            onInterrupt(text)
+                        }, label: {
+                            Label("Interrupt", systemImage: "exclamationmark.bubble.fill")
+                                .frame(maxWidth: .infinity)
+                        })
+                        .buttonStyle(.borderedProminent)
+                        .tint(.orange)
+                        .disabled(!isEditable || isWaitingForValidation)
+                        .help("Stop current operation and send this message immediately")
+                    } else {
+                        Button(action: {
+                            onStop()
+                        }, label: {
+                            Label("Stop", systemImage: "stop.fill")
+                                .frame(maxWidth: .infinity)
+                        })
+                        .buttonStyle(.borderedProminent)
+                        .tint(.red)
+                        .help("Stop all processing, clear queue, and silence incoming tool calls")
+                    }
                 }
                 .frame(width: 100)
             } else {

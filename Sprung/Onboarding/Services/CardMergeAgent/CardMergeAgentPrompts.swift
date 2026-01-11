@@ -115,5 +115,14 @@ enum CardMergeAgentPrompts {
         - Only read full cards when you need to compare content
         - Process one cluster at a time
         - Call complete_merge when no more duplicates exist
+
+        <use_parallel_tool_calls>
+        For maximum efficiency, invoke multiple independent tools simultaneously rather than sequentially.
+        Examples:
+        - When reading multiple card files to compare, call read_file for all of them in parallel
+        - When deleting multiple source cards after a merge, call delete_file for all in parallel
+        - When spawning multiple merge_cards operations for independent clusters, do them in parallel
+        Prioritize parallel tool calls whenever the operations don't depend on each other's results.
+        </use_parallel_tool_calls>
         """
 }

@@ -112,7 +112,7 @@ actor DocumentProcessingService {
             skills = nil
             narrativeCards = nil
         } else if isResume {
-            // Resumes skip summary (full text sent to LLM via interview_context)
+            // Resumes skip summary (full text sent to LLM via interviewContext)
             // but still generate skills and narrative cards
             statusCallback?("Generating knowledge extraction for resume...")
             Logger.info("📝 Resume: skipping summary, generating skills + narrative cards: \(filename)", category: .ai)
@@ -172,27 +172,27 @@ actor DocumentProcessingService {
         if let title = extractedTitle {
             artifactRecord["title"].string = title
         }
-        artifactRecord["document_type"].string = documentType
+        artifactRecord["documentType"].string = documentType
 
-        // Set interview_context for uploads that should have full content sent to LLM
+        // Set interviewContext for uploads that should have full content sent to LLM
         // (writing samples and resumes - helps with voice matching)
         let interviewContextTypes = ["writing_sample", "resume"]
-        artifactRecord["interview_context"].bool = interviewContextTypes.contains(documentType)
+        artifactRecord["interviewContext"].bool = interviewContextTypes.contains(documentType)
 
-        artifactRecord["storage_path"].string = storagePath
-        artifactRecord["extracted_text"].string = extractedText
+        artifactRecord["rawFilePath"].string = storagePath
+        artifactRecord["extractedText"].string = extractedText
 
         // Two-pass extraction fields (PDFs) - stored in metadata for access via ArtifactRecord
         var graphicsMeta = JSON()
         if let plainText = artifact.plainTextContent {
-            graphicsMeta["plain_text_content"].string = plainText
+            graphicsMeta["plainTextContent"].string = plainText
         }
         if let graphics = artifact.graphicsContent {
-            graphicsMeta["graphics_content"].string = graphics
+            graphicsMeta["graphicsContent"].string = graphics
         }
-        graphicsMeta["graphics_extraction_status"].string = artifact.graphicsExtractionStatus.rawValue
-        if let graphicsError = artifact.metadata["graphics_extraction_error"] as? String {
-            graphicsMeta["graphics_extraction_error"].string = graphicsError
+        graphicsMeta["graphicsExtractionStatus"].string = artifact.graphicsExtractionStatus.rawValue
+        if let graphicsError = artifact.metadata["graphicsExtractionError"] as? String {
+            graphicsMeta["graphicsExtractionError"].string = graphicsError
         }
 
         // Determine content type from file extension
@@ -204,29 +204,29 @@ actor DocumentProcessingService {
         case "txt": contentType = "text/plain"
         default: contentType = "application/octet-stream"
         }
-        artifactRecord["content_type"].string = contentType
-        artifactRecord["size_bytes"].int = artifact.sizeInBytes
+        artifactRecord["contentType"].string = contentType
+        artifactRecord["sizeBytes"].int = artifact.sizeInBytes
         artifactRecord["sha256"].string = artifact.sha256
-        artifactRecord["created_at"].string = ISO8601DateFormatter().string(from: Date())
+        artifactRecord["createdAt"].string = ISO8601DateFormatter().string(from: Date())
         if let callId = callId {
-            artifactRecord["originating_call_id"].string = callId
+            artifactRecord["originatingCallId"].string = callId
         }
         // Add summary if generated
         if let summary = documentSummary {
             artifactRecord["summary"].string = summary.summary
-            artifactRecord["brief_description"].string = summary.briefDescription
-            artifactRecord["summary_generated_at"].string = ISO8601DateFormatter().string(from: Date())
+            artifactRecord["briefDescription"].string = summary.briefDescription
+            artifactRecord["summaryGeneratedAt"].string = ISO8601DateFormatter().string(from: Date())
             // Store structured summary fields in metadata
             var summaryMeta = JSON()
-            summaryMeta["document_type"].string = summary.documentType
-            summaryMeta["brief_description"].string = summary.briefDescription
-            summaryMeta["time_period"].string = summary.timePeriod
+            summaryMeta["documentType"].string = summary.documentType
+            summaryMeta["briefDescription"].string = summary.briefDescription
+            summaryMeta["timePeriod"].string = summary.timePeriod
             summaryMeta["companies"].arrayObject = summary.companies
             summaryMeta["roles"].arrayObject = summary.roles
             summaryMeta["skills"].arrayObject = summary.skills
             summaryMeta["achievements"].arrayObject = summary.achievements
-            summaryMeta["relevance_hints"].string = summary.relevanceHints
-            artifactRecord["summary_metadata"] = summaryMeta
+            summaryMeta["relevanceHints"].string = summary.relevanceHints
+            artifactRecord["summaryMetadata"] = summaryMeta
         }
 
         // Store skill bank extraction
@@ -246,8 +246,8 @@ actor DocumentProcessingService {
             for skill in skillsResult {
                 byCategory[skill.category.rawValue, default: 0] += 1
             }
-            skillsStats["by_category"].dictionaryObject = byCategory as [String: Any]
-            artifactRecord["skills_stats"] = skillsStats
+            skillsStats["byCategory"].dictionaryObject = byCategory as [String: Any]
+            artifactRecord["skillsStats"] = skillsStats
         }
 
         // Store narrative knowledge cards
@@ -257,7 +257,7 @@ actor DocumentProcessingService {
             encoder.dateEncodingStrategy = .iso8601
             if let cardsData = try? encoder.encode(cardsResult),
                let cardsString = String(data: cardsData, encoding: .utf8) {
-                artifactRecord["narrative_cards"].string = cardsString
+                artifactRecord["narrativeCards"].string = cardsString
             }
 
             // Add narrative cards stats
@@ -267,8 +267,8 @@ actor DocumentProcessingService {
             for card in cardsResult {
                 byType[card.cardType?.rawValue ?? "other", default: 0] += 1
             }
-            kcStats["by_type"].dictionaryObject = byType as [String: Any]
-            artifactRecord["narrative_cards_stats"] = kcStats
+            kcStats["byType"].dictionaryObject = byType as [String: Any]
+            artifactRecord["narrativeCards_stats"] = kcStats
         }
 
         // Persist both upload metadata and extraction metadata

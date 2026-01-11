@@ -28,7 +28,7 @@ struct NextPhaseTool: InterviewTool {
         """
         Advance to the next interview phase. THIS IS THE PRIMARY TOOL FOR PHASE TRANSITIONS. \
         Call this when phase objectives are complete or user is ready to proceed. \
-        Returns {status, new_phase, next_required_tool}. If blocked, the response will \
+        Returns {status, newPhase, next_required_tool}. If blocked, the response will \
         explain why - only then consider ask_user_skip_to_next_phase as a last resort.
         """
     }
@@ -91,14 +91,14 @@ struct NextPhaseTool: InterviewTool {
 
             var response = JSON()
             response["status"].string = "completed"
-            response["previous_phase"].string = currentPhase.rawValue
-            response["new_phase"].string = nextPhase.rawValue
+            response["previousPhase"].string = currentPhase.rawValue
+            response["newPhase"].string = nextPhase.rawValue
 
             if missingObjectives.isEmpty {
                 response["message"].string = "Phase transition completed"
             } else {
                 response["message"].string = "Phase transition completed with incomplete objectives"
-                response["skipped_objectives"] = JSON(missingObjectives)
+                response["skippedObjectives"] = JSON(missingObjectives)
             }
 
             // Phase transition complete - no bootstrap tool needed

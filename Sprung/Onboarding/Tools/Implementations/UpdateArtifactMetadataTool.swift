@@ -21,11 +21,11 @@ struct UpdateArtifactMetadataTool: InterviewTool {
         guard let coordinator else {
             return .error(ToolError.executionFailed("Coordinator unavailable"))
         }
-        guard let artifactId = params["artifact_id"].string, !artifactId.isEmpty else {
-            throw ToolError.invalidParameters("artifact_id must be provided")
+        guard let artifactId = params["artifactId"].string, !artifactId.isEmpty else {
+            throw ToolError.invalidParameters("artifactId must be provided")
         }
-        guard let metadataUpdates = params["metadata_updates"].dictionary, !metadataUpdates.isEmpty else {
-            throw ToolError.invalidParameters("metadata_updates must be a non-empty object")
+        guard let metadataUpdates = params["metadataUpdates"].dictionary, !metadataUpdates.isEmpty else {
+            throw ToolError.invalidParameters("metadataUpdates must be a non-empty object")
         }
         // Validate that the artifact exists
         let existingArtifact = await coordinator.getArtifactRecord(id: artifactId)
@@ -33,19 +33,19 @@ struct UpdateArtifactMetadataTool: InterviewTool {
             throw ToolError.invalidParameters("Artifact not found: \(artifactId)")
         }
         // Basic type validation for known fields
-        if let targetPhaseObjectives = metadataUpdates["target_phase_objectives"] {
+        if let targetPhaseObjectives = metadataUpdates["targetPhaseObjectives"] {
             guard targetPhaseObjectives.array != nil else {
-                throw ToolError.invalidParameters("target_phase_objectives must be an array")
+                throw ToolError.invalidParameters("targetPhaseObjectives must be an array")
             }
         }
-        if let targetDeliverable = metadataUpdates["target_deliverable"] {
+        if let targetDeliverable = metadataUpdates["targetDeliverable"] {
             guard targetDeliverable.string != nil else {
-                throw ToolError.invalidParameters("target_deliverable must be a string")
+                throw ToolError.invalidParameters("targetDeliverable must be a string")
             }
         }
-        if let userValidated = metadataUpdates["user_validated"] {
+        if let userValidated = metadataUpdates["userValidated"] {
             guard userValidated.bool != nil else {
-                throw ToolError.invalidParameters("user_validated must be a boolean")
+                throw ToolError.invalidParameters("userValidated must be a boolean")
             }
         }
         // Emit metadata update request
@@ -55,8 +55,8 @@ struct UpdateArtifactMetadataTool: InterviewTool {
         var result = JSON()
         result["status"].string = "completed"
         result["success"].boolValue = true
-        result["artifact_id"].stringValue = artifactId
-        result["updated_fields"] = JSON(metadataUpdates.keys.map { $0 })
+        result["artifactId"].stringValue = artifactId
+        result["updatedFields"] = JSON(metadataUpdates.keys.map { $0 })
         Logger.info("✅ Artifact metadata update requested: \(artifactId)", category: .ai)
         return .immediate(result)
     }
