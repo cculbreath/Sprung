@@ -21,27 +21,12 @@ final class WebExtractionService {
     // MARK: - Properties
 
     private var llmFacade: LLMFacade?
-    private let skillBankService: SkillBankService
-    private let kcExtractionService: KnowledgeCardExtractionService
 
     // MARK: - Initialization
 
-    init(
-        llmFacade: LLMFacade? = nil,
-        skillBankService: SkillBankService? = nil,
-        kcExtractionService: KnowledgeCardExtractionService? = nil
-    ) {
+    init(llmFacade: LLMFacade? = nil) {
         self.llmFacade = llmFacade
-        self.skillBankService = skillBankService ?? SkillBankService(llmFacade: llmFacade)
-        self.kcExtractionService = kcExtractionService ?? KnowledgeCardExtractionService(llmFacade: llmFacade)
         Logger.info("🌐 WebExtractionService initialized", category: .ai)
-    }
-
-    /// Set the LLM facade (for deferred initialization)
-    func setLLMFacade(_ facade: LLMFacade?) {
-        self.llmFacade = facade
-        skillBankService.setLLMFacade(facade)
-        kcExtractionService.setLLMFacade(facade)
     }
 
     // MARK: - Public API
@@ -56,6 +41,7 @@ final class WebExtractionService {
         statusCallback: (@Sendable (String) -> Void)? = nil
     ) async throws -> WebExtractionResult {
         let urlString = url.absoluteString
+        let filename = url.host ?? "web_content"
         Logger.info("🌐 Processing URL: \(urlString)", category: .ai)
 
         // Step 1: Fetch HTML content
@@ -74,14 +60,19 @@ final class WebExtractionService {
         // Step 3: Run knowledge extraction in parallel
         statusCallback?("Running knowledge extraction...")
 
+        let skillBankService = SkillBankService(llmFacade: llmFacade)
+        let kcExtractionService = KnowledgeCardExtractionService(llmFacade: llmFacade)
+
         async let skillsTask: [Skill]? = generateSkills(
+            service: skillBankService,
             artifactId: artifactId,
-            source: urlString,
+            filename: filename,
             extractedText: extractedText
         )
         async let cardsTask: [KnowledgeCard]? = generateNarrativeCards(
+            service: kcExtractionService,
             artifactId: artifactId,
-            source: urlString,
+            filename: filename,
             extractedText: extractedText
         )
 
@@ -126,13 +117,12 @@ final class WebExtractionService {
                 ]
                 if !skill.evidence.isEmpty {
                     skillDict["evidence"] = skill.evidence.map { evidence -> [String: Any] in
-                        var evidenceDict: [String: Any] = [
-                            "documentId": evidence.documentId
+                        [
+                            "documentId": evidence.documentId,
+                            "location": evidence.location,
+                            "context": evidence.context,
+                            "strength": evidence.strength.rawValue
                         ]
-                        if let snippet = evidence.snippet {
-                            evidenceDict["snippet"] = snippet
-                        }
-                        return evidenceDict
                     }
                 }
                 return skillDict
@@ -149,7 +139,6 @@ final class WebExtractionService {
                 cardJSON["title"].string = card.title
                 cardJSON["cardType"].string = card.cardType?.rawValue ?? "unknown"
                 cardJSON["narrative"].string = card.narrative
-                cardJSON["bullets"] = JSON(card.bullets)
                 if let dateRange = card.dateRange {
                     cardJSON["dateRange"].string = dateRange
                 }
@@ -198,8 +187,9 @@ final class WebExtractionService {
 
     /// Generate skills from extracted text
     private func generateSkills(
+        service: SkillBankService,
         artifactId: String,
-        source: String,
+        filename: String,
         extractedText: String
     ) async -> [Skill]? {
         guard llmFacade != nil else {
@@ -208,11 +198,12 @@ final class WebExtractionService {
         }
 
         do {
-            let skills = try await skillBankService.extractSkills(
-                from: extractedText,
-                artifactId: artifactId
+            let skills = try await service.extractSkills(
+                documentId: artifactId,
+                filename: filename,
+                content: extractedText
             )
-            Logger.info("🔧 Generated \(skills.count) skills from \(source)", category: .ai)
+            Logger.info("🔧 Generated \(skills.count) skills from \(filename)", category: .ai)
             return skills
         } catch {
             Logger.error("❌ Skill extraction failed: \(error.localizedDescription)", category: .ai)
@@ -222,8 +213,9 @@ final class WebExtractionService {
 
     /// Generate narrative knowledge cards from extracted text
     private func generateNarrativeCards(
+        service: KnowledgeCardExtractionService,
         artifactId: String,
-        source: String,
+        filename: String,
         extractedText: String
     ) async -> [KnowledgeCard]? {
         guard llmFacade != nil else {
@@ -232,11 +224,12 @@ final class WebExtractionService {
         }
 
         do {
-            let cards = try await kcExtractionService.extractKnowledgeCards(
-                from: extractedText,
-                artifactId: artifactId
+            let cards = try await service.extractCards(
+                documentId: artifactId,
+                filename: filename,
+                content: extractedText
             )
-            Logger.info("📖 Generated \(cards.count) narrative cards from \(source)", category: .ai)
+            Logger.info("📖 Generated \(cards.count) narrative cards from \(filename)", category: .ai)
             return cards
         } catch {
             Logger.error("❌ KC extraction failed: \(error.localizedDescription)", category: .ai)
