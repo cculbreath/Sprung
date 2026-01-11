@@ -14,11 +14,17 @@ import SwiftData
 final class SkillStore: SwiftDataStore {
     unowned let modelContext: ModelContext
 
+    /// Change counter to trigger SwiftUI view updates when skills are mutated.
+    /// @Observable only tracks stored properties, not computed SwiftData fetches.
+    /// Views reading skills will observe this, ensuring re-render after mutations.
+    private(set) var changeVersion: Int = 0
+
     // MARK: - Computed Collections
 
     /// All skills - SwiftData is the single source of truth
     var skills: [Skill] {
-        (try? modelContext.fetch(FetchDescriptor<Skill>())) ?? []
+        _ = changeVersion  // Touch to establish observation dependency
+        return (try? modelContext.fetch(FetchDescriptor<Skill>())) ?? []
     }
 
     /// Skills created during onboarding
@@ -53,6 +59,7 @@ final class SkillStore: SwiftDataStore {
     func add(_ skill: Skill) {
         modelContext.insert(skill)
         saveContext()
+        changeVersion += 1
     }
 
     /// Adds multiple Skills to the store
@@ -61,17 +68,20 @@ final class SkillStore: SwiftDataStore {
             modelContext.insert(skill)
         }
         saveContext()
+        changeVersion += 1
     }
 
     /// Persists updates (entity already mutated)
     func update(_ skill: Skill) {
         _ = saveContext()
+        changeVersion += 1
     }
 
     /// Deletes a Skill from the store
     func delete(_ skill: Skill) {
         modelContext.delete(skill)
         saveContext()
+        changeVersion += 1
     }
 
     /// Deletes multiple Skills from the store
@@ -80,6 +90,7 @@ final class SkillStore: SwiftDataStore {
             modelContext.delete(skill)
         }
         saveContext()
+        changeVersion += 1
     }
 
     /// Deletes all Skills created during onboarding
@@ -89,6 +100,7 @@ final class SkillStore: SwiftDataStore {
             modelContext.delete(skill)
         }
         saveContext()
+        changeVersion += 1
         Logger.info("🗑️ Deleted \(skills.count) onboarding Skills", category: .ai)
     }
 
@@ -99,6 +111,7 @@ final class SkillStore: SwiftDataStore {
             modelContext.delete(skill)
         }
         saveContext()
+        changeVersion += 1
         Logger.info("🗑️ Deleted \(skillsToDelete.count) pending Skills", category: .ai)
     }
 
@@ -116,6 +129,7 @@ final class SkillStore: SwiftDataStore {
             skill.isPending = false
         }
         saveContext()
+        changeVersion += 1
         Logger.info("✅ Approved \(skillsToApprove.count) Skills", category: .ai)
     }
 
@@ -129,6 +143,7 @@ final class SkillStore: SwiftDataStore {
             modelContext.delete(skill)
         }
         saveContext()
+        changeVersion += 1
         Logger.info("🗑️ Deleted \(skillsToDelete.count) skills from artifact \(artifactId)", category: .ai)
     }
 
@@ -157,6 +172,7 @@ final class SkillStore: SwiftDataStore {
         }
 
         saveContext()
+        changeVersion += 1
         Logger.info("📥 Imported \(importedCount) Skills from JSON", category: .data)
         return importedCount
     }
