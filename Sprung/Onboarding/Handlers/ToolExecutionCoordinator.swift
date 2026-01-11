@@ -61,12 +61,11 @@ actor ToolExecutionCoordinator: OnboardingEventEmitter {
         if isStopped {
             Logger.info("🛑 Tool call \(call.name) discarded (processing stopped)", category: .ai)
             // Fill a placeholder result so the conversation log doesn't have orphan tool calls
-            await stateCoordinator.fillToolResponseSlot(
+            await stateCoordinator.addCompletedToolResult(
                 callId: call.callId,
-                result: "[Discarded - processing stopped]",
-                status: .skipped
+                toolName: call.name,
+                output: "[Discarded - processing stopped]"
             )
-            await emit(.tool(.resultEmitted(callId: call.callId, result: "[Discarded - processing stopped]", statusMessage: nil)))
             return
         }
 
