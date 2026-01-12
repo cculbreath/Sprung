@@ -36,8 +36,8 @@ actor ConversationContextAssembler {
                 role = "user"
             case .assistant:
                 role = "assistant"
-            case .system:
-                // Skip system messages - they're included via system prompt
+            case .system, .systemNote:
+                // Skip system messages and notes - they're for UI display only
                 return []
             }
 
@@ -50,7 +50,9 @@ actor ConversationContextAssembler {
             )))
 
             // For assistant messages, include tool calls and their results
-            // ConversationLog guarantees all results are present
+            // ConversationLog guarantees all results are present for historical entries.
+            // CRITICAL: For the current turn, pending results MUST have a placeholder
+            // to maintain Anthropic API invariant (every tool_use needs a tool_result).
             if role == "assistant", let toolCalls = message.toolCalls {
                 for toolCall in toolCalls {
                     items.append(.functionToolCall(FunctionToolCall(
@@ -59,16 +61,16 @@ actor ConversationContextAssembler {
                         name: toolCall.name
                     )))
 
-                    if let output = toolCall.result {
-                        items.append(.functionToolCallOutput(FunctionToolCallOutput(
-                            callId: toolCall.id,
-                            output: output,
-                            status: nil
-                        )))
-                    } else {
-                        // With ConversationLog gating, this should rarely happen
-                        // Only during the current turn before results are filled
-                        Logger.debug("📝 Tool call pending result: \(toolCall.name) (id: \(toolCall.id))", category: .ai)
+                    // Always add a tool_result - use actual result or placeholder
+                    let output = toolCall.result ?? #"{"status":"pending","reason":"Tool execution in progress"}"#
+                    items.append(.functionToolCallOutput(FunctionToolCallOutput(
+                        callId: toolCall.id,
+                        output: output,
+                        status: nil
+                    )))
+
+                    if toolCall.result == nil {
+                        Logger.debug("📝 Tool call pending result (using placeholder): \(toolCall.name) (id: \(toolCall.id))", category: .ai)
                     }
                 }
             }

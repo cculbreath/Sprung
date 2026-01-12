@@ -97,7 +97,7 @@ struct IngestWritingSampleTool: InterviewTool {
         let artifactId = UUID()
         var artifactRecord = JSON()
         artifactRecord["id"].string = artifactId.uuidString
-        artifactRecord["sourceType"].string = "writing_sample"
+        artifactRecord["sourceType"].string = "writingSample"
         artifactRecord["filename"].string = "\(sampleName).txt"
         artifactRecord["extractedText"].string = content
         artifactRecord["sourceHash"].string = contentHash

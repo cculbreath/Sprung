@@ -54,18 +54,22 @@ enum ArtifactRecordService {
 
     /// Determines if an artifact is a writing sample based on metadata and type.
     static func isWritingSample(_ record: ArtifactRecord) -> Bool {
-        // Check source type
-        if record.sourceType == "writing_sample" {
+        // Check source type (camelCase or legacy snake_case)
+        if record.sourceType == "writingSample" || record.sourceType == "writing_sample" {
             return true
         }
-        // Check document_type in metadata
-        if let docType = record.metadataString("document_type") {
+        // Check documentType at top level
+        if let docType = record.metadataString("documentType") {
             if docType == "writingSample" || docType == "writing_sample" {
                 return true
             }
         }
-        // Check for writing_type in metadata
-        if record.metadataString("writing_type") != nil {
+        // Check writingType in nested metadata object
+        if record.nestedMetadataString(path: ["metadata", "writingType"]) != nil {
+            return true
+        }
+        // Check writing_type in nested metadata (historical key name)
+        if record.nestedMetadataString(path: ["metadata", "writing_type"]) != nil {
             return true
         }
         return false

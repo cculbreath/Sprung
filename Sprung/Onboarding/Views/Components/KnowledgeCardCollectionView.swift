@@ -5,6 +5,8 @@ struct KnowledgeCardCollectionView: View {
     let coordinator: OnboardingInterviewCoordinator
     let onGenerateCards: () -> Void
     let onAdvanceToNextPhase: () -> Void
+    /// When false, hides the approve button (caller will show it as a sticky footer)
+    var showApproveButton: Bool = true
 
     @State private var selectedCardId: UUID?
 
@@ -43,13 +45,13 @@ struct KnowledgeCardCollectionView: View {
                 cardListSection
             }
 
-            // Show Generate Cards button when assignments are ready
-            if isReadyForGeneration && !isGenerating {
+            // Show Generate Cards button when assignments are ready (unless hidden for sticky footer)
+            if showApproveButton && isReadyForGeneration && !isGenerating {
                 generateCardsButton
             }
 
-            // Show generation progress when generating
-            if isGenerating {
+            // Show generation progress when generating (unless hidden for sticky footer)
+            if showApproveButton && isGenerating {
                 generatingProgressView
             }
         }

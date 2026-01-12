@@ -7,7 +7,8 @@ import Foundation
 import AppKit
 import UniformTypeIdentifiers
 @MainActor
-class ResumeExportService: ObservableObject {
+@Observable
+class ResumeExportService {
     private let nativeGenerator: NativePDFGenerator
     private let textGenerator: TextResumeGenerator
     private let templateStore: TemplateStore

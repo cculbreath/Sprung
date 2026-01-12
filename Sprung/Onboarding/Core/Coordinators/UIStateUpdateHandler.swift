@@ -89,8 +89,12 @@ final class UIStateUpdateHandler {
     // MARK: - Artifact Events
     func handleArtifactEvent(_ event: OnboardingEvent) async {
         switch event {
-        case .artifact(.recordProduced), .artifact(.knowledgeCardPersisted):
-            // Typed artifacts are accessed via coordinator.sessionArtifacts (no UI sync needed)
+        case .artifact(.recordProduced):
+            // Increment change token to trigger SwiftUI updates for views that observe artifacts
+            ui.artifactUIChangeToken += 1
+            await syncWizardProgressFromState()
+
+        case .artifact(.knowledgeCardPersisted):
             await syncWizardProgressFromState()
 
         // MARK: Multi-Agent Workflow State (categorized as .artifact)

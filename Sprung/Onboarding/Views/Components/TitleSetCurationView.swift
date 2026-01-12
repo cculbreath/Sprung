@@ -6,7 +6,6 @@ struct TitleSetCurationView: View {
     let titleSetService: TitleSetService
 
     @State private var titleSets: [TitleSet] = []
-    @State private var vocabulary: [IdentityTerm] = []
     @State private var selectedSetIds: Set<String> = []
     @State private var isGenerating = false
     @State private var isGeneratingMore = false
@@ -14,6 +13,14 @@ struct TitleSetCurationView: View {
     @State private var isGeneratingCustom = false
     @State private var customTitleInput: String = ""
     @State private var showCustomTitleField = false
+    @State private var isGeneratingWithGuidance = false
+    @State private var guidanceComment: String = ""
+    @State private var showGuidanceField = false
+
+    /// Access to the full skill bank for context
+    private var skills: [Skill] {
+        coordinator.skillStore.skills
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -25,13 +32,19 @@ struct TitleSetCurationView: View {
                 .foregroundStyle(.secondary)
 
             if isGenerating {
-                ProgressView("Generating title options from your skills...")
-                    .padding()
-            } else if titleSets.isEmpty {
-                Button("Generate Title Options") {
-                    Task { await generateInitialTitleSets() }
+                VStack {
+                    ProgressView("Generating title options from your skills...")
                 }
-                .buttonStyle(.borderedProminent)
+                .frame(maxWidth: .infinity)
+                .padding()
+            } else if titleSets.isEmpty {
+                VStack {
+                    Button("Generate Title Options") {
+                        Task { await generateInitialTitleSets() }
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
+                .frame(maxWidth: .infinity)
             } else {
                 ScrollView {
                     VStack(spacing: 8) {
@@ -50,7 +63,7 @@ struct TitleSetCurationView: View {
                 // Custom title input
                 if showCustomTitleField {
                     HStack {
-                        TextField("Enter a title (e.g., Architect)", text: $customTitleInput)
+                        TextField("Enter a title (e.g., Software Architect)", text: $customTitleInput)
                             .textFieldStyle(.roundedBorder)
 
                         Button("Generate") {
@@ -71,19 +84,74 @@ struct TitleSetCurationView: View {
                     if isGeneratingCustom {
                         ProgressView("Generating sets with \"\(customTitleInput)\"...")
                             .font(.caption)
+                            .frame(maxWidth: .infinity)
                     }
+                }
+
+                // Guidance comment input
+                if showGuidanceField {
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text("Generation Guidance")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                            Button {
+                                showGuidanceField = false
+                                guidanceComment = ""
+                            } label: {
+                                Image(systemName: "xmark.circle.fill")
+                                    .foregroundStyle(.secondary)
+                            }
+                            .buttonStyle(.plain)
+                        }
+
+                        TextField(
+                            "e.g., Include 'Physicist', avoid 'Analyst', focus on leadership...",
+                            text: $guidanceComment,
+                            axis: .vertical
+                        )
+                        .textFieldStyle(.roundedBorder)
+                        .lineLimit(2...4)
+
+                        HStack {
+                            Spacer()
+                            Button("Generate with Guidance") {
+                                Task { await generateWithGuidance() }
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .controlSize(.small)
+                            .disabled(guidanceComment.trimmingCharacters(in: .whitespaces).isEmpty || isGeneratingWithGuidance)
+                        }
+
+                        if isGeneratingWithGuidance {
+                            ProgressView("Generating sets with your guidance...")
+                                .font(.caption)
+                                .frame(maxWidth: .infinity)
+                        }
+                    }
+                    .padding(8)
+                    .background(Color.secondary.opacity(0.1))
+                    .cornerRadius(8)
                 }
 
                 HStack {
                     Button("Generate More") {
                         Task { await generateMoreTitleSets() }
                     }
-                    .disabled(isGeneratingMore || isSaving || isGeneratingCustom)
+                    .disabled(isGeneratingMore || isSaving || isGeneratingCustom || isGeneratingWithGuidance)
 
                     Button("Specify Title") {
                         showCustomTitleField.toggle()
+                        if showCustomTitleField { showGuidanceField = false }
                     }
-                    .disabled(isGeneratingMore || isSaving || isGeneratingCustom)
+                    .disabled(isGeneratingMore || isSaving || isGeneratingCustom || isGeneratingWithGuidance)
+
+                    Button("With Comment") {
+                        showGuidanceField.toggle()
+                        if showGuidanceField { showCustomTitleField = false }
+                    }
+                    .disabled(isGeneratingMore || isSaving || isGeneratingCustom || isGeneratingWithGuidance)
 
                     Spacer()
 
@@ -91,7 +159,7 @@ struct TitleSetCurationView: View {
                         Task { await saveSelectedSets() }
                     }
                     .buttonStyle(.borderedProminent)
-                    .disabled(selectedSetIds.isEmpty || isSaving || isGeneratingMore || isGeneratingCustom)
+                    .disabled(selectedSetIds.isEmpty || isSaving || isGeneratingMore || isGeneratingCustom || isGeneratingWithGuidance)
                 }
 
                 if selectedSetIds.isEmpty && !titleSets.isEmpty {
@@ -103,6 +171,7 @@ struct TitleSetCurationView: View {
                 if isGeneratingMore {
                     ProgressView("Generating more options...")
                         .font(.caption)
+                        .frame(maxWidth: .infinity)
                 }
             }
         }
@@ -114,10 +183,8 @@ struct TitleSetCurationView: View {
 
     private func loadExistingTitleSets() {
         let existingSets = guidanceStore.titleSets()
-        let existingVocabulary = guidanceStore.identityVocabulary()
-        if !existingSets.isEmpty || !existingVocabulary.isEmpty {
+        if !existingSets.isEmpty {
             titleSets = existingSets
-            vocabulary = existingVocabulary
             selectedSetIds = Set(existingSets.filter { $0.isFavorite }.map { $0.id })
         }
     }
@@ -136,7 +203,6 @@ struct TitleSetCurationView: View {
             let result = try await titleSetService.generateInitialTitleSets(from: currentSkills)
 
             titleSets = result.titleSets
-            vocabulary = result.vocabulary
             selectedSetIds = Set(result.titleSets.filter { $0.isFavorite }.map { $0.id })
 
             await finalizeTitleSetAgent(
@@ -158,12 +224,11 @@ struct TitleSetCurationView: View {
             status: "Generating additional title options"
         )
 
-        // Get user's current favorites to guide generation
         let favoritedSets = titleSets.filter { selectedSetIds.contains($0.id) }
 
         do {
             let moreSets = try await titleSetService.generateMoreTitleSets(
-                vocabulary: vocabulary,
+                skills: skills,
                 existingSets: titleSets,
                 favoritedSets: favoritedSets
             )
@@ -194,7 +259,7 @@ struct TitleSetCurationView: View {
         do {
             let customSets = try await titleSetService.generateWithSpecifiedTitle(
                 specifiedTitle: specifiedTitle,
-                vocabulary: vocabulary,
+                skills: skills,
                 existingSets: titleSets
             )
 
@@ -210,6 +275,44 @@ struct TitleSetCurationView: View {
             )
         } catch {
             Logger.error("🏷️ Custom title generation failed: \(error.localizedDescription)", category: .ai)
+            await failTitleSetAgent(agentId: agentId, error: error.localizedDescription)
+        }
+    }
+
+    private func generateWithGuidance() async {
+        let guidance = guidanceComment.trimmingCharacters(in: .whitespaces)
+        guard !guidance.isEmpty else { return }
+
+        isGeneratingWithGuidance = true
+        defer { isGeneratingWithGuidance = false }
+
+        let agentId = await trackTitleSetAgent(
+            name: "Title Sets (Guided)",
+            status: "Generating sets with guidance"
+        )
+
+        let favoritedSets = titleSets.filter { selectedSetIds.contains($0.id) }
+
+        do {
+            let guidedSets = try await titleSetService.generateWithGuidance(
+                guidance: guidance,
+                skills: skills,
+                existingSets: titleSets,
+                favoritedSets: favoritedSets
+            )
+
+            titleSets.append(contentsOf: guidedSets)
+
+            // Clear input and hide field on success
+            guidanceComment = ""
+            showGuidanceField = false
+
+            await finalizeTitleSetAgent(
+                agentId: agentId,
+                summary: "Generated \(guidedSets.count) sets with guidance: \(guidance.prefix(30))..."
+            )
+        } catch {
+            Logger.error("🏷️ Guided generation failed: \(error.localizedDescription)", category: .ai)
             await failTitleSetAgent(agentId: agentId, error: error.localizedDescription)
         }
     }
@@ -243,7 +346,6 @@ struct TitleSetCurationView: View {
         Logger.info("🏷️ Persisting \(approvedSets.count) approved title sets to inference guidance", category: .ai)
 
         titleSetService.storeTitleSets(
-            vocabulary: vocabulary,
             titleSets: approvedSets,
             in: guidanceStore
         )

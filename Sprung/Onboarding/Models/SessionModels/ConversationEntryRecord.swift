@@ -69,6 +69,12 @@ class ConversationEntryRecord {
                 toolCalls: toolCalls,
                 timestamp: timestamp
             )
+        case "systemNote":
+            return .systemNote(
+                id: id,
+                text: text,
+                timestamp: timestamp
+            )
         default:
             return nil
         }
@@ -97,6 +103,14 @@ class ConversationEntryRecord {
                 entryType: "assistant",
                 text: text,
                 toolCallsJSON: toolCallsJSON,
+                timestamp: timestamp,
+                sequenceIndex: sequenceIndex
+            )
+        case .systemNote(let id, let text, let timestamp):
+            return ConversationEntryRecord(
+                id: id,
+                entryType: "systemNote",
+                text: text,
                 timestamp: timestamp,
                 sequenceIndex: sequenceIndex
             )

@@ -17,6 +17,7 @@ final class VoiceProfileExtractionHandler {
     private let artifactRecordStore: ArtifactRecordStore
     private let sessionPersistenceHandler: SwiftDataSessionPersistenceHandler
     private let agentActivityTracker: AgentActivityTracker
+    private let conversationLog: ConversationLog
 
     private var extractionTask: Task<Void, Never>?
     private var subscriptionTask: Task<Void, Never>?
@@ -28,7 +29,8 @@ final class VoiceProfileExtractionHandler {
         guidanceStore: InferenceGuidanceStore,
         artifactRecordStore: ArtifactRecordStore,
         sessionPersistenceHandler: SwiftDataSessionPersistenceHandler,
-        agentActivityTracker: AgentActivityTracker
+        agentActivityTracker: AgentActivityTracker,
+        conversationLog: ConversationLog
     ) {
         self.eventBus = eventBus
         self.voiceProfileService = voiceProfileService
@@ -36,6 +38,7 @@ final class VoiceProfileExtractionHandler {
         self.artifactRecordStore = artifactRecordStore
         self.sessionPersistenceHandler = sessionPersistenceHandler
         self.agentActivityTracker = agentActivityTracker
+        self.conversationLog = conversationLog
         start()
     }
 
@@ -124,6 +127,7 @@ final class VoiceProfileExtractionHandler {
                 }
 
                 await markObjectiveComplete()
+                await notifyLLMOfCompletion(profile: profile)
                 Logger.info("🎤 Voice profile extraction complete", category: .ai)
                 agentActivityTracker.appendTranscript(
                     agentId: trackerId,
@@ -170,5 +174,42 @@ final class VoiceProfileExtractionHandler {
             notes: "Voice profile extracted and stored",
             details: nil
         )))
+    }
+
+    /// Notify the LLM of voice profile completion and request phase transition
+    private func notifyLLMOfCompletion(profile: VoiceProfile) async {
+        // Add system note to conversation for user visibility
+        await conversationLog.appendSystemNote("📤 Voice profile analysis complete - notifying onboarding agent")
+
+        // Build coordinator message with profile summary
+        let profileSummary = buildProfileSummary(profile)
+        let coordinatorText = """
+        Voice profile extraction has completed successfully. The user's writing style has been analyzed and stored.
+
+        \(profileSummary)
+
+        Writing sample collection is complete. Please call next_phase to transition to Phase 2 where we will build the user's professional profile.
+        """
+
+        let payload = JSON(["text": coordinatorText])
+        await eventBus.publish(.llm(.executeCoordinatorMessage(payload: payload)))
+        Logger.info("🎤 Sent voice profile coordinator message to LLM", category: .ai)
+    }
+
+    private func buildProfileSummary(_ profile: VoiceProfile) -> String {
+        var parts: [String] = []
+
+        parts.append("Enthusiasm: \(profile.enthusiasm.rawValue)")
+        parts.append("First person: \(profile.useFirstPerson ? "yes" : "no")")
+        parts.append("Connective style: \(profile.connectiveStyle)")
+
+        if !profile.aspirationalPhrases.isEmpty {
+            parts.append("Aspirational phrases: \(profile.aspirationalPhrases.joined(separator: ", "))")
+        }
+        if !profile.avoidPhrases.isEmpty {
+            parts.append("Phrases to avoid: \(profile.avoidPhrases.joined(separator: ", "))")
+        }
+
+        return "Voice profile summary:\n- " + parts.joined(separator: "\n- ")
     }
 }

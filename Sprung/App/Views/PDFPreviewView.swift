@@ -7,9 +7,10 @@
 import SwiftUI
 import PDFKit
 import AppKit
-final class PDFPreviewController: ObservableObject {
-    @Published private(set) var canGoToNextPage: Bool = false
-    @Published private(set) var canGoToPreviousPage: Bool = false
+@Observable
+final class PDFPreviewController {
+    private(set) var canGoToNextPage: Bool = false
+    private(set) var canGoToPreviousPage: Bool = false
     weak var pdfView: PDFView? {
         didSet {
             guard let pdfView else { return }

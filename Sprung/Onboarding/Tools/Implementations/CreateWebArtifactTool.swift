@@ -2,7 +2,7 @@
 //  CreateWebArtifactTool.swift
 //  Sprung
 //
-//  Tool for creating artifacts from web content retrieved via web_search.
+//  Tool for creating artifacts from web content retrieved via web_search or web_fetch.
 //  Used when the agent finds valuable content that should be persisted.
 //
 import Foundation
@@ -19,7 +19,7 @@ struct CreateWebArtifactTool: InterviewTool {
 
     var name: String { OnboardingToolName.createWebArtifact.rawValue }
     var description: String {
-        "Create an artifact from web content. Use after web_search when the content is valuable for the user's profile."
+        "Create an artifact from web content. Use after web_search or web_fetch when the content is valuable for the user's profile."
     }
     var parameters: JSONSchema { Self.schema }
 
@@ -58,11 +58,11 @@ struct CreateWebArtifactTool: InterviewTool {
 
         // Add metadata
         var metadata = JSON()
-        metadata["sourceType"].string = "web_search"
+        metadata["sourceType"].string = "web_content"
         metadata["sourceUrl"].string = url
         metadata["documentType"].string = documentType
         metadata["extraction"]["characterCount"].int = content.count
-        metadata["extraction"]["extractionMethod"].string = "web_search"
+        metadata["extraction"]["extractionMethod"].string = "web_fetch"
         artifactRecord["metadata"] = metadata
 
         // Summary metadata for consistency with other artifacts

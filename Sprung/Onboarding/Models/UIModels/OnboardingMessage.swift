@@ -5,6 +5,8 @@ enum OnboardingMessageRole: String, Codable {
     case user
     case assistant
     case system
+    /// Inline system note displayed between bubbles (italic, no bubble, emoji prefix)
+    case systemNote
 }
 
 /// Represents a message in the onboarding chat interface

@@ -173,6 +173,26 @@ final class ArtifactRecord {
         return dict[key] as? String
     }
 
+    /// Get a nested metadata value as a string using a path of keys
+    func nestedMetadataString(path: [String]) -> String? {
+        guard !path.isEmpty,
+              let metadataJSON,
+              let data = metadataJSON.data(using: .utf8),
+              var current = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return nil
+        }
+        for (index, key) in path.enumerated() {
+            if index == path.count - 1 {
+                return current[key] as? String
+            } else if let nested = current[key] as? [String: Any] {
+                current = nested
+            } else {
+                return nil
+            }
+        }
+        return nil
+    }
+
     /// True if graphics extraction failed for this PDF
     var graphicsExtractionFailed: Bool {
         metadataString("graphics_extraction_status") == "failed"

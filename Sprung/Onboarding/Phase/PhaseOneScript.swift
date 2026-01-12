@@ -39,9 +39,9 @@ struct PhaseOneScript: PhaseScript {
                 activeForm: "Validating applicant profile"
             ),
             InterviewTodoItem(
-                content: "Offer profile photo upload",
+                content: "Request profile photo (call get_user_upload with uploadType=photo)",
                 status: .pending,
-                activeForm: "Offering profile photo"
+                activeForm: "Requesting profile photo"
             ),
             InterviewTodoItem(
                 content: "Collect writing samples (cover letters, proposals, emails)",
@@ -52,6 +52,11 @@ struct PhaseOneScript: PhaseScript {
                 content: "Capture job search context (motivation, priorities)",
                 status: .pending,
                 activeForm: "Capturing job search context"
+            ),
+            InterviewTodoItem(
+                content: "Call next_phase to advance to Phase 2",
+                status: .pending,
+                activeForm: "Advancing to Phase 2"
             )
         ]
     }
@@ -76,13 +81,14 @@ struct PhaseOneScript: PhaseScript {
                 },
                 onComplete: { context in
                     let title = """
-                        Profile validated. Now offer profile photo upload. Call get_user_upload with \
-                        target_key="basics.image" and upload_type="photo". If user declines or after photo is uploaded, \
-                        transition to writing samples. The sidebar shows a writing sample upload panel. \
-                        Encourage uploading MULTIPLE writing samples.
+                        Profile validated. IMPORTANT: You must call get_user_upload with uploadType="photo" \
+                        and target_key="basics.image" to request a profile photo. This is a required step. \
+                        After the user provides a photo OR explicitly declines, then transition to writing samples. \
+                        The sidebar shows a writing sample upload panel. Encourage uploading MULTIPLE writing samples.
                         """
                     let details = [
                         "step": "profile_photo",
+                        "required_tool": "get_user_upload",
                         "note": "writing_sample_panel_visible_in_sidebar"
                     ]
                     return [.coordinatorMessage(title: title, details: details, payload: nil)]

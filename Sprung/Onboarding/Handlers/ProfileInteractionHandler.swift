@@ -65,8 +65,8 @@ final class ProfileInteractionHandler {
         return payload
     }
 
-    /// Extracts URLs from validated profile and instructs agent to visit them for context
-    private func triggerProfileURLFetch(draft: ApplicantProfileDraft) async {
+    /// Extracts URLs from validated profile and notifies Claude they're available for fetching
+    func triggerProfileURLFetch(draft: ApplicantProfileDraft) async {
         var urlsToVisit: [(label: String, url: String)] = []
 
         // Check main website
@@ -84,19 +84,18 @@ final class ProfileInteractionHandler {
 
         guard !urlsToVisit.isEmpty else { return }
 
-        Logger.info("🌐 Profile contains \(urlsToVisit.count) URL(s) to fetch for context", category: .ai)
+        Logger.info("🌐 Profile contains \(urlsToVisit.count) URL(s) available for web_fetch", category: .ai)
 
-        // Build developer message instructing agent to fetch these URLs for interview context
-        let urlDescriptions = urlsToVisit.map { "\($0.label): \($0.url)" }.joined(separator: "\n- ")
+        // Notify Claude about available URLs - it will use the native web_fetch tool automatically
+        // The URLs are included so Claude can fetch them using the server-side web_fetch tool
+        let urlDescriptions = urlsToVisit.map { "- \($0.label): \($0.url)" }.joined(separator: "\n")
         var payload = JSON()
         payload["text"].string = """
-            The user has provided the following URLs in their profile:
-            - \(urlDescriptions)
+            The user's profile includes the following URLs that may provide valuable context:
+            \(urlDescriptions)
 
-            Please use the fetch_and_process_url tool to retrieve each of these pages. The extracted content \
-            will be preserved as artifacts and provide valuable context for the interview. Understanding their \
-            background, projects, and accomplishments from these sources will help you conduct a more informed \
-            and personalized interview.
+            Consider fetching these pages to learn more about the user's background, projects, and \
+            accomplishments. This information can help conduct a more informed and personalized interview.
             """
 
         await eventBus.publish(.llm(.executeCoordinatorMessage(payload: payload)))

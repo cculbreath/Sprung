@@ -127,6 +127,27 @@ actor StateCoordinator: OnboardingEventEmitter {
         return await MainActor.run { tracker.runningAgentCount }
     }
 
+    /// Get recently completed agents (within last 30 seconds) for inclusion in interview context
+    func getRecentlyCompletedAgents() async -> [(type: String, name: String, succeeded: Bool, duration: String)]? {
+        guard let tracker = agentActivityTracker else { return nil }
+
+        let cutoff = Date().addingTimeInterval(-30) // Last 30 seconds
+        let recentAgents = await MainActor.run {
+            tracker.agents.filter { agent in
+                guard let endTime = agent.endTime else { return false }
+                return endTime > cutoff && (agent.status == .completed || agent.status == .failed)
+            }
+        }
+        guard !recentAgents.isEmpty else { return nil }
+
+        return recentAgents.map { agent in
+            (type: agent.agentType.displayName,
+             name: agent.name,
+             succeeded: agent.status == .completed,
+             duration: agent.durationString)
+        }
+    }
+
     // MARK: - Phase Management
     func setPhase(_ phase: InterviewPhase) async {
         self.phase = phase

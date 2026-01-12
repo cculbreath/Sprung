@@ -10,7 +10,6 @@ final class OnboardingToolRegistrar {
     private let todoStore: InterviewTodoStore
     private let artifactFilesystemContext: ArtifactFilesystemContext
     private let candidateDossierStore: CandidateDossierStore
-    private let webExtractionService: WebExtractionService
 
     init(
         coordinator: OnboardingInterviewCoordinator,
@@ -20,8 +19,7 @@ final class OnboardingToolRegistrar {
         phaseRegistry: PhaseScriptRegistry,
         todoStore: InterviewTodoStore,
         artifactFilesystemContext: ArtifactFilesystemContext,
-        candidateDossierStore: CandidateDossierStore,
-        webExtractionService: WebExtractionService
+        candidateDossierStore: CandidateDossierStore
     ) {
         self.coordinator = coordinator
         self.toolRegistry = toolRegistry
@@ -31,7 +29,6 @@ final class OnboardingToolRegistrar {
         self.todoStore = todoStore
         self.artifactFilesystemContext = artifactFilesystemContext
         self.candidateDossierStore = candidateDossierStore
-        self.webExtractionService = webExtractionService
     }
     func registerTools(
         documentExtractionService: DocumentExtractionService,
@@ -74,7 +71,6 @@ final class OnboardingToolRegistrar {
         toolRegistry.register(RequestRawArtifactFileTool(coordinator: coordinator))
         toolRegistry.register(UpdateArtifactMetadataTool(coordinator: coordinator))
         toolRegistry.register(CreateWebArtifactTool(coordinator: coordinator, eventBus: eventBus))
-        toolRegistry.register(FetchAndProcessURLTool(coordinator: coordinator, eventBus: eventBus, webExtractionService: webExtractionService))
         toolRegistry.register(NextPhaseTool(coordinator: coordinator, dataStore: dataStore, registry: phaseRegistry))
         toolRegistry.register(AskUserSkipToNextPhaseTool(coordinator: coordinator))
         toolRegistry.register(ValidateApplicantProfileTool(coordinator: coordinator))

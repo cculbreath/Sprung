@@ -94,6 +94,11 @@ final class OnboardingUIState {
     /// Set by open_document_collection tool, cleared when user clicks "Assess Completeness"
     var isDocumentCollectionActive: Bool = false
 
+    // MARK: - Artifact State
+    /// UI-only counter for SwiftUI change detection when artifacts are added/removed.
+    /// Views observing sessionWritingSamples should also access this token to trigger updates.
+    var artifactUIChangeToken: Int = 0
+
     // MARK: - Multi-Agent Workflow State
     /// True when card assignments have been proposed and await user approval
     /// Set by .mergeComplete event, cleared when generation begins

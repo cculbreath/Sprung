@@ -44,15 +44,20 @@ enum ToolCallStatus: String, Sendable, Codable {
     case failed      // Tool threw error
 }
 
-/// Conversation entry (user or assistant message)
+/// Conversation entry (user, assistant, or system note)
 enum ConversationEntry: Identifiable, Sendable {
     case user(id: UUID, text: String, isSystemGenerated: Bool, timestamp: Date)
     case assistant(id: UUID, text: String, toolCalls: [ToolCallSlot]?, timestamp: Date)
+    /// Inline system note displayed between bubbles (italic, no bubble, emoji prefix)
+    /// Used to show coordinator messages, agent completions, etc. so user understands
+    /// why the assistant is responding without explicit user input.
+    case systemNote(id: UUID, text: String, timestamp: Date)
 
     var id: UUID {
         switch self {
         case .user(let id, _, _, _): return id
         case .assistant(let id, _, _, _): return id
+        case .systemNote(let id, _, _): return id
         }
     }
 
@@ -60,6 +65,7 @@ enum ConversationEntry: Identifiable, Sendable {
         switch self {
         case .user(_, _, _, let ts): return ts
         case .assistant(_, _, _, let ts): return ts
+        case .systemNote(_, _, let ts): return ts
         }
     }
 
@@ -67,6 +73,7 @@ enum ConversationEntry: Identifiable, Sendable {
         switch self {
         case .user(_, let text, _, _): return text
         case .assistant(_, let text, _, _): return text
+        case .systemNote(_, let text, _): return text
         }
     }
 
@@ -77,6 +84,11 @@ enum ConversationEntry: Identifiable, Sendable {
 
     var isAssistant: Bool {
         if case .assistant = self { return true }
+        return false
+    }
+
+    var isSystemNote: Bool {
+        if case .systemNote = self { return true }
         return false
     }
 }
@@ -288,7 +300,7 @@ actor ConversationLog {
 
         for (index, entry) in entries.enumerated() {
             switch entry {
-            case .user:
+            case .user, .systemNote:
                 result.append(entry)
 
             case .assistant(let id, let text, let toolCalls, let timestamp):
@@ -350,6 +362,23 @@ actor ConversationLog {
         }
     }
 
+    // MARK: - System Notes
+
+    /// Append an inline system note (displayed between bubbles, not as a bubble)
+    /// Used for coordinator messages, agent completions, etc.
+    func appendSystemNote(_ text: String) async {
+        let entry = ConversationEntry.systemNote(
+            id: UUID(),
+            text: text,
+            timestamp: Date()
+        )
+        entries.append(entry)
+        Logger.info("ConversationLog: Appended system note", category: .ai)
+
+        // Publish event for persistence
+        await eventBus.publish(.llm(.conversationEntryAppended(entry: entry)))
+    }
+
     // MARK: - UI Compatibility
 
     /// Convert entries to OnboardingMessage format for UI display
@@ -380,6 +409,13 @@ actor ConversationLog {
                     text: text,
                     timestamp: timestamp,
                     toolCalls: uiToolCalls
+                )
+            case .systemNote(let id, let text, let timestamp):
+                return OnboardingMessage(
+                    id: id,
+                    role: .systemNote,
+                    text: text,
+                    timestamp: timestamp
                 )
             }
         }

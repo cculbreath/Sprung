@@ -406,6 +406,8 @@ final class UIResponseCoordinator {
         toolRouter.completeApplicantProfileDraft(draft, source: source)
         // Show the profile summary card in the tool pane
         toolRouter.profileHandler.showProfileSummary(profile: profileJSON)
+        // Trigger webfetch for any URLs in the profile (website, LinkedIn, etc.)
+        await toolRouter.profileHandler.triggerProfileURLFetch(draft: draft)
         // Store in UI state to persist until timeline loads
         ui.lastApplicantProfileSummary = profileJSON
         // Mark objectives complete
@@ -450,9 +452,35 @@ final class UIResponseCoordinator {
         resultData["applicantProfile"] = llmSafeProfile
         resultData["validationStatus"].string = "validated_by_user"
 
+        // Include URLs available for fetching (website, social profiles)
+        // This replaces the coordinator message that would otherwise be queued
+        var urlsToFetch: [(label: String, url: String)] = []
+        if !draft.website.isEmpty {
+            urlsToFetch.append(("personal website", draft.website))
+        }
+        for socialProfile in draft.socialProfiles where !socialProfile.url.isEmpty {
+            let network = socialProfile.network.isEmpty ? "profile" : socialProfile.network
+            urlsToFetch.append((network, socialProfile.url))
+        }
+        if !urlsToFetch.isEmpty {
+            var urlsJSON = JSON([])
+            for (label, url) in urlsToFetch {
+                urlsJSON.arrayObject?.append(["label": label, "url": url])
+            }
+            resultData["urlsAvailableForFetch"] = urlsJSON
+            resultData["urlFetchSuggestion"].string = "Consider using web_fetch to learn more about the user from their \(urlsToFetch.map { $0.0 }.joined(separator: ", ")). This can provide valuable context for the interview."
+        }
+
+        // Build explicit next steps guidance since coordinator messages are now queued
+        var nextSteps = "NEXT: Call get_user_upload with uploadType='photo' and target_key='basics.image' to request a profile photo."
+        if !urlsToFetch.isEmpty {
+            nextSteps += " Also consider fetching the user's \(urlsToFetch.map { $0.0 }.joined(separator: ", ")) to learn more about their background."
+        }
+        resultData["nextSteps"].string = nextSteps
+
         let result = buildCompletionResult(
             status: "completed",
-            message: "Profile submitted via \(source == .contacts ? "contacts import" : "manual entry") and validated by user. Proceed to photo step.",
+            message: "Profile validated. \(nextSteps)",
             data: resultData
         )
         completeUITool(toolName: OnboardingToolName.getApplicantProfile.rawValue, result: result)
@@ -619,8 +647,8 @@ final class UIResponseCoordinator {
         }
     }
 
-    // MARK: - Writing Sample Upload (Phase 3)
-    /// Handles writing sample uploads with verbatim transcription for Phase 3
+    // MARK: - Writing Sample Upload
+    /// Handles writing sample uploads with verbatim transcription
     func uploadWritingSamples(_ fileURLs: [URL]) async {
         guard !fileURLs.isEmpty else { return }
 
@@ -646,11 +674,11 @@ final class UIResponseCoordinator {
                 )
             }
 
-            // Emit uploadCompleted event with writing_sample type
+            // Emit uploadCompleted event with writingSample type
             // DocumentArtifactHandler will process with verbatim transcription
             await eventBus.publish(.artifact(.uploadCompleted(
                 files: uploadInfos,
-                requestKind: "writing_sample",
+                requestKind: "writingSample",
                 callId: nil,
                 metadata: metadata
             )))

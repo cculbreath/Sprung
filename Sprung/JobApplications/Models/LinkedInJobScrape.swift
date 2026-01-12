@@ -23,9 +23,10 @@ private enum LinkedInScrapeAssociatedKeys {
 // MARK: - LinkedIn Session Manager
 
 @MainActor
-class LinkedInSessionManager: ObservableObject {
-    @Published var isLoggedIn = false
-    @Published var sessionExpired = false
+@Observable
+class LinkedInSessionManager {
+    var isLoggedIn = false
+    var sessionExpired = false
     private var webView: WKWebView?
 
     init() {

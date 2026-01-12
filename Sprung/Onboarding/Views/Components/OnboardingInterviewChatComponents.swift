@@ -1,5 +1,24 @@
 import SwiftUI
 import SwiftyJSON
+
+/// Inline system note displayed between chat bubbles (italic, no bubble)
+/// Used to show coordinator messages, agent completions, etc.
+struct SystemNoteRow: View {
+    let message: OnboardingMessage
+
+    var body: some View {
+        HStack {
+            Text(message.text)
+                .font(.subheadline)
+                .italic()
+                .foregroundStyle(.secondary)
+            Spacer()
+        }
+        .padding(.horizontal, 4)
+        .padding(.vertical, 2)
+    }
+}
+
 struct MessageBubble: View {
     let message: OnboardingMessage
     var body: some View {
@@ -24,7 +43,7 @@ struct MessageBubble: View {
             return Color.accentColor.opacity(0.2)
         case .assistant:
             return Color(nsColor: .controlBackgroundColor)
-        case .system:
+        case .system, .systemNote:
             return Color.gray.opacity(0.15)
         }
     }
@@ -61,7 +80,7 @@ struct MessageBubble: View {
             return parseAssistantReply(from: message.text)
         case .user:
             return stripChatboxTags(from: message.text)
-        case .system:
+        case .system, .systemNote:
             return message.text
         }
     }

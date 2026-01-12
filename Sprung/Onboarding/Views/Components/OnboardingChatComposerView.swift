@@ -29,76 +29,67 @@ struct OnboardingChatComposerView: View {
     }
 
     var body: some View {
-        HStack(alignment: .top, spacing: 8) {
-            ChatComposerTextView(
-                text: $text,
-                isEditable: isEditable,
-                onSubmit: { text in
-                    onSend(text)
-                },
-                measuredHeight: $composerHeight
-            )
-            .frame(height: min(max(composerHeight, 44), 140))
-            .padding(2)
-            .background(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(Color.gray.opacity(0.2), lineWidth: 1)
-                    .background(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .fill(Color(nsColor: .textBackgroundColor))
-                    )
-            )
-
-            if isProcessing {
-                // When busy: Queue button + merged Stop/Interrupt button (stacked vertically)
-                VStack(spacing: 4) {
-                    Button(action: {
+        VStack(alignment: .trailing, spacing: 6) {
+            // Main input row - text field + primary button (Send or Queue)
+            HStack(alignment: .top, spacing: 8) {
+                ChatComposerTextView(
+                    text: $text,
+                    isEditable: isEditable,
+                    onSubmit: { text in
                         onSend(text)
-                    }, label: {
-                        Label(queueButtonTitle, systemImage: "clock")
-                            .frame(maxWidth: .infinity)
-                    })
-                    .buttonStyle(.bordered)
-                    .disabled(isSendDisabled)
-                    .help("Add message to queue - will be sent when current operation completes")
+                    },
+                    measuredHeight: $composerHeight
+                )
+                .frame(height: min(max(composerHeight, 44), 140))
+                .padding(2)
+                .background(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .fill(Color(nsColor: .textBackgroundColor))
+                        )
+                )
 
-                    // Merged Stop/Interrupt button:
-                    // - No text: "Stop" (red) - stops all processing
-                    // - Has text: "Interrupt" (orange) - stops and sends message
-                    if hasText {
-                        Button(action: {
-                            onInterrupt(text)
-                        }, label: {
-                            Label("Interrupt", systemImage: "exclamationmark.bubble.fill")
-                                .frame(maxWidth: .infinity)
-                        })
-                        .buttonStyle(.borderedProminent)
-                        .tint(.orange)
-                        .disabled(!isEditable || isWaitingForValidation)
-                        .help("Stop current operation and send this message immediately")
-                    } else {
-                        Button(action: {
-                            onStop()
-                        }, label: {
-                            Label("Stop", systemImage: "stop.fill")
-                                .frame(maxWidth: .infinity)
-                        })
-                        .buttonStyle(.borderedProminent)
-                        .tint(.red)
-                        .help("Stop all processing, clear queue, and silence incoming tool calls")
-                    }
-                }
-                .frame(width: 100)
-            } else {
-                // When idle: Send button
+                // Primary button - consistent size, changes appearance based on state
                 Button(action: {
                     onSend(text)
                 }, label: {
-                    Label("Send", systemImage: "paperplane.fill")
+                    Label(isProcessing ? queueButtonTitle : "Send",
+                          systemImage: isProcessing ? "clock" : "paperplane.fill")
                 })
                 .buttonStyle(.borderedProminent)
+                .tint(isProcessing ? .gray : .accentColor)
                 .disabled(isSendDisabled)
-                .help(isWaitingForValidation ? "Submit or cancel the validation dialog to continue" : "")
+                .help(isProcessing
+                      ? "Add message to queue - will be sent when current operation completes"
+                      : (isWaitingForValidation ? "Submit or cancel the validation dialog to continue" : ""))
+            }
+
+            // Stop/Interrupt button - appears below when processing
+            if isProcessing {
+                if hasText {
+                    Button(action: {
+                        onInterrupt(text)
+                    }, label: {
+                        Label("Interrupt", systemImage: "exclamationmark.bubble.fill")
+                    })
+                    .buttonStyle(.borderedProminent)
+                    .tint(.orange)
+                    .controlSize(.small)
+                    .disabled(!isEditable || isWaitingForValidation)
+                    .help("Stop current operation and send this message immediately")
+                } else {
+                    Button(action: {
+                        onStop()
+                    }, label: {
+                        Label("Stop", systemImage: "stop.fill")
+                    })
+                    .buttonStyle(.borderedProminent)
+                    .tint(.red)
+                    .controlSize(.small)
+                    .help("Stop all processing, clear queue, and silence incoming tool calls")
+                }
             }
         }
     }

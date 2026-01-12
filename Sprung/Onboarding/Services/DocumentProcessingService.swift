@@ -97,17 +97,34 @@ actor DocumentProcessingService {
         // - Writing samples: skip both summary and knowledge extraction (only need text extraction)
         // - Resumes: skip summary (full text sent to LLM), but do knowledge extraction
         // - Other documents: do both summary and knowledge extraction
-        let isWritingSample = documentType == "writing_sample"
+        let isWritingSample = documentType == "writingSample" || documentType == "writing_sample"
         let isResume = documentType == "resume"
 
         let documentSummary: DocumentSummary?
         let skills: [Skill]?
         let narrativeCards: [KnowledgeCard]?
 
+        // For writing samples, generate a descriptive name
+        var writingSampleName: String?
+        var writingSampleType: String?
+
         if isWritingSample {
-            // Writing samples don't need summary or knowledge extraction
-            statusCallback?("Writing sample extracted - skipping summary/knowledge extraction")
-            Logger.info("📝 Skipping summary/knowledge extraction for writing sample: \(filename)", category: .ai)
+            // Writing samples: generate descriptive name, skip summary/knowledge extraction
+            statusCallback?("Generating descriptive name for writing sample...")
+            Logger.info("📝 Generating descriptive name for writing sample: \(filename)", category: .ai)
+
+            // Generate a descriptive name for the writing sample
+            writingSampleName = await generateWritingSampleName(
+                extractedText: extractedText,
+                filename: filename
+            )
+            writingSampleType = inferWritingType(from: extractedText)
+
+            if let name = writingSampleName {
+                Logger.info("📝 Writing sample named: '\(name)' (was: \(filename))", category: .ai)
+            }
+
+            statusCallback?("Writing sample extracted")
             documentSummary = nil
             skills = nil
             narrativeCards = nil
@@ -176,7 +193,7 @@ actor DocumentProcessingService {
 
         // Set interviewContext for uploads that should have full content sent to LLM
         // (writing samples and resumes - helps with voice matching)
-        let interviewContextTypes = ["writing_sample", "resume"]
+        let interviewContextTypes = ["writingSample", "writing_sample", "resume"]
         artifactRecord["interviewContext"].bool = interviewContextTypes.contains(documentType)
 
         artifactRecord["rawFilePath"].string = storagePath
@@ -275,6 +292,13 @@ actor DocumentProcessingService {
         var combinedMetadata = metadata
         if !artifact.metadata.isEmpty {
             combinedMetadata["extraction"] = JSON(artifact.metadata)
+        }
+        // Add writing sample name and type if generated
+        if let name = writingSampleName {
+            combinedMetadata["name"].string = name
+        }
+        if let writingType = writingSampleType {
+            combinedMetadata["writing_type"].string = writingType
         }
         // Add graphics extraction fields to metadata (for ArtifactRecord access)
         for (key, value) in graphicsMeta.dictionaryValue {
@@ -548,5 +572,82 @@ actor DocumentProcessingService {
         }
 
         Logger.info("✅ Summary + knowledge extraction regeneration complete for: \(filename)", category: .ai)
+    }
+
+    // MARK: - Writing Sample Naming
+
+    /// Generate a descriptive name for a writing sample using a quick LLM call.
+    /// Falls back to nil if LLM is unavailable or call fails.
+    private func generateWritingSampleName(
+        extractedText: String,
+        filename: String
+    ) async -> String? {
+        guard let facade = llmFacade else {
+            Logger.warning("⚠️ LLM not available for writing sample naming", category: .ai)
+            return nil
+        }
+
+        // Use first 2000 chars for context (enough to understand the document)
+        let textSample = String(extractedText.prefix(2000))
+
+        let prompt = """
+        You are a document naming assistant. Based on this writing sample, generate a short descriptive name (3-6 words) that captures what it is.
+        Examples: "Senior Developer Cover Letter", "Marketing Manager Application", "Software Engineer Introduction Email"
+
+        Writing sample:
+        \(textSample)
+
+        Respond with ONLY the descriptive name, nothing else.
+        """
+
+        // Use a cheap/fast model for this simple task
+        let modelId = UserDefaults.standard.string(forKey: "onboardingQuickModelId")
+            ?? "anthropic/claude-3-haiku"
+
+        do {
+            let response = try await facade.executeText(
+                prompt: prompt,
+                modelId: modelId,
+                temperature: 0.3
+            )
+
+            let name = response.trimmingCharacters(in: .whitespacesAndNewlines)
+                .trimmingCharacters(in: CharacterSet(charactersIn: "\"'"))
+
+            // Validate the name is reasonable (not too long, not empty)
+            if name.count >= 5 && name.count <= 80 {
+                return name
+            }
+
+            Logger.warning("⚠️ Generated name was invalid: '\(name)'", category: .ai)
+            return nil
+        } catch {
+            Logger.warning("⚠️ Failed to generate writing sample name: \(error.localizedDescription)", category: .ai)
+            return nil
+        }
+    }
+
+    /// Infer the writing type from the content.
+    private func inferWritingType(from text: String) -> String {
+        let lowercased = text.lowercased()
+
+        if lowercased.contains("dear hiring") || lowercased.contains("dear recruiter") ||
+           lowercased.contains("i am writing to apply") || lowercased.contains("application for") {
+            return "cover_letter"
+        }
+
+        if lowercased.contains("from:") && lowercased.contains("to:") && lowercased.contains("subject:") {
+            return "email"
+        }
+
+        if lowercased.contains("executive summary") || lowercased.contains("project proposal") {
+            return "proposal"
+        }
+
+        if lowercased.contains("introduction") && lowercased.contains("conclusion") {
+            return "essay"
+        }
+
+        return "document"
     }
 }

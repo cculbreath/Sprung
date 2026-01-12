@@ -22,10 +22,11 @@ struct CreateTimelineCardTool: InterviewTool {
     var description: String {
         """
         Create skeleton timeline card for a position, role, or education. \
-        Phase 1 cards capture basic facts only: title, organization, dates, location. \
+        REQUIRED: fields object with title, organization, start. \
+        Optional: experienceType (work|education|volunteer|project), location, end, url. \
+        Example: { "fields": { "experienceType": "work", "title": "Engineer", "organization": "Acme", "start": "2020", "end": "2023" } }. \
         RETURNS: { "success": true, "id": "<card-id>" }. \
-        Call after gathering details via chat or artifact extraction. Cards appear in timeline editor. \
-        DO NOT generate descriptions/bullets in Phase 1 - defer to Phase 2.
+        DO NOT generate descriptions/bullets - only skeleton facts.
         """
     }
     var parameters: JSONSchema { Self.schema }

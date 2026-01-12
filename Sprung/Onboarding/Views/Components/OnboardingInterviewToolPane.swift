@@ -340,25 +340,19 @@ struct OnboardingInterviewToolPane: View {
                 )
             } else if coordinator.ui.isMergingCards || coordinator.ui.cardAssignmentsReadyForApproval || coordinator.ui.isGeneratingCards {
                 // Card workflow in progress - show knowledge cards and skills for review
-                ScrollView {
-                    VStack(spacing: 12) {
-                        KnowledgeCardCollectionView(
-                            coordinator: coordinator,
-                            onGenerateCards: {
-                                Task {
-                                    await coordinator.eventBus.publish(.artifact(.generateCardsButtonClicked))
-                                }
-                            },
-                            onAdvanceToNextPhase: {
-                                Task {
-                                    await coordinator.requestPhaseAdvanceFromUI()
-                                }
-                            }
-                        )
-
-                        PendingSkillsCollectionView(coordinator: coordinator)
+                CardReviewWithStickyFooter(
+                    coordinator: coordinator,
+                    onGenerateCards: {
+                        Task {
+                            await coordinator.eventBus.publish(.artifact(.generateCardsButtonClicked))
+                        }
+                    },
+                    onAdvanceToNextPhase: {
+                        Task {
+                            await coordinator.requestPhaseAdvanceFromUI()
+                        }
                     }
-                }
+                )
             } else {
                 // Default: empty state - timeline is in Timeline tab
                 InterviewTabEmptyState(phase: .phase2CareerStory)
@@ -392,25 +386,19 @@ struct OnboardingInterviewToolPane: View {
                 )
             } else if coordinator.ui.isMergingCards || coordinator.ui.cardAssignmentsReadyForApproval || coordinator.ui.isGeneratingCards {
                 // Card workflow in progress - show knowledge cards and skills for review
-                ScrollView {
-                    VStack(spacing: 12) {
-                        KnowledgeCardCollectionView(
-                            coordinator: coordinator,
-                            onGenerateCards: {
-                                Task {
-                                    await coordinator.eventBus.publish(.artifact(.generateCardsButtonClicked))
-                                }
-                            },
-                            onAdvanceToNextPhase: {
-                                Task {
-                                    await coordinator.requestPhaseAdvanceFromUI()
-                                }
-                            }
-                        )
-
-                        PendingSkillsCollectionView(coordinator: coordinator)
+                CardReviewWithStickyFooter(
+                    coordinator: coordinator,
+                    onGenerateCards: {
+                        Task {
+                            await coordinator.eventBus.publish(.artifact(.generateCardsButtonClicked))
+                        }
+                    },
+                    onAdvanceToNextPhase: {
+                        Task {
+                            await coordinator.requestPhaseAdvanceFromUI()
+                        }
                     }
-                }
+                )
             } else {
                 // Default: empty state - document collection UI hidden after Done with Uploads
                 InterviewTabEmptyState(phase: .phase3EvidenceCollection)
@@ -918,6 +906,115 @@ private struct InterviewTabEmptyState: View {
             return "Synthesizing your experience into strategic recommendations for your job search."
         case .complete:
             return "The interview has been completed. You can browse your collected data in the other tabs."
+        }
+    }
+}
+
+// MARK: - Card Review with Sticky Footer
+
+private struct CardReviewWithStickyFooter: View {
+    let coordinator: OnboardingInterviewCoordinator
+    let onGenerateCards: () -> Void
+    let onAdvanceToNextPhase: () -> Void
+
+    private var pendingCardCount: Int {
+        coordinator.knowledgeCardStore.pendingCards.count
+    }
+
+    private var pendingSkillCount: Int {
+        coordinator.skillStore.pendingSkills.count
+    }
+
+    private var isReadyForGeneration: Bool {
+        coordinator.ui.cardAssignmentsReadyForApproval
+    }
+
+    private var isMerging: Bool {
+        coordinator.ui.isMergingCards
+    }
+
+    private var isGenerating: Bool {
+        coordinator.ui.isGeneratingCards
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Scrollable content
+            ScrollView {
+                VStack(spacing: 12) {
+                    KnowledgeCardCollectionView(
+                        coordinator: coordinator,
+                        onGenerateCards: onGenerateCards,
+                        onAdvanceToNextPhase: onAdvanceToNextPhase,
+                        showApproveButton: false
+                    )
+
+                    PendingSkillsCollectionView(coordinator: coordinator)
+                }
+                .padding(.bottom, 8)
+            }
+
+            // Sticky footer with approve button
+            if isReadyForGeneration || isGenerating {
+                Divider()
+                stickyFooter
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
+                    .background(Color(nsColor: .windowBackgroundColor))
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var stickyFooter: some View {
+        if isGenerating {
+            // Progress indicator during generation
+            HStack(spacing: 8) {
+                ProgressView()
+                    .scaleEffect(0.8)
+                    .frame(width: 16, height: 16)
+
+                Text("Generating knowledge cards...")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                Spacer()
+            }
+            .padding(.vertical, 8)
+            .padding(.horizontal, 12)
+            .background(Color.accentColor.opacity(0.1))
+            .cornerRadius(8)
+        } else {
+            // Approve button
+            VStack(spacing: 6) {
+                Button(action: onGenerateCards) {
+                    HStack {
+                        Image(systemName: "checkmark.circle.fill")
+                        Text(approveButtonText)
+                    }
+                    .font(.callout.weight(.semibold))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 4)
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.regular)
+                .tint(.green)
+                .disabled(pendingCardCount == 0 || isMerging)
+
+                Text("Click cards above to review details, use trash to remove")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private var approveButtonText: String {
+        let cardText = "\(pendingCardCount) Card\(pendingCardCount == 1 ? "" : "s")"
+        if pendingSkillCount > 0 {
+            let skillText = "\(pendingSkillCount) Skill\(pendingSkillCount == 1 ? "" : "s")"
+            return "Approve & Add \(cardText) and \(skillText)"
+        } else {
+            return "Approve & Add \(cardText)"
         }
     }
 }

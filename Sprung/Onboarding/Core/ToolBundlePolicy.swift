@@ -62,8 +62,8 @@ struct ToolBundlePolicy {
     static let artifactAccessTools: Set<String> = [
         OnboardingToolName.listArtifacts.rawValue,     // Metadata only - summaries for orchestration
         OnboardingToolName.requestRawFile.rawValue,    // For user download requests
-        OnboardingToolName.createWebArtifact.rawValue, // For saving web_search content
-        OnboardingToolName.fetchAndProcessURL.rawValue // For fetching and processing web content
+        OnboardingToolName.createWebArtifact.rawValue  // For saving web_search content
+        // Web fetching is handled by Anthropic's native web_fetch server-side tool
     ]
 
     // MARK: - Filesystem Browsing Tools
@@ -96,8 +96,8 @@ struct ToolBundlePolicy {
             OnboardingToolName.agentReady.rawValue,           // Initial handshake at interview start
             OnboardingToolName.getUserOption.rawValue,        // For structured questions
             OnboardingToolName.getApplicantProfile.rawValue,  // Profile form (agent_ready directs here)
-            OnboardingToolName.validateApplicantProfile.rawValue,  // For URL/document extraction validation
-            OnboardingToolName.fetchAndProcessURL.rawValue    // For fetching LinkedIn/website from profile
+            OnboardingToolName.validateApplicantProfile.rawValue  // For URL/document extraction validation
+            // Web fetching is handled by Anthropic's native web_fetch server-side tool
         ],
 
         .p1_writingSamples: [
@@ -197,8 +197,8 @@ struct ToolBundlePolicy {
             OnboardingToolName.cancelUserUpload.rawValue,
             OnboardingToolName.listArtifacts.rawValue,        // Summaries only
             OnboardingToolName.createWebArtifact.rawValue,
-            OnboardingToolName.fetchAndProcessURL.rawValue,   // Fetch and process web content
             OnboardingToolName.getUserOption.rawValue         // For dossier questions during waits
+            // Web fetching is handled by Anthropic's native web_fetch server-side tool
         ],
 
         .p3_gitCollection: [

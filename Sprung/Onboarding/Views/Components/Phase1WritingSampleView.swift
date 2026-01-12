@@ -17,8 +17,10 @@ struct Phase1WritingSampleView: View {
     let onSkipSamples: () -> Void
 
     /// Writing samples from the current session (typed ArtifactRecord)
+    /// Note: We access artifactUIChangeToken to ensure SwiftUI observes artifact changes
     private var writingSamples: [ArtifactRecord] {
-        coordinator.sessionWritingSamples
+        _ = coordinator.ui.artifactUIChangeToken  // Trigger SwiftUI observation
+        return coordinator.sessionWritingSamples
     }
 
     /// Check if writing samples collection is already complete

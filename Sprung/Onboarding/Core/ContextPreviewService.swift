@@ -157,8 +157,8 @@ final class ContextPreviewService {
                     }
                 }
 
-            case .system:
-                // System messages are typically not included in history
+            case .system, .systemNote:
+                // System messages and notes are not included in LLM history
                 break
             }
         }

@@ -54,11 +54,12 @@ struct AnthropicToolConverter {
             return convertToAnthropicTool(funcTool)
         }
 
-        // Add web_search server-side tool
+        // Add server-side tools
         anthropicTools.append(.serverTool(.webSearch()))
+        anthropicTools.append(.serverTool(.webFetch()))
 
         Logger.debug(
-            "🔧 Anthropic tool bundling: subphase=\(subphase.rawValue), sending \(anthropicTools.count) tools (incl. web_search)",
+            "🔧 Anthropic tool bundling: subphase=\(subphase.rawValue), sending \(anthropicTools.count) tools (incl. web_search, web_fetch)",
             category: .ai
         )
 

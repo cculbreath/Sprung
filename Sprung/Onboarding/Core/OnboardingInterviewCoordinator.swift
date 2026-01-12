@@ -367,6 +367,17 @@ final class OnboardingInterviewCoordinator {
                 details: nil
             )))
 
+            // Trigger voice primer extraction by transitioning objective to in_progress
+            // This is explicit rather than relying on auto-start which can fail in complex event flows
+            Logger.info("🎤 Triggering voice primer extraction from 'Done with Writing Samples' button", category: .ai)
+            await eventBus.publish(.objective(.statusUpdateRequested(
+                id: OnboardingObjectiveId.voicePrimersExtracted.rawValue,
+                status: "in_progress",
+                source: "user_action",
+                notes: "Triggered by 'Done with Writing Samples' button",
+                details: nil
+            )))
+
             // Send a system-tagged message (not chatbox) to indicate app state change
             // Using <system> tags tells Claude this is an app notification, not user speech
             var userMessage = SwiftyJSON.JSON()
@@ -411,6 +422,16 @@ final class OnboardingInterviewCoordinator {
             status: "completed",
             source: "user_action",
             notes: "User chose to skip writing samples",
+            details: nil
+        )))
+
+        // Trigger voice primer extraction (will store default profile since no samples)
+        Logger.info("🎤 Triggering voice primer extraction from 'Skip Writing Samples' button (will use defaults)", category: .ai)
+        await eventBus.publish(.objective(.statusUpdateRequested(
+            id: OnboardingObjectiveId.voicePrimersExtracted.rawValue,
+            status: "in_progress",
+            source: "user_action",
+            notes: "Triggered by 'Skip Writing Samples' button",
             details: nil
         )))
 

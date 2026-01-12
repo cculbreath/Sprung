@@ -93,6 +93,16 @@ struct WorkingMemoryBuilder {
             xml.append("  <note>Background agents are processing. Results will be reported when complete.</note>")
         }
 
+        // Recently completed agents (within last 30 seconds)
+        if let completedAgents = await stateCoordinator.getRecentlyCompletedAgents(), !completedAgents.isEmpty {
+            xml.append("  <completed_agents count=\"\(completedAgents.count)\">")
+            for agent in completedAgents {
+                let status = agent.succeeded ? "succeeded" : "failed"
+                xml.append("    <agent type=\"\(agent.type)\" status=\"\(status)\" duration=\"\(agent.duration)\">\(escapeXML(agent.name))</agent>")
+            }
+            xml.append("  </completed_agents>")
+        }
+
         xml.append("</interview_context>")
 
         let context = xml.joined(separator: "\n")

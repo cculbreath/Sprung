@@ -58,6 +58,9 @@ final class OnboardingDataResetService {
             cleanupSessionArtifacts(session: session)
         }
 
+        // Also delete any archived writing samples (orphaned from previous sessions)
+        cleanupArchivedWritingSamples()
+
         // Delete session
         deleteCurrentSession()
 
@@ -100,6 +103,23 @@ final class OnboardingDataResetService {
         }
 
         Logger.info("🗑️ Artifact cleanup: deleted \(deletedCount) writing samples, archived \(archivedCount) documents", category: .ai)
+    }
+
+    /// Clean up any archived writing samples (orphaned from previous sessions)
+    private func cleanupArchivedWritingSamples() {
+        let archivedArtifacts = artifactRecordStore.archivedArtifacts
+        var deletedCount = 0
+
+        for artifact in archivedArtifacts {
+            if ArtifactRecordService.isWritingSample(artifact) {
+                artifactRecordStore.deleteArtifact(artifact)
+                deletedCount += 1
+            }
+        }
+
+        if deletedCount > 0 {
+            Logger.info("🗑️ Cleaned up \(deletedCount) archived writing sample(s)", category: .ai)
+        }
     }
 
     /// Clear only session-specific data (keep skills/cards for reuse)

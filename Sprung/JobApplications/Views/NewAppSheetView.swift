@@ -20,7 +20,7 @@ struct NewAppSheetView: View {
     @State private var showLinkedInLogin: Bool = false
     @State private var isProcessingJob: Bool = false
     @State private var llmStatusMessage: String = ""
-    @StateObject private var linkedInSessionManager: LinkedInSessionManager
+    @State private var linkedInSessionManager: LinkedInSessionManager
     @Binding var isPresented: Bool
     var initialURL: String?
 
@@ -31,7 +31,7 @@ struct NewAppSheetView: View {
     @MainActor
     init(isPresented: Binding<Bool>, sessionManager: LinkedInSessionManager, initialURL: String? = nil) {
         _isPresented = isPresented
-        _linkedInSessionManager = StateObject(wrappedValue: sessionManager)
+        _linkedInSessionManager = State(initialValue: sessionManager)
         self.initialURL = initialURL
     }
     var body: some View {

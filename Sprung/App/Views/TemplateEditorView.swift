@@ -70,7 +70,7 @@ struct TemplateEditorView: View {
     @State var sidebarWidth: CGFloat = 150
     private let sidebarWidthRange: ClosedRange<CGFloat> = 140...300
     @State var textEditorInsertion: TextEditorInsertionRequest?
-    @StateObject private var pdfController = PDFPreviewController()
+    @State private var pdfController = PDFPreviewController()
     @State var templatePendingDeletion: String?
     @State var showRevertConfirmation: Bool = false
     private var textFilterReference: [TextFilterInfo] {

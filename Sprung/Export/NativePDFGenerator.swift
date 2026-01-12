@@ -3,7 +3,8 @@ import AppKit
 import Mustache
 
 @MainActor
-class NativePDFGenerator: ObservableObject {
+@Observable
+class NativePDFGenerator {
     private let templateStore: TemplateStore
     private let profileProvider: ApplicantProfileProviding
 

@@ -71,7 +71,7 @@ struct PhaseTwoScript: PhaseScript {
                 activeForm: "Collecting section cards"
             ),
             InterviewTodoItem(
-                content: "Advance to Phase 3",
+                content: "Call next_phase to advance to Phase 3",
                 status: .pending,
                 activeForm: "Advancing to Phase 3"
             )

@@ -101,8 +101,27 @@ struct NextPhaseTool: InterviewTool {
                 response["skippedObjectives"] = JSON(missingObjectives)
             }
 
-            // Phase transition complete - no bootstrap tool needed
-            // The LLM will continue with the new phase's tools automatically
+            // Include the first objective's workflow guidance in the response
+            // This replaces coordinator messages which are now queued until user action
+            if let script = await MainActor.run(body: { registry.script(for: nextPhase) }),
+               let firstObjectiveId = script.requiredObjectives.first,
+               let workflow = script.workflow(for: firstObjectiveId) {
+                let context = ObjectiveWorkflowContext(
+                    completedObjectives: [],
+                    status: .inProgress,
+                    details: [:]
+                )
+                let outputs = workflow.outputs(for: .inProgress, context: context)
+                for output in outputs {
+                    if case .coordinatorMessage(let title, let details, _) = output {
+                        response["nextSteps"].string = title
+                        if let action = details["action"] {
+                            response["nextRequiredTool"].string = action.replacingOccurrences(of: "call_", with: "")
+                        }
+                        break
+                    }
+                }
+            }
 
             return .immediate(response)
         }

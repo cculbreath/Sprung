@@ -21,6 +21,8 @@ enum ChatTranscriptFormatter {
             return "Assistant"
         case .system:
             return "System"
+        case .systemNote:
+            return "Note"
         }
     }
 }

@@ -16,6 +16,7 @@ struct OnboardingChatMessageList: View {
     private let bubbleShape = RoundedRectangle(cornerRadius: 24, style: .continuous)
 
     /// Sent messages (not queued) - shown in chronological order
+    /// Includes systemNote messages which are displayed inline between bubbles
     private var sentMessages: [OnboardingMessage] {
         let queuedIds = coordinator.ui.queuedMessageIds
         return coordinator.ui.messages.filter {
@@ -39,8 +40,13 @@ struct OnboardingChatMessageList: View {
                 LazyVStack(alignment: .leading, spacing: 16) {
                     // Sent messages in chronological order
                     ForEach(sentMessages) { message in
-                        MessageBubble(message: message)
-                            .id(message.id)
+                        if message.role == .systemNote {
+                            SystemNoteRow(message: message)
+                                .id(message.id)
+                        } else {
+                            MessageBubble(message: message)
+                                .id(message.id)
+                        }
                     }
 
                     // Queued messages section (at bottom with dimmed styling)

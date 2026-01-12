@@ -243,31 +243,12 @@ final class OnboardingDependencyContainer {
             await stateRef.setAgentActivityTracker(trackerRef)
         }
 
-        // Wire up "all agents done" callback to notify LLM when background work completes
-        let eventBusRef = self.eventBus
+        // Agent completion callback - logs only, no separate LLM message.
+        // Agent status is included in message headers when legitimate messages are sent.
         trackerRef.onAllAgentsCompleted = { summaries in
-            // Build the notification message
-            var lines: [String] = ["<agent_status>"]
-            lines.append("  <event>all_agents_completed</event>")
-            lines.append("  <results>")
-            for summary in summaries {
-                let status = summary.succeeded ? "completed" : "failed"
-                let durationStr = summary.duration.map { String(format: "%.1fs", $0) } ?? "unknown"
-                let errorInfo = summary.errorMessage.map { " error=\"\($0)\"" } ?? ""
-                lines.append("    <agent type=\"\(summary.agentType.displayName)\" status=\"\(status)\" duration=\"\(durationStr)\"\(errorInfo)>\(summary.name)</agent>")
-            }
-            lines.append("  </results>")
-            lines.append("  <note>All background processing is complete. You may now use the results in your response.</note>")
-            lines.append("</agent_status>")
-
-            let messageText = lines.joined(separator: "\n")
-            var payload = JSON()
-            payload["text"].string = messageText
-
-            Task {
-                await eventBusRef.publish(.llm(.sendUserMessage(payload: payload, isSystemGenerated: true)))
-                Logger.info("📨 Sent 'all agents done' notification to LLM", category: .ai)
-            }
+            let succeeded = summaries.filter { $0.succeeded }.count
+            let failed = summaries.count - succeeded
+            Logger.info("🏁 All agents completed: \(succeeded) succeeded, \(failed) failed", category: .ai)
         }
 
         // 4a. Initialize card pipeline services (deferred - needs sessionPersistenceHandler)
@@ -426,7 +407,8 @@ final class OnboardingDependencyContainer {
             guidanceStore: guidanceStore,
             artifactRecordStore: artifactRecordStore,
             sessionPersistenceHandler: sessionPersistenceHandler,
-            agentActivityTracker: agentActivityTracker
+            agentActivityTracker: agentActivityTracker,
+            conversationLog: stores.conversationLog
         )
         // 11. Initialize early coordinators (don't need coordinator reference)
         // Create extracted services first
@@ -619,8 +601,7 @@ final class OnboardingDependencyContainer {
             phaseRegistry: phaseRegistry,
             todoStore: todoStore,
             artifactFilesystemContext: artifactFilesystemContext,
-            candidateDossierStore: candidateDossierStore,
-            webExtractionService: webExtractionService
+            candidateDossierStore: candidateDossierStore
         )
         // Register tools
         toolRegistrar.registerTools(

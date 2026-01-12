@@ -349,7 +349,7 @@ struct LinkedInLoginView: NSViewRepresentable {
 // MARK: - LinkedIn Login Sheet
 struct LinkedInLoginSheet: View {
     @Binding var isPresented: Bool
-    @ObservedObject var sessionManager: LinkedInSessionManager
+    var sessionManager: LinkedInSessionManager
     @State private var isLoggedIn = false
     var onSuccess: (() -> Void)?
     var body: some View {
@@ -442,7 +442,7 @@ struct LinkedInLoginSheet: View {
 }
 // MARK: - LinkedIn Session Status View
 struct LinkedInSessionStatusView: View {
-    @ObservedObject var sessionManager: LinkedInSessionManager
+    var sessionManager: LinkedInSessionManager
     @State private var showLoginSheet = false
     var body: some View {
         HStack(spacing: 12) {

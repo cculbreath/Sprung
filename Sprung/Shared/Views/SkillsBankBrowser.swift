@@ -7,6 +7,7 @@ struct SkillsBankBrowser: View {
     var llmFacade: LLMFacade?
 
     @State private var expandedCategories: Set<SkillCategory> = Set(SkillCategory.allCases)
+    @State private var expandedSkills: Set<UUID> = []
     @State private var searchText = ""
     @State private var selectedProficiency: Proficiency?
 
@@ -371,58 +372,115 @@ struct SkillsBankBrowser: View {
     }
 
     private func skillRow(_ skill: Skill) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            // Proficiency indicator
-            Circle()
-                .fill(colorFor(skill.proficiency))
-                .frame(width: 8, height: 8)
-                .padding(.top, 6)
+        let isExpanded = expandedSkills.contains(skill.id)
+        let hasVariants = !skill.atsVariants.isEmpty
 
-            VStack(alignment: .leading, spacing: 4) {
-                // Skill name
-                Text(skill.canonical)
-                    .font(.subheadline.weight(.medium))
+        return VStack(alignment: .leading, spacing: 0) {
+            // Main skill row
+            HStack(alignment: .top, spacing: 12) {
+                // Expand/collapse indicator (only if has variants)
+                if hasVariants {
+                    Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .frame(width: 10)
+                        .padding(.top, 6)
+                } else {
+                    // Proficiency indicator when no variants
+                    Circle()
+                        .fill(colorFor(skill.proficiency))
+                        .frame(width: 8, height: 8)
+                        .padding(.top, 6)
+                }
 
-                // ATS variants (if any)
-                if !skill.atsVariants.isEmpty {
-                    Text(skill.atsVariants.prefix(5).joined(separator: " • "))
+                VStack(alignment: .leading, spacing: 4) {
+                    // Skill name with proficiency dot
+                    HStack(spacing: 6) {
+                        if hasVariants {
+                            Circle()
+                                .fill(colorFor(skill.proficiency))
+                                .frame(width: 8, height: 8)
+                        }
+                        Text(skill.canonical)
+                            .font(.subheadline.weight(.medium))
+                    }
+
+                    // ATS variants preview (collapsed) or count indicator
+                    if hasVariants && !isExpanded {
+                        Text("\(skill.atsVariants.count) ATS synonym\(skill.atsVariants.count == 1 ? "" : "s")")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    // Evidence count
+                    if !skill.evidence.isEmpty {
+                        Label("\(skill.evidence.count) evidence", systemImage: "doc.text")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+
+                Spacer()
+
+                // Last used
+                if let lastUsed = skill.lastUsed {
+                    Text(lastUsed)
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                        .lineLimit(2)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 2)
+                        .background(Color.secondary.opacity(0.1))
+                        .clipShape(Capsule())
                 }
 
-                // Evidence count
-                if !skill.evidence.isEmpty {
-                    Label("\(skill.evidence.count) evidence", systemImage: "doc.text")
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
-                }
-            }
-
-            Spacer()
-
-            // Last used
-            if let lastUsed = skill.lastUsed {
-                Text(lastUsed)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                // Proficiency badge
+                Text(skill.proficiency.rawValue.capitalized)
+                    .font(.caption2.weight(.medium))
                     .padding(.horizontal, 8)
                     .padding(.vertical, 2)
-                    .background(Color.secondary.opacity(0.1))
+                    .background(colorFor(skill.proficiency).opacity(0.15))
+                    .foregroundStyle(colorFor(skill.proficiency))
                     .clipShape(Capsule())
             }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                if hasVariants {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        if isExpanded {
+                            expandedSkills.remove(skill.id)
+                        } else {
+                            expandedSkills.insert(skill.id)
+                        }
+                    }
+                }
+            }
 
-            // Proficiency badge
-            Text(skill.proficiency.rawValue.capitalized)
-                .font(.caption2.weight(.medium))
-                .padding(.horizontal, 8)
-                .padding(.vertical, 2)
-                .background(colorFor(skill.proficiency).opacity(0.15))
-                .foregroundStyle(colorFor(skill.proficiency))
-                .clipShape(Capsule())
+            // Expanded ATS variants section
+            if isExpanded && hasVariants {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("ATS Synonyms")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+
+                    FlowLayout(spacing: 6) {
+                        ForEach(skill.atsVariants, id: \.self) { variant in
+                            Text(variant)
+                                .font(.caption)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(Color.accentColor.opacity(0.1))
+                                .foregroundStyle(Color.accentColor)
+                                .clipShape(Capsule())
+                        }
+                    }
+                }
+                .padding(.horizontal, 12)
+                .padding(.bottom, 12)
+                .padding(.leading, 22)
+            }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
         .background(Color(nsColor: .windowBackgroundColor))
     }
 
@@ -503,5 +561,48 @@ struct SkillsBankBrowser: View {
             .buttonStyle(.bordered)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+// MARK: - Flow Layout for ATS Variant Tags
+
+private struct FlowLayout: Layout {
+    var spacing: CGFloat = 8
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let sizes = subviews.map { $0.sizeThatFits(.unspecified) }
+        return layout(sizes: sizes, containerWidth: proposal.width ?? .infinity).size
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let sizes = subviews.map { $0.sizeThatFits(.unspecified) }
+        let offsets = layout(sizes: sizes, containerWidth: bounds.width).offsets
+
+        for (subview, offset) in zip(subviews, offsets) {
+            subview.place(at: CGPoint(x: bounds.minX + offset.x, y: bounds.minY + offset.y), proposal: .unspecified)
+        }
+    }
+
+    private func layout(sizes: [CGSize], containerWidth: CGFloat) -> (offsets: [CGPoint], size: CGSize) {
+        var offsets: [CGPoint] = []
+        var currentX: CGFloat = 0
+        var currentY: CGFloat = 0
+        var lineHeight: CGFloat = 0
+        var maxWidth: CGFloat = 0
+
+        for size in sizes {
+            if currentX + size.width > containerWidth && currentX > 0 {
+                currentX = 0
+                currentY += lineHeight + spacing
+                lineHeight = 0
+            }
+
+            offsets.append(CGPoint(x: currentX, y: currentY))
+            lineHeight = max(lineHeight, size.height)
+            currentX += size.width + spacing
+            maxWidth = max(maxWidth, currentX)
+        }
+
+        return (offsets, CGSize(width: maxWidth, height: currentY + lineHeight))
     }
 }
