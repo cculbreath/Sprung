@@ -87,7 +87,6 @@ final class OnboardingToolRegistrar {
             eventBus: eventBus,
             candidateDossierStore: candidateDossierStore
         ))
-        toolRegistry.register(AuditSectionReadinessTool(coordinator: coordinator))
 
         // Filesystem tools for browsing exported artifacts (ephemeral responses, pruned after N turns)
         toolRegistry.register(ReadArtifactFileTool(context: artifactFilesystemContext))

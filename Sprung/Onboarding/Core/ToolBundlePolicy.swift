@@ -229,7 +229,6 @@ struct ToolBundlePolicy {
         ],
 
         .p4_experienceDefaults: [
-            OnboardingToolName.auditSectionReadiness.rawValue,
             OnboardingToolName.generateExperienceDefaults.rawValue,
             OnboardingToolName.submitForValidation.rawValue,
             OnboardingToolName.getUserOption.rawValue

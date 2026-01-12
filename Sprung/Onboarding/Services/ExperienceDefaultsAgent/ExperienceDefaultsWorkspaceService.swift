@@ -402,6 +402,18 @@ final class ExperienceDefaultsWorkspaceService {
         Generate high-quality, generally applicable resume content from the collected evidence.
         This content will be the default for all resumes, customized per-job later.
 
+        ## CRITICAL: Data Priority
+
+        **Priority order for structuring output:**
+        1. **Enabled sections** (`config/enabled_sections.json`) - Which sections to include
+        2. **Skeleton timeline** (`timeline/index.json`) - Structure for work, education, volunteer
+        3. **Skills and KCs** - Generate rich bullets for all descriptive fields
+
+        **For work and education:** Timeline DEFINES structure (companies, positions, schools, dates).
+        DO NOT invent entries not in timeline. DO NOT skip timeline entries.
+
+        **For content:** Read matching KCs AND any other relevant KCs. Use all available evidence.
+
         ## Guidance (REQUIRED READING)
 
         \(guidanceIntro)
@@ -455,23 +467,31 @@ final class ExperienceDefaultsWorkspaceService {
 
         ### Step 1: Configuration
         1. Read this OVERVIEW.md (done!)
-        2. Read `guidance/voice_profile.json`
-        3. Read `config/enabled_sections.json`
-        4. Read `config/custom_fields.json`
+        2. Read `timeline/index.json` - **DEFINES work and education structure**
+        3. Read `guidance/voice_profile.json`
+        4. Read `config/enabled_sections.json`
+        5. Read `config/custom_fields.json`
 
         ### Step 2: Work Section (if enabled)
-        1. Read `knowledge_cards/by_type/employment/index.json`
-        2. For each work timeline entry, find matching KCs by organization
-        3. Read full KCs to extract specific details for bullets
-        4. Generate 3-4 high-quality highlights per entry
+        1. Read `timeline/index.json` - each work entry becomes ONE output entry
+        2. Use timeline data for: organization, position, dates, location
+        3. Read employment KCs + any other relevant KCs for content
+        4. Generate 3-4 rich highlights per entry from KC evidence
 
-        ### Step 3: Other Sections
-        - Education: Use timeline + `by_type/education/` KCs
+        ### Step 3: Education Section (if enabled)
+        1. Read `timeline/index.json` - each education entry becomes ONE output entry
+        2. Use timeline data for: institution, degree, field, dates
+        3. Read education KCs for courses, accomplishments, details
+
+        ### Step 4: Other Sections
         - Projects: Use `by_type/project/` KCs
-        - Skills: Use `skills/summary.json`, create 3-6 dynamic categories
+        - Skills: Use `skills/summary.json`, create 4-7 categories with 4-8 skills each
+          - Goal: maximize coverage across all positions applicant might apply for
+          - Draw ONLY from skill bank (do not invent skills)
         - Awards/Certs/Publications: Use `by_type/achievement/` KCs
+        - Volunteer: Use timeline volunteer entries + relevant KCs
 
-        ### Step 4: Write Output
+        ### Step 5: Write Output
         Write to `output/experience_defaults.json`
 
         ## Work Highlights: Quality Standards
