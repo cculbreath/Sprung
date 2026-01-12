@@ -2,27 +2,27 @@
 //  PhaseTwoScript.swift
 //  Sprung
 //
-//  Phase 2: Career Story — Active timeline collection, enrichment interviews,
-//  dossier weaving, and document suggestions.
+//  Phase 2: Career Story — Section configuration, timeline collection,
+//  enrichment interviews, section cards, and dossier weaving.
 //
 //  INTERVIEW REVITALIZATION PLAN:
 //  The interviewer now has voice context from Phase 1. It should ACTIVELY interview
 //  about each position (not just collect dates), weave dossier questions naturally
-//  into conversation, and suggest specific documents based on timeline gaps.
+//  into conversation, and collect non-chronological sections.
 //
 //  TOOL AVAILABILITY: Defined in ToolBundlePolicy.swift (single source of truth)
 //
 //  FLOW:
-//  1. Timeline collection (resume upload OR conversational)
-//  2. ACTIVE interviewing about each role:
+//  1. Section configuration (FIRST - determines which cards to collect)
+//  2. Timeline collection (resume upload OR conversational, gated by enabled sections)
+//  3. ACTIVE interviewing about each role:
 //     - "What did you build there?"
 //     - "What made you leave?"
 //     - "What would you do differently?"
-//  3. Dossier questions woven in naturally:
-//     - Work arrangement preferences (when discussing locations)
-//     - Unique circumstances (when discussing gaps/pivots)
-//  4. Section configuration
-//  5. Document suggestions based on timeline gaps
+//  4. Section cards collection (awards, publications, languages, references)
+//     - Publications: offer CV/BibTeX upload OR conversational fallback
+//     - Others: conversational collection
+//  5. Dossier questions woven in naturally throughout
 //  6. Transition to Phase 3
 //
 import Foundation
@@ -31,14 +31,20 @@ struct PhaseTwoScript: PhaseScript {
     let phase: InterviewPhase = .phase2CareerStory
 
     let requiredObjectives: [String] = OnboardingObjectiveId.rawValues([
-        .skeletonTimelineComplete,       // All positions captured with dates
+        .enabledSections,                // FIRST: User configures which sections to include
+        .skeletonTimelineComplete,       // All chronological positions captured with dates
         .timelineEnriched,               // Each position has context beyond dates
-        .enabledSections                 // User has configured sections
+        .sectionCardsComplete            // Non-chronological sections collected (awards, publications, etc.)
         // workPreferencesCaptured and uniqueCircumstancesDocumented are gathered throughout, not required
     ])
 
     var initialTodoItems: [InterviewTodoItem] {
         [
+            InterviewTodoItem(
+                content: "Configure enabled resume sections",
+                status: .pending,
+                activeForm: "Configuring resume sections"
+            ),
             InterviewTodoItem(
                 content: "Offer resume/LinkedIn upload or conversational timeline",
                 status: .pending,
@@ -60,9 +66,9 @@ struct PhaseTwoScript: PhaseScript {
                 activeForm: "Submitting timeline for validation"
             ),
             InterviewTodoItem(
-                content: "Configure enabled resume sections",
+                content: "Collect non-chronological section cards",
                 status: .pending,
-                activeForm: "Configuring resume sections"
+                activeForm: "Collecting section cards"
             ),
             InterviewTodoItem(
                 content: "Advance to Phase 3",
@@ -74,22 +80,37 @@ struct PhaseTwoScript: PhaseScript {
 
     var objectiveWorkflows: [String: ObjectiveWorkflow] {
         [
-            // MARK: - Timeline Collection
-            OnboardingObjectiveId.skeletonTimelineComplete.rawValue: ObjectiveWorkflow(
-                id: OnboardingObjectiveId.skeletonTimelineComplete.rawValue,
+            // MARK: - Section Configuration (FIRST in Phase 2)
+            // Determines which timeline card types and section cards to collect
+            OnboardingObjectiveId.enabledSections.rawValue: ObjectiveWorkflow(
+                id: OnboardingObjectiveId.enabledSections.rawValue,
                 onBegin: { _ in
                     let title = """
-                        Phase 2 starting. Offer resume upload OR conversational collection: \
+                        Phase 2 starting. First, configure which resume sections to include. \
+                        Call configure_enabled_sections to show the section toggle UI. \
+                        This determines which types of timeline cards and section cards we'll collect.
+                        """
+                    let details = [
+                        "action": "call_configure_enabled_sections"
+                    ]
+                    return [.coordinatorMessage(title: title, details: details, payload: nil)]
+                },
+                onComplete: { _ in
+                    let title = """
+                        Sections configured. Now offer resume upload OR conversational collection: \
                         "Let's map out your career timeline. Do you have a resume or LinkedIn export I can start from? \
                         Or if you prefer, just walk me through your work history and I'll build the timeline as we talk." \
                         Call get_user_upload with upload_type='resume' to show the upload form.
                         """
-                    let details = [
-                        "action": "call_get_user_upload",
-                        "upload_type": "resume"
-                    ]
-                    return [.coordinatorMessage(title: title, details: details, payload: nil)]
-                },
+                    return [.coordinatorMessage(title: title, details: ["action": "call_get_user_upload"], payload: nil)]
+                }
+            ),
+
+            // MARK: - Timeline Collection
+            OnboardingObjectiveId.skeletonTimelineComplete.rawValue: ObjectiveWorkflow(
+                id: OnboardingObjectiveId.skeletonTimelineComplete.rawValue,
+                dependsOn: [OnboardingObjectiveId.enabledSections.rawValue],
+                autoStartWhenReady: true,
                 onComplete: { _ in
                     let title = """
                         Skeleton timeline captured. Now ACTIVELY INTERVIEW about each position. \
@@ -105,14 +126,35 @@ struct PhaseTwoScript: PhaseScript {
             ),
 
             // MARK: - Timeline Enrichment (Active Interviewing)
-            // NOTE: No onComplete handler here. configure_enabled_sections is triggered by
-            // next_phase validation blocking (in PhaseScriptRegistry.validatePhaseTwoToThree).
-            // This avoids the race condition where timelineEnriched.onComplete fired before
-            // the user actually validated the timeline in the popup.
             OnboardingObjectiveId.timelineEnriched.rawValue: ObjectiveWorkflow(
                 id: OnboardingObjectiveId.timelineEnriched.rawValue,
                 dependsOn: [OnboardingObjectiveId.skeletonTimelineComplete.rawValue],
-                autoStartWhenReady: true
+                autoStartWhenReady: true,
+                onComplete: { _ in
+                    let title = """
+                        Timeline enriched. Now collect non-chronological sections based on enabled sections. \
+                        Check which sections are enabled (awards, publications, languages, references). \
+                        For publications: offer CV/BibTeX upload OR interview fallback. \
+                        For other sections: use conversational collection with create_section_card. \
+                        Call display_section_cards_for_review when done to show the editor.
+                        """
+                    return [.coordinatorMessage(title: title, details: ["action": "collect_section_cards"], payload: nil)]
+                }
+            ),
+
+            // MARK: - Section Cards Collection (Awards, Publications, Languages, References)
+            OnboardingObjectiveId.sectionCardsComplete.rawValue: ObjectiveWorkflow(
+                id: OnboardingObjectiveId.sectionCardsComplete.rawValue,
+                dependsOn: [OnboardingObjectiveId.timelineEnriched.rawValue],
+                autoStartWhenReady: true,
+                onComplete: { _ in
+                    let title = """
+                        Section cards collected. All Phase 2 objectives complete. \
+                        Ready to advance to Phase 3 (Evidence Collection). \
+                        Call next_phase to proceed.
+                        """
+                    return [.coordinatorMessage(title: title, details: ["action": "call_next_phase"], payload: nil)]
+                }
             ),
 
             // MARK: - Work Preferences (Dossier Weaving)
@@ -133,15 +175,6 @@ struct PhaseTwoScript: PhaseScript {
                     let title = "Unique circumstances documented (gaps, pivots, constraints)."
                     return [.coordinatorMessage(title: title, details: [:], payload: nil)]
                 }
-            ),
-
-            // MARK: - Section Configuration
-            // NOTE: No onComplete handler needed here. The instruction text in the tool response
-            // (from confirmSectionToggle in UIResponseCoordinator) guides Claude to call next_phase.
-            // This follows Anthropic's pattern of including guidance WITH tool results.
-            OnboardingObjectiveId.enabledSections.rawValue: ObjectiveWorkflow(
-                id: OnboardingObjectiveId.enabledSections.rawValue,
-                dependsOn: [OnboardingObjectiveId.timelineEnriched.rawValue]
             )
         ]
     }

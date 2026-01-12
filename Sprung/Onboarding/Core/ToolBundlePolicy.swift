@@ -171,6 +171,20 @@ struct ToolBundlePolicy {
             OnboardingToolName.nextPhase.rawValue                  // Available for instruction-based phase advance
         ],
 
+        .p2_sectionCardsCollection: [  // Collect non-chronological sections (awards, publications, languages, references)
+            OnboardingToolName.createSectionCard.rawValue,
+            OnboardingToolName.updateSectionCard.rawValue,
+            OnboardingToolName.deleteSectionCard.rawValue,
+            OnboardingToolName.createPublicationCard.rawValue,
+            OnboardingToolName.updatePublicationCard.rawValue,
+            OnboardingToolName.deletePublicationCard.rawValue,
+            OnboardingToolName.displaySectionCardsForReview.rawValue,
+            OnboardingToolName.getUserUpload.rawValue,             // For CV/BibTeX upload
+            OnboardingToolName.getUserOption.rawValue,             // For interview fallback
+            OnboardingToolName.cancelUserUpload.rawValue,
+            OnboardingToolName.submitForValidation.rawValue        // For section cards validation
+        ],
+
         .p2_phaseTransition: [
             OnboardingToolName.nextPhase.rawValue
         ],
@@ -334,6 +348,7 @@ struct ToolBundlePolicy {
     }
 
     /// Infer Phase 2 subphase (Career Story)
+    /// NEW ORDER: section config → timeline collection → enrichment → section cards → work preferences
     private static func inferPhase2Subphase(
         toolPaneCard: OnboardingToolPaneCard,
         objectives: [String: String]
@@ -341,6 +356,13 @@ struct ToolBundlePolicy {
         // UI state takes precedence
         switch toolPaneCard {
         case .uploadRequest:
+            // Could be timeline upload or CV/BibTeX upload for publications
+            // Check section cards status to determine which
+            let sectionCardsStatus = objectives[OnboardingObjectiveId.sectionCardsComplete.rawValue] ?? "pending"
+            let timelineStatus = objectives[OnboardingObjectiveId.skeletonTimelineComplete.rawValue] ?? "pending"
+            if timelineStatus == "completed" && (sectionCardsStatus == "pending" || sectionCardsStatus == "in_progress") {
+                return .p2_sectionCardsCollection
+            }
             return .p2_timelineCollection
         case .editTimelineCards:
             return .p2_timelineCollection
@@ -360,12 +382,19 @@ struct ToolBundlePolicy {
         }
 
         // Infer from objective state
+        // NEW PHASE 2 ORDER: section config → timeline → enrichment → section cards → work preferences
+        let sectionsStatus = objectives[OnboardingObjectiveId.enabledSections.rawValue] ?? "pending"
         let timelineStatus = objectives[OnboardingObjectiveId.skeletonTimelineComplete.rawValue] ?? "pending"
         let enrichedStatus = objectives[OnboardingObjectiveId.timelineEnriched.rawValue] ?? "pending"
+        let sectionCardsStatus = objectives[OnboardingObjectiveId.sectionCardsComplete.rawValue] ?? "pending"
         let preferencesStatus = objectives[OnboardingObjectiveId.workPreferencesCaptured.rawValue] ?? "pending"
-        let sectionsStatus = objectives[OnboardingObjectiveId.enabledSections.rawValue] ?? "pending"
 
-        // Timeline collection
+        // Section config FIRST (immediately after Phase 1)
+        if sectionsStatus == "pending" || sectionsStatus == "in_progress" {
+            return .p2_sectionConfig
+        }
+
+        // Timeline collection (gated by enabled sections)
         if timelineStatus == "pending" || timelineStatus == "in_progress" {
             return .p2_timelineCollection
         }
@@ -375,14 +404,14 @@ struct ToolBundlePolicy {
             return .p2_timelineEnrichment
         }
 
+        // Section cards collection (non-chronological: awards, publications, languages, references)
+        if sectionCardsStatus == "pending" || sectionCardsStatus == "in_progress" {
+            return .p2_sectionCardsCollection
+        }
+
         // Work preferences
         if preferencesStatus == "pending" || preferencesStatus == "in_progress" {
             return .p2_workPreferences
-        }
-
-        // Section config
-        if sectionsStatus == "pending" || sectionsStatus == "in_progress" {
-            return .p2_sectionConfig
         }
 
         // Document suggestions or transition

@@ -21,6 +21,8 @@ final class OnboardingInterviewCoordinator {
     // MARK: - Public Sub-Services (Direct Access)
     // Timeline Management
     var timeline: TimelineManagementService { container.timelineManagementService }
+    // Section Card Management (awards, languages, references, publications)
+    var sectionCards: SectionCardManagementService { container.sectionCardManagementService }
     // Extraction Management
     var extraction: ExtractionManagementService { container.extractionManagementService }
     // Phase & Objective Management

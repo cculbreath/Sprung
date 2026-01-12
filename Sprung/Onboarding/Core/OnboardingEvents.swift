@@ -56,6 +56,12 @@ enum OnboardingEvent {
 
     /// Timeline operations events
     case timeline(TimelineEvent)
+
+    /// Section card operations events (awards, languages, references)
+    case sectionCard(SectionCardEvent)
+
+    /// Publication card operations events
+    case publicationCard(PublicationCardEvent)
 }
 
 // MARK: - LLM Events
@@ -258,6 +264,31 @@ extension OnboardingEvent {
     }
 }
 
+// MARK: - Section Card Events
+
+extension OnboardingEvent {
+    /// Events related to section card operations (awards, languages, references)
+    enum SectionCardEvent: Sendable {
+        case cardCreated(card: JSON, sectionType: String)
+        case cardUpdated(id: String, fields: JSON, sectionType: String)
+        case cardDeleted(id: String, sectionType: String, fromUI: Bool = false)
+        case uiUpdateNeeded
+    }
+}
+
+// MARK: - Publication Card Events
+
+extension OnboardingEvent {
+    /// Events related to publication card operations
+    enum PublicationCardEvent: Sendable {
+        case cardCreated(card: JSON)
+        case cardUpdated(id: String, fields: JSON)
+        case cardDeleted(id: String, fromUI: Bool = false)
+        case cardsImported(cards: [JSON], sourceType: String)
+        case uiUpdateNeeded
+    }
+}
+
 // MARK: - Event Topics
 
 /// Event topics for routing
@@ -271,6 +302,8 @@ enum EventTopic: String, CaseIterable {
     case objective = "Objective"
     case tool = "Tool"
     case timeline = "Timeline"
+    case sectionCard = "SectionCard"
+    case publicationCard = "PublicationCard"
     case processing = "Processing"
 }
 
@@ -289,6 +322,8 @@ extension OnboardingEvent {
         case .objective: return .objective
         case .tool: return .tool
         case .timeline: return .timeline
+        case .sectionCard: return .sectionCard
+        case .publicationCard: return .publicationCard
         }
     }
 
@@ -312,6 +347,10 @@ extension OnboardingEvent {
         case .tool(let event):
             return event.logDescription
         case .timeline(let event):
+            return event.logDescription
+        case .sectionCard(let event):
+            return event.logDescription
+        case .publicationCard(let event):
             return event.logDescription
         }
     }
@@ -554,6 +593,38 @@ extension OnboardingEvent.TimelineEvent {
                 return "timeline.skeletonReplaced(\(diff.summary))"
             }
             return "timeline.skeletonReplaced"
+        }
+    }
+}
+
+extension OnboardingEvent.SectionCardEvent {
+    var logDescription: String {
+        switch self {
+        case .cardCreated(_, let sectionType):
+            return "sectionCard.cardCreated(\(sectionType))"
+        case .cardUpdated(let id, _, let sectionType):
+            return "sectionCard.cardUpdated(\(id.prefix(8))..., \(sectionType))"
+        case .cardDeleted(let id, let sectionType, let fromUI):
+            return "sectionCard.cardDeleted(\(id.prefix(8))..., \(sectionType)\(fromUI ? " fromUI" : ""))"
+        case .uiUpdateNeeded:
+            return "sectionCard.uiUpdateNeeded"
+        }
+    }
+}
+
+extension OnboardingEvent.PublicationCardEvent {
+    var logDescription: String {
+        switch self {
+        case .cardCreated:
+            return "publicationCard.cardCreated"
+        case .cardUpdated(let id, _):
+            return "publicationCard.cardUpdated(\(id.prefix(8))...)"
+        case .cardDeleted(let id, let fromUI):
+            return "publicationCard.cardDeleted(\(id.prefix(8))...\(fromUI ? " fromUI" : ""))"
+        case .cardsImported(let cards, let sourceType):
+            return "publicationCard.cardsImported(\(cards.count) cards, \(sourceType))"
+        case .uiUpdateNeeded:
+            return "publicationCard.uiUpdateNeeded"
         }
     }
 }

@@ -55,6 +55,26 @@ final class OnboardingUIState {
     var timelineToolWasUsed: Bool = false
     /// ID of the currently expanded/editing timeline entry (nil = all collapsed)
     var editingTimelineEntryId: String?
+
+    // MARK: - Section Cards State (Awards, Languages, References)
+    /// Section cards for non-chronological resume sections
+    var sectionCards: [AdditionalSectionEntry] = []
+    /// UI-only counter for SwiftUI change detection when section cards update
+    var sectionCardsUIChangeToken: Int = 0
+    /// True when LLM has activated the section cards editor
+    var isSectionCardsEditorActive: Bool = false
+    /// Flag set when a section card CRUD tool is used to trigger tab auto-switch
+    var sectionCardToolWasUsed: Bool = false
+
+    // MARK: - Publication Cards State
+    /// Publication cards for the publications section
+    var publicationCards: [PublicationCard] = []
+    /// UI-only counter for SwiftUI change detection when publication cards update
+    var publicationCardsUIChangeToken: Int = 0
+
+    // MARK: - Enabled Sections
+    /// Set of section types that are enabled for this resume
+    var enabledSectionTypes: Set<String> = []
     // MARK: - Wizard State
     var wizardStep: StateCoordinator.WizardStep = .voice
     var completedWizardSteps: Set<StateCoordinator.WizardStep> = []
@@ -158,5 +178,69 @@ final class OnboardingUIState {
     func clearFailedMessage() {
         failedMessageText = nil
         failedMessageError = nil
+    }
+
+    // MARK: - Section Cards Methods
+
+    /// Update section cards and trigger UI refresh
+    func updateSectionCards(_ cards: [AdditionalSectionEntry]) {
+        self.sectionCards = cards
+        self.sectionCardsUIChangeToken += 1
+    }
+
+    /// Update publication cards and trigger UI refresh
+    func updatePublicationCards(_ cards: [PublicationCard]) {
+        self.publicationCards = cards
+        self.publicationCardsUIChangeToken += 1
+    }
+
+    /// Get the section type for a section card by ID
+    func getSectionCardType(id: String) -> String? {
+        sectionCards.first(where: { $0.id == id })?.sectionType.rawValue
+    }
+
+    /// Check if a publication card exists with the given ID
+    func publicationCardExists(id: String) -> Bool {
+        publicationCards.contains(where: { $0.id == id })
+    }
+
+    /// Add a new section card
+    func addSectionCard(_ card: AdditionalSectionEntry) {
+        sectionCards.append(card)
+        sectionCardsUIChangeToken += 1
+    }
+
+    /// Update an existing section card
+    func updateSectionCard(id: String, with updatedCard: AdditionalSectionEntry) {
+        if let index = sectionCards.firstIndex(where: { $0.id == id }) {
+            sectionCards[index] = updatedCard
+            sectionCardsUIChangeToken += 1
+        }
+    }
+
+    /// Delete a section card by ID
+    func deleteSectionCard(id: String) {
+        sectionCards.removeAll(where: { $0.id == id })
+        sectionCardsUIChangeToken += 1
+    }
+
+    /// Add a new publication card
+    func addPublicationCard(_ card: PublicationCard) {
+        publicationCards.append(card)
+        publicationCardsUIChangeToken += 1
+    }
+
+    /// Update an existing publication card
+    func updatePublicationCard(id: String, with updatedCard: PublicationCard) {
+        if let index = publicationCards.firstIndex(where: { $0.id == id }) {
+            publicationCards[index] = updatedCard
+            publicationCardsUIChangeToken += 1
+        }
+    }
+
+    /// Delete a publication card by ID
+    func deletePublicationCard(id: String) {
+        publicationCards.removeAll(where: { $0.id == id })
+        publicationCardsUIChangeToken += 1
     }
 }

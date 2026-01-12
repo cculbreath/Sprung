@@ -40,6 +40,7 @@ private struct ToolRouterComponents {
 private struct Services {
     let extractionManagementService: ExtractionManagementService
     let timelineManagementService: TimelineManagementService
+    let sectionCardManagementService: SectionCardManagementService
     let dataPersistenceService: DataPersistenceService
 }
 
@@ -70,6 +71,7 @@ final class OnboardingDependencyContainer {
     // MARK: - Services
     let extractionManagementService: ExtractionManagementService
     let timelineManagementService: TimelineManagementService
+    let sectionCardManagementService: SectionCardManagementService
     let dataPersistenceService: DataPersistenceService
     let voiceProfileService: VoiceProfileService
     let titleSetService: TitleSetService
@@ -367,6 +369,7 @@ final class OnboardingDependencyContainer {
         )
         self.extractionManagementService = services.extractionManagementService
         self.timelineManagementService = services.timelineManagementService
+        self.sectionCardManagementService = services.sectionCardManagementService
         self.dataPersistenceService = services.dataPersistenceService
 
         // 10. Initialize lifecycle controller (merged with session coordinator)
@@ -568,6 +571,9 @@ final class OnboardingDependencyContainer {
             ),
             timelineManagementService: TimelineManagementService(
                 eventBus: eventBus, phaseTransitionController: phaseTransitionController
+            ),
+            sectionCardManagementService: SectionCardManagementService(
+                eventBus: eventBus
             ),
             dataPersistenceService: DataPersistenceService(
                 eventBus: eventBus, state: state, dataStore: dataStore,

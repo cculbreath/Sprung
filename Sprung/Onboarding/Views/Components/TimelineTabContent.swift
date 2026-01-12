@@ -39,6 +39,9 @@ struct TimelineTabContent: View {
     var body: some View {
         // Access timelineUIChangeToken in body to establish @Observable tracking
         let _ = coordinator.ui.timelineUIChangeToken
+        // Access section cards tokens for @Observable tracking
+        let _ = coordinator.ui.sectionCardsUIChangeToken
+        let _ = coordinator.ui.publicationCardsUIChangeToken
 
         VStack(spacing: 0) {
             // Scrollable content area
@@ -48,11 +51,16 @@ struct TimelineTabContent: View {
                         header
                     }
 
-                    // Cards list
+                    // Timeline Cards list
                     if canEdit {
                         editableCardsList
                     } else {
                         browseCardsList
+                    }
+
+                    // Additional Sections (Awards, Publications, Languages, References)
+                    if hasAdditionalSections {
+                        additionalSectionsView
                     }
                 }
                 .padding(.horizontal, 4)
@@ -395,6 +403,258 @@ struct TimelineTabContent: View {
             }
             isSaving = false
             onDoneWithTimeline?()
+        }
+    }
+
+    // MARK: - Additional Sections (Awards, Publications, Languages, References)
+
+    private var hasAdditionalSections: Bool {
+        !coordinator.ui.sectionCards.isEmpty || !coordinator.ui.publicationCards.isEmpty
+    }
+
+    @ViewBuilder
+    private var additionalSectionsView: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            // Awards Section
+            let awards = coordinator.ui.sectionCards.filter { $0.sectionType == .award }
+            if !awards.isEmpty {
+                AdditionalSectionGroup(
+                    title: "Awards",
+                    icon: "trophy",
+                    color: .yellow,
+                    entries: awards
+                )
+            }
+
+            // Publications Section
+            let publications = coordinator.ui.publicationCards
+            if !publications.isEmpty {
+                PublicationSectionGroup(
+                    title: "Publications",
+                    icon: "book.pages",
+                    color: .indigo,
+                    publications: publications
+                )
+            }
+
+            // Languages Section
+            let languages = coordinator.ui.sectionCards.filter { $0.sectionType == .language }
+            if !languages.isEmpty {
+                AdditionalSectionGroup(
+                    title: "Languages",
+                    icon: "globe",
+                    color: .teal,
+                    entries: languages
+                )
+            }
+
+            // References Section
+            let references = coordinator.ui.sectionCards.filter { $0.sectionType == .reference }
+            if !references.isEmpty {
+                AdditionalSectionGroup(
+                    title: "References",
+                    icon: "person.text.rectangle",
+                    color: .mint,
+                    entries: references
+                )
+            }
+        }
+        .padding(.top, 8)
+    }
+}
+
+// MARK: - Additional Section Group View
+
+struct AdditionalSectionGroup: View {
+    let title: String
+    let icon: String
+    let color: Color
+    let entries: [AdditionalSectionEntry]
+
+    @State private var isExpanded = true
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            // Header
+            Button {
+                withAnimation {
+                    isExpanded.toggle()
+                }
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: icon)
+                        .foregroundStyle(color)
+                        .frame(width: 20)
+
+                    Text(title)
+                        .font(.subheadline.weight(.semibold))
+
+                    Text("(\(entries.count))")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    Spacer()
+
+                    Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .buttonStyle(.plain)
+
+            // Cards
+            if isExpanded {
+                ForEach(entries, id: \.id) { entry in
+                    AdditionalSectionCardRow(entry: entry, color: color)
+                }
+            }
+        }
+    }
+}
+
+struct AdditionalSectionCardRow: View {
+    let entry: AdditionalSectionEntry
+    let color: Color
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(entry.displayTitle)
+                        .font(.subheadline.weight(.medium))
+                        .lineLimit(1)
+
+                    if let subtitle = entry.displaySubtitle {
+                        Text(subtitle)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                    }
+                }
+
+                Spacer()
+
+                Text(entry.sectionType.displayName)
+                    .font(.caption2)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(color.opacity(0.12))
+                    .foregroundStyle(color)
+                    .cornerRadius(4)
+            }
+        }
+        .padding(10)
+        .background(Color(nsColor: .controlBackgroundColor))
+        .cornerRadius(8)
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Color(nsColor: .separatorColor), lineWidth: 1)
+        )
+    }
+}
+
+// MARK: - Publication Section Group View
+
+struct PublicationSectionGroup: View {
+    let title: String
+    let icon: String
+    let color: Color
+    let publications: [PublicationCard]
+
+    @State private var isExpanded = true
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            // Header
+            Button {
+                withAnimation {
+                    isExpanded.toggle()
+                }
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: icon)
+                        .foregroundStyle(color)
+                        .frame(width: 20)
+
+                    Text(title)
+                        .font(.subheadline.weight(.semibold))
+
+                    Text("(\(publications.count))")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    Spacer()
+
+                    Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .buttonStyle(.plain)
+
+            // Cards
+            if isExpanded {
+                ForEach(publications, id: \.id) { publication in
+                    PublicationCardRow(publication: publication, color: color)
+                }
+            }
+        }
+    }
+}
+
+struct PublicationCardRow: View {
+    let publication: PublicationCard
+    let color: Color
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(publication.displayTitle)
+                        .font(.subheadline.weight(.medium))
+                        .lineLimit(2)
+
+                    if let subtitle = publication.displaySubtitle {
+                        Text(subtitle)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+
+                    if let authors = publication.authorString {
+                        Text(authors)
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                            .lineLimit(1)
+                    }
+                }
+
+                Spacer()
+
+                // Source type badge
+                Text(sourceTypeLabel(publication.sourceType))
+                    .font(.caption2)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(color.opacity(0.12))
+                    .foregroundStyle(color)
+                    .cornerRadius(4)
+            }
+        }
+        .padding(10)
+        .background(Color(nsColor: .controlBackgroundColor))
+        .cornerRadius(8)
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Color(nsColor: .separatorColor), lineWidth: 1)
+        )
+    }
+
+    private func sourceTypeLabel(_ sourceType: PublicationSourceType) -> String {
+        switch sourceType {
+        case .bibtex: return "BibTeX"
+        case .cv: return "CV"
+        case .interview: return "Interview"
         }
     }
 }

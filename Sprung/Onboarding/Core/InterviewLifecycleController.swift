@@ -449,6 +449,24 @@ final class InterviewLifecycleController {
             }
         }
         stateUpdateTasks.append(timelineTask)
+        // Section card topic - for non-chronological section cards (awards, languages, references)
+        let sectionCardTask = Task { [weak self] in
+            guard let self else { return }
+            for await event in await self.eventBus.stream(topic: .sectionCard) {
+                if Task.isCancelled { break }
+                await handlers.handleSectionCardEvent(event)
+            }
+        }
+        stateUpdateTasks.append(sectionCardTask)
+        // Publication card topic - for publication cards
+        let publicationCardTask = Task { [weak self] in
+            guard let self else { return }
+            for await event in await self.eventBus.stream(topic: .publicationCard) {
+                if Task.isCancelled { break }
+                await handlers.handlePublicationCardEvent(event)
+            }
+        }
+        stateUpdateTasks.append(publicationCardTask)
         // Phase topic - for interview completion handling
         let phaseTask = Task { [weak self] in
             guard let self else { return }
@@ -484,6 +502,8 @@ struct StateUpdateHandlers {
     let handleLLMEvent: (OnboardingEvent) async -> Void
     let handleStateEvent: (OnboardingEvent) async -> Void
     let handleTimelineEvent: (OnboardingEvent) async -> Void
+    let handleSectionCardEvent: (OnboardingEvent) async -> Void
+    let handlePublicationCardEvent: (OnboardingEvent) async -> Void
     let handlePhaseEvent: (OnboardingEvent) async -> Void
     let performInitialSync: () async -> Void
 }

@@ -48,6 +48,15 @@ enum OnboardingToolName: String, CaseIterable {
     case getTimelineEntries = "get_timeline_entries"
     case openDocumentCollection = "open_document_collection"
 
+    // Section Card Tools (non-chronological sections)
+    case createSectionCard = "create_section_card"
+    case updateSectionCard = "update_section_card"
+    case deleteSectionCard = "delete_section_card"
+    case createPublicationCard = "create_publication_card"
+    case updatePublicationCard = "update_publication_card"
+    case deletePublicationCard = "delete_publication_card"
+    case displaySectionCardsForReview = "display_section_cards_for_review"
+
     // Web Browsing Tools
     case createWebArtifact = "create_web_artifact"
     case fetchAndProcessURL = "fetch_and_process_url"
@@ -109,6 +118,8 @@ enum OnboardingObjectiveId: String, CaseIterable {
     case uniqueCircumstancesDocumented = "unique_circumstances_documented"
     /// User has configured which sections to include
     case enabledSections = "enabled_sections"
+    /// Non-chronological section cards collected (awards, publications, languages, references)
+    case sectionCardsComplete = "section_cards_complete"
     /// Initial timeline skeleton captured
     case skeletonTimeline = "skeleton_timeline"
     /// Initial dossier data seeded
@@ -152,6 +163,8 @@ enum OnboardingDataType: String, CaseIterable {
     case candidateDossierEntry = "candidate_dossier_entry"
     case experienceDefaults = "experience_defaults"
     case enabledSections = "enabled_sections"
+    case sectionCards = "section_cards"
+    case publicationCards = "publication_cards"
 }
 
 // MARK: - Interview Subphases
@@ -173,12 +186,13 @@ enum InterviewSubphase: String, CaseIterable, Codable {
     case p1_phaseTransition = "p1_phase_transition"       // Ready to advance to Phase 2
 
     // MARK: Phase 2: Career Story
+    case p2_sectionConfig = "p2_section_config"               // Configuring enabled sections (FIRST in Phase 2)
     case p2_timelineCollection = "p2_timeline_collection"     // Resume upload or conversational collection
     case p2_timelineEnrichment = "p2_timeline_enrichment"     // Active interviewing about each role
-    case p2_workPreferences = "p2_work_preferences"           // Dossier weaving (remote, location, etc.)
-    case p2_sectionConfig = "p2_section_config"               // Configuring enabled sections
-    case p2_documentSuggestions = "p2_document_suggestions"   // Strategic suggestions before Phase 3
     case p2_timelineValidation = "p2_timeline_validation"     // User clicked "Done with Timeline", needs validation
+    case p2_sectionCardsCollection = "p2_section_cards"       // Collect non-chronological sections (awards, publications, etc.)
+    case p2_workPreferences = "p2_work_preferences"           // Dossier weaving (remote, location, etc.)
+    case p2_documentSuggestions = "p2_document_suggestions"   // Strategic suggestions before Phase 3
     case p2_phaseTransition = "p2_phase_transition"           // Ready to advance to Phase 3
 
     // MARK: Phase 3: Evidence Collection
@@ -201,8 +215,9 @@ enum InterviewSubphase: String, CaseIterable, Codable {
         case .p1_welcome, .p1_writingSamples, .p1_jobSearchContext,
              .p1_profileIntake, .p1_profileValidation, .p1_phaseTransition:
             return .phase1VoiceContext
-        case .p2_timelineCollection, .p2_timelineEnrichment, .p2_workPreferences,
-             .p2_sectionConfig, .p2_documentSuggestions, .p2_timelineValidation, .p2_phaseTransition:
+        case .p2_sectionConfig, .p2_timelineCollection, .p2_timelineEnrichment,
+             .p2_timelineValidation, .p2_sectionCardsCollection, .p2_workPreferences,
+             .p2_documentSuggestions, .p2_phaseTransition:
             return .phase2CareerStory
         case .p3_documentCollection, .p3_gitCollection, .p3_cardGeneration,
              .p3_cardReview, .p3_phaseTransition:
@@ -262,6 +277,17 @@ extension OnboardingToolName {
         OnboardingToolName.reorderTimelineCards
     ].map(\.rawValue))
 
+    /// Section card tools for non-chronological sections (awards, languages, references, publications).
+    /// Used by ToolGating to allow these tools during section cards collection.
+    static let sectionCardTools: Set<String> = Set([
+        OnboardingToolName.createSectionCard,
+        OnboardingToolName.updateSectionCard,
+        OnboardingToolName.deleteSectionCard,
+        OnboardingToolName.createPublicationCard,
+        OnboardingToolName.updatePublicationCard,
+        OnboardingToolName.deletePublicationCard,
+        OnboardingToolName.displaySectionCardsForReview
+    ].map(\.rawValue))
 }
 
 // MARK: - Convenience Extensions

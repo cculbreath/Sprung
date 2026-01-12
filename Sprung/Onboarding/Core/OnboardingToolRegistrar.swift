@@ -57,6 +57,17 @@ final class OnboardingToolRegistrar {
         toolRegistry.register(DeleteTimelineCardTool(coordinator: coordinator))
         toolRegistry.register(ReorderTimelineCardsTool(coordinator: coordinator))
         toolRegistry.register(DisplayTimelineForReviewTool(coordinator: coordinator))
+
+        // Section card tools (non-chronological sections: awards, languages, references)
+        toolRegistry.register(CreateSectionCardTool(coordinator: coordinator))
+        toolRegistry.register(UpdateSectionCardTool(coordinator: coordinator))
+        toolRegistry.register(DeleteSectionCardTool(coordinator: coordinator))
+        toolRegistry.register(DisplaySectionCardsForReviewTool(coordinator: coordinator))
+
+        // Publication card tools
+        toolRegistry.register(CreatePublicationCardTool(coordinator: coordinator))
+        toolRegistry.register(UpdatePublicationCardTool(coordinator: coordinator))
+        toolRegistry.register(DeletePublicationCardTool(coordinator: coordinator))
         toolRegistry.register(SubmitForValidationTool(coordinator: coordinator))
         toolRegistry.register(ListArtifactsTool(coordinator: coordinator))
         toolRegistry.register(GetArtifactRecordTool(coordinator: coordinator))

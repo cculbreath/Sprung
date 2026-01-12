@@ -37,6 +37,12 @@ final class UIStateUpdateHandler {
             handleTimelineEvent: { [weak self] event in
                 await self?.handleTimelineEvent(event)
             },
+            handleSectionCardEvent: { [weak self] event in
+                await self?.handleSectionCardEvent(event)
+            },
+            handlePublicationCardEvent: { [weak self] event in
+                await self?.handlePublicationCardEvent(event)
+            },
             handlePhaseEvent: { [weak self] event in
                 await self?.handlePhaseEvent(event)
             },
@@ -154,6 +160,84 @@ final class UIStateUpdateHandler {
             Logger.info("📊 UIStateUpdateHandler: Received timelineUIUpdateNeeded with \(cardCount) cards", category: .ai)
             ui.updateTimeline(timeline)
             Logger.info("📊 UIStateUpdateHandler: ui.updateTimeline called, new token=\(ui.timelineUIChangeToken)", category: .ai)
+        default:
+            break
+        }
+    }
+
+    // MARK: - Section Card Events
+    /// Handle section card events for non-chronological sections (awards, languages, references)
+    func handleSectionCardEvent(_ event: OnboardingEvent) async {
+        switch event {
+        case .sectionCard(.cardCreated(let card, let sectionType)):
+            guard let sectionTypeEnum = AdditionalSectionType(rawValue: sectionType) else {
+                Logger.warning("Unknown section type: \(sectionType)", category: .ai)
+                return
+            }
+            let entry = AdditionalSectionEntry(sectionType: sectionTypeEnum, fields: card)
+            ui.addSectionCard(entry)
+            ui.sectionCardToolWasUsed = true
+            Logger.info("📊 UIStateUpdateHandler: Section card created (\(sectionType))", category: .ai)
+
+        case .sectionCard(.cardUpdated(let id, let fields, let sectionType)):
+            if var existing = ui.sectionCards.first(where: { $0.id == id }) {
+                existing = existing.applying(fields: fields)
+                ui.updateSectionCard(id: id, with: existing)
+                ui.sectionCardToolWasUsed = true
+                Logger.info("📊 UIStateUpdateHandler: Section card updated (\(id.prefix(8))..., \(sectionType))", category: .ai)
+            }
+
+        case .sectionCard(.cardDeleted(let id, let sectionType, _)):
+            ui.deleteSectionCard(id: id)
+            ui.sectionCardToolWasUsed = true
+            Logger.info("📊 UIStateUpdateHandler: Section card deleted (\(id.prefix(8))..., \(sectionType))", category: .ai)
+
+        case .sectionCard(.uiUpdateNeeded):
+            ui.sectionCardsUIChangeToken += 1
+            Logger.info("📊 UIStateUpdateHandler: Section cards UI update triggered", category: .ai)
+
+        default:
+            break
+        }
+    }
+
+    // MARK: - Publication Card Events
+    /// Handle publication card events
+    func handlePublicationCardEvent(_ event: OnboardingEvent) async {
+        switch event {
+        case .publicationCard(.cardCreated(let card)):
+            if let pubCard = PublicationCard(json: card) {
+                ui.addPublicationCard(pubCard)
+                ui.sectionCardToolWasUsed = true
+                Logger.info("📊 UIStateUpdateHandler: Publication card created", category: .ai)
+            }
+
+        case .publicationCard(.cardUpdated(let id, let fields)):
+            if var existing = ui.publicationCards.first(where: { $0.id == id }) {
+                existing = existing.applying(fields: fields)
+                ui.updatePublicationCard(id: id, with: existing)
+                ui.sectionCardToolWasUsed = true
+                Logger.info("📊 UIStateUpdateHandler: Publication card updated (\(id.prefix(8))...)", category: .ai)
+            }
+
+        case .publicationCard(.cardDeleted(let id, _)):
+            ui.deletePublicationCard(id: id)
+            ui.sectionCardToolWasUsed = true
+            Logger.info("📊 UIStateUpdateHandler: Publication card deleted (\(id.prefix(8))...)", category: .ai)
+
+        case .publicationCard(.cardsImported(let cards, let sourceType)):
+            for card in cards {
+                if let pubCard = PublicationCard(json: card) {
+                    ui.addPublicationCard(pubCard)
+                }
+            }
+            ui.sectionCardToolWasUsed = true
+            Logger.info("📊 UIStateUpdateHandler: \(cards.count) publication cards imported (\(sourceType))", category: .ai)
+
+        case .publicationCard(.uiUpdateNeeded):
+            ui.publicationCardsUIChangeToken += 1
+            Logger.info("📊 UIStateUpdateHandler: Publication cards UI update triggered", category: .ai)
+
         default:
             break
         }
