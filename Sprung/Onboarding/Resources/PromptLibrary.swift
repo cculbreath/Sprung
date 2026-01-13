@@ -165,13 +165,6 @@ enum PromptLibrary {
         loadPrompt(named: "voice_profile_extraction")
     }()
 
-    // MARK: - Experience Defaults Agent Prompts
-
-    /// System prompt for the ExperienceDefaults agent
-    static let experienceDefaultsAgentSystem: String = {
-        loadPrompt(named: "experience_defaults_agent_system")
-    }()
-
     // MARK: - Prompt Loading
 
     /// Loads a prompt from a resource file in the Prompts directory.

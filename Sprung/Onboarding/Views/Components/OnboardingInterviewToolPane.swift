@@ -417,14 +417,9 @@ struct OnboardingInterviewToolPane: View {
                 }
             )
         case .phase4StrategicSynthesis:
-            if coordinator.ui.shouldGenerateTitleSets {
-                TitleSetCurationView(
-                    coordinator: coordinator,
-                    titleSetService: coordinator.titleSetService
-                )
-            } else {
-                InterviewTabEmptyState(phase: coordinator.ui.phase)
-            }
+            // Phase 4 now focuses on dossier completion
+            // SGM (Seed Generation Module) will be presented after Phase 4 completes
+            InterviewTabEmptyState(phase: coordinator.ui.phase)
         default:
             // Other phases: show empty state with guidance
             InterviewTabEmptyState(phase: coordinator.ui.phase)

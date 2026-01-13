@@ -123,7 +123,6 @@ final class OnboardingInterviewCoordinator {
 
     /// Guidance services
     var voiceProfileService: VoiceProfileService { container.voiceProfileService }
-    var titleSetService: TitleSetService { container.titleSetService }
 
     // MARK: - UI State Properties (from ToolRouter)
     var pendingUploadRequests: [OnboardingUploadRequest] {

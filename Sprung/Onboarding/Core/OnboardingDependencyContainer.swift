@@ -74,7 +74,6 @@ final class OnboardingDependencyContainer {
     let sectionCardManagementService: SectionCardManagementService
     let dataPersistenceService: DataPersistenceService
     let voiceProfileService: VoiceProfileService
-    let titleSetService: TitleSetService
     let dataResetService: OnboardingDataResetService
     let artifactArchiveManager: ArtifactArchiveManager
 
@@ -294,7 +293,6 @@ final class OnboardingDependencyContainer {
 
         // 7b. Initialize guidance services
         self.voiceProfileService = VoiceProfileService(llmFacade: llmFacade)
-        self.titleSetService = TitleSetService(llmFacade: llmFacade)
 
         // 7c. Initialize data reset service
         self.dataResetService = OnboardingDataResetService(

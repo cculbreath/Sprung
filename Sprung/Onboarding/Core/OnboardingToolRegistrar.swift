@@ -81,11 +81,6 @@ final class OnboardingToolRegistrar {
         // KC workflow: Document merge UI → Approve & Create button → Direct ResRef conversion
         toolRegistry.register(OpenDocumentCollectionTool(coordinator: coordinator))
         toolRegistry.register(IngestWritingSampleTool(coordinator: coordinator, eventBus: eventBus))
-        toolRegistry.register(GenerateExperienceDefaultsTool(
-            coordinator: coordinator,
-            eventBus: eventBus,
-            agentActivityTracker: coordinator.agentActivityTracker
-        ))
         toolRegistry.register(CompleteDossierSectionTool(
             eventBus: eventBus,
             candidateDossierStore: candidateDossierStore
