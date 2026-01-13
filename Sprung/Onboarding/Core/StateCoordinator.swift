@@ -338,13 +338,10 @@ actor StateCoordinator: OnboardingEventEmitter {
     }
     private func handleLLMEvent(_ event: OnboardingEvent) async {
         switch event {
-        case .llm(.userMessageSent(_, let payload, let isSystemGenerated)):
-            if isSystemGenerated {
-                let text = payload["text"].stringValue
-                // ConversationLog handles gating - will fill pending tool slots before appending
-                await conversationLog.appendUser(text: text, isSystemGenerated: isSystemGenerated)
-                Logger.debug("StateCoordinator: system-generated user message sent to ConversationLog", category: .ai)
-            }
+        case .llm(.userMessageSent):
+            // System-generated messages are now added at enqueue time to preserve ordering
+            // Chatbox messages are added before enqueueing in sendChatMessage()
+            break
         case .llm(.sentToolResponseMessage):
             break
         case .llm(.status(let status)):
@@ -363,6 +360,14 @@ actor StateCoordinator: OnboardingEventEmitter {
             // Clear streaming buffer - message is now in ConversationLog
             await streamingBuffer.finalize()
         case .llm(.enqueueUserMessage(let payload, let isSystemGenerated, let chatboxMessageId, let originalText)):
+            // Add system-generated messages to ConversationLog NOW to preserve ordering
+            // Chatbox messages are already added in sendChatMessage() before enqueueing
+            if isSystemGenerated {
+                let text = payload["text"].stringValue
+                await conversationLog.appendUser(text: text, isSystemGenerated: isSystemGenerated)
+                Logger.debug("StateCoordinator: system-generated message added to ConversationLog at enqueue time", category: .ai)
+            }
+
             // Bundle any queued coordinator messages WITH the user message
             // They'll be included as input items in the same API request
             let bundledDevMessages = await llmStateManager.drainQueuedCoordinatorMessages()
