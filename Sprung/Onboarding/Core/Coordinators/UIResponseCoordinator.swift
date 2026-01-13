@@ -315,6 +315,28 @@ final class UIResponseCoordinator {
         )))
         Logger.info("✅ Timeline editing complete - requesting submit_for_validation", category: .ai)
     }
+
+    /// Called when user clicks "Done with Section Cards" in the timeline tab.
+    /// Marks section cards complete and advances to Phase 3.
+    func completeSectionCardsAndAdvancePhase() async {
+        // Deactivate the section cards editor mode
+        ui.isSectionCardsEditorActive = false
+
+        // Mark section cards objective as completed
+        await eventBus.publish(.objective(.statusUpdateRequested(
+            id: OnboardingObjectiveId.sectionCardsComplete.rawValue,
+            status: "completed",
+            source: "user_done_with_section_cards",
+            notes: "User clicked Done with Section Cards",
+            details: nil
+        )))
+
+        // Force phase transition to Phase 3
+        await forcePhaseTransition(reason: "Section cards collection completed by user")
+
+        Logger.info("✅ Section cards complete - advanced to Phase 3", category: .ai)
+    }
+
     // MARK: - Applicant Profile Handling
     func confirmApplicantProfile(draft: ApplicantProfileDraft) async {
         guard let resolution = toolRouter.resolveApplicantProfile(with: draft) else { return }
@@ -500,6 +522,9 @@ final class UIResponseCoordinator {
     func confirmSectionToggle(enabled: [String], customFields: [CustomFieldDefinition] = []) async {
         guard toolRouter.resolveSectionToggle(enabled: enabled) != nil else { return }
 
+        // Emit event to unblock the DrainGate (GateBlockEventHandler listens for this)
+        await eventBus.publish(.toolpane(.sectionToggleCleared))
+
         // Store enabled sections in artifact repository
         await state.restoreEnabledSections(Set(enabled))
 
@@ -521,17 +546,16 @@ final class UIResponseCoordinator {
             details: ["sections": enabled.joined(separator: ", ")]
         )))
 
-        // Execute phase transition directly - no need to ask LLM to call next_phase
-        // Direct transitions are more reliable and eliminate a round trip
-        await forcePhaseTransition(reason: "Section configuration confirmed by user")
+        // NOTE: Phase transition removed - Phase 3 should come after section cards approval,
+        // not after section configuration. The LLM should proceed with timeline collection.
 
-        // Build result informing LLM that phase has advanced
+        // Build result informing LLM of confirmed sections
         var message = "Section toggle confirmed. Enabled sections: \(enabled.joined(separator: ", "))"
         if !customFields.isEmpty {
             let customFieldsSummary = customFields.map { "\($0.key): \($0.description)" }.joined(separator: "; ")
             message += ". Custom fields: \(customFieldsSummary)"
         }
-        message += ". Phase has been advanced to Phase 3 (Evidence Collection)."
+        message += ". Proceed with timeline collection - offer resume upload or conversational input."
 
         var resultData = JSON()
         resultData["enabledSections"] = JSON(enabled)
@@ -539,13 +563,16 @@ final class UIResponseCoordinator {
             resultData["customFields"] = JSON(customFields.map { ["key": $0.key, "description": $0.description] })
         }
 
-        let result = buildCompletionResult(status: "phase_advanced", message: message, data: resultData)
+        let result = buildCompletionResult(status: "confirmed", message: message, data: resultData)
         completeUITool(toolName: OnboardingToolName.configureEnabledSections.rawValue, result: result)
 
-        Logger.info("✅ Section toggle confirmed, phase advanced to Phase 3", category: .ai)
+        Logger.info("✅ Section toggle confirmed, proceeding with Phase 2 timeline collection", category: .ai)
     }
     func rejectSectionToggle(reason: String) async {
         guard toolRouter.rejectSectionToggle(reason: reason) != nil else { return }
+
+        // Emit event to unblock the DrainGate (GateBlockEventHandler listens for this)
+        await eventBus.publish(.toolpane(.sectionToggleCleared))
 
         // Complete UI tool with rejection
         let result = buildCompletionResult(
@@ -571,8 +598,13 @@ final class UIResponseCoordinator {
         // NOTE: Document collection mode is NOT cleared by chatbox messages.
         // It should only be dismissed by "Done with Uploads" button or phase transitions.
 
+        // CRITICAL: User chatbox messages are highest priority - clear ALL stale blocks
+        // This prevents messages from being stuck in queue due to orphaned blocking states.
+        // UI prompts have already been dismissed above, so all blocks should be stale.
+        // If glow is off (not streaming), any remaining blocks are definitionally stale.
+        drainGate.clearAllBlocks()
+
         // Add the message to chat transcript IMMEDIATELY so user sees it in the UI
-        // Chatbox messages (isSystemGenerated=false) always return a messageId - they're never queued
         guard let messageId = await state.appendUserMessage(text, isSystemGenerated: false) else {
             Logger.error("❌ Chatbox message unexpectedly queued - this should never happen", category: .ai)
             return

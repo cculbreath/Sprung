@@ -58,9 +58,9 @@ struct OnboardingInterviewChatPanel: View {
             OnboardingChatComposerView(
                 text: $state.userInput,
                 isEditable: coordinator.ui.isActive,
+                isStreaming: coordinator.ui.isStreaming,
                 isProcessing: coordinator.ui.isProcessing,
                 isWaitingForValidation: isWaitingForValidation,
-                queuedMessageCount: coordinator.ui.queuedMessageCount,
                 onSend: { text in
                     send(text)
                 },

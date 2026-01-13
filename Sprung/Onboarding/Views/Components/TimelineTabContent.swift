@@ -15,6 +15,7 @@ struct TimelineTabContent: View {
     var onValidationSubmit: ((String) -> Void)?
     var onSubmitChangesOnly: (() -> Void)?
     var onDoneWithTimeline: (() -> Void)?
+    var onDoneWithSectionCards: (() -> Void)?
 
     // MARK: - State
 
@@ -67,7 +68,7 @@ struct TimelineTabContent: View {
             }
 
             // Sticky footer (outside ScrollView)
-            if canEdit {
+            if canEdit || coordinator.ui.isSectionCardsEditorActive {
                 Divider()
                 footerButtons
                     .padding(.horizontal, 4)
@@ -257,10 +258,24 @@ struct TimelineTabContent: View {
                     editorModeButtons
                 } else if mode == .validation {
                     validationModeButtons
+                } else if coordinator.ui.isSectionCardsEditorActive {
+                    sectionCardsButtons
                 }
             }
         }
         .padding(.top, 8)
+    }
+
+    @ViewBuilder
+    private var sectionCardsButtons: some View {
+        Spacer()
+
+        Button {
+            onDoneWithSectionCards?()
+        } label: {
+            Label("Done with Section Cards", systemImage: "checkmark.circle")
+        }
+        .buttonStyle(.borderedProminent)
     }
 
     @ViewBuilder

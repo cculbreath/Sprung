@@ -770,6 +770,12 @@ final class OnboardingInterviewCoordinator {
         await uiResponseCoordinator.completeTimelineEditingAndRequestValidation()
     }
 
+    /// Called when user clicks "Done with Section Cards" in the timeline tab.
+    /// Completes section cards collection and advances to Phase 3.
+    func completeSectionCardsAndAdvancePhase() async {
+        await uiResponseCoordinator.completeSectionCardsAndAdvancePhase()
+    }
+
     /// Returns the current experience defaults as JSON for validation UI.
     /// Used by SubmitForValidationTool when validation_type="experience_defaults".
     func currentExperienceDefaultsForValidation() async -> JSON {

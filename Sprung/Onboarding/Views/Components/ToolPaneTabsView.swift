@@ -158,6 +158,11 @@ struct ToolPaneTabsView<InterviewContent: View>: View {
                     Task {
                         await coordinator.completeTimelineEditingAndRequestValidation()
                     }
+                },
+                onDoneWithSectionCards: {
+                    Task {
+                        await coordinator.completeSectionCardsAndAdvancePhase()
+                    }
                 }
             )
         case .artifacts:

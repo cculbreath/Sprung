@@ -130,13 +130,9 @@ struct Phase1WritingSampleView: View {
         .padding(.top, 4)
     }
 
-    /// Whether buttons should be disabled (during LLM processing)
-    private var buttonsDisabled: Bool {
-        coordinator.ui.isProcessing
-    }
-
     private var actionButtons: some View {
         // Single button - action depends on whether samples were collected
+        // Always enabled - user action should work regardless of LLM activity
         Button(action: writingSamples.isEmpty ? onSkipSamples : onDoneWithSamples) {
             HStack {
                 Image(systemName: writingSamples.isEmpty ? "arrow.right.circle" : "checkmark.circle.fill")
@@ -146,7 +142,6 @@ struct Phase1WritingSampleView: View {
         }
         .buttonStyle(.borderedProminent)
         .controlSize(.regular)
-        .disabled(buttonsDisabled)
     }
 
     private var waitingForProfileView: some View {

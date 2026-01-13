@@ -1,4 +1,4 @@
-import SwiftUI
+    import SwiftUI
 struct ResumeSectionsToggleCard: View {
     let request: OnboardingSectionToggleRequest
     let onConfirm: ([String], [CustomFieldDefinition]) -> Void
