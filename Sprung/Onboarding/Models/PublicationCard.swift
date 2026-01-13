@@ -86,7 +86,8 @@ struct PublicationCard: Identifiable, Equatable, Codable {
         self.summary = fields["summary"].stringValue
         self.sourceType = sourceType
         self.bibtexKey = fields["bibtexKey"].string
-        self.bibtexType = fields["bibtexType"].string
+        // Support both bibtexType (internal) and publicationType (from LLM tool)
+        self.bibtexType = fields["publicationType"].string ?? fields["bibtexType"].string
         self.authors = fields["authors"].array?.compactMap { $0.string }
         self.doi = fields["doi"].string
     }
@@ -96,6 +97,7 @@ struct PublicationCard: Identifiable, Equatable, Codable {
         var updated = self
 
         if let v = fields["name"].string { updated.name = v }
+        if let v = fields["publicationType"].string ?? fields["bibtexType"].string { updated.bibtexType = v }
         if let v = fields["publisher"].string { updated.publisher = v }
         if let v = fields["releaseDate"].string { updated.releaseDate = v }
         if let v = fields["url"].string { updated.url = v }

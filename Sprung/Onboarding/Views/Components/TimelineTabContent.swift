@@ -646,8 +646,8 @@ struct PublicationCardRow: View {
 
                 Spacer()
 
-                // Source type badge
-                Text(sourceTypeLabel(publication.sourceType))
+                // Publication type badge (prefer bibtexType over sourceType)
+                Text(publicationTypeLabel(publication))
                     .font(.caption2)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
@@ -665,11 +665,26 @@ struct PublicationCardRow: View {
         )
     }
 
-    private func sourceTypeLabel(_ sourceType: PublicationSourceType) -> String {
-        switch sourceType {
-        case .bibtex: return "BibTeX"
-        case .cv: return "CV"
-        case .interview: return "Interview"
+    /// Label for publication type - prefer bibtexType (article, book) over sourceType
+    private func publicationTypeLabel(_ publication: PublicationCard) -> String {
+        if let bibtexType = publication.bibtexType, !bibtexType.isEmpty {
+            return formatBibtexType(bibtexType)
+        }
+        // Fallback to generic "Publication" instead of sourceType
+        return "Publication"
+    }
+
+    private func formatBibtexType(_ type: String) -> String {
+        switch type.lowercased() {
+        case "article": return "Article"
+        case "inproceedings", "conference": return "Conference"
+        case "book": return "Book"
+        case "incollection": return "Chapter"
+        case "phdthesis": return "PhD Thesis"
+        case "mastersthesis": return "Thesis"
+        case "techreport": return "Report"
+        case "misc": return "Publication"
+        default: return type.capitalized
         }
     }
 }

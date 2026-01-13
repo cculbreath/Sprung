@@ -26,6 +26,11 @@ enum PublicationCardSchema {
                 type: .string,
                 description: "Publication title (required)"
             ),
+            "publicationType": JSONSchema(
+                type: .string,
+                description: "Type of publication: article, conference, book, chapter, thesis, report",
+                enum: ["article", "conference", "book", "chapter", "thesis", "report"]
+            ),
             "publisher": JSONSchema(
                 type: .string,
                 description: "Journal, conference, or publisher name"
@@ -62,6 +67,11 @@ enum PublicationCardSchema {
         description: "Fields to update (PATCH semantics - only provided fields change)",
         properties: [
             "name": JSONSchema(type: .string, description: "Publication title"),
+            "publicationType": JSONSchema(
+                type: .string,
+                description: "Type of publication: article, conference, book, chapter, thesis, report",
+                enum: ["article", "conference", "book", "chapter", "thesis", "report"]
+            ),
             "publisher": JSONSchema(type: .string, description: "Journal, conference, or publisher name"),
             "releaseDate": JSONSchema(type: .string, description: "Publication date"),
             "url": JSONSchema(type: .string, description: "URL to the publication"),
