@@ -10,6 +10,13 @@
 import Foundation
 import SwiftyJSON
 
+// MARK: - Response Types
+
+private struct EducationResponse: Codable {
+    let description: String
+    let courses: [String]
+}
+
 /// Generates education section content.
 /// For each education timeline entry, generates description and coursework.
 @MainActor
@@ -48,7 +55,8 @@ final class EducationGenerator: BaseSectionGenerator {
         task: GenerationTask,
         context: SeedGenerationContext,
         preamble: String,
-        llmService: any LLMServiceProtocol
+        llmFacade: LLMFacade,
+        modelId: String
     ) async throws -> GeneratedContent {
         guard let targetId = task.targetId else {
             throw GeneratorError.missingContext("No targetId for education task")
@@ -58,6 +66,8 @@ final class EducationGenerator: BaseSectionGenerator {
         let relevantKCs = context.relevantKCs(for: entry)
 
         let taskContext = buildTaskContext(entry: entry, kcs: relevantKCs, skills: context.skills)
+
+        let systemPrompt = "You are a professional resume writer. Generate education content that highlights relevant skills and achievements."
 
         let fullPrompt = """
             \(preamble)
@@ -86,32 +96,27 @@ final class EducationGenerator: BaseSectionGenerator {
             }
             """
 
-        let response = try await llmService.generateJSON(
-            systemPrompt: "You are a professional resume writer. Generate education content that highlights relevant skills and achievements.",
-            userPrompt: fullPrompt,
-            schema: """
-                {
-                    "type": "object",
-                    "properties": {
-                        "description": {"type": "string"},
-                        "courses": {
-                            "type": "array",
-                            "items": {"type": "string"}
-                        }
-                    },
-                    "required": ["description", "courses"]
-                }
-                """,
-            maxTokens: 400
+        let response: EducationResponse = try await llmFacade.executeStructuredWithDictionarySchema(
+            prompt: "\(systemPrompt)\n\n\(fullPrompt)",
+            modelId: modelId,
+            as: EducationResponse.self,
+            schema: [
+                "type": "object",
+                "properties": [
+                    "description": ["type": "string"],
+                    "courses": ["type": "array", "items": ["type": "string"]]
+                ],
+                "required": ["description", "courses"]
+            ],
+            schemaName: "education"
         )
 
         return GeneratedContent(
             type: .educationDescription(
                 targetId: targetId,
-                description: response["description"].stringValue,
-                courses: response["courses"].arrayValue.map { $0.stringValue }
-            ),
-            rawJSON: response
+                description: response.description,
+                courses: response.courses
+            )
         )
     }
 

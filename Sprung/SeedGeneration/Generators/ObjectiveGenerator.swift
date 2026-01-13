@@ -14,6 +14,12 @@
 import Foundation
 import SwiftyJSON
 
+// MARK: - Response Types
+
+private struct ObjectiveResponse: Codable {
+    let summary: String
+}
+
 /// Generates professional objective/summary for resume.
 /// Creates a single task producing a 3-5 sentence summary.
 @MainActor
@@ -43,9 +49,12 @@ final class ObjectiveGenerator: BaseSectionGenerator {
         task: GenerationTask,
         context: SeedGenerationContext,
         preamble: String,
-        llmService: any LLMServiceProtocol
+        llmFacade: LLMFacade,
+        modelId: String
     ) async throws -> GeneratedContent {
         let taskContext = buildTaskContext(context: context)
+
+        let systemPrompt = "You are a professional resume writer. Generate a compelling professional summary."
 
         let fullPrompt = """
             \(preamble)
@@ -77,24 +86,22 @@ final class ObjectiveGenerator: BaseSectionGenerator {
             }
             """
 
-        let response = try await llmService.generateJSON(
-            systemPrompt: "You are a professional resume writer. Generate a compelling professional summary.",
-            userPrompt: fullPrompt,
-            schema: """
-                {
-                    "type": "object",
-                    "properties": {
-                        "summary": {"type": "string"}
-                    },
-                    "required": ["summary"]
-                }
-                """,
-            maxTokens: 300
+        let response: ObjectiveResponse = try await llmFacade.executeStructuredWithDictionarySchema(
+            prompt: "\(systemPrompt)\n\n\(fullPrompt)",
+            modelId: modelId,
+            as: ObjectiveResponse.self,
+            schema: [
+                "type": "object",
+                "properties": [
+                    "summary": ["type": "string"]
+                ],
+                "required": ["summary"]
+            ],
+            schemaName: "objective"
         )
 
         return GeneratedContent(
-            type: .objective(summary: response["summary"].stringValue),
-            rawJSON: response
+            type: .objective(summary: response.summary)
         )
     }
 

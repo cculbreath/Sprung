@@ -9,6 +9,13 @@
 import Foundation
 import SwiftyJSON
 
+// MARK: - Response Types
+
+private struct VolunteerResponse: Codable {
+    let summary: String
+    let highlights: [String]
+}
+
 /// Generates volunteer experience content.
 /// For each volunteer timeline entry, generates description and highlights.
 @MainActor
@@ -47,7 +54,8 @@ final class VolunteerGenerator: BaseSectionGenerator {
         task: GenerationTask,
         context: SeedGenerationContext,
         preamble: String,
-        llmService: any LLMServiceProtocol
+        llmFacade: LLMFacade,
+        modelId: String
     ) async throws -> GeneratedContent {
         guard let targetId = task.targetId else {
             throw GeneratorError.missingContext("No targetId for volunteer task")
@@ -57,6 +65,8 @@ final class VolunteerGenerator: BaseSectionGenerator {
         let relevantKCs = context.relevantKCs(for: entry)
 
         let taskContext = buildTaskContext(entry: entry, kcs: relevantKCs)
+
+        let systemPrompt = "You are a professional resume writer. Generate volunteer experience content that showcases leadership and impact."
 
         let fullPrompt = """
             \(preamble)
@@ -85,32 +95,27 @@ final class VolunteerGenerator: BaseSectionGenerator {
             }
             """
 
-        let response = try await llmService.generateJSON(
-            systemPrompt: "You are a professional resume writer. Generate volunteer experience content that showcases leadership and impact.",
-            userPrompt: fullPrompt,
-            schema: """
-                {
-                    "type": "object",
-                    "properties": {
-                        "summary": {"type": "string"},
-                        "highlights": {
-                            "type": "array",
-                            "items": {"type": "string"}
-                        }
-                    },
-                    "required": ["summary", "highlights"]
-                }
-                """,
-            maxTokens: 400
+        let response: VolunteerResponse = try await llmFacade.executeStructuredWithDictionarySchema(
+            prompt: "\(systemPrompt)\n\n\(fullPrompt)",
+            modelId: modelId,
+            as: VolunteerResponse.self,
+            schema: [
+                "type": "object",
+                "properties": [
+                    "summary": ["type": "string"],
+                    "highlights": ["type": "array", "items": ["type": "string"]]
+                ],
+                "required": ["summary", "highlights"]
+            ],
+            schemaName: "volunteer"
         )
 
         return GeneratedContent(
             type: .volunteerDescription(
                 targetId: targetId,
-                summary: response["summary"].stringValue,
-                highlights: response["highlights"].arrayValue.map { $0.stringValue }
-            ),
-            rawJSON: response
+                summary: response.summary,
+                highlights: response.highlights
+            )
         )
     }
 

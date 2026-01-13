@@ -33,13 +33,15 @@ protocol SectionGenerator {
     ///   - task: The task to execute
     ///   - context: The full generation context
     ///   - preamble: Cached preamble for prompt efficiency
-    ///   - llmService: The LLM service to use for generation
+    ///   - llmFacade: The LLM facade for generation
+    ///   - modelId: The model ID to use
     /// - Returns: Generated content for this task
     func execute(
         task: GenerationTask,
         context: SeedGenerationContext,
         preamble: String,
-        llmService: any LLMServiceProtocol
+        llmFacade: LLMFacade,
+        modelId: String
     ) async throws -> GeneratedContent
 
     /// Apply approved content to ExperienceDefaults.
@@ -57,38 +59,6 @@ extension SectionGenerator {
     var displayName: String {
         sectionKey.rawValue.capitalized
     }
-}
-
-// MARK: - LLM Service Protocol
-
-/// Protocol for LLM services that generators can use.
-/// Abstracts over Anthropic, Gemini, or OpenRouter providers.
-protocol LLMServiceProtocol: Sendable {
-    /// Send a message and get a response.
-    /// - Parameters:
-    ///   - systemPrompt: The system prompt to use
-    ///   - userPrompt: The user message/request
-    ///   - maxTokens: Maximum tokens for the response
-    /// - Returns: The LLM's text response
-    func generate(
-        systemPrompt: String,
-        userPrompt: String,
-        maxTokens: Int
-    ) async throws -> String
-
-    /// Send a message expecting JSON output.
-    /// - Parameters:
-    ///   - systemPrompt: The system prompt to use
-    ///   - userPrompt: The user message/request
-    ///   - schema: JSON schema description for the expected output
-    ///   - maxTokens: Maximum tokens for the response
-    /// - Returns: Parsed JSON response
-    func generateJSON(
-        systemPrompt: String,
-        userPrompt: String,
-        schema: String,
-        maxTokens: Int
-    ) async throws -> JSON
 }
 
 // MARK: - Generator Errors
@@ -146,7 +116,8 @@ class BaseSectionGenerator: SectionGenerator {
         task: GenerationTask,
         context: SeedGenerationContext,
         preamble: String,
-        llmService: any LLMServiceProtocol
+        llmFacade: LLMFacade,
+        modelId: String
     ) async throws -> GeneratedContent {
         // Subclasses override this
         fatalError("Subclasses must implement execute")

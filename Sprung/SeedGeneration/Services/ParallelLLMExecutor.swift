@@ -42,14 +42,16 @@ actor ParallelLLMExecutor {
     ///   - generator: The generator to use for execution
     ///   - context: The generation context
     ///   - preamble: Cached preamble for prompts
-    ///   - llmService: The LLM service to use
+    ///   - llmFacade: The LLM facade to use
+    ///   - modelId: The model ID to use
     /// - Returns: AsyncStream of task results
     func execute(
         tasks: [GenerationTask],
         generator: SectionGenerator,
         context: SeedGenerationContext,
         preamble: String,
-        llmService: any LLMServiceProtocol
+        llmFacade: LLMFacade,
+        modelId: String
     ) -> AsyncStream<TaskExecutionResult> {
         AsyncStream { continuation in
             Task {
@@ -68,7 +70,8 @@ actor ParallelLLMExecutor {
                                     task: task,
                                     context: context,
                                     preamble: preamble,
-                                    llmService: llmService
+                                    llmFacade: llmFacade,
+                                    modelId: modelId
                                 )
                                 return TaskExecutionResult(
                                     taskId: task.id,
@@ -100,7 +103,8 @@ actor ParallelLLMExecutor {
         generator: SectionGenerator,
         context: SeedGenerationContext,
         preamble: String,
-        llmService: any LLMServiceProtocol
+        llmFacade: LLMFacade,
+        modelId: String
     ) async -> TaskExecutionResult {
         await waitForSlot()
         defer {
@@ -112,7 +116,8 @@ actor ParallelLLMExecutor {
                 task: task,
                 context: context,
                 preamble: preamble,
-                llmService: llmService
+                llmFacade: llmFacade,
+                modelId: modelId
             )
             return TaskExecutionResult(
                 taskId: task.id,
@@ -169,14 +174,16 @@ extension ParallelLLMExecutor {
     ///   - generator: The generator to use
     ///   - context: The generation context
     ///   - preamble: Cached preamble
-    ///   - llmService: LLM service to use
+    ///   - llmFacade: LLM facade to use
+    ///   - modelId: Model ID to use
     /// - Returns: Dictionary mapping task IDs to results
     func executeAll(
         tasks: [GenerationTask],
         generator: SectionGenerator,
         context: SeedGenerationContext,
         preamble: String,
-        llmService: any LLMServiceProtocol
+        llmFacade: LLMFacade,
+        modelId: String
     ) async -> [UUID: Result<GeneratedContent, Error>] {
         var results: [UUID: Result<GeneratedContent, Error>] = [:]
 
@@ -185,7 +192,8 @@ extension ParallelLLMExecutor {
             generator: generator,
             context: context,
             preamble: preamble,
-            llmService: llmService
+            llmFacade: llmFacade,
+            modelId: modelId
         )
 
         for await taskResult in stream {

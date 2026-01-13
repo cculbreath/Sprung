@@ -10,6 +10,12 @@
 import Foundation
 import SwiftyJSON
 
+// MARK: - Response Types
+
+private struct WorkHighlightsResponse: Codable {
+    let highlights: [String]
+}
+
 /// Generates work experience highlights for resume work section.
 /// For each work timeline entry, generates 3-4 impactful bullet points
 /// using evidence from knowledge cards.
@@ -49,7 +55,8 @@ final class WorkHighlightsGenerator: BaseSectionGenerator {
         task: GenerationTask,
         context: SeedGenerationContext,
         preamble: String,
-        llmService: any LLMServiceProtocol
+        llmFacade: LLMFacade,
+        modelId: String
     ) async throws -> GeneratedContent {
         guard let targetId = task.targetId else {
             throw GeneratorError.missingContext("No targetId for work task")
@@ -59,6 +66,8 @@ final class WorkHighlightsGenerator: BaseSectionGenerator {
         let relevantKCs = context.relevantKCs(for: entry)
 
         let taskContext = buildTaskContext(entry: entry, kcs: relevantKCs)
+
+        let systemPrompt = "You are a professional resume writer. Generate impactful work highlights."
 
         let fullPrompt = """
             \(preamble)
@@ -88,31 +97,22 @@ final class WorkHighlightsGenerator: BaseSectionGenerator {
             }
             """
 
-        let response = try await llmService.generateJSON(
-            systemPrompt: "You are a professional resume writer. Generate impactful work highlights.",
-            userPrompt: fullPrompt,
-            schema: """
-                {
-                    "type": "object",
-                    "properties": {
-                        "highlights": {
-                            "type": "array",
-                            "items": {"type": "string"},
-                            "minItems": 3,
-                            "maxItems": 4
-                        }
-                    },
-                    "required": ["highlights"]
-                }
-                """,
-            maxTokens: 500
+        let response: WorkHighlightsResponse = try await llmFacade.executeStructuredWithDictionarySchema(
+            prompt: "\(systemPrompt)\n\n\(fullPrompt)",
+            modelId: modelId,
+            as: WorkHighlightsResponse.self,
+            schema: [
+                "type": "object",
+                "properties": [
+                    "highlights": ["type": "array", "items": ["type": "string"]]
+                ],
+                "required": ["highlights"]
+            ],
+            schemaName: "work_highlights"
         )
 
-        let highlights = response["highlights"].arrayValue.map { $0.stringValue }
-
         return GeneratedContent(
-            type: .workHighlights(targetId: targetId, highlights: highlights),
-            rawJSON: response
+            type: .workHighlights(targetId: targetId, highlights: response.highlights)
         )
     }
 

@@ -117,6 +117,15 @@ final class SeedGenerationActivityTracker {
         activeTasks.filter { $0.status == .failed }
     }
 
+    /// Whether there are any completed or failed tasks
+    var hasCompletedTasks: Bool {
+        completedCount > 0 || failedCount > 0
+    }
+
+    // MARK: - Type Alias for Views
+
+    typealias TrackedTask = TrackedGenerationTask
+
     // MARK: - Task Lifecycle
 
     /// Track a new task
@@ -208,6 +217,35 @@ final class SeedGenerationActivityTracker {
             activeTasks[index].error = nil
             activeTasks[index].endTime = nil
         }
+    }
+
+    /// Cancel all running tasks
+    func cancelAll() {
+        for index in activeTasks.indices where activeTasks[index].status == .running {
+            activeTasks[index].status = .failed
+            activeTasks[index].endTime = Date()
+            activeTasks[index].error = "Cancelled"
+        }
+        Logger.info("🛑 All running tasks cancelled", category: .ai)
+    }
+
+    // MARK: - Convenience Methods (used by Orchestrator)
+
+    /// Start tracking a task and mark it as running
+    func startTask(id: UUID, displayName: String) {
+        let idString = id.uuidString
+        trackTask(id: idString, displayName: displayName)
+        markRunning(id: idString)
+    }
+
+    /// Mark a task as completed
+    func completeTask(id: UUID) {
+        markCompleted(id: id.uuidString)
+    }
+
+    /// Mark a task as failed
+    func failTask(id: UUID, error: String) {
+        markFailed(id: id.uuidString, error: error)
     }
 
     // MARK: - Private Helpers
