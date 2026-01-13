@@ -68,7 +68,7 @@ struct TimelineTabContent: View {
             }
 
             // Sticky footer (outside ScrollView)
-            if canEdit || coordinator.ui.isSectionCardsEditorActive {
+            if canEdit || coordinator.ui.isSectionCardsEditorActive || hasAdditionalSections {
                 Divider()
                 footerButtons
                     .padding(.horizontal, 4)
@@ -258,7 +258,8 @@ struct TimelineTabContent: View {
                     editorModeButtons
                 } else if mode == .validation {
                     validationModeButtons
-                } else if coordinator.ui.isSectionCardsEditorActive {
+                } else if coordinator.ui.isSectionCardsEditorActive || hasAdditionalSections {
+                    // Show section cards buttons when LLM activated editor OR when cards exist
                     sectionCardsButtons
                 }
             }
