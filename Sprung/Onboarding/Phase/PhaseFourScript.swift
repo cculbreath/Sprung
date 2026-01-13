@@ -2,7 +2,7 @@
 //  PhaseFourScript.swift
 //  Sprung
 //
-//  Phase 4: Strategic Synthesis — Strengths, pitfalls, dossier completion, experience defaults.
+//  Phase 4: Strategic Synthesis — Strengths, pitfalls, and dossier completion.
 //
 //  WORKFLOW:
 //  1. Analyze evidence and present strategic STRENGTHS (2-3 with evidence) - discuss with user
@@ -10,11 +10,11 @@
 //  3. Fill any remaining DOSSIER GAPS (availability, preferences, circumstances)
 //  4. Call submit_candidate_dossier with all gathered insights
 //     → This automatically satisfies: strengthsIdentified, pitfallsDocumented, dossierComplete
-//  5. If custom.jobTitles was enabled:
-//     → WAIT for user to complete Title Set Curation in tool pane (user-driven)
-//     → You'll receive a "Title Sets Curated" notification when ready
-//  6. Call generate_experience_defaults (with selected_titles if title sets were curated)
-//  7. Summarize and call next_phase to complete
+//  5. Summarize and call next_phase to complete
+//
+//  NOTE: Experience defaults generation has been moved to the Seed Generation Module (SGM),
+//  which is presented after Phase 4 completes. SGM handles parallel LLM generation with
+//  interactive review queue for all resume content.
 //
 //  IMPORTANT: Do NOT rush to submit_candidate_dossier. The synthesis work (strengths analysis,
 //  pitfalls analysis, gap-filling questions) must happen FIRST through conversation.
@@ -29,8 +29,7 @@ struct PhaseFourScript: PhaseScript {
     let requiredObjectives: [String] = OnboardingObjectiveId.rawValues([
         .strengthsIdentified,
         .pitfallsDocumented,
-        .dossierComplete,
-        .experienceDefaultsSet
+        .dossierComplete
     ])
 
     var initialTodoItems: [InterviewTodoItem] {
@@ -54,16 +53,6 @@ struct PhaseFourScript: PhaseScript {
                 content: "Submit candidate dossier with strengths and pitfalls",
                 status: .pending,
                 activeForm: "Submitting dossier"
-            ),
-            InterviewTodoItem(
-                content: "Wait for user to complete Title Set curation (if enabled)",
-                status: .pending,
-                activeForm: "Waiting for title sets"
-            ),
-            InterviewTodoItem(
-                content: "Generate experience defaults",
-                status: .pending,
-                activeForm: "Generating experience defaults"
             ),
             InterviewTodoItem(
                 content: "Summarize interview and call next_phase",
@@ -145,38 +134,21 @@ struct PhaseFourScript: PhaseScript {
                 },
                 onComplete: { _ in
                     let title = """
-                        Dossier submitted! Next step depends on whether custom.jobTitles was enabled:
-
-                        IF custom.jobTitles was enabled:
-                        → The tool pane now shows Title Set Curation
-                        → WAIT for the user to generate, select, and save their title sets
-                        → You'll receive a "Title Sets Curated" notification with the approved titles
-                        → THEN call generate_experience_defaults with the selected_titles parameter
-
-                        IF custom.jobTitles was NOT enabled:
-                        → Proceed directly to generate_experience_defaults (no selected_titles needed)
-                        """
-                    return [.coordinatorMessage(title: title, details: ["action": "await_title_curation_or_generate_defaults"], payload: nil)]
-                }
-            ),
-
-            // MARK: - Experience Defaults
-            OnboardingObjectiveId.experienceDefaultsSet.rawValue: ObjectiveWorkflow(
-                id: OnboardingObjectiveId.experienceDefaultsSet.rawValue,
-                dependsOn: [OnboardingObjectiveId.dossierComplete.rawValue],
-                autoStartWhenReady: false,  // Don't auto-start - wait for title curation if needed
-                onComplete: { _ in
-                    let title = """
-                        Experience defaults generated! Interview is nearly complete.
+                        Dossier submitted! Interview is nearly complete.
 
                         Summarize what was accomplished:
                         - Voice primers extracted from writing samples
                         - Knowledge cards generated from evidence
                         - Strategic dossier with strengths and pitfall mitigations
-                        - Resume defaults ready for customization
+                        - Skeleton timeline established
 
-                        Explain next steps (resume customization, cover letter generation, job applications).
-                        Then call next_phase to complete the onboarding interview.
+                        Explain next steps:
+                        - Seed Generation will create resume content based on gathered information
+                        - Resume customization for specific job applications
+                        - Cover letter generation
+                        - Job application tracking
+
+                        Call next_phase to complete the onboarding interview and begin seed generation.
                         """
                     return [.coordinatorMessage(title: title, details: ["action": "call_next_phase"], payload: nil)]
                 }

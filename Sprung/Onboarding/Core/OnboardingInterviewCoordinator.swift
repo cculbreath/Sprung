@@ -444,30 +444,6 @@ final class OnboardingInterviewCoordinator {
         await eventBus.publish(.llm(.enqueueUserMessage(payload: userMessage, isSystemGenerated: true)))
     }
 
-    /// Notify the LLM that title sets have been curated, providing the approved options.
-    func notifyTitleSetsCurated(approvedSets: [TitleSet]) async {
-        let setsDescription = approvedSets.enumerated().map { index, set in
-            "  \(index + 1). [\"\(set.titles.joined(separator: "\", \""))\"] - \(set.emphasis.rawValue)"
-        }.joined(separator: "\n")
-
-        var payload = SwiftyJSON.JSON()
-        payload["text"].string = """
-            <system>
-            Title Sets Curated: User has approved \(approvedSets.count) identity title sets:
-
-            \(setsDescription)
-
-            Choose the ONE title set that would work best for the WIDEST range of job applications. \
-            Consider versatility, professional appeal, and breadth of applicability.
-
-            Call generate_experience_defaults with your chosen titles in the `selected_titles` parameter \
-            as an array of 4 strings, e.g. ["Engineer", "Developer", "Builder", "Maker"].
-            </system>
-            """
-
-        await eventBus.publish(.llm(.enqueueUserMessage(payload: payload, isSystemGenerated: true)))
-    }
-
     // MARK: - Evidence Handling
     func handleEvidenceUpload(url: URL, requirementId: String) async {
         await container.artifactIngestionCoordinator.handleEvidenceUpload(url: url, requirementId: requirementId)

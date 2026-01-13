@@ -62,7 +62,6 @@ enum OnboardingToolName: String, CaseIterable {
 
     // Phase 3/4 Tools
     case ingestWritingSample = "ingest_writing_sample"
-    case generateExperienceDefaults = "generate_experience_defaults"
     case completeDossierSection = "complete_dossier_section"
     case submitDossier = "submit_dossier"
 
@@ -205,7 +204,6 @@ enum InterviewSubphase: String, CaseIterable, Codable {
     case p4_strengthsSynthesis = "p4_strengths_synthesis"     // Identify strategic strengths
     case p4_pitfallsAnalysis = "p4_pitfalls_analysis"         // Document concerns + mitigations
     case p4_dossierCompletion = "p4_dossier_completion"       // Fill remaining dossier gaps
-    case p4_experienceDefaults = "p4_experience_defaults"     // Configure resume defaults
     case p4_completion = "p4_completion"                       // Final wrap-up
 
     /// The parent phase for this subphase
@@ -222,7 +220,7 @@ enum InterviewSubphase: String, CaseIterable, Codable {
              .p3_cardReview, .p3_phaseTransition:
             return .phase3EvidenceCollection
         case .p4_strengthsSynthesis, .p4_pitfallsAnalysis, .p4_dossierCompletion,
-             .p4_experienceDefaults, .p4_completion:
+             .p4_completion:
             return .phase4StrategicSynthesis
         }
     }

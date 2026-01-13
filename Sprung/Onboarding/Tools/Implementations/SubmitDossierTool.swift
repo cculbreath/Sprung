@@ -98,14 +98,18 @@ struct SubmitDossierTool: InterviewTool {
         devPayload["title"].string = "Dossier Complete"
         var details = JSON()
         details["instruction"].string = """
-            Dossier finalized! Next step depends on whether custom.jobTitles was enabled:
-            IF custom.jobTitles was enabled:
-            → The tool pane now shows Title Set Curation
-            → WAIT for the user to generate, select, and save their title sets
-            → You'll receive a "Title Sets Curated" notification with the approved titles
-            → THEN call generate_experience_defaults with the selected_titles parameter
-            IF custom.jobTitles was NOT enabled:
-            → Proceed directly to generate_experience_defaults (no selected_titles needed)
+            Dossier finalized! Interview is nearly complete.
+
+            Summarize what was accomplished in the interview:
+            - Voice primers extracted from writing samples
+            - Knowledge cards generated from evidence
+            - Strategic dossier with strengths and pitfall mitigations
+            - Skeleton timeline established
+
+            Explain next steps (Seed Generation will create resume content, then resume
+            customization for job applications, cover letter generation, job tracking).
+
+            Call next_phase to complete the onboarding interview.
             """
         devPayload["details"] = details
         await eventBus.publish(.llm(.sendCoordinatorMessage(payload: devPayload)))
@@ -123,7 +127,7 @@ struct SubmitDossierTool: InterviewTool {
             response["warnings"].arrayObject = warnings
         }
 
-        response["message"].string = "Dossier validated and finalized. Proceed to generate_experience_defaults."
+        response["message"].string = "Dossier validated and finalized. Summarize and call next_phase to complete interview."
 
         return .immediate(response)
     }

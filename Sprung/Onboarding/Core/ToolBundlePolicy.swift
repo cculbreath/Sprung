@@ -242,11 +242,8 @@ struct ToolBundlePolicy {
             OnboardingToolName.submitDossier.rawValue         // Validate when all sections complete
         ],
 
-        .p4_experienceDefaults: [
-            OnboardingToolName.generateExperienceDefaults.rawValue,
-            OnboardingToolName.submitForValidation.rawValue,
-            OnboardingToolName.getUserOption.rawValue
-        ],
+        // NOTE: p4_experienceDefaults removed - experience defaults generation moved to SGM
+        // which is presented after Phase 4 completes
 
         .p4_completion: [
             OnboardingToolName.submitDossier.rawValue,        // Can still validate if needed
@@ -477,7 +474,7 @@ struct ToolBundlePolicy {
         // UI state takes precedence for specific card types
         switch toolPaneCard {
         case .validationPrompt:
-            return .p4_experienceDefaults
+            return .p4_dossierCompletion
         // NOTE: .choicePrompt intentionally NOT mapped here.
         // Choice prompts can appear during various Phase 4 activities. We rely on
         // objective-based inference below to determine the correct subphase,
@@ -490,7 +487,6 @@ struct ToolBundlePolicy {
         let strengthsStatus = objectives[OnboardingObjectiveId.strengthsIdentified.rawValue] ?? "pending"
         let pitfallsStatus = objectives[OnboardingObjectiveId.pitfallsDocumented.rawValue] ?? "pending"
         let dossierStatus = objectives[OnboardingObjectiveId.dossierComplete.rawValue] ?? "pending"
-        let defaultsStatus = objectives[OnboardingObjectiveId.experienceDefaultsSet.rawValue] ?? "pending"
 
         // Strengths synthesis (first step)
         if strengthsStatus == "pending" || strengthsStatus == "in_progress" {
@@ -507,18 +503,7 @@ struct ToolBundlePolicy {
             return .p4_dossierCompletion
         }
 
-        // Experience defaults (fourth step)
-        // Gate: If title sets are required but not yet curated, stay in dossier completion
-        // (generate_experience_defaults won't be available until user completes curation)
-        if defaultsStatus == "pending" || defaultsStatus == "in_progress" {
-            // If title sets required but not curated, keep LLM in dossier phase (awaiting user action)
-            if uiContext.titleSetsRequired && !uiContext.titleSetsCurated {
-                return .p4_dossierCompletion  // User must complete title curation in UI
-            }
-            return .p4_experienceDefaults
-        }
-
-        // All complete
+        // All complete - experience defaults generation moved to SGM post-interview
         return .p4_completion
     }
 

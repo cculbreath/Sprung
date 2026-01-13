@@ -254,23 +254,9 @@ final class PhaseScriptRegistry {
     private func validatePhaseFourToComplete(
         dataStore: InterviewDataStore
     ) async -> PhaseTransitionValidation {
-        // VALIDATION: experience_defaults MUST be persisted before completing the interview
-        let experienceDefaults = await dataStore.list(dataType: "experience_defaults")
-
-        if experienceDefaults.isEmpty {
-            Logger.warning("⚠️ next_phase blocked: experience_defaults not persisted", category: .ai)
-            return .blocked(
-                reason: "missing_experience_defaults",
-                message: """
-                    Cannot complete interview: experience_defaults have not been persisted.
-                    You MUST call generate_experience_defaults before calling next_phase.
-                    The agent will use all knowledge cards, skills, and timeline data to generate
-                    structured resume content automatically.
-                    """
-            )
-        }
-
-        Logger.info("✅ Phase 4→Complete validated: experience_defaults persisted", category: .ai)
+        // NOTE: experience_defaults generation moved to SGM (Seed Generation Module)
+        // which is presented after Phase 4 completes. No validation needed here.
+        Logger.info("✅ Phase 4→Complete validated: ready for SGM", category: .ai)
         return .allowed
     }
     // MARK: - Base System Prompt
