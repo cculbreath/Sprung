@@ -472,6 +472,12 @@ actor StateCoordinator: OnboardingEventEmitter {
                     }
                     await setPhase(newPhase)
                     await emit(.phase(.transitionApplied(phase: newPhase.rawValue, timestamp: Date())))
+
+                    // Emit interview completion event when transitioning to complete phase
+                    if newPhase == .complete {
+                        Logger.info("🌱 Interview complete - emitting interviewCompleted event", category: .ai)
+                        await emit(.phase(.interviewCompleted(timestamp: Date())))
+                    }
                 }
             }
         default:

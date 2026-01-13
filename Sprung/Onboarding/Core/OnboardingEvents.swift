@@ -227,6 +227,7 @@ extension OnboardingEvent {
     enum PhaseEvent: Sendable {
         case transitionRequested(from: String, to: String, reason: String?)
         case transitionApplied(phase: String, timestamp: Date)
+        case interviewCompleted(timestamp: Date)
     }
 }
 
@@ -547,6 +548,8 @@ extension OnboardingEvent.PhaseEvent {
             return "phase.transitionRequested(\(from) → \(to))"
         case .transitionApplied(let phase, _):
             return "phase.transitionApplied(\(phase))"
+        case .interviewCompleted:
+            return "phase.interviewCompleted"
         }
     }
 }

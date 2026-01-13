@@ -15,6 +15,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var experienceEditorWindow: NSWindow?
     var searchOpsWindow: NSWindow?
     var debugLogsWindow: NSWindow?
+    var seedGenerationWindow: NSWindow?
     var appEnvironment: AppEnvironment?
     var modelContainer: ModelContainer?
     var enabledLLMStore: EnabledLLMStore?
@@ -38,6 +39,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             self,
             selector: #selector(handleShowDebugLogs(_:)),
             name: .showDebugLogs,
+            object: nil
+        )
+
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleShowSeedGeneration(_:)),
+            name: .showSeedGeneration,
             object: nil
         )
     }
@@ -584,6 +592,115 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         debugLogsWindow?.makeKeyAndOrderFront(nil)
     }
 
+    // MARK: - Seed Generation
+
+    @objc private func handleShowSeedGeneration(_ notification: Notification) {
+        Logger.info("🌱 Seed generation notification received", category: .ui)
+        Task { @MainActor in
+            await self.showSeedGenerationWindow()
+        }
+    }
+
+    @MainActor func showSeedGenerationWindow() async {
+        Logger.info("🌱 showSeedGenerationWindow called", category: .ui)
+
+        // Reset window if it was closed
+        if let window = seedGenerationWindow, !window.isVisible {
+            seedGenerationWindow = nil
+        }
+
+        if seedGenerationWindow == nil {
+            guard let onboardingCoordinator,
+                  let appEnvironment,
+                  let skillStore,
+                  let modelContainer else {
+                Logger.error("🌱 Cannot show seed generation: missing dependencies", category: .ui)
+                return
+            }
+
+            // Build SeedGenerationContext from onboarding artifacts
+            guard let context = await buildSeedGenerationContext(
+                coordinator: onboardingCoordinator,
+                skillStore: skillStore
+            ) else {
+                Logger.error("🌱 Failed to build SeedGenerationContext", category: .ui)
+                return
+            }
+
+            // Get model ID from settings
+            let modelId = UserDefaults.standard.string(forKey: "seedGenerationModelId")
+                ?? "google/gemini-2.0-flash-exp:free"
+
+            let orchestrator = SeedGenerationOrchestrator(
+                context: context,
+                llmFacade: appEnvironment.llmFacade,
+                modelId: modelId
+            )
+
+            let sgmView = SeedGenerationView(orchestrator: orchestrator)
+            let hostingView: NSHostingView<AnyView>
+
+            if let experienceDefaultsStore,
+               let guidanceStore {
+                let root = sgmView
+                    .modelContainer(modelContainer)
+                    .environment(appEnvironment)
+                    .environment(appEnvironment.appState)
+                    .environment(experienceDefaultsStore)
+                    .environment(guidanceStore)
+                hostingView = NSHostingView(rootView: AnyView(root))
+            } else {
+                hostingView = NSHostingView(rootView: AnyView(
+                    sgmView.modelContainer(modelContainer)
+                ))
+            }
+
+            seedGenerationWindow = NSWindow(
+                contentRect: NSRect(x: 0, y: 0, width: 1000, height: 700),
+                styleMask: [.titled, .closable, .miniaturizable, .resizable],
+                backing: .buffered,
+                defer: false
+            )
+            seedGenerationWindow?.title = "Seed Generation"
+            seedGenerationWindow?.tabbingMode = .disallowed
+            seedGenerationWindow?.contentView = hostingView
+            seedGenerationWindow?.isReleasedWhenClosed = false
+            seedGenerationWindow?.center()
+            seedGenerationWindow?.minSize = NSSize(width: 800, height: 600)
+
+            Logger.info("🌱 Created seed generation window", category: .ui)
+        }
+
+        seedGenerationWindow?.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    @MainActor
+    private func buildSeedGenerationContext(
+        coordinator: OnboardingInterviewCoordinator,
+        skillStore: SkillStore
+    ) async -> SeedGenerationContext? {
+        let artifacts = await coordinator.state.artifacts
+        let knowledgeCards = coordinator.getKnowledgeCardStore().onboardingCards
+
+        // Get writing samples from CoverRefStore (filter by type)
+        let allCoverRefs = coverRefStore?.storedCoverRefs ?? []
+        let writingSamples = allCoverRefs.filter { $0.type == .writingSample }
+        let voicePrimer = allCoverRefs.first { $0.type == .voicePrimer }
+
+        // Dossier is not used in current SGM implementation
+        // Future: Could get from CandidateDossierStore if needed
+
+        return SeedGenerationContext.build(
+            from: artifacts,
+            knowledgeCards: knowledgeCards,
+            skills: skillStore.skills,
+            writingSamples: writingSamples,
+            voicePrimer: voicePrimer,
+            dossier: nil
+        )
+    }
+
     // MARK: - URL Scheme Handling
 
     func application(_ application: NSApplication, open urls: [URL]) {
@@ -626,4 +743,5 @@ extension Notification.Name {
     // Relay notification sent after sheet is shown, so the view can receive it
     static let captureJobURLReady = Notification.Name("captureJobURLReady")
     static let showDebugLogs = Notification.Name("showDebugLogs")
+    static let showSeedGeneration = Notification.Name("showSeedGeneration")
 }

@@ -103,6 +103,11 @@ final class CoordinatorEventRouter {
                 Logger.warning("📊 CoordinatorEventRouter: Could not convert phaseName '\(phaseName)' to InterviewPhase", category: .ai)
             }
 
+        case .phase(.interviewCompleted):
+            // Trigger Seed Generation Module when interview completes
+            Logger.info("🌱 CoordinatorEventRouter: Interview complete - triggering Seed Generation Module", category: .ai)
+            NotificationCenter.default.post(name: .showSeedGeneration, object: nil)
+
         // MARK: - Card Generation Workflow
         case .artifact(.doneWithUploadsClicked):
             await knowledgeCardWorkflow.handleDoneWithUploadsClicked()
