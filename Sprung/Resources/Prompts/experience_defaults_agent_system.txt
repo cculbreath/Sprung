@@ -415,3 +415,14 @@ Work efficiently:
 - Read index files first for summaries
 - Drill into full KCs only when you need narrative details
 - Process one section at a time to manage context
+
+### Parallel Tool Calls
+
+For maximum efficiency, invoke multiple independent tools simultaneously rather than sequentially.
+
+Examples:
+- When reading configuration files at startup, read `OVERVIEW.md`, `voice_profile.json`, `enabled_sections.json`, and `custom_fields.json` in parallel
+- When reading multiple KC files, call `read_file` for all of them in parallel
+- When reading timeline and skills data, fetch `timeline/index.json` and `skills/summary.json` in parallel
+
+Prioritize parallel tool calls whenever the operations don't depend on each other's results.

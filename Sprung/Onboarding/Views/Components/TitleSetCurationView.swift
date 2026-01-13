@@ -38,13 +38,13 @@ struct TitleSetCurationView: View {
                 .frame(maxWidth: .infinity)
                 .padding()
             } else if titleSets.isEmpty {
+                // Auto-generation triggered by .task modifier below
+                // Show loading state while waiting to start
                 VStack {
-                    Button("Generate Title Options") {
-                        Task { await generateInitialTitleSets() }
-                    }
-                    .buttonStyle(.borderedProminent)
+                    ProgressView("Preparing to generate title options...")
                 }
                 .frame(maxWidth: .infinity)
+                .padding()
             } else {
                 ScrollView {
                     VStack(spacing: 8) {
@@ -53,7 +53,8 @@ struct TitleSetCurationView: View {
                                 titleSet: titleSet,
                                 isSelected: selectedSetIds.contains(titleSet.id),
                                 onToggle: { toggleSelection(titleSet) },
-                                onDelete: { deleteTitleSet(titleSet) }
+                                onDelete: { deleteTitleSet(titleSet) },
+                                onUpdate: { updateTitleSet($0) }
                             )
                         }
                     }
@@ -176,8 +177,14 @@ struct TitleSetCurationView: View {
             }
         }
         .padding()
-        .onAppear {
+        .task {
+            // Load existing title sets first
             loadExistingTitleSets()
+
+            // Auto-start generation if no existing sets
+            if titleSets.isEmpty && !isGenerating {
+                await generateInitialTitleSets()
+            }
         }
     }
 
@@ -330,6 +337,12 @@ struct TitleSetCurationView: View {
         selectedSetIds.remove(titleSet.id)
     }
 
+    private func updateTitleSet(_ updatedSet: TitleSet) {
+        if let index = titleSets.firstIndex(where: { $0.id == updatedSet.id }) {
+            titleSets[index] = updatedSet
+        }
+    }
+
     private func saveSelectedSets() async {
         isSaving = true
         defer { isSaving = false }
@@ -405,6 +418,10 @@ struct TitleSetCurationRow: View {
     let isSelected: Bool
     let onToggle: () -> Void
     let onDelete: () -> Void
+    let onUpdate: (TitleSet) -> Void
+
+    @State private var isEditing = false
+    @State private var editedTitles: [String] = []
 
     var body: some View {
         HStack {
@@ -414,33 +431,80 @@ struct TitleSetCurationRow: View {
             }
             .buttonStyle(.plain)
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(titleSet.displayString)
-                    .font(.system(.body, design: .serif))
+            if isEditing {
+                // Edit mode: show text fields for each title
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 8) {
+                        ForEach(0..<4, id: \.self) { index in
+                            TextField("Title \(index + 1)", text: $editedTitles[index])
+                                .textFieldStyle(.roundedBorder)
+                                .font(.system(.body, design: .serif))
+                                .frame(minWidth: 80)
+                        }
+                    }
 
-                HStack(spacing: 4) {
-                    Text(titleSet.emphasis.displayName)
-                        .font(.caption2)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(emphasisColor.opacity(0.2))
-                        .cornerRadius(4)
-
-                    ForEach(titleSet.suggestedFor.prefix(2), id: \.self) { jobType in
-                        Text(jobType)
+                    HStack(spacing: 8) {
+                        Text(titleSet.emphasis.displayName)
                             .font(.caption2)
-                            .foregroundColor(.secondary)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(emphasisColor.opacity(0.2))
+                            .cornerRadius(4)
+
+                        Spacer()
+
+                        Button("Cancel") {
+                            isEditing = false
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundColor(.secondary)
+
+                        Button("Save") {
+                            saveEdits()
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.small)
+                        .disabled(!hasValidEdits)
                     }
                 }
-            }
+            } else {
+                // Display mode: show title string
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(titleSet.displayString)
+                        .font(.system(.body, design: .serif))
 
-            Spacer()
+                    HStack(spacing: 4) {
+                        Text(titleSet.emphasis.displayName)
+                            .font(.caption2)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(emphasisColor.opacity(0.2))
+                            .cornerRadius(4)
 
-            Button(action: onDelete) {
-                Image(systemName: "trash")
-                    .foregroundColor(.red.opacity(0.7))
+                        ForEach(titleSet.suggestedFor.prefix(2), id: \.self) { jobType in
+                            Text(jobType)
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                }
+
+                Spacer()
+
+                Button {
+                    startEditing()
+                } label: {
+                    Image(systemName: "pencil")
+                        .foregroundColor(.secondary)
+                }
+                .buttonStyle(.plain)
+
+                Button(action: onDelete) {
+                    Image(systemName: "trash")
+                        .foregroundColor(.red.opacity(0.7))
+                }
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
         }
         .padding(.vertical, 8)
         .padding(.horizontal, 12)
@@ -455,5 +519,27 @@ struct TitleSetCurationRow: View {
         case .leadership: return .orange
         case .balanced: return .green
         }
+    }
+
+    private var hasValidEdits: Bool {
+        // All titles must be non-empty
+        editedTitles.allSatisfy { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+    }
+
+    private func startEditing() {
+        // Pad to 4 titles if needed
+        editedTitles = titleSet.titles
+        while editedTitles.count < 4 {
+            editedTitles.append("")
+        }
+        isEditing = true
+    }
+
+    private func saveEdits() {
+        let trimmed = editedTitles.map { $0.trimmingCharacters(in: .whitespaces) }
+        var updated = titleSet
+        updated.titles = trimmed
+        onUpdate(updated)
+        isEditing = false
     }
 }

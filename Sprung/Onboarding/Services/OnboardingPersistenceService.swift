@@ -97,7 +97,8 @@ final class OnboardingPersistenceService {
 
     // MARK: - Experience Defaults Propagation
 
-    /// Propagate timeline cards to ExperienceDefaults when interview completes
+    /// Propagate timeline cards to ExperienceDefaults when interview completes.
+    /// Skips sections that already have agent-generated content to avoid duplicates.
     func propagateExperienceDefaults() async {
         Logger.info("📋 Propagating timeline cards to ExperienceDefaults", category: .ai)
 
@@ -110,42 +111,74 @@ final class OnboardingPersistenceService {
         // Load current draft
         var draft = experienceDefaultsStore.loadDraft()
 
+        // Track what already has agent-generated content (with highlights)
+        let hasAgentWork = draft.work.contains { !$0.highlights.isEmpty }
+        let hasAgentEducation = !draft.education.isEmpty
+        let hasAgentVolunteer = !draft.volunteer.isEmpty
+        // Note: projects come from KCs not timeline, so always allow propagation
+
+        var propagatedCount = 0
+
         // Process each timeline card based on experienceType
         for card in experiences {
             let experienceType = card["experienceType"].string ?? "work"
 
             switch experienceType {
             case "work":
+                // Skip if agent already generated work entries with highlights
+                if hasAgentWork {
+                    Logger.info("📋 Skipping work propagation - agent already generated work with highlights", category: .ai)
+                    continue
+                }
                 let workDraft = createWorkExperienceDraft(from: card)
                 draft.work.append(workDraft)
                 draft.isWorkEnabled = true
+                propagatedCount += 1
 
             case "education":
+                // Skip if agent already generated education entries
+                if hasAgentEducation {
+                    continue
+                }
                 let eduDraft = createEducationDraft(from: card)
                 draft.education.append(eduDraft)
                 draft.isEducationEnabled = true
+                propagatedCount += 1
 
             case "volunteer":
+                // Skip if agent already generated volunteer entries
+                if hasAgentVolunteer {
+                    continue
+                }
                 let volDraft = createVolunteerDraft(from: card)
                 draft.volunteer.append(volDraft)
                 draft.isVolunteerEnabled = true
+                propagatedCount += 1
 
             case "project":
+                // Projects come from KCs, not timeline - this case shouldn't happen often
                 let projDraft = createProjectDraft(from: card)
                 draft.projects.append(projDraft)
                 draft.isProjectsEnabled = true
+                propagatedCount += 1
 
             default:
-                // Default to work experience
-                let workDraft = createWorkExperienceDraft(from: card)
-                draft.work.append(workDraft)
-                draft.isWorkEnabled = true
+                if !hasAgentWork {
+                    let workDraft = createWorkExperienceDraft(from: card)
+                    draft.work.append(workDraft)
+                    draft.isWorkEnabled = true
+                    propagatedCount += 1
+                }
             }
         }
 
         // Save the draft
         experienceDefaultsStore.save(draft: draft)
-        Logger.info("✅ Propagated \(experiences.count) timeline cards to ExperienceDefaults", category: .ai)
+        if propagatedCount > 0 {
+            Logger.info("✅ Propagated \(propagatedCount) timeline cards to ExperienceDefaults", category: .ai)
+        } else {
+            Logger.info("✅ No propagation needed - agent already generated content", category: .ai)
+        }
     }
 
     // MARK: - Timeline Card Draft Converters
@@ -273,11 +306,24 @@ final class OnboardingPersistenceService {
             Logger.info("📋 Added \(certsArray.count) certificates", category: .ai)
         }
 
-        // Process publications
-        if let pubsArray = defaults["publications"].array, !pubsArray.isEmpty {
+        // Process publications - section cards are authoritative
+        let sectionCardPublications = ui.publicationCards
+        if !sectionCardPublications.isEmpty {
+            // Section cards exist - use them as the source of truth
+            draft.isPublicationsEnabled = true
+            draft.publications = sectionCardPublications.map { createPublicationDraftFromCard($0) }
+
+            // Log if LLM output differs from section cards
+            let llmPubCount = defaults["publications"].array?.count ?? 0
+            if llmPubCount != sectionCardPublications.count {
+                Logger.warning("📋 Publications mismatch: LLM generated \(llmPubCount), section cards have \(sectionCardPublications.count). Using section cards.", category: .ai)
+            }
+            Logger.info("📋 Added \(sectionCardPublications.count) publications from section cards", category: .ai)
+        } else if let pubsArray = defaults["publications"].array, !pubsArray.isEmpty {
+            // No section cards - fall back to LLM output
             draft.isPublicationsEnabled = true
             draft.publications = pubsArray.map { createPublicationDraftFromLLM($0) }
-            Logger.info("📋 Added \(pubsArray.count) publications", category: .ai)
+            Logger.info("📋 Added \(pubsArray.count) publications from LLM", category: .ai)
         }
 
         // Process custom fields (keys starting with "custom.")
@@ -449,6 +495,16 @@ final class OnboardingPersistenceService {
         draft.releaseDate = json["releaseDate"].stringValue
         draft.url = json["url"].stringValue
         draft.summary = json["summary"].stringValue
+        return draft
+    }
+
+    private func createPublicationDraftFromCard(_ card: PublicationCard) -> PublicationExperienceDraft {
+        var draft = PublicationExperienceDraft()
+        draft.name = card.name
+        draft.publisher = card.publisher
+        draft.releaseDate = card.releaseDate
+        draft.url = card.url
+        draft.summary = card.summary
         return draft
     }
 }

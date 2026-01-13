@@ -192,10 +192,7 @@ final class ExperienceDefaultsAgentService {
             return []
         }
 
-        // Filter to entries marked for inclusion
-        return experiences.filter { entry in
-            entry["includeInResume"].boolValue
-        }
+        return experiences
     }
 
     private func updateTrackerStatus(_ message: String) {

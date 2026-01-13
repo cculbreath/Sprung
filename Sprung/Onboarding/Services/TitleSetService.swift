@@ -74,13 +74,14 @@ final class TitleSetService {
 
         ### Title Format Rules
         - Titles can be 1-2 words (e.g., "Physicist", "Software Developer", "Data Scientist")
+        - IMPORTANT: Each set of 4 titles must have AT MOST 2 two-word entries (0, 1, or 2 are acceptable; 3 or 4 is NOT)
         - Use professional role nouns, not adjectives or verbs
         - Good examples: "Engineer", "Developer", "Scientist", "Architect", "Software Engineer", "Research Scientist"
         - Bad examples: "Experienced", "Leading", "Building" (these are adjectives/verbs, not identity nouns)
 
         ### Diversity Requirements
         - Vary the emphasis across sets: technical, research, leadership, balanced
-        - Mix single-word and two-word titles for rhythm
+        - Balance single-word and two-word titles, but never more than 2 two-word titles per set
         - Don't repeat the same title in the same position across all sets
         - Create sets suitable for different job types (R&D, engineering, management, etc.)
 
@@ -169,6 +170,7 @@ final class TitleSetService {
 
         ### Title Format Rules
         - Titles can be 1-2 words (e.g., "Physicist", "Software Developer", "Data Scientist")
+        - IMPORTANT: Each set of 4 titles must have AT MOST 2 two-word entries (0, 1, or 2 are acceptable; 3 or 4 is NOT)
         - Use professional role nouns that describe who this person IS
         - Each set has exactly 4 titles
 
@@ -249,6 +251,7 @@ final class TitleSetService {
 
         ### Title Format Rules
         - Titles can be 1-2 words (e.g., "Physicist", "Software Developer", "Data Scientist")
+        - IMPORTANT: Each set of 4 titles must have AT MOST 2 two-word entries (0, 1, or 2 are acceptable; 3 or 4 is NOT)
         - Use professional role nouns
         - Each set has exactly 4 titles
 
@@ -313,6 +316,7 @@ final class TitleSetService {
 
         ### Title Format Rules
         - Titles can be 1-2 words (e.g., "Physicist", "Software Developer")
+        - IMPORTANT: Each set of 4 titles must have AT MOST 2 two-word entries (0, 1, or 2 are acceptable; 3 or 4 is NOT)
         - Each set has exactly 4 titles
         - "\(specifiedTitle)" MUST be one of the 4 titles in every set
 
