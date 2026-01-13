@@ -25,8 +25,8 @@ class OnboardingSession {
     var skeletonTimelineJSON: String?
     /// Applicant profile JSON (for restoring profile state)
     var applicantProfileJSON: String?
-    /// Enabled sections as comma-separated string
-    var enabledSectionsCSV: String?
+    /// Section configuration JSON (enabled sections + custom field definitions)
+    var sectionConfigJSON: String?
     /// Merged card inventory JSON (expensive Gemini call result)
     var mergedInventoryJSON: String?
     /// Whether document collection UI was active (for session restore)
@@ -88,7 +88,7 @@ class OnboardingSession {
         isComplete: Bool = false,
         skeletonTimelineJSON: String? = nil,
         applicantProfileJSON: String? = nil,
-        enabledSectionsCSV: String? = nil,
+        sectionConfigJSON: String? = nil,
         mergedInventoryJSON: String? = nil,
         isDocumentCollectionActive: Bool? = nil,
         isTimelineEditorActive: Bool? = nil,
@@ -102,7 +102,7 @@ class OnboardingSession {
         self.isComplete = isComplete
         self.skeletonTimelineJSON = skeletonTimelineJSON
         self.applicantProfileJSON = applicantProfileJSON
-        self.enabledSectionsCSV = enabledSectionsCSV
+        self.sectionConfigJSON = sectionConfigJSON
         self.mergedInventoryJSON = mergedInventoryJSON
         self.isDocumentCollectionActive = isDocumentCollectionActive
         self.isTimelineEditorActive = isTimelineEditorActive

@@ -258,20 +258,44 @@ final class OnboardingSessionStore {
         session.applicantProfileJSON
     }
 
-    /// Update enabled sections
-    func updateEnabledSections(_ session: OnboardingSession, sections: Set<String>) {
-        session.enabledSectionsCSV = sections.sorted().joined(separator: ",")
-        session.lastActiveAt = Date()
-        saveContext()
-        Logger.debug("Session enabled sections updated: \(sections.count) sections", category: .ai)
+    /// Update section configuration
+    func updateSectionConfig(_ session: OnboardingSession, config: SectionConfig) {
+        do {
+            session.sectionConfigJSON = try config.toJSON()
+            session.lastActiveAt = Date()
+            saveContext()
+            Logger.debug(
+                "Session section config updated: \(config.enabledSections.count) sections, \(config.customFields.count) custom fields",
+                category: .ai
+            )
+        } catch {
+            Logger.error("Failed to encode section config: \(error)", category: .ai)
+        }
     }
 
-    /// Get enabled sections
-    func getEnabledSections(_ session: OnboardingSession) -> Set<String> {
-        guard let csv = session.enabledSectionsCSV, !csv.isEmpty else {
-            return []
+    /// Get section configuration
+    func getSectionConfig(_ session: OnboardingSession) -> SectionConfig {
+        guard let json = session.sectionConfigJSON, !json.isEmpty else {
+            return SectionConfig()
         }
-        return Set(csv.split(separator: ",").map { String($0) })
+        do {
+            return try SectionConfig.from(json: json)
+        } catch {
+            Logger.error("Failed to decode section config: \(error)", category: .ai)
+            return SectionConfig()
+        }
+    }
+
+    /// Update enabled sections (convenience method that preserves custom fields)
+    func updateEnabledSections(_ session: OnboardingSession, sections: Set<String>) {
+        var config = getSectionConfig(session)
+        config.enabledSections = sections
+        updateSectionConfig(session, config: config)
+    }
+
+    /// Get enabled sections (convenience method)
+    func getEnabledSections(_ session: OnboardingSession) -> Set<String> {
+        getSectionConfig(session).enabledSections
     }
 
     // MARK: - Merged Inventory Management

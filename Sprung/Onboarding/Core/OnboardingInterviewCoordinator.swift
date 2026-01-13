@@ -754,8 +754,8 @@ final class OnboardingInterviewCoordinator {
     func rejectApplicantProfile(reason: String) async {
         await uiResponseCoordinator.rejectApplicantProfile(reason: reason)
     }
-    func confirmSectionToggle(enabled: [String], customFields: [CustomFieldDefinition] = []) async {
-        await uiResponseCoordinator.confirmSectionToggle(enabled: enabled, customFields: customFields)
+    func confirmSectionToggle(config: SectionConfig) async {
+        await uiResponseCoordinator.confirmSectionToggle(config: config)
     }
     func rejectSectionToggle(reason: String) async {
         await uiResponseCoordinator.rejectSectionToggle(reason: reason)

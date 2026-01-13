@@ -519,21 +519,19 @@ final class UIResponseCoordinator {
         Logger.info("✅ Profile URL submitted and user message sent to LLM", category: .ai)
     }
     // MARK: - Section Toggle Handling
-    func confirmSectionToggle(enabled: [String], customFields: [CustomFieldDefinition] = []) async {
+    func confirmSectionToggle(config: SectionConfig) async {
+        let enabled = Array(config.enabledSections)
         guard toolRouter.resolveSectionToggle(enabled: enabled) != nil else { return }
 
         // Emit event to unblock the DrainGate (GateBlockEventHandler listens for this)
         await eventBus.publish(.toolpane(.sectionToggleCleared))
 
-        // Store enabled sections in artifact repository
-        await state.restoreEnabledSections(Set(enabled))
-
-        // Store custom field definitions (including empty to clear prior state)
-        await state.storeCustomFieldDefinitions(customFields)
-        Logger.info("📋 Stored \(customFields.count) custom field definitions", category: .ai)
+        // Store section configuration in artifact repository
+        await state.storeSectionConfig(config)
+        Logger.info("📋 Stored section config: \(config.enabledSections.count) sections, \(config.customFields.count) custom fields", category: .ai)
 
         // Flag whether title set curation is required in Phase 4
-        let hasJobTitles = customFields.contains { $0.key.lowercased() == "custom.jobtitles" }
+        let hasJobTitles = config.customFields.contains { $0.key.lowercased() == "custom.jobtitles" }
         ui.shouldGenerateTitleSets = hasJobTitles
         Logger.info("🏷️ Title set curation \(hasJobTitles ? "enabled" : "disabled") via custom.jobTitles", category: .ai)
 
@@ -551,16 +549,16 @@ final class UIResponseCoordinator {
 
         // Build result informing LLM of confirmed sections
         var message = "Section toggle confirmed. Enabled sections: \(enabled.joined(separator: ", "))"
-        if !customFields.isEmpty {
-            let customFieldsSummary = customFields.map { "\($0.key): \($0.description)" }.joined(separator: "; ")
+        if !config.customFields.isEmpty {
+            let customFieldsSummary = config.customFields.map { "\($0.key): \($0.description)" }.joined(separator: "; ")
             message += ". Custom fields: \(customFieldsSummary)"
         }
         message += ". Proceed with timeline collection - offer resume upload or conversational input."
 
         var resultData = JSON()
         resultData["enabledSections"] = JSON(enabled)
-        if !customFields.isEmpty {
-            resultData["customFields"] = JSON(customFields.map { ["key": $0.key, "description": $0.description] })
+        if !config.customFields.isEmpty {
+            resultData["customFields"] = JSON(config.customFields.map { ["key": $0.key, "description": $0.description] })
         }
 
         let result = buildCompletionResult(status: "confirmed", message: message, data: resultData)

@@ -1,7 +1,7 @@
     import SwiftUI
 struct ResumeSectionsToggleCard: View {
     let request: OnboardingSectionToggleRequest
-    let onConfirm: ([String], [CustomFieldDefinition]) -> Void
+    let onConfirm: (SectionConfig) -> Void
     let onCancel: () -> Void
     @State private var draft: ExperienceDefaultsDraft
     @State private var customFields: [CustomFieldDefinition] = []
@@ -10,7 +10,7 @@ struct ResumeSectionsToggleCard: View {
     init(
         request: OnboardingSectionToggleRequest,
         existingDraft: ExperienceDefaultsDraft,
-        onConfirm: @escaping ([String], [CustomFieldDefinition]) -> Void,
+        onConfirm: @escaping (SectionConfig) -> Void,
         onCancel: @escaping () -> Void
     ) {
         self.request = request
@@ -67,8 +67,12 @@ struct ResumeSectionsToggleCard: View {
                 Button("Cancel", action: onCancel)
                 Spacer()
                 Button("Confirm Sections", action: {
-                    let enabled = draft.enabledSectionKeys().map(\.rawValue)
-                    onConfirm(enabled, customFields)
+                    let enabledSections = Set(draft.enabledSectionKeys().map(\.rawValue))
+                    let config = SectionConfig(
+                        enabledSections: enabledSections,
+                        customFields: customFields
+                    )
+                    onConfirm(config)
                 })
                 .buttonStyle(.borderedProminent)
             }

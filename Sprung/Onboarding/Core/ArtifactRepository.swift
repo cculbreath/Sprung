@@ -56,19 +56,40 @@ actor ArtifactRepository: OnboardingEventEmitter {
     func getSkeletonTimeline() -> JSON? {
         artifacts.skeletonTimeline
     }
-    /// Set enabled sections
+    /// Set section configuration (unified: enabled sections + custom field definitions)
+    func setSectionConfig(_ config: SectionConfig) async {
+        artifacts.enabledSections = config.enabledSections
+        artifacts.customFieldDefinitions = config.customFields
+        Logger.info(
+            "📑 Section config updated: \(config.enabledSections.count) sections, \(config.customFields.count) custom fields",
+            category: .ai
+        )
+        // Emit event for state coordinator to update objectives
+        await emit(.state(.enabledSectionsUpdated(config.enabledSections)))
+    }
+
+    /// Get section configuration
+    func getSectionConfig() -> SectionConfig {
+        SectionConfig(
+            enabledSections: artifacts.enabledSections,
+            customFields: artifacts.customFieldDefinitions
+        )
+    }
+
+    /// Set enabled sections (convenience method that preserves custom fields)
     func setEnabledSections(_ sections: Set<String>) async {
         artifacts.enabledSections = sections
         Logger.info("📑 Enabled sections updated: \(sections.count) sections", category: .ai)
         // Emit event for state coordinator to update objectives
         await emit(.state(.enabledSectionsUpdated(sections)))
     }
+
     /// Get enabled sections
     func getEnabledSections() -> Set<String> {
         artifacts.enabledSections
     }
 
-    /// Set custom field definitions
+    /// Set custom field definitions (convenience method that preserves enabled sections)
     func setCustomFieldDefinitions(_ definitions: [CustomFieldDefinition]) async {
         artifacts.customFieldDefinitions = definitions
         Logger.info("📋 Custom field definitions updated: \(definitions.count) fields", category: .ai)

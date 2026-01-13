@@ -247,9 +247,9 @@ struct OnboardingInterviewToolPane: View {
             ResumeSectionsToggleCard(
                 request: sectionToggle,
                 existingDraft: experienceDefaultsStore.loadDraft(),
-                onConfirm: { enabled, customFields in
+                onConfirm: { config in
                     Task {
-                        await coordinator.confirmSectionToggle(enabled: enabled, customFields: customFields)
+                        await coordinator.confirmSectionToggle(config: config)
                     }
                 },
                 onCancel: {

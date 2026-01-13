@@ -809,6 +809,16 @@ actor StateCoordinator: OnboardingEventEmitter {
         await artifactRepository.getEnabledSections()
     }
 
+    /// Store section configuration (unified: enabled sections + custom fields)
+    func storeSectionConfig(_ config: SectionConfig) async {
+        await artifactRepository.setSectionConfig(config)
+    }
+
+    /// Get section configuration
+    func getSectionConfig() async -> SectionConfig {
+        await artifactRepository.getSectionConfig()
+    }
+
     /// Store custom field definitions
     func storeCustomFieldDefinitions(_ definitions: [CustomFieldDefinition]) async {
         await artifactRepository.setCustomFieldDefinitions(definitions)
