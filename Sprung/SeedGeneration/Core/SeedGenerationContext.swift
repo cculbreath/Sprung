@@ -31,7 +31,40 @@ struct SeedGenerationContext {
     /// Voice primer for style guidance (if available)
     let voicePrimer: CoverRef?
 
+    /// Candidate dossier with strategic insights (if available)
+    let dossier: JSON?
+
     // MARK: - Timeline Entry Access
+
+    /// Get a specific timeline entry by ID
+    func getTimelineEntry(id: String) -> JSON? {
+        guard let experiences = skeletonTimeline["experiences"].array else {
+            return nil
+        }
+        return experiences.first { entry in
+            entry["id"].stringValue == id
+        }
+    }
+
+    /// Get timeline entries for an ExperienceSectionKey
+    func timelineEntries(for section: ExperienceSectionKey) -> [JSON] {
+        let experienceType: String
+        switch section {
+        case .work: experienceType = "work"
+        case .education: experienceType = "education"
+        case .volunteer: experienceType = "volunteer"
+        case .projects: experienceType = "project"
+        case .awards: experienceType = "award"
+        case .certificates: experienceType = "certificate"
+        case .publications: experienceType = "publication"
+        case .languages: experienceType = "language"
+        case .interests: experienceType = "interest"
+        case .references: experienceType = "reference"
+        case .skills: return [] // Skills don't have timeline entries
+        default: return []
+        }
+        return timelineEntries(for: experienceType)
+    }
 
     /// Get all timeline entries for a specific experience type
     func timelineEntries(for experienceType: String) -> [JSON] {
@@ -211,7 +244,8 @@ extension SeedGenerationContext {
         knowledgeCards: [KnowledgeCard],
         skills: [Skill],
         writingSamples: [CoverRef],
-        voicePrimer: CoverRef?
+        voicePrimer: CoverRef?,
+        dossier: JSON?
     ) -> SeedGenerationContext {
         let profile: ApplicantProfileDraft
         if let profileJSON = artifacts.applicantProfile {
@@ -232,7 +266,8 @@ extension SeedGenerationContext {
             knowledgeCards: knowledgeCards,
             skills: skills,
             writingSamples: writingSamples.filter { $0.type == .writingSample },
-            voicePrimer: voicePrimer
+            voicePrimer: voicePrimer,
+            dossier: dossier
         )
     }
 }
