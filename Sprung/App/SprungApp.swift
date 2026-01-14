@@ -170,6 +170,10 @@ struct SprungApp: App {
                     appDelegate.showExperienceEditorWindow()
                 }
                 .keyboardShortcut("x", modifiers: [.command, .shift])
+                Button("Generate Experience Defaults...") {
+                    NotificationCenter.default.post(name: .showSeedGeneration, object: nil)
+                }
+                .keyboardShortcut("g", modifiers: [.command, .shift])
                 Divider()
                 Button("Knowledge Cards...") {
                     NotificationCenter.default.post(name: .toggleKnowledgeCards, object: nil)
