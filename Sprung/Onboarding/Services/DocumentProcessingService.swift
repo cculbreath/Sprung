@@ -600,9 +600,9 @@ actor DocumentProcessingService {
         Respond with ONLY the descriptive name, nothing else.
         """
 
-        // Use a cheap/fast model for this simple task
-        let modelId = UserDefaults.standard.string(forKey: "onboardingQuickModelId")
-            ?? "anthropic/claude-3-haiku"
+        // Use KC agent model (fast haiku) for this simple task
+        let modelId = UserDefaults.standard.string(forKey: "onboardingKCAgentModelId")
+            ?? "anthropic/claude-haiku-4.5"
 
         do {
             let response = try await facade.executeText(

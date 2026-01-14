@@ -95,10 +95,10 @@ actor ObjectiveStore: OnboardingEventEmitter {
         ],
         .phase4StrategicSynthesis: [
             // Phase 4: Strategic Synthesis objectives
+            // NOTE: experience_defaults_set removed - moved to SGM (Seed Generation Module)
             (OnboardingObjectiveId.strengthsIdentified.rawValue, "Strengths identified", nil),
             (OnboardingObjectiveId.pitfallsDocumented.rawValue, "Pitfalls documented", nil),
-            (OnboardingObjectiveId.dossierComplete.rawValue, "Dossier complete", nil),
-            (OnboardingObjectiveId.experienceDefaultsSet.rawValue, "Experience defaults set", nil)
+            (OnboardingObjectiveId.dossierComplete.rawValue, "Dossier complete", nil)
         ],
         .complete: []
     ]
