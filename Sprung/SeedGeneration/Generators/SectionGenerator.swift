@@ -186,8 +186,7 @@ class BaseSectionGenerator: SectionGenerator {
                 systemPrompt: systemPrompt,
                 config: config,
                 responseType: responseType,
-                schema: schema,
-                schemaName: schemaName
+                schema: schema
             )
         } else {
             // OpenRouter path: use standard structured output
@@ -208,8 +207,7 @@ class BaseSectionGenerator: SectionGenerator {
         systemPrompt: String,
         config: GeneratorExecutionConfig,
         responseType: T.Type,
-        schema: [String: Any],
-        schemaName: String
+        schema: [String: Any]
     ) async throws -> T {
         // Build system content with cache control on the preamble
         let cachedPreambleBlock = AnthropicSystemBlock(
@@ -225,8 +223,7 @@ class BaseSectionGenerator: SectionGenerator {
             userPrompt: taskPrompt,
             modelId: config.modelId,
             responseType: responseType,
-            schema: schema,
-            schemaName: schemaName
+            schema: schema
         )
     }
 }

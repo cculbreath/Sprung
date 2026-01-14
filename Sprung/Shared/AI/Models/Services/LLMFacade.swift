@@ -751,7 +751,6 @@ final class LLMFacade {
     ///   - modelId: Anthropic model ID (e.g., "claude-sonnet-4-20250514")
     ///   - responseType: The expected response type
     ///   - schema: JSON schema dictionary for the structured output
-    ///   - schemaName: Name for the schema (used in Anthropic's output_format)
     ///   - temperature: Generation temperature
     /// - Returns: The parsed response of type T
     func executeStructuredWithAnthropicCaching<T: Codable>(
@@ -760,11 +759,9 @@ final class LLMFacade {
         modelId: String,
         responseType: T.Type,
         schema: [String: Any],
-        schemaName: String,
         temperature: Double? = nil
     ) async throws -> T {
         let outputFormat = AnthropicOutputFormat.schema(
-            name: schemaName,
             schema: schema
         )
 
