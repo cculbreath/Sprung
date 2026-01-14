@@ -94,8 +94,12 @@ struct ReviewQueueView: View {
                             onApprove: {
                                 queue.setAction(for: item.id, action: .approved)
                             },
-                            onReject: {
-                                queue.setAction(for: item.id, action: .rejected)
+                            onReject: { comment in
+                                if let comment = comment {
+                                    queue.setAction(for: item.id, action: .rejectedWithComment(comment))
+                                } else {
+                                    queue.setAction(for: item.id, action: .rejected)
+                                }
                             },
                             onEdit: { editedContent in
                                 queue.setEditedContent(for: item.id, content: editedContent)

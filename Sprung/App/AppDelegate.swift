@@ -632,8 +632,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             // Get model and backend from settings
             let backendString = UserDefaults.standard.string(forKey: "seedGenerationBackend") ?? "anthropic"
             let backend: LLMFacade.Backend = backendString == "anthropic" ? .anthropic : .openRouter
-            let defaultModel = backend == .anthropic ? "claude-sonnet-4-20250514" : "anthropic/claude-sonnet-4"
-            let modelId = UserDefaults.standard.string(forKey: "seedGenerationModelId") ?? defaultModel
+            guard let modelId = UserDefaults.standard.string(forKey: "seedGenerationModelId"),
+                  !modelId.isEmpty else {
+                Logger.error("🌱 Cannot show seed generation: no model configured. Please select a model in Settings > Onboarding Models.", category: .ui)
+                return
+            }
 
             let orchestrator = SeedGenerationOrchestrator(
                 context: context,

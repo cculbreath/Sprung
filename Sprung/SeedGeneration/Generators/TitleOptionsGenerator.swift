@@ -73,12 +73,19 @@ final class TitleOptionsGenerator: BaseSectionGenerator {
             1. Generate 3-5 distinct title sets, each with exactly 4 titles
             2. Each title should be a single word or short phrase (1-3 words max)
             3. Titles should reflect the candidate's expertise areas
-            4. Include sets with different emphasis (technical, leadership, research)
+            4. Include sets with different emphasis (technical, leadership, research, balanced)
             5. Suggest what job types each set works well for
 
-            Example format for titles array: ["Physicist", "Developer", "Educator", "Innovator"]
-
-            Return JSON with your title sets.
+            Return JSON in this exact format:
+            {
+                "sets": [
+                    {
+                        "titles": ["Physicist", "Developer", "Educator", "Innovator"],
+                        "emphasis": "balanced",
+                        "suggestedFor": ["R&D roles", "technical positions"]
+                    }
+                ]
+            }
             """
 
         let schema: [String: Any] = [

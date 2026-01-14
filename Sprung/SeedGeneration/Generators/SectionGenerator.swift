@@ -169,7 +169,7 @@ class BaseSectionGenerator: SectionGenerator {
     // MARK: - Backend-Aware Execution Helpers
 
     /// Execute a structured JSON request with backend-aware caching.
-    /// For Anthropic: uses direct API with cached system content
+    /// For Anthropic: uses direct API with cached system content and schema-enforced structured output
     /// For OpenRouter: uses standard structured output
     func executeStructuredRequest<T: Codable>(
         taskPrompt: String,
@@ -180,12 +180,14 @@ class BaseSectionGenerator: SectionGenerator {
         schemaName: String
     ) async throws -> T {
         if config.backend == .anthropic {
-            // Anthropic path: use cached system content + text response with JSON parsing
+            // Anthropic path: use cached system content + schema-enforced structured output
             return try await executeWithAnthropicCaching(
                 taskPrompt: taskPrompt,
                 systemPrompt: systemPrompt,
                 config: config,
-                responseType: responseType
+                responseType: responseType,
+                schema: schema,
+                schemaName: schemaName
             )
         } else {
             // OpenRouter path: use standard structured output
@@ -200,12 +202,14 @@ class BaseSectionGenerator: SectionGenerator {
         }
     }
 
-    /// Execute with Anthropic caching - system content is cached, user prompt is not
+    /// Execute with Anthropic caching and structured outputs - system content is cached, schema enforces format
     private func executeWithAnthropicCaching<T: Codable>(
         taskPrompt: String,
         systemPrompt: String,
         config: GeneratorExecutionConfig,
-        responseType: T.Type
+        responseType: T.Type,
+        schema: [String: Any],
+        schemaName: String
     ) async throws -> T {
         // Build system content with cache control on the preamble
         let cachedPreambleBlock = AnthropicSystemBlock(
@@ -215,49 +219,14 @@ class BaseSectionGenerator: SectionGenerator {
         let systemInstructionBlock = AnthropicSystemBlock(text: systemPrompt)
         let systemContent = [cachedPreambleBlock, systemInstructionBlock]
 
-        // User prompt includes task-specific instructions and JSON format request
-        let userPrompt = """
-            \(taskPrompt)
-
-            IMPORTANT: Return your response as valid JSON only. No markdown, no explanation, just the JSON object.
-            """
-
-        let responseText = try await config.llmFacade.executeTextWithAnthropicCaching(
+        // Use Anthropic's structured output feature for schema-enforced JSON
+        return try await config.llmFacade.executeStructuredWithAnthropicCaching(
             systemContent: systemContent,
-            userPrompt: userPrompt,
-            modelId: config.modelId
+            userPrompt: taskPrompt,
+            modelId: config.modelId,
+            responseType: responseType,
+            schema: schema,
+            schemaName: schemaName
         )
-
-        // Try to extract JSON from response (it might have markdown code blocks)
-        let cleanedJSON = cleanJSONResponse(responseText)
-        guard let cleanedData = cleanedJSON.data(using: .utf8) else {
-            throw GeneratorError.llmResponseParsingFailed("Cleaned response is not valid UTF-8")
-        }
-
-        do {
-            return try JSONDecoder().decode(responseType, from: cleanedData)
-        } catch {
-            Logger.warning("Failed to parse Anthropic response as \(responseType): \(error)", category: .ai)
-            Logger.debug("Response was: \(responseText.prefix(500))", category: .ai)
-            throw GeneratorError.llmResponseParsingFailed(error.localizedDescription)
-        }
-    }
-
-    /// Clean JSON response by removing markdown code blocks if present
-    private func cleanJSONResponse(_ response: String) -> String {
-        var cleaned = response.trimmingCharacters(in: .whitespacesAndNewlines)
-
-        // Remove markdown code blocks
-        if cleaned.hasPrefix("```json") {
-            cleaned = String(cleaned.dropFirst(7))
-        } else if cleaned.hasPrefix("```") {
-            cleaned = String(cleaned.dropFirst(3))
-        }
-
-        if cleaned.hasSuffix("```") {
-            cleaned = String(cleaned.dropLast(3))
-        }
-
-        return cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }

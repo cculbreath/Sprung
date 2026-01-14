@@ -22,6 +22,8 @@ final class SeedGenerationOrchestrator {
 
     private(set) var projectProposals: [ProjectProposal]?
     private(set) var generatedSkillGroups: [SkillGroup]?
+    private(set) var generatedTitleSets: [TitleSet]?
+    private(set) var generatedObjective: String?
     private(set) var sectionProgress: [SectionProgress] = []
 
     private var isRunning = false
@@ -67,9 +69,18 @@ final class SeedGenerationOrchestrator {
     private func initializeSectionProgress() {
         guard let context else { return }
 
-        let enabledSections = context.enabledSections
+        var enabledSections = context.enabledSections
 
-        sectionProgress = enabledSections.compactMap { section in
+        // Always add .custom if we have generators that use it (TitleOptions, Objective)
+        // These generators produce content regardless of the custom section enablement
+        if generators.contains(where: { $0.sectionKey == .custom }) {
+            enabledSections.append(.custom)
+        }
+
+        // De-duplicate in case .custom was already present
+        let uniqueSections = Array(Set(enabledSections))
+
+        sectionProgress = uniqueSections.compactMap { section in
             // Only track sections we have generators for
             guard generators.contains(where: { $0.sectionKey == section }) else {
                 return nil
@@ -148,12 +159,26 @@ final class SeedGenerationOrchestrator {
                 continue
             }
 
-            let sectionTasks = generator.createTasks(context: context)
+            let generatorTypeName = String(describing: type(of: generator))
+            var sectionTasks = generator.createTasks(context: context)
+
+            // Tag each task with the generator type that created it
+            for i in sectionTasks.indices {
+                sectionTasks[i] = GenerationTask(
+                    id: sectionTasks[i].id,
+                    section: sectionTasks[i].section,
+                    targetId: sectionTasks[i].targetId,
+                    displayName: sectionTasks[i].displayName,
+                    generatorType: generatorTypeName,
+                    status: sectionTasks[i].status
+                )
+            }
+
             tasks.append(contentsOf: sectionTasks)
 
             // Update progress tracking
             if let index = sectionProgress.firstIndex(where: { $0.section == generator.sectionKey }) {
-                sectionProgress[index].totalTasks = sectionTasks.count
+                sectionProgress[index].totalTasks += sectionTasks.count
             }
         }
     }
@@ -170,13 +195,15 @@ final class SeedGenerationOrchestrator {
         )
 
         for generator in generators {
-            let sectionTasks = tasks.filter { $0.section == generator.sectionKey }
+            let generatorTypeName = String(describing: type(of: generator))
+            // Filter tasks by the generator that created them, not just by section
+            let generatorTasks = tasks.filter { $0.generatorType == generatorTypeName }
 
-            guard !sectionTasks.isEmpty else { continue }
+            guard !generatorTasks.isEmpty else { continue }
 
             updateSectionStatus(generator.sectionKey, to: .running)
 
-            for task in sectionTasks {
+            for task in generatorTasks {
                 activityTracker.startTask(id: task.id, displayName: task.displayName)
 
                 do {
@@ -186,9 +213,16 @@ final class SeedGenerationOrchestrator {
                         config: config
                     )
 
-                    // Handle special cases
-                    if case .skillGroups(let groups) = content.type {
+                    // Handle special cases - capture for dedicated views
+                    switch content.type {
+                    case .skillGroups(let groups):
                         generatedSkillGroups = groups
+                    case .titleSets(let sets):
+                        generatedTitleSets = sets
+                    case .objective(let summary):
+                        generatedObjective = summary
+                    default:
+                        break
                     }
 
                     // Add to review queue

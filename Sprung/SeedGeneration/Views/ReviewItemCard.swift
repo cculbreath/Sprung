@@ -11,11 +11,13 @@ import SwiftUI
 struct ReviewItemCard: View {
     let item: ReviewItem
     let onApprove: () -> Void
-    let onReject: () -> Void
+    let onReject: (String?) -> Void
     let onEdit: (String) -> Void
 
     @State private var isEditing = false
     @State private var editedText = ""
+    @State private var showingRejectionSheet = false
+    @State private var rejectionComment = ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -30,6 +32,60 @@ struct ReviewItemCard: View {
         .background(cardBackground)
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .overlay(statusBorder)
+        .sheet(isPresented: $showingRejectionSheet) {
+            rejectionCommentSheet
+        }
+    }
+
+    // MARK: - Rejection Comment Sheet
+
+    private var rejectionCommentSheet: some View {
+        VStack(spacing: 16) {
+            Text("Rejection Feedback")
+                .font(.headline)
+
+            Text("What should be different? Your feedback will guide regeneration.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+
+            TextEditor(text: $rejectionComment)
+                .font(.body)
+                .frame(minHeight: 100)
+                .padding(8)
+                .background(.background)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(.quaternary, lineWidth: 1)
+                )
+
+            HStack {
+                Button("Cancel") {
+                    showingRejectionSheet = false
+                    rejectionComment = ""
+                }
+                .buttonStyle(.bordered)
+
+                Button("Reject Without Comment") {
+                    showingRejectionSheet = false
+                    onReject(nil)
+                    rejectionComment = ""
+                }
+                .buttonStyle(.bordered)
+
+                Button("Submit & Regenerate") {
+                    showingRejectionSheet = false
+                    onReject(rejectionComment.isEmpty ? nil : rejectionComment)
+                    rejectionComment = ""
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.red)
+                .disabled(rejectionComment.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+        }
+        .padding(24)
+        .frame(width: 400)
     }
 
     // MARK: - Header
@@ -147,7 +203,7 @@ struct ReviewItemCard: View {
                 .buttonStyle(.bordered)
 
                 Button {
-                    onReject()
+                    showingRejectionSheet = true
                 } label: {
                     Label("Reject", systemImage: "xmark.circle")
                 }

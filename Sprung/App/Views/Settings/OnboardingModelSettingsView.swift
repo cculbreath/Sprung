@@ -7,22 +7,22 @@ import SwiftUI
 import SwiftOpenAI
 
 struct OnboardingModelSettingsView: View {
-    @AppStorage("onboardingAnthropicModelId") private var onboardingAnthropicModelId: String = "claude-sonnet-4-20250514"
-    @AppStorage("seedGenerationModelId") private var seedGenerationModelId: String = "anthropic/claude-sonnet-4"
+    @AppStorage("onboardingAnthropicModelId") private var onboardingAnthropicModelId: String = ""
+    @AppStorage("seedGenerationModelId") private var seedGenerationModelId: String = ""
     @AppStorage("seedGenerationBackend") private var seedGenerationBackend: String = "anthropic"
-    @AppStorage("onboardingPDFExtractionModelId") private var pdfExtractionModelId: String = "gemini-2.5-flash"
-    @AppStorage("onboardingGitIngestModelId") private var gitIngestModelId: String = "anthropic/claude-haiku-4.5"
-    @AppStorage("onboardingDocSummaryModelId") private var docSummaryModelId: String = "gemini-2.5-flash-lite"
-    @AppStorage("onboardingCardMergeModelId") private var cardMergeModelId: String = "openai/gpt-5"
-    @AppStorage("skillBankModelId") private var skillBankModelId: String = "gemini-2.5-flash"
-    @AppStorage("kcExtractionModelId") private var kcExtractionModelId: String = "gemini-2.5-pro"
-    @AppStorage("guidanceExtractionModelId") private var guidanceExtractionModelId: String = "gemini-2.5-flash"
-    @AppStorage("skillsProcessingModelId") private var skillsProcessingModelId: String = "gemini-2.5-flash"
+    @AppStorage("onboardingPDFExtractionModelId") private var pdfExtractionModelId: String = ""
+    @AppStorage("onboardingGitIngestModelId") private var gitIngestModelId: String = ""
+    @AppStorage("onboardingDocSummaryModelId") private var docSummaryModelId: String = ""
+    @AppStorage("onboardingCardMergeModelId") private var cardMergeModelId: String = ""
+    @AppStorage("skillBankModelId") private var skillBankModelId: String = ""
+    @AppStorage("kcExtractionModelId") private var kcExtractionModelId: String = ""
+    @AppStorage("guidanceExtractionModelId") private var guidanceExtractionModelId: String = ""
+    @AppStorage("skillsProcessingModelId") private var skillsProcessingModelId: String = ""
     @AppStorage("skillsProcessingParallelAgents") private var skillsProcessingParallelAgents: Int = 12
-    @AppStorage("voicePrimerExtractionModelId") private var voicePrimerModelId: String = "openai/gpt-4o-mini"
-    @AppStorage("onboardingKCAgentModelId") private var kcAgentModelId: String = "anthropic/claude-haiku-4.5"
+    @AppStorage("voicePrimerExtractionModelId") private var voicePrimerModelId: String = ""
+    @AppStorage("onboardingKCAgentModelId") private var kcAgentModelId: String = ""
     @AppStorage("onboardingInterviewAllowWebSearchDefault") private var onboardingWebSearchAllowed: Bool = true
-    @AppStorage("backgroundProcessingModelId") private var backgroundProcessingModelId: String = "google/gemini-2.0-flash-001"
+    @AppStorage("backgroundProcessingModelId") private var backgroundProcessingModelId: String = ""
     @AppStorage("knowledgeCardTokenLimit") private var knowledgeCardTokenLimit: Int = 8000
     @AppStorage("onboardingMaxConcurrentExtractions") private var maxConcurrentExtractions: Int = 5
     @AppStorage("maxConcurrentPDFExtractions") private var maxConcurrentPDFExtractions: Int = 30
@@ -41,7 +41,6 @@ struct OnboardingModelSettingsView: View {
     @State private var anthropicModelError: String?
 
     private let googleAIService = GoogleAIService()
-    private let pdfExtractionFallbackModelId = DefaultModels.gemini
 
     var body: some View {
         Form {
@@ -92,14 +91,6 @@ struct OnboardingModelSettingsView: View {
             if hasAnthropicKey && anthropicModels.isEmpty {
                 await loadAnthropicModels()
             }
-            sanitizePDFExtractionModelIfNeeded()
-            sanitizeGitIngestModelIfNeeded()
-            sanitizeBackgroundProcessingModelIfNeeded()
-        }
-        .onChange(of: enabledLLMStore.enabledModels.map(\.modelId)) { _, _ in
-            sanitizePDFExtractionModelIfNeeded()
-            sanitizeGitIngestModelIfNeeded()
-            sanitizeBackgroundProcessingModelIfNeeded()
         }
     }
 
@@ -125,9 +116,7 @@ struct OnboardingModelSettingsView: View {
     private var allOpenRouterModels: [EnabledLLM] {
         enabledLLMStore.enabledModels
             .sorted { lhs, rhs in
-                if lhs.modelId == DefaultModels.openRouterFast { return true }
-                if rhs.modelId == DefaultModels.openRouterFast { return false }
-                return (lhs.displayName.isEmpty ? lhs.modelId : lhs.displayName)
+                (lhs.displayName.isEmpty ? lhs.modelId : lhs.displayName)
                     < (rhs.displayName.isEmpty ? rhs.modelId : rhs.displayName)
             }
     }
@@ -143,6 +132,10 @@ private extension OnboardingModelSettingsView {
                 Text("OpenRouter").tag("openrouter")
             }
             .pickerStyle(.segmented)
+            .onChange(of: seedGenerationBackend) { _, _ in
+                // Clear model ID when backend changes - user must select from the new list
+                seedGenerationModelId = ""
+            }
             Text(seedGenerationBackend == "anthropic"
                 ? "Direct Anthropic API with prompt caching for faster, cheaper generation."
                 : "OpenRouter for model flexibility. Caching depends on underlying provider.")
@@ -468,13 +461,7 @@ private extension OnboardingModelSettingsView {
                     .foregroundStyle(.orange)
                     .font(.callout)
             } else {
-                Picker("Git Ingest Model", selection: Binding(
-                    get: { gitIngestModelId },
-                    set: { newValue in
-                        gitIngestModelId = newValue
-                        _ = sanitizeGitIngestModelIfNeeded()
-                    }
-                )) {
+                Picker("Git Ingest Model", selection: $gitIngestModelId) {
                     ForEach(allOpenRouterModels, id: \.modelId) { model in
                         Text(model.displayName.isEmpty ? model.modelId : model.displayName)
                             .tag(model.modelId)
@@ -502,9 +489,6 @@ private extension OnboardingModelSettingsView {
                     }
                 }
                 .pickerStyle(.menu)
-                .onAppear {
-                    sanitizeBackgroundProcessingModelIfNeeded()
-                }
                 Text("Used for job requirement extraction. Fast, inexpensive models recommended.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
@@ -643,51 +627,15 @@ private extension OnboardingModelSettingsView {
     }
 }
 
-// MARK: - Model Sanitization
+// MARK: - Model Validation
 private extension OnboardingModelSettingsView {
-    @discardableResult
-    func sanitizePDFExtractionModelIfNeeded() -> String {
-        let ids = geminiModels.map(\.id)
-        guard !ids.isEmpty else { return pdfExtractionModelId }
-        let (sanitized, adjusted) = ModelPreferenceValidator.sanitize(
-            requested: pdfExtractionModelId,
-            available: ids,
-            fallback: pdfExtractionFallbackModelId
-        )
-        if adjusted {
-            pdfExtractionModelId = sanitized
+    /// Returns true if the seed generation model ID is valid for the current backend
+    var isSeedGenerationModelValid: Bool {
+        guard !seedGenerationModelId.isEmpty else { return false }
+        if seedGenerationBackend == "anthropic" {
+            return filteredAnthropicModels.contains { $0.id == seedGenerationModelId }
+        } else {
+            return allOpenRouterModels.contains { $0.modelId == seedGenerationModelId }
         }
-        return sanitized
-    }
-
-    @discardableResult
-    func sanitizeGitIngestModelIfNeeded() -> String {
-        let ids = allOpenRouterModels.map(\.modelId)
-        let fallback = DefaultModels.openRouter
-        let (sanitized, adjusted) = ModelPreferenceValidator.sanitize(
-            requested: gitIngestModelId,
-            available: ids,
-            fallback: fallback
-        )
-        if adjusted {
-            gitIngestModelId = sanitized
-        }
-        return sanitized
-    }
-
-    @discardableResult
-    func sanitizeBackgroundProcessingModelIfNeeded() -> String {
-        let ids = allOpenRouterModels.map(\.modelId)
-        guard !ids.isEmpty else { return backgroundProcessingModelId }
-        let fallback = DefaultModels.openRouterFast
-        let (sanitized, adjusted) = ModelPreferenceValidator.sanitize(
-            requested: backgroundProcessingModelId,
-            available: ids,
-            fallback: fallback
-        )
-        if adjusted {
-            backgroundProcessingModelId = sanitized
-        }
-        return sanitized
     }
 }

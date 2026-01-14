@@ -79,7 +79,15 @@ final class SkillsGroupingGenerator: BaseSectionGenerator {
             5. Order skills within each group by relevance/importance
             6. Categories should cover different aspects (e.g., Technical, Leadership, Tools, etc.)
 
-            Return JSON with your skill groupings.
+            Return JSON in this exact format:
+            {
+                "groups": [
+                    {
+                        "name": "Category Name",
+                        "skills": ["skill1", "skill2", "skill3"]
+                    }
+                ]
+            }
             """
 
         let schema: [String: Any] = [

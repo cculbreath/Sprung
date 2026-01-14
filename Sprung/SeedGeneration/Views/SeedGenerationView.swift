@@ -163,6 +163,12 @@ struct SeedGenerationView: View {
                 sectionPlaceholder(for: section)
             }
 
+        case .custom:
+            CustomSectionDetailView(
+                titleSets: orchestrator.generatedTitleSets,
+                objective: orchestrator.generatedObjective
+            )
+
         default:
             sectionPlaceholder(for: section)
         }
@@ -244,5 +250,82 @@ struct SectionProgressRow: View {
                 .foregroundStyle(.secondary)
                 .monospacedDigit()
         }
+    }
+}
+
+// MARK: - Custom Section Detail View
+
+struct CustomSectionDetailView: View {
+    let titleSets: [TitleSet]?
+    let objective: String?
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 24) {
+                if let sets = titleSets, !sets.isEmpty {
+                    titleSetsSection(sets)
+                }
+
+                if let summary = objective, !summary.isEmpty {
+                    objectiveSection(summary)
+                }
+
+                if titleSets == nil && objective == nil {
+                    ContentUnavailableView {
+                        Label("Custom Content", systemImage: "doc.fill")
+                    } description: {
+                        Text("Title options and professional summary will appear here after generation.")
+                    }
+                }
+            }
+            .padding()
+        }
+    }
+
+    @ViewBuilder
+    private func titleSetsSection(_ sets: [TitleSet]) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Label("Professional Title Options", systemImage: "person.text.rectangle")
+                .font(.headline)
+
+            Text("Generated title combinations for your resume header. Select your favorites in the review queue.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            ForEach(sets) { set in
+                HStack(spacing: 8) {
+                    ForEach(set.titles, id: \.self) { title in
+                        Text(title)
+                            .font(.callout)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(.quaternary, in: RoundedRectangle(cornerRadius: 6))
+                    }
+                    Spacer()
+                    Text(set.emphasis.displayName)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.vertical, 4)
+            }
+        }
+        .padding()
+        .background(.background.secondary, in: RoundedRectangle(cornerRadius: 12))
+    }
+
+    @ViewBuilder
+    private func objectiveSection(_ summary: String) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Label("Professional Summary", systemImage: "text.alignleft")
+                .font(.headline)
+
+            Text(summary)
+                .font(.body)
+                .padding()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(.background.secondary, in: RoundedRectangle(cornerRadius: 8))
+        }
+        .padding()
+        .background(.background.secondary, in: RoundedRectangle(cornerRadius: 12))
     }
 }

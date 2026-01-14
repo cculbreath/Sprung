@@ -16,6 +16,8 @@ struct GenerationTask: Identifiable, Equatable {
     let targetId: String?
     /// Human-readable description (e.g., "Work highlights: Anthropic")
     let displayName: String
+    /// Type name of the generator that created this task (e.g., "TitleOptionsGenerator")
+    let generatorType: String
     /// Current task status
     var status: TaskStatus
     /// Generated content result (nil until completed)
@@ -30,6 +32,7 @@ struct GenerationTask: Identifiable, Equatable {
         section: ExperienceSectionKey,
         targetId: String? = nil,
         displayName: String,
+        generatorType: String = "",
         status: TaskStatus = .pending,
         result: GeneratedContent? = nil,
         error: String? = nil,
@@ -39,6 +42,7 @@ struct GenerationTask: Identifiable, Equatable {
         self.section = section
         self.targetId = targetId
         self.displayName = displayName
+        self.generatorType = generatorType
         self.status = status
         self.result = result
         self.error = error
