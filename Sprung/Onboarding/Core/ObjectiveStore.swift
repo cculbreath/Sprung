@@ -83,7 +83,8 @@ actor ObjectiveStore: OnboardingEventEmitter {
             (OnboardingObjectiveId.timelineEnriched.rawValue, "Timeline enriched with context", OnboardingObjectiveId.skeletonTimelineComplete.rawValue),
             (OnboardingObjectiveId.workPreferencesCaptured.rawValue, "Work preferences captured", nil),
             (OnboardingObjectiveId.uniqueCircumstancesDocumented.rawValue, "Unique circumstances documented", nil),
-            (OnboardingObjectiveId.enabledSections.rawValue, "Enabled sections configured", nil)
+            (OnboardingObjectiveId.enabledSections.rawValue, "Enabled sections configured", nil),
+            (OnboardingObjectiveId.sectionCardsComplete.rawValue, "Section cards complete", nil)
         ],
         .phase3EvidenceCollection: [
             // Phase 3: Evidence Collection objectives

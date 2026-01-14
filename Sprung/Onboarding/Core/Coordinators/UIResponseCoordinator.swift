@@ -91,7 +91,7 @@ final class UIResponseCoordinator {
             // This bypasses the LLM to prevent dead-end stalls where the LLM
             // acknowledges but fails to call next_phase
             if approved {
-                await forcePhaseTransition(reason: "User approved skip to next phase")
+                await forcePhaseTransition(to: .phase4StrategicSynthesis, reason: "User approved skip to next phase")
                 Logger.info("⚡ Forced phase transition executed after user approval", category: .ai)
             }
         }
@@ -123,23 +123,30 @@ final class UIResponseCoordinator {
 
     // MARK: - Forced Phase Transition
 
-    /// Force an immediate phase transition without waiting for LLM to call next_phase.
+    /// Force an immediate phase transition to a specific target phase.
     /// Used when user action should directly advance the phase (section toggle, skip approval, etc.)
     /// Direct transitions are more reliable and eliminate LLM round trips.
-    private func forcePhaseTransition(reason: String = "User action triggered phase advance") async {
+    /// IDEMPOTENT: If already at or past target phase, this is a no-op.
+    private func forcePhaseTransition(to targetPhase: InterviewPhase, reason: String = "User action triggered phase advance") async {
         let currentPhase = await state.phase
-        guard let nextPhase = currentPhase.next() else {
-            Logger.warning("⚠️ Cannot force phase transition: already at final phase", category: .ai)
+
+        // Idempotent check: if already at or past target phase, do nothing
+        if currentPhase.rawValue == targetPhase.rawValue {
+            Logger.info("⚡ Force phase transition skipped: already at \(targetPhase.rawValue)", category: .ai)
+            return
+        }
+        if currentPhase.order >= targetPhase.order {
+            Logger.info("⚡ Force phase transition skipped: already past \(targetPhase.rawValue) (current: \(currentPhase.rawValue))", category: .ai)
             return
         }
 
-        Logger.info("⚡ Forcing phase transition: \(currentPhase.rawValue) → \(nextPhase.rawValue)", category: .ai)
+        Logger.info("⚡ Forcing phase transition: \(currentPhase.rawValue) → \(targetPhase.rawValue)", category: .ai)
 
         // Emit phase transition request - StateCoordinator will handle the actual transition
         // This triggers: setPhase() → phaseTransitionApplied → handlePhaseTransition (sends intro prompt)
         await eventBus.publish(.phase(.transitionRequested(
             from: currentPhase.rawValue,
-            to: nextPhase.rawValue,
+            to: targetPhase.rawValue,
             reason: reason
         )))
     }
@@ -332,7 +339,7 @@ final class UIResponseCoordinator {
         )))
 
         // Force phase transition to Phase 3
-        await forcePhaseTransition(reason: "Section cards collection completed by user")
+        await forcePhaseTransition(to: .phase3EvidenceCollection, reason: "Section cards collection completed by user")
 
         Logger.info("✅ Section cards complete - advanced to Phase 3", category: .ai)
     }

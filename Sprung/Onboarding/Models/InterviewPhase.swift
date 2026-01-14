@@ -40,6 +40,17 @@ enum InterviewPhase: String, Codable, CaseIterable {
         rawValue
     }
 
+    /// Numeric order for phase comparison (higher = later in interview)
+    var order: Int {
+        switch self {
+        case .phase1VoiceContext: return 1
+        case .phase2CareerStory: return 2
+        case .phase3EvidenceCollection: return 3
+        case .phase4StrategicSynthesis: return 4
+        case .complete: return 5
+        }
+    }
+
     /// Returns the next phase in sequence, or nil if complete
     func next() -> InterviewPhase? {
         switch self {
