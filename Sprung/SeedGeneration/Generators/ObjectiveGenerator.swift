@@ -103,7 +103,8 @@ final class ObjectiveGenerator: BaseSectionGenerator {
                 "properties": [
                     "summary": ["type": "string"]
                 ],
-                "required": ["summary"]
+                "required": ["summary"],
+                "additionalProperties": false
             ],
             schemaName: "objective"
         )

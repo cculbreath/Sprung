@@ -112,7 +112,8 @@ final class VolunteerGenerator: BaseSectionGenerator {
                     "summary": ["type": "string"],
                     "highlights": ["type": "array", "items": ["type": "string"]]
                 ],
-                "required": ["summary", "highlights"]
+                "required": ["summary", "highlights"],
+                "additionalProperties": false
             ],
             schemaName: "volunteer"
         )

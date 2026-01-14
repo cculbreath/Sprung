@@ -113,7 +113,8 @@ final class WorkHighlightsGenerator: BaseSectionGenerator {
                 "properties": [
                     "highlights": ["type": "array", "items": ["type": "string"]]
                 ],
-                "required": ["highlights"]
+                "required": ["highlights"],
+                "additionalProperties": false
             ],
             schemaName: "work_highlights"
         )

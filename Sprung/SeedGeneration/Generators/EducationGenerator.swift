@@ -113,7 +113,8 @@ final class EducationGenerator: BaseSectionGenerator {
                     "description": ["type": "string"],
                     "courses": ["type": "array", "items": ["type": "string"]]
                 ],
-                "required": ["description", "courses"]
+                "required": ["description", "courses"],
+                "additionalProperties": false
             ],
             schemaName: "education"
         )

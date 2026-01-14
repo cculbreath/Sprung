@@ -100,11 +100,13 @@ final class TitleOptionsGenerator: BaseSectionGenerator {
                             "emphasis": ["type": "string"],
                             "suggestedFor": ["type": "array", "items": ["type": "string"]]
                         ],
-                        "required": ["titles", "emphasis", "suggestedFor"]
+                        "required": ["titles", "emphasis", "suggestedFor"],
+                        "additionalProperties": false
                     ]
                 ]
             ],
-            "required": ["sets"]
+            "required": ["sets"],
+            "additionalProperties": false
         ]
 
         let response: TitleSetsResponse = try await executeStructuredRequest(

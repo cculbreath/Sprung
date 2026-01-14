@@ -165,11 +165,13 @@ final class ProjectsGenerator: BaseSectionGenerator {
                                 "description": ["type": "string"],
                                 "rationale": ["type": "string"]
                             ],
-                            "required": ["name", "description", "rationale"]
+                            "required": ["name", "description", "rationale"],
+                            "additionalProperties": false
                         ]
                     ]
                 ],
-                "required": ["proposals"]
+                "required": ["proposals"],
+                "additionalProperties": false
             ],
             schemaName: "project_proposals"
         )
@@ -289,7 +291,8 @@ final class ProjectsGenerator: BaseSectionGenerator {
                     "highlights": ["type": "array", "items": ["type": "string"]],
                     "keywords": ["type": "array", "items": ["type": "string"]]
                 ],
-                "required": ["description", "highlights", "keywords"]
+                "required": ["description", "highlights", "keywords"],
+                "additionalProperties": false
             ],
             schemaName: "project"
         )

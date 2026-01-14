@@ -101,11 +101,13 @@ final class SkillsGroupingGenerator: BaseSectionGenerator {
                             "name": ["type": "string"],
                             "skills": ["type": "array", "items": ["type": "string"]]
                         ],
-                        "required": ["name", "skills"]
+                        "required": ["name", "skills"],
+                        "additionalProperties": false
                     ]
                 ]
             ],
-            "required": ["groups"]
+            "required": ["groups"],
+            "additionalProperties": false
         ]
 
         let response: SkillGroupsResponse = try await executeStructuredRequest(
