@@ -274,6 +274,31 @@ class BaseSectionGenerator: SectionGenerator {
             for set in sets {
                 context += "- \(set.titles.joined(separator: " | ")) (\(set.emphasis.rawValue))\n"
             }
+
+        case .workSummary(_, let summary):
+            context += "Summary: \(summary)\n"
+
+        case .awardSummary(_, let summary):
+            context += "Summary: \(summary)\n"
+
+        case .publicationSummary(_, let summary):
+            context += "Summary: \(summary)\n"
+
+        case .languages(let entries):
+            for entry in entries {
+                context += "- \(entry.language): \(entry.fluency)\n"
+            }
+
+        case .interests(let entries):
+            for entry in entries {
+                context += "- \(entry.name): \(entry.keywords.joined(separator: ", "))\n"
+            }
+
+        case .customField(let key, let values):
+            context += "\(key): \(values.joined(separator: ", "))\n"
+
+        case .certificate, .reference, .rawJSON:
+            context += "(Content details not available for display)\n"
         }
 
         context += "\n## User Feedback\n\n"
