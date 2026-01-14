@@ -27,16 +27,16 @@ final class ObjectiveGenerator: BaseSectionGenerator {
     override var displayName: String { "Professional Summary" }
 
     init() {
-        super.init(sectionKey: .work)  // Placeholder - objective doesn't have its own section key
+        super.init(sectionKey: .custom)  // Uses custom section since objective is a special case
     }
 
     // MARK: - Task Creation
 
     override func createTasks(context: SeedGenerationContext) -> [GenerationTask] {
-        // Single task for the objective
+        // Single task for the objective - optional generation
         [GenerationTask(
             id: UUID(),
-            section: .work, // Placeholder
+            section: .custom,
             targetId: "objective",
             displayName: "Professional Summary",
             status: .pending

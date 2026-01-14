@@ -685,7 +685,23 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         coordinator: OnboardingInterviewCoordinator,
         skillStore: SkillStore
     ) async -> SeedGenerationContext? {
-        let artifacts = await coordinator.state.artifacts
+        // Use ExperienceDefaults as the source of truth for timeline entries
+        guard let experienceDefaultsStore else {
+            Logger.error("🌱 ExperienceDefaultsStore not available", category: .ui)
+            return nil
+        }
+
+        let defaults = experienceDefaultsStore.currentDefaults()
+
+        // Get applicant profile
+        let applicantProfile: ApplicantProfileDraft
+        if let profileStore = applicantProfileStore {
+            applicantProfile = ApplicantProfileDraft(profile: profileStore.currentProfile())
+        } else {
+            applicantProfile = ApplicantProfileDraft()
+        }
+
+        // Get knowledge cards from onboarding
         let knowledgeCards = coordinator.getKnowledgeCardStore().onboardingCards
 
         // Get writing samples from CoverRefStore (filter by type)
@@ -697,7 +713,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Future: Could get from CandidateDossierStore if needed
 
         return SeedGenerationContext.build(
-            from: artifacts,
+            from: defaults,
+            applicantProfile: applicantProfile,
             knowledgeCards: knowledgeCards,
             skills: skillStore.skills,
             writingSamples: writingSamples,

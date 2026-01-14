@@ -270,4 +270,115 @@ extension SeedGenerationContext {
             dossier: dossier
         )
     }
+
+    /// Build context from ExperienceDefaults - used when launching SGM from Experience Editor
+    static func build(
+        from defaults: ExperienceDefaults,
+        applicantProfile: ApplicantProfileDraft,
+        knowledgeCards: [KnowledgeCard],
+        skills: [Skill],
+        writingSamples: [CoverRef],
+        voicePrimer: CoverRef?,
+        dossier: JSON?
+    ) -> SeedGenerationContext {
+        // Build enabled sections from defaults flags (as raw strings)
+        var enabledSections: Set<String> = []
+        if defaults.isWorkEnabled { enabledSections.insert(ExperienceSectionKey.work.rawValue) }
+        if defaults.isEducationEnabled { enabledSections.insert(ExperienceSectionKey.education.rawValue) }
+        if defaults.isVolunteerEnabled { enabledSections.insert(ExperienceSectionKey.volunteer.rawValue) }
+        if defaults.isProjectsEnabled { enabledSections.insert(ExperienceSectionKey.projects.rawValue) }
+        if defaults.isSkillsEnabled { enabledSections.insert(ExperienceSectionKey.skills.rawValue) }
+        if defaults.isAwardsEnabled { enabledSections.insert(ExperienceSectionKey.awards.rawValue) }
+        if defaults.isCertificatesEnabled { enabledSections.insert(ExperienceSectionKey.certificates.rawValue) }
+        if defaults.isPublicationsEnabled { enabledSections.insert(ExperienceSectionKey.publications.rawValue) }
+        if defaults.isLanguagesEnabled { enabledSections.insert(ExperienceSectionKey.languages.rawValue) }
+        if defaults.isInterestsEnabled { enabledSections.insert(ExperienceSectionKey.interests.rawValue) }
+        if defaults.isReferencesEnabled { enabledSections.insert(ExperienceSectionKey.references.rawValue) }
+        if defaults.isCustomEnabled { enabledSections.insert(ExperienceSectionKey.custom.rawValue) }
+
+        let sectionConfig = SectionConfig(
+            enabledSections: enabledSections,
+            customFields: []  // Custom field definitions not stored in ExperienceDefaults
+        )
+
+        // Build skeleton timeline JSON from ExperienceDefaults entries
+        let skeletonTimeline = buildSkeletonTimeline(from: defaults)
+
+        return SeedGenerationContext(
+            applicantProfile: applicantProfile,
+            skeletonTimeline: skeletonTimeline,
+            sectionConfig: sectionConfig,
+            knowledgeCards: knowledgeCards,
+            skills: skills,
+            writingSamples: writingSamples.filter { $0.type == .writingSample },
+            voicePrimer: voicePrimer,
+            dossier: dossier
+        )
+    }
+
+    /// Convert ExperienceDefaults entries to skeleton timeline JSON format
+    private static func buildSkeletonTimeline(from defaults: ExperienceDefaults) -> JSON {
+        var experiences: [[String: Any]] = []
+
+        // Work entries
+        for work in defaults.work {
+            experiences.append([
+                "id": work.id.uuidString,
+                "experienceType": "work",
+                "company": work.name,
+                "title": work.position,
+                "location": work.location,
+                "startDate": work.startDate,
+                "endDate": work.endDate,
+                "description": work.summary,
+                "highlights": work.highlights.map { $0.text }
+            ])
+        }
+
+        // Education entries
+        for edu in defaults.education {
+            experiences.append([
+                "id": edu.id.uuidString,
+                "experienceType": "education",
+                "institution": edu.institution,
+                "area": edu.area,
+                "studyType": edu.studyType,
+                "startDate": edu.startDate,
+                "endDate": edu.endDate,
+                "score": edu.score,
+                "courses": edu.courses.map { $0.name }
+            ])
+        }
+
+        // Volunteer entries
+        for vol in defaults.volunteer {
+            experiences.append([
+                "id": vol.id.uuidString,
+                "experienceType": "volunteer",
+                "organization": vol.organization,
+                "position": vol.position,
+                "startDate": vol.startDate,
+                "endDate": vol.endDate,
+                "summary": vol.summary,
+                "highlights": vol.highlights.map { $0.text }
+            ])
+        }
+
+        // Project entries
+        for proj in defaults.projects {
+            experiences.append([
+                "id": proj.id.uuidString,
+                "experienceType": "project",
+                "name": proj.name,
+                "description": proj.description,
+                "startDate": proj.startDate,
+                "endDate": proj.endDate,
+                "url": proj.url,
+                "highlights": proj.highlights.map { $0.text },
+                "keywords": proj.keywords.map { $0.keyword }
+            ])
+        }
+
+        return JSON(["experiences": experiences])
+    }
 }
