@@ -114,6 +114,76 @@ final class ObjectiveGenerator: BaseSectionGenerator {
         )
     }
 
+    // MARK: - Regeneration
+
+    override func regenerate(
+        task: GenerationTask,
+        originalContent: GeneratedContent,
+        feedback: String?,
+        context: SeedGenerationContext,
+        config: GeneratorExecutionConfig
+    ) async throws -> GeneratedContent {
+        let taskContext = buildTaskContext(context: context)
+        let regenerationContext = buildRegenerationContext(originalContent: originalContent, feedback: feedback)
+
+        let systemPrompt = "You are a professional resume writer. Generate a professional summary based strictly on documented evidence and in the candidate's authentic voice."
+
+        let taskPrompt = """
+            ## Task: Revise Professional Summary
+
+            Revise the professional summary based on user feedback.
+
+            ## Context
+
+            \(taskContext)
+
+            \(regenerationContext)
+
+            ## Requirements
+
+            Generate a professional summary that:
+            - Is 3-5 sentences (60-100 words)
+            - Highlights the candidate's core value proposition
+            - Mentions key skills and areas of expertise
+            - Conveys professional identity and career focus
+            - Matches the candidate's voice and communication style as shown in writing samples
+
+            ## CONSTRAINTS
+
+            1. Use ONLY facts from the provided Knowledge Cards and documented experience
+            2. Do NOT invent metrics, percentages, or quantitative claims
+            3. Match the candidate's writing voice - study their writing samples carefully
+            4. Avoid generic resume phrases
+
+            ## FORBIDDEN
+
+            - Fabricated numbers ("X years of experience", "reduced by Y%")
+            - Generic phrases ("results-driven", "passionate about", "proven track record")
+            - Vague claims ("significantly improved", "extensive experience")
+            - LinkedIn buzzwords ("leveraged", "spearheaded", "synergized")
+            """
+
+        let response: ObjectiveResponse = try await executeStructuredRequest(
+            taskPrompt: taskPrompt,
+            systemPrompt: systemPrompt,
+            config: config,
+            responseType: ObjectiveResponse.self,
+            schema: [
+                "type": "object",
+                "properties": [
+                    "summary": ["type": "string"]
+                ],
+                "required": ["summary"],
+                "additionalProperties": false
+            ],
+            schemaName: "objective"
+        )
+
+        return GeneratedContent(
+            type: .objective(summary: response.summary)
+        )
+    }
+
     // MARK: - Apply to Defaults
 
     override func apply(content: GeneratedContent, to defaults: inout ExperienceDefaults) {

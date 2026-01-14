@@ -14,7 +14,7 @@ import SwiftyJSON
 
 private struct EducationResponse: Codable {
     let description: String
-    let courses: [String]
+    let courses: [String]?
 }
 
 /// Generates education section content.
@@ -113,7 +113,7 @@ final class EducationGenerator: BaseSectionGenerator {
                     "description": ["type": "string"],
                     "courses": ["type": "array", "items": ["type": "string"]]
                 ],
-                "required": ["description", "courses"],
+                "required": ["description"],
                 "additionalProperties": false
             ],
             schemaName: "education"
@@ -123,7 +123,78 @@ final class EducationGenerator: BaseSectionGenerator {
             type: .educationDescription(
                 targetId: targetId,
                 description: response.description,
-                courses: response.courses
+                courses: response.courses ?? []
+            )
+        )
+    }
+
+    // MARK: - Regeneration
+
+    override func regenerate(
+        task: GenerationTask,
+        originalContent: GeneratedContent,
+        feedback: String?,
+        context: SeedGenerationContext,
+        config: GeneratorExecutionConfig
+    ) async throws -> GeneratedContent {
+        guard let targetId = task.targetId else {
+            throw GeneratorError.missingContext("No targetId for education task")
+        }
+
+        let entry = try findTimelineEntry(id: targetId, in: context)
+        let relevantKCs = context.relevantKCs(for: entry)
+        let taskContext = buildTaskContext(entry: entry, kcs: relevantKCs, skills: context.skills)
+        let regenerationContext = buildRegenerationContext(originalContent: originalContent, feedback: feedback)
+
+        let systemPrompt = "You are a professional resume writer. Generate education content based strictly on documented evidence."
+
+        let taskPrompt = """
+            ## Task: Revise Education Content
+
+            Revise the content for this education entry based on user feedback.
+
+            ## Context for This Entry
+
+            \(taskContext)
+
+            \(regenerationContext)
+
+            ## Requirements
+
+            Generate:
+            1. A brief description (1-2 sentences) highlighting the educational experience
+            2. A list of 3-5 relevant courses that demonstrate skills valuable to employers
+
+            ## CONSTRAINTS
+
+            1. Use ONLY facts from the provided Knowledge Cards
+            2. Do NOT invent metrics, percentages, or quantitative claims
+            3. Match the candidate's writing voice from the samples
+            4. Avoid generic resume phrases
+            """
+
+        let response: EducationResponse = try await executeStructuredRequest(
+            taskPrompt: taskPrompt,
+            systemPrompt: systemPrompt,
+            config: config,
+            responseType: EducationResponse.self,
+            schema: [
+                "type": "object",
+                "properties": [
+                    "description": ["type": "string"],
+                    "courses": ["type": "array", "items": ["type": "string"]]
+                ],
+                "required": ["description"],
+                "additionalProperties": false
+            ],
+            schemaName: "education"
+        )
+
+        return GeneratedContent(
+            type: .educationDescription(
+                targetId: targetId,
+                description: response.description,
+                courses: response.courses ?? []
             )
         )
     }

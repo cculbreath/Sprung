@@ -132,6 +132,84 @@ final class TitleOptionsGenerator: BaseSectionGenerator {
         )
     }
 
+    // MARK: - Regeneration
+
+    override func regenerate(
+        task: GenerationTask,
+        originalContent: GeneratedContent,
+        feedback: String?,
+        context: SeedGenerationContext,
+        config: GeneratorExecutionConfig
+    ) async throws -> GeneratedContent {
+        let taskContext = buildTaskContext(context: context)
+        let regenerationContext = buildRegenerationContext(originalContent: originalContent, feedback: feedback)
+
+        let systemPrompt = "You are an expert resume writer crafting professional title sets."
+
+        let taskPrompt = """
+            ## Task: Revise Professional Title Sets
+
+            Revise the title sets based on user feedback.
+
+            ## Context
+
+            \(taskContext)
+
+            \(regenerationContext)
+
+            ## Instructions
+
+            1. Generate 3-5 distinct title sets, each with exactly 4 titles
+            2. Each title should be a single word or short phrase (1-3 words max)
+            3. Titles should reflect the candidate's expertise areas
+            4. Include sets with different emphasis (technical, leadership, research, balanced)
+            5. Suggest what job types each set works well for
+            """
+
+        let schema: [String: Any] = [
+            "type": "object",
+            "properties": [
+                "sets": [
+                    "type": "array",
+                    "items": [
+                        "type": "object",
+                        "properties": [
+                            "titles": ["type": "array", "items": ["type": "string"]],
+                            "emphasis": ["type": "string"],
+                            "suggestedFor": ["type": "array", "items": ["type": "string"]]
+                        ],
+                        "required": ["titles", "emphasis", "suggestedFor"],
+                        "additionalProperties": false
+                    ]
+                ]
+            ],
+            "required": ["sets"],
+            "additionalProperties": false
+        ]
+
+        let response: TitleSetsResponse = try await executeStructuredRequest(
+            taskPrompt: taskPrompt,
+            systemPrompt: systemPrompt,
+            config: config,
+            responseType: TitleSetsResponse.self,
+            schema: schema,
+            schemaName: "title_sets"
+        )
+
+        let titleSets = response.sets.map { dto -> TitleSet in
+            let emphasis = TitleEmphasis(rawValue: dto.emphasis.lowercased()) ?? .balanced
+            return TitleSet(
+                titles: dto.titles,
+                emphasis: emphasis,
+                suggestedFor: dto.suggestedFor
+            )
+        }
+
+        return GeneratedContent(
+            type: .titleSets(titleSets)
+        )
+    }
+
     // MARK: - Apply to Defaults
 
     override func apply(content: GeneratedContent, to defaults: inout ExperienceDefaults) {

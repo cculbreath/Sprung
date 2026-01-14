@@ -64,6 +64,14 @@ final class SeedGenerationOrchestrator {
         self.parallelExecutor = ParallelLLMExecutor()
 
         initializeSectionProgress()
+        setupRegenerationCallback()
+    }
+
+    private func setupRegenerationCallback() {
+        reviewQueue.onRegenerationRequested = { [weak self] itemId, originalContent, feedback in
+            guard let self else { return nil }
+            return await self.regenerateItem(itemId: itemId, originalContent: originalContent, feedback: feedback)
+        }
     }
 
     private func initializeSectionProgress() {
@@ -309,6 +317,55 @@ final class SeedGenerationOrchestrator {
         }
 
         Logger.info("Applied \(reviewQueue.approvedItems.count) approved items to defaults", category: .ai)
+    }
+
+    // MARK: - Regeneration
+
+    /// Regenerate a rejected item with user feedback
+    private func regenerateItem(
+        itemId: UUID,
+        originalContent: GeneratedContent,
+        feedback: String?
+    ) async -> GeneratedContent? {
+        guard let context else {
+            Logger.error("Cannot regenerate: no context available", category: .ai)
+            return nil
+        }
+
+        // Find the original item to get its task
+        guard let item = reviewQueue.item(for: itemId) else {
+            Logger.error("Cannot regenerate: item not found", category: .ai)
+            return nil
+        }
+
+        // Find the generator for this task
+        let generatorTypeName = item.task.generatorType
+        guard let generator = generators.first(where: { String(describing: type(of: $0)) == generatorTypeName }) else {
+            Logger.error("Cannot regenerate: generator not found for \(generatorTypeName)", category: .ai)
+            return nil
+        }
+
+        let preamble = promptCacheService.buildPreamble(context: context)
+        let config = GeneratorExecutionConfig(
+            llmFacade: llmFacade,
+            modelId: modelId,
+            backend: backend,
+            preamble: preamble
+        )
+
+        do {
+            let newContent = try await generator.regenerate(
+                task: item.task,
+                originalContent: originalContent,
+                feedback: feedback,
+                context: context,
+                config: config
+            )
+            return newContent
+        } catch {
+            Logger.error("Regeneration failed: \(error)", category: .ai)
+            return nil
+        }
     }
 
     // MARK: - Helpers

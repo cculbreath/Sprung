@@ -128,6 +128,79 @@ final class SkillsGroupingGenerator: BaseSectionGenerator {
         )
     }
 
+    // MARK: - Regeneration
+
+    override func regenerate(
+        task: GenerationTask,
+        originalContent: GeneratedContent,
+        feedback: String?,
+        context: SeedGenerationContext,
+        config: GeneratorExecutionConfig
+    ) async throws -> GeneratedContent {
+        let skillList = context.skills.map { $0.canonical }
+        let regenerationContext = buildRegenerationContext(originalContent: originalContent, feedback: feedback)
+
+        let systemPrompt = "You are an expert resume writer organizing skills into clear, impactful categories."
+
+        let taskPrompt = """
+            ## Task: Revise Skill Categories
+
+            Revise the skill categories based on user feedback.
+
+            ## Available Skills
+
+            \(skillList.joined(separator: ", "))
+
+            \(regenerationContext)
+
+            ## Instructions
+
+            1. Group related skills into 4-6 categories
+            2. Each category should have a clear, professional name
+            3. Each category should contain 4-8 skills
+            4. Use only skills from the list above - do not invent new skills
+            5. Order skills within each group by relevance/importance
+            6. Categories should cover different aspects (e.g., Technical, Leadership, Tools, etc.)
+            """
+
+        let schema: [String: Any] = [
+            "type": "object",
+            "properties": [
+                "groups": [
+                    "type": "array",
+                    "items": [
+                        "type": "object",
+                        "properties": [
+                            "name": ["type": "string"],
+                            "skills": ["type": "array", "items": ["type": "string"]]
+                        ],
+                        "required": ["name", "skills"],
+                        "additionalProperties": false
+                    ]
+                ]
+            ],
+            "required": ["groups"],
+            "additionalProperties": false
+        ]
+
+        let response: SkillGroupsResponse = try await executeStructuredRequest(
+            taskPrompt: taskPrompt,
+            systemPrompt: systemPrompt,
+            config: config,
+            responseType: SkillGroupsResponse.self,
+            schema: schema,
+            schemaName: "skill_groups"
+        )
+
+        let skillGroups = response.groups.map { group in
+            SkillGroup(name: group.name, keywords: group.skills)
+        }
+
+        return GeneratedContent(
+            type: .skillGroups(skillGroups)
+        )
+    }
+
     // MARK: - Apply to Defaults
 
     override func apply(content: GeneratedContent, to defaults: inout ExperienceDefaults) {

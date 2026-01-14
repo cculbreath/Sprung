@@ -124,6 +124,78 @@ final class WorkHighlightsGenerator: BaseSectionGenerator {
         )
     }
 
+    // MARK: - Regeneration
+
+    override func regenerate(
+        task: GenerationTask,
+        originalContent: GeneratedContent,
+        feedback: String?,
+        context: SeedGenerationContext,
+        config: GeneratorExecutionConfig
+    ) async throws -> GeneratedContent {
+        guard let targetId = task.targetId else {
+            throw GeneratorError.missingContext("No targetId for work task")
+        }
+
+        let entry = try findTimelineEntry(id: targetId, in: context)
+        let relevantKCs = context.relevantKCs(for: entry)
+        let taskContext = buildTaskContext(entry: entry, kcs: relevantKCs)
+        let regenerationContext = buildRegenerationContext(originalContent: originalContent, feedback: feedback)
+
+        let systemPrompt = "You are a professional resume writer. Generate work highlights based strictly on documented evidence."
+
+        let taskPrompt = """
+            ## Task: Revise Work Highlights
+
+            Revise the resume bullet points for this position based on user feedback.
+
+            ## Position Context
+
+            \(taskContext)
+
+            \(regenerationContext)
+
+            ## Requirements
+
+            Generate 3-4 bullet points that:
+
+            1. **Use ONLY facts from the Knowledge Cards** - Every claim must have evidence in the KCs provided above
+
+            2. **Match the candidate's voice** - Write in their style as shown in the writing samples, not generic resume-speak
+
+            3. **Describe work narratively** - Focus on what was built, created, discovered, or accomplished
+
+            4. **Vary sentence structure** - Don't start every bullet the same way
+
+            ## FORBIDDEN
+
+            - Inventing metrics, percentages, or numbers not explicitly stated in KCs
+            - Generic phrases: "spearheaded", "leveraged", "drove results", "cross-functional"
+            - Vague impact claims: "significantly improved", "enhanced capabilities", "streamlined processes"
+            - Formulaic structure: "[Verb] [thing] resulting in [X]% improvement"
+            """
+
+        let response: WorkHighlightsResponse = try await executeStructuredRequest(
+            taskPrompt: taskPrompt,
+            systemPrompt: systemPrompt,
+            config: config,
+            responseType: WorkHighlightsResponse.self,
+            schema: [
+                "type": "object",
+                "properties": [
+                    "highlights": ["type": "array", "items": ["type": "string"]]
+                ],
+                "required": ["highlights"],
+                "additionalProperties": false
+            ],
+            schemaName: "work_highlights"
+        )
+
+        return GeneratedContent(
+            type: .workHighlights(targetId: targetId, highlights: response.highlights)
+        )
+    }
+
     // MARK: - Apply to Defaults
 
     override func apply(content: GeneratedContent, to defaults: inout ExperienceDefaults) {

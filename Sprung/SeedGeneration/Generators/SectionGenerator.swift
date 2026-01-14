@@ -74,6 +74,22 @@ protocol SectionGenerator {
     ///   - content: The approved content to apply
     ///   - defaults: The ExperienceDefaults to update (inout)
     func apply(content: GeneratedContent, to defaults: inout ExperienceDefaults)
+
+    /// Regenerate content after rejection with user feedback.
+    /// - Parameters:
+    ///   - task: The original task
+    ///   - originalContent: The content that was rejected
+    ///   - feedback: User's feedback explaining why (nil if rejected without comment)
+    ///   - context: The full generation context
+    ///   - config: Execution configuration
+    /// - Returns: New generated content incorporating the feedback
+    func regenerate(
+        task: GenerationTask,
+        originalContent: GeneratedContent,
+        feedback: String?,
+        context: SeedGenerationContext,
+        config: GeneratorExecutionConfig
+    ) async throws -> GeneratedContent
 }
 
 // MARK: - Default Implementations
@@ -150,6 +166,18 @@ class BaseSectionGenerator: SectionGenerator {
         fatalError("Subclasses must implement apply")
     }
 
+    func regenerate(
+        task: GenerationTask,
+        originalContent: GeneratedContent,
+        feedback: String?,
+        context: SeedGenerationContext,
+        config: GeneratorExecutionConfig
+    ) async throws -> GeneratedContent {
+        // Default implementation: subclasses should override for custom regeneration logic
+        // This base implementation just re-executes with feedback in the prompt
+        fatalError("Subclasses must implement regenerate")
+    }
+
     // MARK: - Helper Methods
 
     /// Build the section-specific part of the prompt
@@ -199,6 +227,65 @@ class BaseSectionGenerator: SectionGenerator {
                 schemaName: schemaName
             )
         }
+    }
+
+    /// Build regeneration context from original content and feedback
+    func buildRegenerationContext(originalContent: GeneratedContent, feedback: String?) -> String {
+        var context = "## Previous Generation (REJECTED)\n\n"
+
+        // Format the original content based on type
+        switch originalContent.type {
+        case .workHighlights(_, let highlights):
+            context += "The following highlights were rejected:\n"
+            for highlight in highlights {
+                context += "- \(highlight)\n"
+            }
+
+        case .educationDescription(_, let description, let courses):
+            context += "Description: \(description)\n"
+            if !courses.isEmpty {
+                context += "Courses: \(courses.joined(separator: ", "))\n"
+            }
+
+        case .volunteerDescription(_, let summary, let highlights):
+            context += "Summary: \(summary)\n"
+            for highlight in highlights {
+                context += "- \(highlight)\n"
+            }
+
+        case .projectDescription(_, let description, let highlights, let keywords):
+            context += "Description: \(description)\n"
+            for highlight in highlights {
+                context += "- \(highlight)\n"
+            }
+            if !keywords.isEmpty {
+                context += "Keywords: \(keywords.joined(separator: ", "))\n"
+            }
+
+        case .objective(let summary):
+            context += "Summary: \(summary)\n"
+
+        case .skillGroups(let groups):
+            for group in groups {
+                context += "\(group.name): \(group.keywords.joined(separator: ", "))\n"
+            }
+
+        case .titleSets(let sets):
+            for set in sets {
+                context += "- \(set.titles.joined(separator: " | ")) (\(set.emphasis.rawValue))\n"
+            }
+        }
+
+        context += "\n## User Feedback\n\n"
+        if let feedback = feedback, !feedback.isEmpty {
+            context += feedback
+            context += "\n\n## Instructions\n\nRevise the content based on the user's feedback. You may keep parts that weren't criticized, but address the specific issues mentioned."
+        } else {
+            context += "The user rejected this content without providing specific feedback."
+            context += "\n\n## Instructions\n\nGenerate a significantly different alternative. Since no specific feedback was provided, try a different approach or emphasis."
+        }
+
+        return context
     }
 
     /// Execute with Anthropic caching and structured outputs - system content is cached, schema enforces format

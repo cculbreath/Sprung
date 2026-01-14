@@ -127,6 +127,77 @@ final class VolunteerGenerator: BaseSectionGenerator {
         )
     }
 
+    // MARK: - Regeneration
+
+    override func regenerate(
+        task: GenerationTask,
+        originalContent: GeneratedContent,
+        feedback: String?,
+        context: SeedGenerationContext,
+        config: GeneratorExecutionConfig
+    ) async throws -> GeneratedContent {
+        guard let targetId = task.targetId else {
+            throw GeneratorError.missingContext("No targetId for volunteer task")
+        }
+
+        let entry = try findTimelineEntry(id: targetId, in: context)
+        let relevantKCs = context.relevantKCs(for: entry)
+        let taskContext = buildTaskContext(entry: entry, kcs: relevantKCs)
+        let regenerationContext = buildRegenerationContext(originalContent: originalContent, feedback: feedback)
+
+        let systemPrompt = "You are a professional resume writer. Generate volunteer content based strictly on documented evidence."
+
+        let taskPrompt = """
+            ## Task: Revise Volunteer Experience Content
+
+            Revise the content for this volunteer experience based on user feedback.
+
+            ## Context for This Entry
+
+            \(taskContext)
+
+            \(regenerationContext)
+
+            ## Requirements
+
+            Generate:
+            1. A summary (1-2 sentences) describing the volunteer role and its impact
+            2. 2-3 highlight bullets showcasing achievements and contributions
+
+            ## CONSTRAINTS
+
+            1. Use ONLY facts from the provided Knowledge Cards
+            2. Do NOT invent metrics, percentages, or quantitative claims
+            3. Match the candidate's writing voice from the samples
+            4. Avoid generic resume phrases
+            """
+
+        let response: VolunteerResponse = try await executeStructuredRequest(
+            taskPrompt: taskPrompt,
+            systemPrompt: systemPrompt,
+            config: config,
+            responseType: VolunteerResponse.self,
+            schema: [
+                "type": "object",
+                "properties": [
+                    "summary": ["type": "string"],
+                    "highlights": ["type": "array", "items": ["type": "string"]]
+                ],
+                "required": ["summary", "highlights"],
+                "additionalProperties": false
+            ],
+            schemaName: "volunteer"
+        )
+
+        return GeneratedContent(
+            type: .volunteerDescription(
+                targetId: targetId,
+                summary: response.summary,
+                highlights: response.highlights
+            )
+        )
+    }
+
     // MARK: - Apply to Defaults
 
     override func apply(content: GeneratedContent, to defaults: inout ExperienceDefaults) {

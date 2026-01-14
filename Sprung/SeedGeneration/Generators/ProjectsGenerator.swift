@@ -307,6 +307,79 @@ final class ProjectsGenerator: BaseSectionGenerator {
         )
     }
 
+    // MARK: - Regeneration
+
+    override func regenerate(
+        task: GenerationTask,
+        originalContent: GeneratedContent,
+        feedback: String?,
+        context: SeedGenerationContext,
+        config: GeneratorExecutionConfig
+    ) async throws -> GeneratedContent {
+        guard let targetId = task.targetId else {
+            throw GeneratorError.missingContext("No targetId for project task")
+        }
+
+        let entry = context.getTimelineEntry(id: targetId)
+        let taskContext = buildTaskContext(entry: entry, context: context)
+        let regenerationContext = buildRegenerationContext(originalContent: originalContent, feedback: feedback)
+
+        let systemPrompt = "You are a professional resume writer. Generate project content based strictly on documented evidence."
+
+        let taskPrompt = """
+            ## Task: Revise Project Content
+
+            Revise the content for this project entry based on user feedback.
+
+            ## Context
+
+            \(taskContext)
+
+            \(regenerationContext)
+
+            ## Requirements
+
+            Generate:
+            1. A description (2-3 sentences) explaining the project's purpose and your role
+            2. 2-4 highlights showing key achievements or contributions
+            3. Relevant keywords/technologies
+
+            ## CONSTRAINTS
+
+            1. Use ONLY facts from the provided Knowledge Cards
+            2. Do NOT invent metrics, percentages, or quantitative claims
+            3. Match the candidate's writing voice from the samples
+            4. Avoid generic resume phrases
+            """
+
+        let response: ProjectResponse = try await executeStructuredRequest(
+            taskPrompt: taskPrompt,
+            systemPrompt: systemPrompt,
+            config: config,
+            responseType: ProjectResponse.self,
+            schema: [
+                "type": "object",
+                "properties": [
+                    "description": ["type": "string"],
+                    "highlights": ["type": "array", "items": ["type": "string"]],
+                    "keywords": ["type": "array", "items": ["type": "string"]]
+                ],
+                "required": ["description", "highlights", "keywords"],
+                "additionalProperties": false
+            ],
+            schemaName: "project"
+        )
+
+        return GeneratedContent(
+            type: .projectDescription(
+                targetId: targetId,
+                description: response.description,
+                highlights: response.highlights,
+                keywords: response.keywords
+            )
+        )
+    }
+
     // MARK: - Apply to Defaults
 
     override func apply(content: GeneratedContent, to defaults: inout ExperienceDefaults) {
