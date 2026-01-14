@@ -73,6 +73,7 @@ struct SeedGenerationView: View {
     private func applyToDefaults() {
         var defaults = defaultsStore.currentDefaults()
         orchestrator.applyApprovedContent(to: &defaults)
+        defaultsStore.save(defaults)  // Actually save the modified defaults
         defaultsStore.markSeedCreated()
         hasApplied = true
         Logger.info("🌱 Applied \(orchestrator.reviewQueue.approvedItems.count) items to defaults and marked seedCreated", category: .ai)
