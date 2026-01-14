@@ -51,7 +51,12 @@ actor ChatInventoryService {
         Logger.info("💬 Extracting chat knowledge from \(userMessages.count) user messages", category: .ai)
 
         // Call LLM with structured output for skills
-        let modelId = UserDefaults.standard.string(forKey: "onboardingCardMergeModelId") ?? DefaultModels.openRouter
+        guard let modelId = UserDefaults.standard.string(forKey: "onboardingCardMergeModelId"), !modelId.isEmpty else {
+            throw ModelConfigurationError.modelNotConfigured(
+                settingKey: "onboardingCardMergeModelId",
+                operationName: "Chat Inventory Processing"
+            )
+        }
 
         // Extract skills
         let skills: [Skill]

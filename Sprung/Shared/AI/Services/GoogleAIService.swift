@@ -241,8 +241,19 @@ actor GoogleAIService {
         modelId: String? = nil,
         maxOutputTokens: Int = 65536
     ) async throws -> (text: String, tokenUsage: GeminiTokenUsage?) {
-        // Use configured model or default
-        let effectiveModelId = modelId ?? UserDefaults.standard.string(forKey: "onboardingPDFExtractionModelId") ?? DefaultModels.gemini
+        // Use provided model or require configuration
+        let effectiveModelId: String
+        if let providedModelId = modelId, !providedModelId.isEmpty {
+            effectiveModelId = providedModelId
+        } else {
+            guard let configuredModelId = UserDefaults.standard.string(forKey: "onboardingPDFExtractionModelId"), !configuredModelId.isEmpty else {
+                throw ModelConfigurationError.modelNotConfigured(
+                    settingKey: "onboardingPDFExtractionModelId",
+                    operationName: "Google AI Content Generation"
+                )
+            }
+            effectiveModelId = configuredModelId
+        }
 
         // Upload file
         let uploadedFile: GoogleFilesAPIClient.UploadedFile

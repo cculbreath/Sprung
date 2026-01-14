@@ -96,15 +96,21 @@ class CoverLetterCommitteeSummaryGenerator {
         guard let llm = llmFacade else {
             throw CoverLetterCommitteeSummaryError.facadeUnavailable
         }
-        let summaryModelId = preferredModelId ?? modelReasonings.first?.model ?? DefaultModels.openRouter
+        let summaryModelId = preferredModelId ?? modelReasonings.first?.model
+        guard let modelId = summaryModelId, !modelId.isEmpty else {
+            throw ModelConfigurationError.modelNotConfigured(
+                settingKey: "preferredModelId",
+                operationName: "Cover Letter Summary Generation"
+            )
+        }
         let summaryResponse: CommitteeSummaryResponse = try await llm.executeFlexibleJSON(
                 prompt: summaryPrompt,
-                modelId: summaryModelId,
+                modelId: modelId,
                 as: CommitteeSummaryResponse.self,
                 temperature: 0.7,
                 jsonSchema: jsonSchema
         )
-        Logger.info("🧠 Analysis summary generated using model \(summaryModelId)")
+        Logger.info("🧠 Analysis summary generated using model \(modelId)")
         Logger.debug("🔍 Processing \(summaryResponse.letterAnalyses.count) letter analyses")
         for analysis in summaryResponse.letterAnalyses {
             Logger.debug("🔍 Processing analysis for letterId: \(analysis.letterId)")

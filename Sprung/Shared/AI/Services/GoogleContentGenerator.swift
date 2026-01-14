@@ -159,8 +159,19 @@ actor GoogleContentGenerator {
         filename: String,
         modelId: String? = nil
     ) async throws -> DocumentSummary {
-        // Use setting-based model or fallback
-        let effectiveModelId = modelId ?? UserDefaults.standard.string(forKey: "onboardingDocSummaryModelId") ?? DefaultModels.geminiLite
+        // Use provided model or require configuration
+        let effectiveModelId: String
+        if let providedModelId = modelId, !providedModelId.isEmpty {
+            effectiveModelId = providedModelId
+        } else {
+            guard let configuredModelId = UserDefaults.standard.string(forKey: "onboardingDocSummaryModelId"), !configuredModelId.isEmpty else {
+                throw ModelConfigurationError.modelNotConfigured(
+                    settingKey: "onboardingDocSummaryModelId",
+                    operationName: "Document Summary Generation"
+                )
+            }
+            effectiveModelId = configuredModelId
+        }
         let apiKey = try getAPIKey()
         let url = URL(string: "\(baseURL)/v1beta/models/\(effectiveModelId):generateContent?key=\(apiKey)")!
 
@@ -253,7 +264,19 @@ actor GoogleContentGenerator {
         maxOutputTokens: Int = 65536,
         jsonSchema: [String: Any]? = nil
     ) async throws -> String {
-        let effectiveModelId = modelId ?? UserDefaults.standard.string(forKey: "onboardingDocSummaryModelId") ?? DefaultModels.geminiLite
+        // Use provided model or require configuration
+        let effectiveModelId: String
+        if let providedModelId = modelId, !providedModelId.isEmpty {
+            effectiveModelId = providedModelId
+        } else {
+            guard let configuredModelId = UserDefaults.standard.string(forKey: "onboardingDocSummaryModelId"), !configuredModelId.isEmpty else {
+                throw ModelConfigurationError.modelNotConfigured(
+                    settingKey: "onboardingDocSummaryModelId",
+                    operationName: "Document Summary Generation"
+                )
+            }
+            effectiveModelId = configuredModelId
+        }
         let apiKey = try getAPIKey()
         let url = URL(string: "\(baseURL)/v1beta/models/\(effectiveModelId):generateContent?key=\(apiKey)")!
 

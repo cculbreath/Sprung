@@ -74,8 +74,10 @@ class JobAppPreprocessor {
     // MARK: - Configuration
 
     /// Model for preprocessing (user-configurable via Settings)
-    private var preprocessingModel: String {
-        UserDefaults.standard.string(forKey: "backgroundProcessingModelId") ?? DefaultModels.openRouterFast
+    /// Returns nil if not configured; callers must validate before use
+    private var preprocessingModel: String? {
+        let modelId = UserDefaults.standard.string(forKey: "backgroundProcessingModelId")
+        return (modelId?.isEmpty == false) ? modelId : nil
     }
 
     // MARK: - Initialization
@@ -147,6 +149,13 @@ class JobAppPreprocessor {
             throw PreprocessingError.llmNotAvailable
         }
 
+        guard let modelId = preprocessingModel, !modelId.isEmpty else {
+            throw ModelConfigurationError.modelNotConfigured(
+                settingKey: "backgroundProcessingModelId",
+                operationName: "Job Requirements Extraction"
+            )
+        }
+
         // Build card summaries for the LLM
         let cardSummaries = cards.map { "- \($0.id.uuidString): \($0.title)" }.joined(separator: "\n")
 
@@ -181,7 +190,7 @@ class JobAppPreprocessor {
 
         let response = try await facade.executeStructuredWithSchema(
             prompt: prompt,
-            modelId: preprocessingModel,
+            modelId: modelId,
             as: PreprocessingResponse.self,
             schema: Self.preprocessingSchema,
             schemaName: "preprocessing_response",
@@ -197,7 +206,7 @@ class JobAppPreprocessor {
                 cultural: response.cultural,
                 atsKeywords: response.atsKeywords,
                 extractedAt: Date(),
-                extractionModel: preprocessingModel
+                extractionModel: modelId
             ),
             relevantCardIds: response.relevantCardIds
         )

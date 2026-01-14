@@ -194,7 +194,7 @@ actor LLMMessenger: OnboardingEventEmitter {
         }
 
         do {
-            let request = await anthropicRequestBuilder.buildUserMessageRequest(
+            let request = try await anthropicRequestBuilder.buildUserMessageRequest(
                 text: text,
                 isSystemGenerated: isSystemGenerated,
                 bundledCoordinatorMessages: bundledCoordinatorMessages,
@@ -294,7 +294,7 @@ actor LLMMessenger: OnboardingEventEmitter {
         Logger.info("📨 Sending Anthropic developer message (\(text.prefix(100))...)", category: .ai)
 
         do {
-            let request = await anthropicRequestBuilder.buildCoordinatorMessageRequest(
+            let request = try await anthropicRequestBuilder.buildCoordinatorMessageRequest(
                 text: text
             )
             let messageId = UUID().uuidString
@@ -385,7 +385,7 @@ actor LLMMessenger: OnboardingEventEmitter {
             Logger.verbose("📤 Sending Anthropic tool response for callId=\(String(callId.prefix(12)))...", category: .ai)
 
             // Tool result is already stored in ConversationLog - request builder reads from history
-            let request = await anthropicRequestBuilder.buildToolResponseRequest(
+            let request = try await anthropicRequestBuilder.buildToolResponseRequest(
                 callId: callId,
                 instruction: instruction,
                 pdfBase64: pdfBase64,
@@ -474,7 +474,7 @@ actor LLMMessenger: OnboardingEventEmitter {
             Logger.info("📤 Sending Anthropic batched tool responses (\(payloads.count) responses)", category: .ai)
 
             // Note: Don't store results before building request - buildBatchedToolResponseRequest adds them explicitly
-            let request = await anthropicRequestBuilder.buildBatchedToolResponseRequest(payloads: payloads)
+            let request = try await anthropicRequestBuilder.buildBatchedToolResponseRequest(payloads: payloads)
             let messageId = UUID().uuidString
 
             for payload in payloads {

@@ -14,9 +14,15 @@ enum OnboardingModelConfig {
     static let anthropicModelKey = "onboardingAnthropicModelId"
 
     /// Returns the currently configured model ID from settings
-    /// Default is registered in SprungApp.init()
-    static var currentModelId: String {
-        UserDefaults.standard.string(forKey: anthropicModelKey) ?? DefaultModels.anthropic
+    /// Throws ModelConfigurationError if no model is configured
+    static func currentModelId() throws -> String {
+        guard let modelId = UserDefaults.standard.string(forKey: anthropicModelKey), !modelId.isEmpty else {
+            throw ModelConfigurationError.modelNotConfigured(
+                settingKey: anthropicModelKey,
+                operationName: "Onboarding Interview"
+            )
+        }
+        return modelId
     }
 }
 

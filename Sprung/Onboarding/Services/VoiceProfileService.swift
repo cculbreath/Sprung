@@ -13,8 +13,14 @@ import Foundation
 final class VoiceProfileService {
     private var llmFacade: LLMFacade?
 
-    private var modelId: String {
-        UserDefaults.standard.string(forKey: "voiceProfileModelId") ?? DefaultModels.gemini
+    private func getModelId() throws -> String {
+        guard let modelId = UserDefaults.standard.string(forKey: "voiceProfileModelId"), !modelId.isEmpty else {
+            throw ModelConfigurationError.modelNotConfigured(
+                settingKey: "voiceProfileModelId",
+                operationName: "Voice Profile Generation"
+            )
+        }
+        return modelId
     }
 
     init(llmFacade: LLMFacade?) {
@@ -36,6 +42,7 @@ final class VoiceProfileService {
             return VoiceProfile()
         }
 
+        let modelId = try getModelId()
         let samplesText = samples.joined(separator: "\n\n---\n\n")
         let prompt = PromptLibrary.substitute(
             template: PromptLibrary.voiceProfileTemplate,

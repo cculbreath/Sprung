@@ -125,13 +125,22 @@ class BatchCoverLetterGenerator {
                                 // Handle "same as generating model" option
                                 let modelToUseForRevisions: String
                                 if revisionModel == "SAME_AS_GENERATING" {
-                                    modelToUseForRevisions = baseLetter.generationModel ?? DefaultModels.openRouter
+                                    guard let generationModel = baseLetter.generationModel, !generationModel.isEmpty else {
+                                        throw ModelConfigurationError.modelNotConfigured(
+                                            settingKey: "generationModel",
+                                            operationName: "Batch Cover Letter Revision"
+                                        )
+                                    }
+                                    modelToUseForRevisions = generationModel
                                 } else {
                                     modelToUseForRevisions = revisionModel
                                 }
                                 // Validate we have a model
                                 guard !modelToUseForRevisions.isEmpty else {
-                                    throw NSError(domain: "BatchGeneration", code: 2, userInfo: [NSLocalizedDescriptionKey: "No model specified for revision"])
+                                    throw ModelConfigurationError.modelNotConfigured(
+                                        settingKey: "revisionModel",
+                                        operationName: "Batch Cover Letter Revision"
+                                    )
                                 }
                                 _ = try await self.generateSingleCoverLetter(
                                     baseCoverLetter: baseLetter,

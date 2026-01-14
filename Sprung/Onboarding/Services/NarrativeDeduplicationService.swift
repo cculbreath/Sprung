@@ -16,8 +16,14 @@ final class NarrativeDeduplicationService {
     private weak var eventBus: EventCoordinator?
     private weak var agentActivityTracker: AgentActivityTracker?
 
-    private var modelId: String {
-        UserDefaults.standard.string(forKey: "onboardingCardMergeModelId") ?? DefaultModels.openRouter
+    private func getModelId() throws -> String {
+        guard let modelId = UserDefaults.standard.string(forKey: "onboardingCardMergeModelId"), !modelId.isEmpty else {
+            throw ModelConfigurationError.modelNotConfigured(
+                settingKey: "onboardingCardMergeModelId",
+                operationName: "Narrative Deduplication"
+            )
+        }
+        return modelId
     }
 
     private let workspaceService = CardMergeWorkspaceService()
@@ -56,6 +62,8 @@ final class NarrativeDeduplicationService {
         guard let facade = llmFacade else {
             throw DeduplicationError.llmNotConfigured
         }
+
+        let modelId = try getModelId()
 
         Logger.info("🔀 Starting agentic deduplication of \(cards.count) cards", category: .ai)
         Logger.info("🔀 Using model: \(modelId)", category: .ai)

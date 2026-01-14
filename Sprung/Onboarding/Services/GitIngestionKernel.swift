@@ -355,7 +355,12 @@ actor GitIngestionKernel {
         Logger.info("🔬 [GitIngest] llmFacade exists, getting model ID...", category: .ai)
 
         // Get model from settings (OpenRouter-style ID)
-        let modelId = UserDefaults.standard.string(forKey: "onboardingGitIngestModelId") ?? DefaultModels.openRouter
+        guard let modelId = UserDefaults.standard.string(forKey: "onboardingGitIngestModelId"), !modelId.isEmpty else {
+            throw ModelConfigurationError.modelNotConfigured(
+                settingKey: "onboardingGitIngestModelId",
+                operationName: "Git Repository Analysis"
+            )
+        }
         Logger.info("🔬 [GitIngest] Using model: \(modelId)", category: .ai)
 
         // Note: Author filtering removed - this app analyzes the user's own repositories,

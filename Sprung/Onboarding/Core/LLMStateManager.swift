@@ -8,8 +8,8 @@ actor LLMStateManager {
     /// Currently allowed tool names for LLM calls
     private var allowedToolNames: Set<String> = []
 
-    /// Current model ID being used (reads from settings)
-    private var currentModelId: String = OnboardingModelConfig.currentModelId
+    /// Current model ID being used (set via setModelId when interview starts)
+    private var currentModelId: String = ""
 
     /// Whether to use flex processing tier (50% cost savings, variable latency)
     private var useFlexProcessing: Bool = true
@@ -167,7 +167,7 @@ actor LLMStateManager {
     /// Reset all LLM state to initial values
     func reset() {
         allowedToolNames = []
-        currentModelId = OnboardingModelConfig.currentModelId
+        currentModelId = ""
         currentToolPaneCard = .none
         pendingToolResponsePayloads = []
         pendingToolResponseRetryCount = 0

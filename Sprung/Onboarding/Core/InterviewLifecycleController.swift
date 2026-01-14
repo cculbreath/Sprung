@@ -110,7 +110,13 @@ final class InterviewLifecycleController {
         await documentArtifactMessenger.start()
 
         // Set model ID BEFORE starting interview (so first message uses correct model)
-        let modelId = OnboardingModelConfig.currentModelId
+        let modelId: String
+        do {
+            modelId = try OnboardingModelConfig.currentModelId()
+        } catch {
+            Logger.error("❌ Model not configured: \(error.localizedDescription)", category: .ai)
+            return false
+        }
         Logger.info("🎯 Setting interview model from settings: \(modelId)", category: .ai)
         await state.setModelId(modelId)
 
@@ -190,7 +196,13 @@ final class InterviewLifecycleController {
         await state.publishAllowedToolsNow()
 
         // Set model ID BEFORE starting interview (so first message uses correct model)
-        let modelId = OnboardingModelConfig.currentModelId
+        let modelId: String
+        do {
+            modelId = try OnboardingModelConfig.currentModelId()
+        } catch {
+            Logger.error("❌ Model not configured: \(error.localizedDescription)", category: .ai)
+            return false
+        }
         Logger.info("🎯 Setting interview model from settings (resume): \(modelId)", category: .ai)
         await state.setModelId(modelId)
 

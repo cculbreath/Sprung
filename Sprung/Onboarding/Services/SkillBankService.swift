@@ -12,8 +12,14 @@ import Foundation
 actor SkillBankService {
     private var llmFacade: LLMFacade?
 
-    private var modelId: String {
-        UserDefaults.standard.string(forKey: "skillBankModelId") ?? DefaultModels.gemini
+    private func getModelId() throws -> String {
+        guard let modelId = UserDefaults.standard.string(forKey: "skillBankModelId"), !modelId.isEmpty else {
+            throw ModelConfigurationError.modelNotConfigured(
+                settingKey: "skillBankModelId",
+                operationName: "Skill Bank Extraction"
+            )
+        }
+        return modelId
     }
 
     init(llmFacade: LLMFacade?) {
@@ -97,6 +103,7 @@ actor SkillBankService {
         content: String,
         facade: LLMFacade
     ) async throws -> [Skill] {
+        let modelId = try getModelId()
         let prompt = SkillBankPrompts.extractionPrompt(
             documentId: documentId,
             filename: filename,

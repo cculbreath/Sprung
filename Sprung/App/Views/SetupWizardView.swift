@@ -18,7 +18,7 @@ struct SetupWizardView: View {
     @AppStorage("hasCompletedSetupWizard") private var hasCompletedSetupWizard = false
     @AppStorage("onboardingInterviewDefaultModelId") private var onboardingModelId: String = "gpt-5"
     @AppStorage("onboardingPDFExtractionModelId") private var pdfExtractionModelId: String = "gemini-2.5-flash"
-    @AppStorage("onboardingGitIngestModelId") private var gitIngestModelId: String = Self.gitIngestDefaultModelId
+    @AppStorage("onboardingGitIngestModelId") private var gitIngestModelId: String = ""
     @AppStorage("discoveryCoachingModelId") private var coachingModelId: String = ""
 
     @State private var openRouterApiKey: String = APIKeyManager.get(.openRouter) ?? ""
@@ -48,8 +48,6 @@ struct SetupWizardView: View {
     private static let targetProviders = ["google", "openai", "anthropic", "x-ai", "deepseek"]
 
     var onFinish: (() -> Void)?
-
-    private static let gitIngestDefaultModelId = DefaultModels.openRouter
 
     var body: some View {
         NavigationStack {
@@ -535,7 +533,7 @@ private extension SetupWizardView {
                 }
                 .pickerStyle(.menu)
             }
-            Text("Used when scanning repositories during onboarding. Default: \(Self.gitIngestDefaultModelId)")
+            Text("Used when scanning repositories during onboarding.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
         }
@@ -658,28 +656,8 @@ private extension SetupWizardView {
     }
 
     func finalizeDefaults() {
-        // Ensure git ingest selection is valid against enabled models
-        let ids = enabledLLMStore.enabledModels.map(\.modelId)
-        let (sanitizedGit, adjustedGit) = ModelPreferenceValidator.sanitize(
-            requested: gitIngestModelId,
-            available: ids,
-            fallback: Self.gitIngestDefaultModelId
-        )
-        if adjustedGit {
-            gitIngestModelId = sanitizedGit
-        }
-        // Ensure PDF extraction model still points to something usable
-        if !geminiModels.isEmpty {
-            let ids = geminiModels.map(\.id)
-            let (sanitizedPDF, adjustedPDF) = ModelPreferenceValidator.sanitize(
-                requested: pdfExtractionModelId,
-                available: ids,
-                fallback: DefaultModels.gemini
-            )
-            if adjustedPDF {
-                pdfExtractionModelId = sanitizedPDF
-            }
-        }
+        // No-op: Model validation removed - if user selection is invalid,
+        // operations will throw ModelConfigurationError at runtime
     }
 
     func completeAndDismiss(markCompleted: Bool) {

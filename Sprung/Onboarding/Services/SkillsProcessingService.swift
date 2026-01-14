@@ -75,8 +75,14 @@ final class SkillsProcessingService {
     private(set) var totalBatches: Int = 0
 
     // Configuration - UserDefaults backed
-    private var modelId: String {
-        UserDefaults.standard.string(forKey: "skillsProcessingModelId") ?? "gemini-2.5-flash"
+    private func getModelId() throws -> String {
+        guard let modelId = UserDefaults.standard.string(forKey: "skillsProcessingModelId"), !modelId.isEmpty else {
+            throw ModelConfigurationError.modelNotConfigured(
+                settingKey: "skillsProcessingModelId",
+                operationName: "Skills Processing"
+            )
+        }
+        return modelId
     }
 
     private var parallelAgentCount: Int {
@@ -188,6 +194,7 @@ final class SkillsProcessingService {
         facade: LLMFacade,
         agentId: String
     ) async throws -> [DuplicateGroup] {
+        let modelId = try getModelId()
         var allDuplicateGroups: [DuplicateGroup] = []
         var processedSkillIds: Set<String> = []
         var partNumber = 1
@@ -641,7 +648,7 @@ final class SkillsProcessingService {
             "required": ["skills"]
         ]
 
-        let modelId = await MainActor.run { self.modelId }
+        let modelId = try await MainActor.run { try self.getModelId() }
 
         Logger.debug("🔧 ATS batch \(batchIndex): Processing \(skills.count) skills", category: .ai)
 

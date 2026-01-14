@@ -166,7 +166,19 @@ final class LLMFacadeSpecializedAPIs {
             throw LLMError.clientError("Google AI service is not configured. Call registerGoogleAIService first.")
         }
 
-        let effectiveModelId = modelId ?? UserDefaults.standard.string(forKey: "onboardingPDFExtractionModelId") ?? DefaultModels.gemini
+        // Use provided model or require configuration
+        let effectiveModelId: String
+        if let providedModelId = modelId, !providedModelId.isEmpty {
+            effectiveModelId = providedModelId
+        } else {
+            guard let configuredModelId = UserDefaults.standard.string(forKey: "onboardingPDFExtractionModelId"), !configuredModelId.isEmpty else {
+                throw ModelConfigurationError.modelNotConfigured(
+                    settingKey: "onboardingPDFExtractionModelId",
+                    operationName: "LLM Facade Image Analysis"
+                )
+            }
+            effectiveModelId = configuredModelId
+        }
 
         return try await service.generateFromPDF(
             pdfData: pdfData,

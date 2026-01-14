@@ -8,11 +8,11 @@ struct OnboardingInterviewView: View {
     @Environment(DebugSettingsStore.self) private var debugSettings
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var viewModel = OnboardingInterviewViewModel(
-        fallbackModelId: OnboardingModelConfig.currentModelId
+        fallbackModelId: UserDefaults.standard.string(forKey: OnboardingModelConfig.anthropicModelKey) ?? ""
     )
     @State private var showResumePrompt = false
     @State private var showSetupWizard = false
-    @AppStorage("onboardingAnthropicModelId") private var anthropicModelId = DefaultModels.anthropic
+    @AppStorage("onboardingAnthropicModelId") private var anthropicModelId = ""
     @AppStorage("onboardingInterviewAllowWebSearchDefault") private var defaultWebSearchAllowed = true
 
     private var currentModelId: String {

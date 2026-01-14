@@ -56,8 +56,4 @@ enum OnboardingLLMConfig {
     /// Default maximum concurrent extractions
     static let defaultMaxConcurrentExtractions = 5
 
-    // MARK: - Model Defaults (see DefaultModels.swift for model IDs)
-
-    // Model IDs are centralized in DefaultModels.swift to avoid duplication
-    // Use DefaultModels.anthropic, DefaultModels.anthropicFast, etc.
 }

@@ -12,9 +12,14 @@ import Foundation
 actor KnowledgeCardExtractionService {
     private var llmFacade: LLMFacade?
 
-    private var modelId: String {
-        // Pro for narratives - quality matters
-        UserDefaults.standard.string(forKey: "kcExtractionModelId") ?? DefaultModels.geminiPro
+    private func getModelId() throws -> String {
+        guard let modelId = UserDefaults.standard.string(forKey: "kcExtractionModelId"), !modelId.isEmpty else {
+            throw ModelConfigurationError.modelNotConfigured(
+                settingKey: "kcExtractionModelId",
+                operationName: "Knowledge Card Extraction"
+            )
+        }
+        return modelId
     }
 
     init(llmFacade: LLMFacade?) {
@@ -63,6 +68,7 @@ actor KnowledgeCardExtractionService {
         content: String,
         facade: LLMFacade
     ) async throws -> [KnowledgeCard] {
+        let modelId = try getModelId()
         let prompt = KCExtractionPrompts.extractionPrompt(
             documentId: documentId,
             filename: filename,

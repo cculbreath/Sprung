@@ -77,7 +77,19 @@ actor GoogleImageAnalyzer {
         temperature: Double = 0.1,
         maxOutputTokens: Int = 8192
     ) async throws -> String {
-        let effectiveModelId = modelId ?? UserDefaults.standard.string(forKey: "onboardingPDFExtractionModelId") ?? DefaultModels.gemini
+        // Use provided model or require configuration
+        let effectiveModelId: String
+        if let providedModelId = modelId, !providedModelId.isEmpty {
+            effectiveModelId = providedModelId
+        } else {
+            guard let configuredModelId = UserDefaults.standard.string(forKey: "onboardingPDFExtractionModelId"), !configuredModelId.isEmpty else {
+                throw ModelConfigurationError.modelNotConfigured(
+                    settingKey: "onboardingPDFExtractionModelId",
+                    operationName: "Image Analysis"
+                )
+            }
+            effectiveModelId = configuredModelId
+        }
         let apiKey = try getAPIKey()
         let url = URL(string: "\(baseURL)/v1beta/models/\(effectiveModelId):generateContent?key=\(apiKey)")!
 
@@ -162,7 +174,19 @@ actor GoogleImageAnalyzer {
         modelId: String? = nil,
         temperature: Double = 0.1
     ) async throws -> String {
-        let effectiveModelId = modelId ?? UserDefaults.standard.string(forKey: "onboardingPDFExtractionModelId") ?? DefaultModels.gemini
+        // Use provided model or require configuration
+        let effectiveModelId: String
+        if let providedModelId = modelId, !providedModelId.isEmpty {
+            effectiveModelId = providedModelId
+        } else {
+            guard let configuredModelId = UserDefaults.standard.string(forKey: "onboardingPDFExtractionModelId"), !configuredModelId.isEmpty else {
+                throw ModelConfigurationError.modelNotConfigured(
+                    settingKey: "onboardingPDFExtractionModelId",
+                    operationName: "Image Analysis"
+                )
+            }
+            effectiveModelId = configuredModelId
+        }
         let apiKey = try getAPIKey()
         let url = URL(string: "\(baseURL)/v1beta/models/\(effectiveModelId):generateContent?key=\(apiKey)")!
 

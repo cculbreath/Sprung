@@ -105,7 +105,6 @@ actor DocumentExtractionService {
 
     // MARK: - Private Properties
     private var llmFacade: LLMFacade?
-    private let defaultModelId = DefaultModels.gemini
     private var eventBus: EventCoordinator?
     private var pdfRouter: PDFExtractionRouter?
     private weak var agentTracker: AgentActivityTracker?
@@ -273,10 +272,16 @@ actor DocumentExtractionService {
 
     // MARK: - Helpers
 
-    private func currentModelId() -> String {
+    private func currentModelId() throws -> String {
         // Model IDs are now Gemini format (e.g., "gemini-2.0-flash") not OpenRouter format
         // Validation happens in SettingsView when models are loaded from Google API
-        UserDefaults.standard.string(forKey: "onboardingPDFExtractionModelId") ?? defaultModelId
+        guard let modelId = UserDefaults.standard.string(forKey: "onboardingPDFExtractionModelId"), !modelId.isEmpty else {
+            throw ModelConfigurationError.modelNotConfigured(
+                settingKey: "onboardingPDFExtractionModelId",
+                operationName: "PDF Extraction"
+            )
+        }
+        return modelId
     }
 
     private func contentTypeForFile(at url: URL) -> String? {

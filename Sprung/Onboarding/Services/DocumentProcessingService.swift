@@ -114,7 +114,7 @@ actor DocumentProcessingService {
             Logger.info("📝 Generating descriptive name for writing sample: \(filename)", category: .ai)
 
             // Generate a descriptive name for the writing sample
-            writingSampleName = await generateWritingSampleName(
+            writingSampleName = try await generateWritingSampleName(
                 extractedText: extractedText,
                 filename: filename
             )
@@ -578,10 +578,11 @@ actor DocumentProcessingService {
 
     /// Generate a descriptive name for a writing sample using a quick LLM call.
     /// Falls back to nil if LLM is unavailable or call fails.
+    /// Throws ModelConfigurationError if no model is configured.
     private func generateWritingSampleName(
         extractedText: String,
         filename: String
-    ) async -> String? {
+    ) async throws -> String? {
         guard let facade = llmFacade else {
             Logger.warning("⚠️ LLM not available for writing sample naming", category: .ai)
             return nil
@@ -601,8 +602,12 @@ actor DocumentProcessingService {
         """
 
         // Use KC agent model (fast haiku) for this simple task
-        let modelId = UserDefaults.standard.string(forKey: "onboardingKCAgentModelId")
-            ?? "anthropic/claude-haiku-4.5"
+        guard let modelId = UserDefaults.standard.string(forKey: "onboardingKCAgentModelId"), !modelId.isEmpty else {
+            throw ModelConfigurationError.modelNotConfigured(
+                settingKey: "onboardingKCAgentModelId",
+                operationName: "Document Name Generation"
+            )
+        }
 
         do {
             let response = try await facade.executeText(

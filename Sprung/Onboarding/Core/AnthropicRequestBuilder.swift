@@ -43,7 +43,7 @@ struct AnthropicRequestBuilder {
         bundledCoordinatorMessages: [JSON] = [],
         imageBase64: String? = nil,
         imageContentType: String? = nil
-    ) async -> AnthropicMessageParameter {
+    ) async throws -> AnthropicMessageParameter {
         var messages: [AnthropicMessage] = []
 
         // Build conversation history (Anthropic uses explicit messages, no PRI)
@@ -135,7 +135,7 @@ struct AnthropicRequestBuilder {
         // Build system prompt (base personality only - interview context now in user messages)
         let systemPrompt = await buildSystemPrompt()
 
-        let modelId = await stateCoordinator.getAnthropicModelId()
+        let modelId = try await stateCoordinator.getAnthropicModelId()
 
         let parameters = AnthropicMessageParameter(
             model: modelId,
@@ -163,7 +163,7 @@ struct AnthropicRequestBuilder {
     /// with <coordinator> XML tags, not stuffed into system prompt.
     func buildCoordinatorMessageRequest(
         text: String
-    ) async -> AnthropicMessageParameter {
+    ) async throws -> AnthropicMessageParameter {
         var messages: [AnthropicMessage] = []
 
         // Include conversation history
@@ -196,7 +196,7 @@ struct AnthropicRequestBuilder {
 
         let tools = await toolConverter.getAnthropicTools()
         let systemPrompt = await buildSystemPrompt()
-        let modelId = await stateCoordinator.getAnthropicModelId()
+        let modelId = try await stateCoordinator.getAnthropicModelId()
 
         let parameters = AnthropicMessageParameter(
             model: modelId,
@@ -236,7 +236,7 @@ struct AnthropicRequestBuilder {
         instruction: String? = nil,
         pdfBase64: String? = nil,
         pdfFilename: String? = nil
-    ) async -> AnthropicMessageParameter {
+    ) async throws -> AnthropicMessageParameter {
         // Build conversation history - tool_result is already in ConversationLog
         var messages = await historyBuilder.buildAnthropicHistory()
 
@@ -285,7 +285,7 @@ struct AnthropicRequestBuilder {
 
         let tools = await toolConverter.getAnthropicTools()
         let systemPrompt = await buildSystemPrompt()
-        let modelId = await stateCoordinator.getAnthropicModelId()
+        let modelId = try await stateCoordinator.getAnthropicModelId()
 
         let parameters = AnthropicMessageParameter(
             model: modelId,
@@ -353,7 +353,7 @@ struct AnthropicRequestBuilder {
     /// then appends computed context (interview state, coordinator instructions).
     ///
     /// - Parameter payloads: Payloads containing callIds and optional instructions (output not needed)
-    func buildBatchedToolResponseRequest(payloads: [JSON]) async -> AnthropicMessageParameter {
+    func buildBatchedToolResponseRequest(payloads: [JSON]) async throws -> AnthropicMessageParameter {
         // Build conversation history - all tool_results are already in ConversationLog
         var messages = await historyBuilder.buildAnthropicHistory()
 
@@ -388,7 +388,7 @@ struct AnthropicRequestBuilder {
 
         let tools = await toolConverter.getAnthropicTools()
         let systemPrompt = await buildSystemPrompt()
-        let modelId = await stateCoordinator.getAnthropicModelId()
+        let modelId = try await stateCoordinator.getAnthropicModelId()
 
         let parameters = AnthropicMessageParameter(
             model: modelId,
@@ -435,7 +435,14 @@ struct AnthropicRequestBuilder {
 
 extension StateCoordinator {
     /// Get the Anthropic model ID from settings
-    func getAnthropicModelId() async -> String {
-        return UserDefaults.standard.string(forKey: "onboardingAnthropicModelId") ?? DefaultModels.anthropic
+    /// Throws ModelConfigurationError if no model is configured
+    func getAnthropicModelId() async throws -> String {
+        guard let modelId = UserDefaults.standard.string(forKey: "onboardingAnthropicModelId"), !modelId.isEmpty else {
+            throw ModelConfigurationError.modelNotConfigured(
+                settingKey: "onboardingAnthropicModelId",
+                operationName: "Anthropic Request Building"
+            )
+        }
+        return modelId
     }
 }

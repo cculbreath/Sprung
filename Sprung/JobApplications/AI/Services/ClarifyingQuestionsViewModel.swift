@@ -169,7 +169,12 @@ class ClarifyingQuestionsViewModel {
         guard let conversationId = currentConversationId else {
             throw ClarifyingQuestionsError.noActiveConversation
         }
-        let modelId = currentModelId ?? DefaultModels.openRouter
+        guard let modelId = currentModelId, !modelId.isEmpty else {
+            throw ModelConfigurationError.modelNotConfigured(
+                settingKey: "currentModelId",
+                operationName: "Clarifying Questions"
+            )
+        }
         // Add the user's answers to the conversation
         let answerPrompt = createAnswerPrompt(answers: answers)
         // Check if model supports reasoning for streaming
@@ -251,12 +256,18 @@ class ClarifyingQuestionsViewModel {
     ) async {
         Logger.debug("🔄 Handing off conversation \(conversationId) to ResumeReviseViewModel")
         do {
+            guard let modelId = currentModelId, !modelId.isEmpty else {
+                throw ModelConfigurationError.modelNotConfigured(
+                    settingKey: "currentModelId",
+                    operationName: "Clarifying Questions"
+                )
+            }
             // Pass conversation context - ResumeReviseViewModel will generate revisions
             // using the existing conversation thread (no duplicate background docs needed)
             try await resumeReviseViewModel.continueConversationAndGenerateRevisions(
                 conversationId: conversationId,
                 resume: resume,
-                modelId: currentModelId ?? DefaultModels.openRouter
+                modelId: modelId
             )
             Logger.debug("✅ Conversation handoff complete - ResumeReviseViewModel is managing the workflow")
         } catch {

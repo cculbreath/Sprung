@@ -36,8 +36,9 @@ actor MetadataExtractionService {
 
     init(llmFacade: LLMFacade?, modelId: String? = nil) {
         self.llmFacade = llmFacade
-        // Default to a fast, capable model for metadata extraction
-        self.modelId = modelId ?? UserDefaults.standard.string(forKey: "onboardingKCAgentModelId") ?? DefaultModels.openRouter
+        // Use provided modelId, or fall back to user setting; empty means not configured
+        let configured = modelId ?? UserDefaults.standard.string(forKey: "onboardingKCAgentModelId")
+        self.modelId = (configured?.isEmpty == false) ? configured! : ""
     }
 
     // MARK: - Public API
@@ -54,6 +55,13 @@ actor MetadataExtractionService {
             // Fallback to defaults if no LLM available
             let filename = artifacts.first?["filename"].stringValue ?? "Document"
             return CardMetadata.defaults(fromFilename: filename)
+        }
+
+        guard !modelId.isEmpty else {
+            throw ModelConfigurationError.modelNotConfigured(
+                settingKey: "onboardingKCAgentModelId",
+                operationName: "Metadata Extraction"
+            )
         }
 
         // Build summary of all artifacts for the prompt
