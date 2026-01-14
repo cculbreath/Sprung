@@ -700,6 +700,49 @@ final class LLMFacade {
         try await specializedAPIs.anthropicListModels()
     }
 
+    /// Execute a text prompt via direct Anthropic API with prompt caching.
+    /// The system content blocks can include cache_control for server-side caching.
+    /// - Parameters:
+    ///   - systemContent: Array of system content blocks (some may have cache_control)
+    ///   - userPrompt: The user's request/prompt
+    ///   - modelId: Anthropic model ID (e.g., "claude-sonnet-4-20250514")
+    ///   - temperature: Generation temperature
+    /// - Returns: The assistant's text response
+    func executeTextWithAnthropicCaching(
+        systemContent: [AnthropicSystemBlock],
+        userPrompt: String,
+        modelId: String,
+        temperature: Double? = nil
+    ) async throws -> String {
+        let parameters = AnthropicMessageParameter(
+            model: modelId,
+            messages: [.user(userPrompt)],
+            system: .blocks(systemContent),
+            maxTokens: 4096,
+            stream: false,
+            temperature: temperature ?? 0.7
+        )
+
+        let stream = try await specializedAPIs.anthropicMessagesStream(parameters: parameters)
+        var resultText = ""
+
+        for try await event in stream {
+            switch event {
+            case .contentBlockDelta(let delta):
+                if case .textDelta(let text) = delta.delta {
+                    resultText += text
+                }
+            case .messageStop:
+                break
+            default:
+                break
+            }
+        }
+
+        Logger.info("✅ Anthropic cached request completed: \(resultText.count) chars", category: .ai)
+        return resultText
+    }
+
     // MARK: - Gemini Document Extraction (Specialized)
 
     func generateFromPDF(

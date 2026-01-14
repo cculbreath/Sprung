@@ -8,6 +8,8 @@ import SwiftOpenAI
 
 struct OnboardingModelSettingsView: View {
     @AppStorage("onboardingAnthropicModelId") private var onboardingAnthropicModelId: String = "claude-sonnet-4-20250514"
+    @AppStorage("seedGenerationModelId") private var seedGenerationModelId: String = "anthropic/claude-sonnet-4"
+    @AppStorage("seedGenerationBackend") private var seedGenerationBackend: String = "anthropic"
     @AppStorage("onboardingPDFExtractionModelId") private var pdfExtractionModelId: String = "gemini-2.5-flash"
     @AppStorage("onboardingGitIngestModelId") private var gitIngestModelId: String = "anthropic/claude-haiku-4.5"
     @AppStorage("onboardingDocSummaryModelId") private var docSummaryModelId: String = "gemini-2.5-flash-lite"
@@ -47,6 +49,12 @@ struct OnboardingModelSettingsView: View {
                 anthropicModelPickerContent
             } header: {
                 SettingsSectionHeader(title: "Interview Model", systemImage: "bubble.left.and.bubble.right")
+            }
+
+            Section {
+                seedGenerationSettings
+            } header: {
+                SettingsSectionHeader(title: "Experience Defaults Generation", systemImage: "wand.and.stars")
             }
 
             Section {
@@ -127,6 +135,60 @@ struct OnboardingModelSettingsView: View {
 
 // MARK: - Model Pickers
 private extension OnboardingModelSettingsView {
+    @ViewBuilder
+    var seedGenerationSettings: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Picker("Backend", selection: $seedGenerationBackend) {
+                Text("Anthropic (Direct)").tag("anthropic")
+                Text("OpenRouter").tag("openrouter")
+            }
+            .pickerStyle(.segmented)
+            Text(seedGenerationBackend == "anthropic"
+                ? "Direct Anthropic API with prompt caching for faster, cheaper generation."
+                : "OpenRouter for model flexibility. Caching depends on underlying provider.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+
+            Divider()
+                .padding(.vertical, 4)
+
+            if seedGenerationBackend == "anthropic" {
+                if !hasAnthropicKey {
+                    Label("Add Anthropic API key to use direct Anthropic backend.", systemImage: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange)
+                        .font(.callout)
+                } else if filteredAnthropicModels.isEmpty {
+                    HStack {
+                        Text("Loading models...")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                        ProgressView()
+                            .controlSize(.small)
+                    }
+                } else {
+                    Picker("Model", selection: $seedGenerationModelId) {
+                        ForEach(filteredAnthropicModels) { model in
+                            Text(model.displayName).tag(model.id)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                }
+            } else {
+                Picker("Model", selection: $seedGenerationModelId) {
+                    ForEach(allOpenRouterModels, id: \.modelId) { model in
+                        Text(model.displayName.isEmpty ? model.modelId : model.displayName)
+                            .tag(model.modelId)
+                    }
+                }
+                .pickerStyle(.menu)
+            }
+
+            Text("Generates professional descriptions for work history, education, and projects after onboarding.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        }
+    }
+
     @ViewBuilder
     var anthropicModelPickerContent: some View {
         if !hasAnthropicKey {

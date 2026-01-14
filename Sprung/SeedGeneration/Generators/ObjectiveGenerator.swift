@@ -48,19 +48,13 @@ final class ObjectiveGenerator: BaseSectionGenerator {
     override func execute(
         task: GenerationTask,
         context: SeedGenerationContext,
-        preamble: String,
-        llmFacade: LLMFacade,
-        modelId: String
+        config: GeneratorExecutionConfig
     ) async throws -> GeneratedContent {
         let taskContext = buildTaskContext(context: context)
 
         let systemPrompt = "You are a professional resume writer. Generate a compelling professional summary."
 
-        let fullPrompt = """
-            \(preamble)
-
-            ---
-
+        let taskPrompt = """
             ## Task: Generate Professional Summary
 
             Create a compelling professional summary (also called an objective statement)
@@ -86,10 +80,11 @@ final class ObjectiveGenerator: BaseSectionGenerator {
             }
             """
 
-        let response: ObjectiveResponse = try await llmFacade.executeStructuredWithDictionarySchema(
-            prompt: "\(systemPrompt)\n\n\(fullPrompt)",
-            modelId: modelId,
-            as: ObjectiveResponse.self,
+        let response: ObjectiveResponse = try await executeStructuredRequest(
+            taskPrompt: taskPrompt,
+            systemPrompt: systemPrompt,
+            config: config,
+            responseType: ObjectiveResponse.self,
             schema: [
                 "type": "object",
                 "properties": [

@@ -54,9 +54,7 @@ final class EducationGenerator: BaseSectionGenerator {
     override func execute(
         task: GenerationTask,
         context: SeedGenerationContext,
-        preamble: String,
-        llmFacade: LLMFacade,
-        modelId: String
+        config: GeneratorExecutionConfig
     ) async throws -> GeneratedContent {
         guard let targetId = task.targetId else {
             throw GeneratorError.missingContext("No targetId for education task")
@@ -69,11 +67,7 @@ final class EducationGenerator: BaseSectionGenerator {
 
         let systemPrompt = "You are a professional resume writer. Generate education content that highlights relevant skills and achievements."
 
-        let fullPrompt = """
-            \(preamble)
-
-            ---
-
+        let taskPrompt = """
             ## Task: Generate Education Content
 
             Generate a compelling description for this education entry that highlights
@@ -96,10 +90,11 @@ final class EducationGenerator: BaseSectionGenerator {
             }
             """
 
-        let response: EducationResponse = try await llmFacade.executeStructuredWithDictionarySchema(
-            prompt: "\(systemPrompt)\n\n\(fullPrompt)",
-            modelId: modelId,
-            as: EducationResponse.self,
+        let response: EducationResponse = try await executeStructuredRequest(
+            taskPrompt: taskPrompt,
+            systemPrompt: systemPrompt,
+            config: config,
+            responseType: EducationResponse.self,
             schema: [
                 "type": "object",
                 "properties": [

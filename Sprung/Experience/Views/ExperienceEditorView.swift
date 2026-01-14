@@ -32,6 +32,9 @@ struct ExperienceEditorView: View {
     }
     var body: some View {
         VStack(spacing: 0) {
+            if !defaultsStore.isSeedCreated {
+                seedGenerationBanner
+            }
             header
             Divider()
             content
@@ -57,6 +60,35 @@ struct ExperienceEditorView: View {
             )
         }
     }
+    // MARK: - Seed Generation Banner
+
+    private var seedGenerationBanner: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "wand.and.stars")
+                .font(.title2)
+                .foregroundStyle(.blue)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Generate Experience Defaults")
+                    .font(.headline)
+                Text("Use AI to generate professional descriptions for your work history, education, and projects.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+
+            Button {
+                NotificationCenter.default.post(name: .showSeedGeneration, object: nil)
+            } label: {
+                Label("Generate", systemImage: "wand.and.stars")
+            }
+            .buttonStyle(.borderedProminent)
+        }
+        .padding()
+        .background(Color.blue.opacity(0.08))
+    }
+
     // MARK: - Header
     private var header: some View {
         HStack(spacing: 16) {
@@ -155,6 +187,8 @@ struct ExperienceEditorView: View {
         guard hasChanges else { return true }
         saveState = .saving
         defaultsStore.save(draft: draft)
+        // Mark seed as created when user manually saves content
+        defaultsStore.markSeedCreated()
         originalDraft = draft
         hasChanges = false
         saveState = .saved

@@ -627,14 +627,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 return
             }
 
-            // Get model ID from settings
-            let modelId = UserDefaults.standard.string(forKey: "seedGenerationModelId")
-                ?? "google/gemini-2.0-flash-exp:free"
+            // Get model and backend from settings
+            let backendString = UserDefaults.standard.string(forKey: "seedGenerationBackend") ?? "anthropic"
+            let backend: LLMFacade.Backend = backendString == "anthropic" ? .anthropic : .openRouter
+            let defaultModel = backend == .anthropic ? "claude-sonnet-4-20250514" : "anthropic/claude-sonnet-4"
+            let modelId = UserDefaults.standard.string(forKey: "seedGenerationModelId") ?? defaultModel
 
             let orchestrator = SeedGenerationOrchestrator(
                 context: context,
                 llmFacade: appEnvironment.llmFacade,
-                modelId: modelId
+                modelId: modelId,
+                backend: backend
             )
 
             let sgmView = SeedGenerationView(orchestrator: orchestrator)

@@ -228,9 +228,7 @@ final class ProjectsGenerator: BaseSectionGenerator {
     override func execute(
         task: GenerationTask,
         context: SeedGenerationContext,
-        preamble: String,
-        llmFacade: LLMFacade,
-        modelId: String
+        config: GeneratorExecutionConfig
     ) async throws -> GeneratedContent {
         guard let targetId = task.targetId else {
             throw GeneratorError.missingContext("No targetId for project task")
@@ -242,11 +240,7 @@ final class ProjectsGenerator: BaseSectionGenerator {
 
         let systemPrompt = "You are a professional resume writer creating impactful project descriptions."
 
-        let fullPrompt = """
-            \(preamble)
-
-            ---
-
+        let taskPrompt = """
             ## Task: Generate Project Content
 
             Create compelling content for this project entry.
@@ -270,10 +264,11 @@ final class ProjectsGenerator: BaseSectionGenerator {
             }
             """
 
-        let response: ProjectResponse = try await llmFacade.executeStructuredWithDictionarySchema(
-            prompt: "\(systemPrompt)\n\n\(fullPrompt)",
-            modelId: modelId,
-            as: ProjectResponse.self,
+        let response: ProjectResponse = try await executeStructuredRequest(
+            taskPrompt: taskPrompt,
+            systemPrompt: systemPrompt,
+            config: config,
+            responseType: ProjectResponse.self,
             schema: [
                 "type": "object",
                 "properties": [

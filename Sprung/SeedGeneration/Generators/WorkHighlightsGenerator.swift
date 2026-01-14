@@ -54,9 +54,7 @@ final class WorkHighlightsGenerator: BaseSectionGenerator {
     override func execute(
         task: GenerationTask,
         context: SeedGenerationContext,
-        preamble: String,
-        llmFacade: LLMFacade,
-        modelId: String
+        config: GeneratorExecutionConfig
     ) async throws -> GeneratedContent {
         guard let targetId = task.targetId else {
             throw GeneratorError.missingContext("No targetId for work task")
@@ -69,11 +67,7 @@ final class WorkHighlightsGenerator: BaseSectionGenerator {
 
         let systemPrompt = "You are a professional resume writer. Generate impactful work highlights."
 
-        let fullPrompt = """
-            \(preamble)
-
-            ---
-
+        let taskPrompt = """
             ## Task: Generate Work Highlights
 
             Generate compelling bullet point highlights for this work experience.
@@ -97,10 +91,11 @@ final class WorkHighlightsGenerator: BaseSectionGenerator {
             }
             """
 
-        let response: WorkHighlightsResponse = try await llmFacade.executeStructuredWithDictionarySchema(
-            prompt: "\(systemPrompt)\n\n\(fullPrompt)",
-            modelId: modelId,
-            as: WorkHighlightsResponse.self,
+        let response: WorkHighlightsResponse = try await executeStructuredRequest(
+            taskPrompt: taskPrompt,
+            systemPrompt: systemPrompt,
+            config: config,
+            responseType: WorkHighlightsResponse.self,
             schema: [
                 "type": "object",
                 "properties": [

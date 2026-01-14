@@ -53,9 +53,7 @@ final class VolunteerGenerator: BaseSectionGenerator {
     override func execute(
         task: GenerationTask,
         context: SeedGenerationContext,
-        preamble: String,
-        llmFacade: LLMFacade,
-        modelId: String
+        config: GeneratorExecutionConfig
     ) async throws -> GeneratedContent {
         guard let targetId = task.targetId else {
             throw GeneratorError.missingContext("No targetId for volunteer task")
@@ -68,11 +66,7 @@ final class VolunteerGenerator: BaseSectionGenerator {
 
         let systemPrompt = "You are a professional resume writer. Generate volunteer experience content that showcases leadership and impact."
 
-        let fullPrompt = """
-            \(preamble)
-
-            ---
-
+        let taskPrompt = """
             ## Task: Generate Volunteer Experience Content
 
             Generate compelling content for this volunteer experience that demonstrates
@@ -95,10 +89,11 @@ final class VolunteerGenerator: BaseSectionGenerator {
             }
             """
 
-        let response: VolunteerResponse = try await llmFacade.executeStructuredWithDictionarySchema(
-            prompt: "\(systemPrompt)\n\n\(fullPrompt)",
-            modelId: modelId,
-            as: VolunteerResponse.self,
+        let response: VolunteerResponse = try await executeStructuredRequest(
+            taskPrompt: taskPrompt,
+            systemPrompt: systemPrompt,
+            config: config,
+            responseType: VolunteerResponse.self,
             schema: [
                 "type": "object",
                 "properties": [

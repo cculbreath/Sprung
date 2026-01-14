@@ -8,16 +8,25 @@
 //
 
 import Foundation
+import SwiftOpenAI
 import SwiftyJSON
 
 /// Service for building cacheable prompt preambles.
 /// The preamble is built once from context and reused across all generation tasks.
 @MainActor
 final class PromptCacheService {
+    // MARK: - Configuration
+
+    private let backend: LLMFacade.Backend
+
     // MARK: - Cached State
 
     private var cachedPreamble: String?
     private var cachedContextHash: Int?
+
+    init(backend: LLMFacade.Backend = .openRouter) {
+        self.backend = backend
+    }
 
     // MARK: - Public API
 
@@ -87,6 +96,48 @@ final class PromptCacheService {
 
         \(taskContext)
         """
+    }
+
+    /// Build structured system content blocks for Anthropic caching.
+    /// The preamble is marked with cache_control for server-side caching.
+    /// - Parameters:
+    ///   - context: The seed generation context
+    ///   - sectionPrompt: Section-specific generation instructions
+    ///   - taskContext: Task-specific context
+    /// - Returns: Array of AnthropicSystemBlock with cache control on the preamble
+    func buildAnthropicSystemContent(
+        context: SeedGenerationContext,
+        sectionPrompt: String,
+        taskContext: String
+    ) -> [AnthropicSystemBlock] {
+        let preamble = buildPreamble(context: context)
+
+        // The preamble (large, static context) gets cache_control
+        // The task-specific content is dynamic and not cached
+        let taskContent = """
+        ## Current Task
+
+        \(sectionPrompt)
+
+        ## Context for This Task
+
+        \(taskContext)
+        """
+
+        // Build system blocks with cache_control on the preamble
+        let cachedPreambleBlock = AnthropicSystemBlock(
+            text: preamble,
+            cacheControl: AnthropicCacheControl()  // defaults to "ephemeral"
+        )
+
+        let taskBlock = AnthropicSystemBlock(text: taskContent)
+
+        return [cachedPreambleBlock, taskBlock]
+    }
+
+    /// Check if this service is configured for Anthropic caching
+    var usesCaching: Bool {
+        backend == .anthropic
     }
 
     /// Invalidate cached preamble (call when context changes)

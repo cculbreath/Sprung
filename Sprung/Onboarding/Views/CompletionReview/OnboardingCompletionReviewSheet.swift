@@ -183,6 +183,33 @@ struct OnboardingCompletionReviewSheet: View {
                     )
                 }
 
+                // Primary CTA: Generate Experience Defaults
+                VStack(spacing: 12) {
+                    Text("Next Step")
+                        .font(.headline)
+
+                    Text("Generate professional descriptions for your work history, education, and projects using AI.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+
+                    Button {
+                        NotificationCenter.default.post(name: .showSeedGeneration, object: nil)
+                    } label: {
+                        Label("Generate Experience Defaults", systemImage: "wand.and.stars")
+                            .font(.headline)
+                            .padding(.horizontal, 24)
+                            .padding(.vertical, 12)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 20)
+                .padding(.horizontal, 16)
+                .background(Color.accentColor.opacity(0.08))
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+
                 Text("Quick Actions")
                     .font(.headline)
                     .padding(.top, 8)

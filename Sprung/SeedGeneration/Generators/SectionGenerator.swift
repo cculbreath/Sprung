@@ -7,7 +7,35 @@
 //
 
 import Foundation
+import SwiftOpenAI
 import SwiftyJSON
+
+/// Configuration for generator execution
+struct GeneratorExecutionConfig {
+    let llmFacade: LLMFacade
+    let modelId: String
+    let backend: LLMFacade.Backend
+    let preamble: String
+    let anthropicSystemContent: [AnthropicSystemBlock]?
+
+    init(
+        llmFacade: LLMFacade,
+        modelId: String,
+        backend: LLMFacade.Backend,
+        preamble: String,
+        anthropicSystemContent: [AnthropicSystemBlock]? = nil
+    ) {
+        self.llmFacade = llmFacade
+        self.modelId = modelId
+        self.backend = backend
+        self.preamble = preamble
+        self.anthropicSystemContent = anthropicSystemContent
+    }
+
+    var usesAnthropicCaching: Bool {
+        backend == .anthropic && anthropicSystemContent != nil
+    }
+}
 
 /// Protocol for section-specific content generation.
 /// Each generator handles one `ExperienceSectionKey` and knows how to:
@@ -32,16 +60,12 @@ protocol SectionGenerator {
     /// - Parameters:
     ///   - task: The task to execute
     ///   - context: The full generation context
-    ///   - preamble: Cached preamble for prompt efficiency
-    ///   - llmFacade: The LLM facade for generation
-    ///   - modelId: The model ID to use
+    ///   - config: Execution configuration (LLM, model, backend, preamble)
     /// - Returns: Generated content for this task
     func execute(
         task: GenerationTask,
         context: SeedGenerationContext,
-        preamble: String,
-        llmFacade: LLMFacade,
-        modelId: String
+        config: GeneratorExecutionConfig
     ) async throws -> GeneratedContent
 
     /// Apply approved content to ExperienceDefaults.
@@ -115,9 +139,7 @@ class BaseSectionGenerator: SectionGenerator {
     func execute(
         task: GenerationTask,
         context: SeedGenerationContext,
-        preamble: String,
-        llmFacade: LLMFacade,
-        modelId: String
+        config: GeneratorExecutionConfig
     ) async throws -> GeneratedContent {
         // Subclasses override this
         fatalError("Subclasses must implement execute")
@@ -142,5 +164,100 @@ class BaseSectionGenerator: SectionGenerator {
             throw GeneratorError.timelineEntryNotFound(id: id)
         }
         return entry
+    }
+
+    // MARK: - Backend-Aware Execution Helpers
+
+    /// Execute a structured JSON request with backend-aware caching.
+    /// For Anthropic: uses direct API with cached system content
+    /// For OpenRouter: uses standard structured output
+    func executeStructuredRequest<T: Codable>(
+        taskPrompt: String,
+        systemPrompt: String,
+        config: GeneratorExecutionConfig,
+        responseType: T.Type,
+        schema: [String: Any],
+        schemaName: String
+    ) async throws -> T {
+        if config.backend == .anthropic {
+            // Anthropic path: use cached system content + text response with JSON parsing
+            return try await executeWithAnthropicCaching(
+                taskPrompt: taskPrompt,
+                systemPrompt: systemPrompt,
+                config: config,
+                responseType: responseType
+            )
+        } else {
+            // OpenRouter path: use standard structured output
+            let fullPrompt = "\(config.preamble)\n\n---\n\n\(taskPrompt)"
+            return try await config.llmFacade.executeStructuredWithDictionarySchema(
+                prompt: "\(systemPrompt)\n\n\(fullPrompt)",
+                modelId: config.modelId,
+                as: responseType,
+                schema: schema,
+                schemaName: schemaName
+            )
+        }
+    }
+
+    /// Execute with Anthropic caching - system content is cached, user prompt is not
+    private func executeWithAnthropicCaching<T: Codable>(
+        taskPrompt: String,
+        systemPrompt: String,
+        config: GeneratorExecutionConfig,
+        responseType: T.Type
+    ) async throws -> T {
+        // Build system content with cache control on the preamble
+        let cachedPreambleBlock = AnthropicSystemBlock(
+            text: config.preamble,
+            cacheControl: AnthropicCacheControl()
+        )
+        let systemInstructionBlock = AnthropicSystemBlock(text: systemPrompt)
+        let systemContent = [cachedPreambleBlock, systemInstructionBlock]
+
+        // User prompt includes task-specific instructions and JSON format request
+        let userPrompt = """
+            \(taskPrompt)
+
+            IMPORTANT: Return your response as valid JSON only. No markdown, no explanation, just the JSON object.
+            """
+
+        let responseText = try await config.llmFacade.executeTextWithAnthropicCaching(
+            systemContent: systemContent,
+            userPrompt: userPrompt,
+            modelId: config.modelId
+        )
+
+        // Try to extract JSON from response (it might have markdown code blocks)
+        let cleanedJSON = cleanJSONResponse(responseText)
+        guard let cleanedData = cleanedJSON.data(using: .utf8) else {
+            throw GeneratorError.llmResponseParsingFailed("Cleaned response is not valid UTF-8")
+        }
+
+        do {
+            return try JSONDecoder().decode(responseType, from: cleanedData)
+        } catch {
+            Logger.warning("Failed to parse Anthropic response as \(responseType): \(error)", category: .ai)
+            Logger.debug("Response was: \(responseText.prefix(500))", category: .ai)
+            throw GeneratorError.llmResponseParsingFailed(error.localizedDescription)
+        }
+    }
+
+    /// Clean JSON response by removing markdown code blocks if present
+    private func cleanJSONResponse(_ response: String) -> String {
+        var cleaned = response.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        // Remove markdown code blocks
+        if cleaned.hasPrefix("```json") {
+            cleaned = String(cleaned.dropFirst(7))
+        } else if cleaned.hasPrefix("```") {
+            cleaned = String(cleaned.dropFirst(3))
+        }
+
+        if cleaned.hasSuffix("```") {
+            cleaned = String(cleaned.dropLast(3))
+        }
+
+        return cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }

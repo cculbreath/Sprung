@@ -17,10 +17,15 @@ enum SeedGenerationSelection: Hashable {
 struct SeedGenerationView: View {
     @State var orchestrator: SeedGenerationOrchestrator
 
+    @Environment(ExperienceDefaultsStore.self) private var defaultsStore
+
     @State private var selectedItem: SeedGenerationSelection?
+    @State private var hasApplied = false
 
     var body: some View {
         VStack(spacing: 0) {
+            headerBar
+            Divider()
             mainContent
             Divider()
             SeedGenerationStatusBar(tracker: orchestrator.activityTracker)
@@ -29,6 +34,48 @@ struct SeedGenerationView: View {
         .task {
             await orchestrator.startGeneration()
         }
+    }
+
+    // MARK: - Header Bar
+
+    private var headerBar: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Experience Defaults Generator")
+                    .font(.headline)
+                Text("Review and approve generated content, then apply to your defaults")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+
+            if hasApplied {
+                Label("Applied", systemImage: "checkmark.circle.fill")
+                    .foregroundStyle(.green)
+                    .font(.subheadline)
+            }
+
+            Button {
+                applyToDefaults()
+            } label: {
+                Label("Apply to Defaults", systemImage: "square.and.arrow.down")
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(orchestrator.reviewQueue.approvedItems.isEmpty || hasApplied)
+        }
+        .padding(.horizontal)
+        .padding(.vertical, 12)
+    }
+
+    // MARK: - Actions
+
+    private func applyToDefaults() {
+        var defaults = defaultsStore.currentDefaults()
+        orchestrator.applyApprovedContent(to: &defaults)
+        defaultsStore.markSeedCreated()
+        hasApplied = true
+        Logger.info("🌱 Applied \(orchestrator.reviewQueue.approvedItems.count) items to defaults and marked seedCreated", category: .ai)
     }
 
     // MARK: - Main Content

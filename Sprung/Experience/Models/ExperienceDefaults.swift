@@ -7,6 +7,9 @@ import SwiftData
 final class ExperienceDefaults {
     @Attribute(.unique) var id: UUID
 
+    /// Flag indicating whether seed generation has been run or manual edits saved
+    var seedCreated: Bool = false
+
     // Section enablement flags
     var isWorkEnabled: Bool = false
     var isVolunteerEnabled: Bool = false

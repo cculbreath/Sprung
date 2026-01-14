@@ -53,9 +53,7 @@ final class SkillsGroupingGenerator: BaseSectionGenerator {
     override func execute(
         task: GenerationTask,
         context: SeedGenerationContext,
-        preamble: String,
-        llmFacade: LLMFacade,
-        modelId: String
+        config: GeneratorExecutionConfig
     ) async throws -> GeneratedContent {
         let skillList = context.skills.map { $0.canonical }
 
@@ -63,11 +61,7 @@ final class SkillsGroupingGenerator: BaseSectionGenerator {
             You are an expert resume writer organizing skills into clear, impactful categories.
             """
 
-        let userPrompt = """
-            \(preamble)
-
-            ---
-
+        let taskPrompt = """
             ## Task: Organize Skills into Categories
 
             Create 4-6 skill categories that would look professional on a resume.
@@ -106,10 +100,11 @@ final class SkillsGroupingGenerator: BaseSectionGenerator {
             "required": ["groups"]
         ]
 
-        let response: SkillGroupsResponse = try await llmFacade.executeStructuredWithDictionarySchema(
-            prompt: "\(systemPrompt)\n\n\(userPrompt)",
-            modelId: modelId,
-            as: SkillGroupsResponse.self,
+        let response: SkillGroupsResponse = try await executeStructuredRequest(
+            taskPrompt: taskPrompt,
+            systemPrompt: systemPrompt,
+            config: config,
+            responseType: SkillGroupsResponse.self,
             schema: schema,
             schemaName: "skill_groups"
         )

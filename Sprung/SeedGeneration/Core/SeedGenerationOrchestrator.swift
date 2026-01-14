@@ -30,6 +30,7 @@ final class SeedGenerationOrchestrator {
 
     private let llmFacade: LLMFacade
     private let modelId: String
+    private let backend: LLMFacade.Backend
     private let promptCacheService: PromptCacheService
     private let parallelExecutor: ParallelLLMExecutor
 
@@ -50,12 +51,14 @@ final class SeedGenerationOrchestrator {
     init(
         context: SeedGenerationContext,
         llmFacade: LLMFacade,
-        modelId: String
+        modelId: String,
+        backend: LLMFacade.Backend = .openRouter
     ) {
         self.context = context
         self.llmFacade = llmFacade
         self.modelId = modelId
-        self.promptCacheService = PromptCacheService()
+        self.backend = backend
+        self.promptCacheService = PromptCacheService(backend: backend)
         self.parallelExecutor = ParallelLLMExecutor()
 
         initializeSectionProgress()
@@ -158,6 +161,14 @@ final class SeedGenerationOrchestrator {
     // MARK: - Task Execution
 
     private func executeAllTasks(context: SeedGenerationContext, preamble: String) async {
+        // Create execution config for generators
+        let config = GeneratorExecutionConfig(
+            llmFacade: llmFacade,
+            modelId: modelId,
+            backend: backend,
+            preamble: preamble
+        )
+
         for generator in generators {
             let sectionTasks = tasks.filter { $0.section == generator.sectionKey }
 
@@ -172,9 +183,7 @@ final class SeedGenerationOrchestrator {
                     let content = try await generator.execute(
                         task: task,
                         context: context,
-                        preamble: preamble,
-                        llmFacade: llmFacade,
-                        modelId: modelId
+                        config: config
                     )
 
                     // Handle special cases
@@ -230,6 +239,12 @@ final class SeedGenerationOrchestrator {
         tasks.append(contentsOf: projectTasks)
 
         let preamble = promptCacheService.buildPreamble(context: context)
+        let config = GeneratorExecutionConfig(
+            llmFacade: llmFacade,
+            modelId: modelId,
+            backend: backend,
+            preamble: preamble
+        )
 
         for task in projectTasks {
             activityTracker.startTask(id: task.id, displayName: task.displayName)
@@ -238,9 +253,7 @@ final class SeedGenerationOrchestrator {
                 let content = try await projectsGenerator.execute(
                     task: task,
                     context: context,
-                    preamble: preamble,
-                    llmFacade: llmFacade,
-                    modelId: modelId
+                    config: config
                 )
 
                 reviewQueue.add(task: task, content: content)

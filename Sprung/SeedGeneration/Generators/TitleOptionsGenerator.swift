@@ -50,9 +50,7 @@ final class TitleOptionsGenerator: BaseSectionGenerator {
     override func execute(
         task: GenerationTask,
         context: SeedGenerationContext,
-        preamble: String,
-        llmFacade: LLMFacade,
-        modelId: String
+        config: GeneratorExecutionConfig
     ) async throws -> GeneratedContent {
         let taskContext = buildTaskContext(context: context)
 
@@ -60,11 +58,7 @@ final class TitleOptionsGenerator: BaseSectionGenerator {
             You are an expert resume writer crafting professional title sets.
             """
 
-        let userPrompt = """
-            \(preamble)
-
-            ---
-
+        let taskPrompt = """
             ## Task: Generate Professional Title Sets
 
             Create 3-5 title sets for the resume header. Each set should have exactly 4 titles
@@ -106,10 +100,11 @@ final class TitleOptionsGenerator: BaseSectionGenerator {
             "required": ["sets"]
         ]
 
-        let response: TitleSetsResponse = try await llmFacade.executeStructuredWithDictionarySchema(
-            prompt: "\(systemPrompt)\n\n\(userPrompt)",
-            modelId: modelId,
-            as: TitleSetsResponse.self,
+        let response: TitleSetsResponse = try await executeStructuredRequest(
+            taskPrompt: taskPrompt,
+            systemPrompt: systemPrompt,
+            config: config,
+            responseType: TitleSetsResponse.self,
             schema: schema,
             schemaName: "title_sets"
         )

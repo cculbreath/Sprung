@@ -104,9 +104,8 @@ final class CoordinatorEventRouter {
             }
 
         case .phase(.interviewCompleted):
-            // Trigger Seed Generation Module when interview completes
-            Logger.info("🌱 CoordinatorEventRouter: Interview complete - triggering Seed Generation Module", category: .ai)
-            NotificationCenter.default.post(name: .showSeedGeneration, object: nil)
+            // Log completion - SGM is triggered via button on completion sheet, not automatically
+            Logger.info("🌱 CoordinatorEventRouter: Interview complete - user can launch SGM from completion sheet", category: .ai)
 
         // MARK: - Card Generation Workflow
         case .artifact(.doneWithUploadsClicked):

@@ -40,4 +40,17 @@ final class ExperienceDefaultsStore: SwiftDataStore {
     func clearCache() {
         cachedDefaults = nil
     }
+
+    /// Check if seed generation has been completed or manual edits saved
+    var isSeedCreated: Bool {
+        currentDefaults().seedCreated
+    }
+
+    /// Mark that seed generation or manual editing is complete
+    func markSeedCreated() {
+        let defaults = currentDefaults()
+        defaults.seedCreated = true
+        cachedDefaults = defaults
+        saveContext()
+    }
 }
