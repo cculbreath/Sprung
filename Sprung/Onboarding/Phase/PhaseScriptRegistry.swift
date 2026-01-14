@@ -158,6 +158,52 @@ final class PhaseScriptRegistry {
             )
         }
 
+        // VALIDATION 4: If non-chronological sections are enabled, they must be collected
+        let enabledSections = await coordinator.state.artifacts.enabledSections
+        let nonChronologicalSections: Set<String> = ["awards", "publications", "languages", "references"]
+        let enabledNonChronological = enabledSections.intersection(nonChronologicalSections)
+
+        if !enabledNonChronological.isEmpty {
+            let sectionCardsStatus = coordinator.ui.objectiveStatuses[OnboardingObjectiveId.sectionCardsComplete.rawValue]
+            if sectionCardsStatus != "completed" {
+                let sectionList = enabledNonChronological.sorted().joined(separator: ", ")
+                Logger.warning("⚠️ next_phase blocked: section cards not collected for: \(sectionList)", category: .ai)
+
+                // Build specific instructions for each enabled section
+                var instructions: [String] = []
+                if enabledNonChronological.contains("publications") {
+                    instructions.append("• publications: offer CV/BibTeX upload via get_user_upload(upload_type='cv'), or use create_publication_card for each publication")
+                }
+                if enabledNonChronological.contains("awards") {
+                    instructions.append("• awards: use create_section_card(sectionType='award') for each award/honor")
+                }
+                if enabledNonChronological.contains("languages") {
+                    instructions.append("• languages: use create_section_card(sectionType='language') for each language")
+                }
+                if enabledNonChronological.contains("references") {
+                    instructions.append("• references: use create_section_card(sectionType='reference') for each reference")
+                }
+                let instructionText = instructions.joined(separator: "\n")
+
+                return .blocked(
+                    reason: "section_cards_incomplete",
+                    message: """
+                        Cannot advance to Phase 3: Section cards have not been collected for enabled sections.
+
+                        ENABLED NON-CHRONOLOGICAL SECTIONS: \(sectionList)
+
+                        REQUIRED ACTIONS:
+                        \(instructionText)
+
+                        AFTER COLLECTING:
+                        1. Call display_section_cards_for_review to show the section cards editor
+                        2. Call submit_for_validation(validation_type='section_cards') for user approval
+                        3. Once approved, call next_phase to proceed
+                        """
+                )
+            }
+        }
+
         Logger.info("✅ Phase 2→3 validated: \(experiences.count) timeline entries, sections configured", category: .ai)
         return .allowed
     }

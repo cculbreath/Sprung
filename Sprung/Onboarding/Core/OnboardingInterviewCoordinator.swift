@@ -611,6 +611,29 @@ final class OnboardingInterviewCoordinator {
                 await eventBus.publish(.llm(.sendCoordinatorMessage(payload: payload)))
                 Logger.info("📋 Prompting configure_enabled_sections after timeline validation", category: .ai)
             }
+
+            // Mark section_cards objective as complete when user confirms validation
+            if let validation = pendingValidation,
+               validation.dataType == "section_cards",
+               ["confirmed", "confirmed_with_changes", "approved", "modified"].contains(status.lowercased()) {
+                await eventBus.publish(.objective(.statusUpdateRequested(
+                    id: OnboardingObjectiveId.sectionCardsComplete.rawValue,
+                    status: "completed",
+                    source: "ui_section_cards_validated",
+                    notes: "Section cards validated by user",
+                    details: nil
+                )))
+                Logger.debug("✅ section_cards_complete objective marked complete after validation", category: .ai)
+
+                // Prompt for next_phase as next step
+                var payload = JSON()
+                payload["text"].string = """
+                    Section cards approved. Phase 2 is now complete. \
+                    Call next_phase to advance to Phase 3 (Evidence Collection).
+                    """
+                await eventBus.publish(.llm(.sendCoordinatorMessage(payload: payload)))
+                Logger.info("📋 Prompting next_phase after section cards validation", category: .ai)
+            }
         }
         return result
     }

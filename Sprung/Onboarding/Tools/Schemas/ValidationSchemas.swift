@@ -16,13 +16,13 @@ enum ValidationSchemas {
     static let validationType = JSONSchema(
         type: .string,
         description: "Type of data being validated. Each type presents specialized validation UI.",
-        enum: ["applicant_profile", "skeleton_timeline", "enabled_sections", "knowledge_card", "candidate_dossier", "experience_defaults"]
+        enum: ["applicant_profile", "skeleton_timeline", "enabled_sections", "knowledge_card", "candidate_dossier", "experience_defaults", "section_cards"]
     )
 
     /// Schema for validation data payload
     static let dataPayload = JSONSchema(
         type: .object,
-        description: "The complete data payload to validate. For skeleton_timeline, this is optional and will be auto-fetched from current timeline state. For other types, provide the complete data object."
+        description: "The complete data payload to validate. For skeleton_timeline, section_cards, and experience_defaults, this is optional and will be auto-fetched. For other types, provide the complete data object."
     )
 
     /// Schema for validation summary message

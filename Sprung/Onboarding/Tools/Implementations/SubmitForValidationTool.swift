@@ -31,8 +31,9 @@ struct SubmitForValidationTool: InterviewTool {
         Call at sub-phase end AFTER data collection complete. \
         RETURNS: { "message": "UI presented...", "status": "completed" } - user response arrives as new message. \
         validation_types: applicant_profile, skeleton_timeline (data auto-fetched), enabled_sections, \
-        knowledge_card, candidate_dossier, experience_defaults (data auto-fetched). \
+        knowledge_card, candidate_dossier, experience_defaults (data auto-fetched), section_cards (data auto-fetched). \
         For timeline: call display_timeline_entries_for_review FIRST, then this tool. \
+        For section_cards: call display_section_cards_for_review FIRST, then this tool. \
         User can Confirm, Reject, or Submit Changes Only (then re-submit). \
         DO NOT re-validate already confirmed data.
         """
@@ -78,6 +79,38 @@ struct SubmitForValidationTool: InterviewTool {
                 data: currentDefaults,
                 summary: payload.summary
             )
+        } else if payload.validationType == OnboardingDataType.sectionCards.rawValue {
+            // Auto-fetch section cards (awards, languages, references) and publication cards
+            let sectionCardsData = await MainActor.run {
+                var data = JSON()
+
+                // Convert section cards to JSON using Codable
+                let sectionCardsJSON: [JSON] = coordinator.ui.sectionCards.compactMap { card in
+                    guard let jsonData = try? JSONEncoder().encode(card),
+                          let jsonObject = try? JSON(data: jsonData) else {
+                        return nil
+                    }
+                    return jsonObject
+                }
+                data["sectionCards"] = JSON(sectionCardsJSON)
+
+                // Convert publication cards to JSON using Codable
+                let publicationCardsJSON: [JSON] = coordinator.ui.publicationCards.compactMap { card in
+                    guard let jsonData = try? JSONEncoder().encode(card),
+                          let jsonObject = try? JSON(data: jsonData) else {
+                        return nil
+                    }
+                    return jsonObject
+                }
+                data["publicationCards"] = JSON(publicationCardsJSON)
+
+                return data
+            }
+            payload = ValidationPayload(
+                validationType: payload.validationType,
+                data: sectionCardsData,
+                summary: payload.summary
+            )
         }
         // Emit UI request to show the validation prompt
         await coordinator.eventBus.publish(.toolpane(.validationPromptRequested(prompt: payload.toValidationPrompt())))
@@ -94,16 +127,20 @@ private struct ValidationPayload {
         guard let type = json["validationType"].string, !type.isEmpty else {
             throw ToolError.invalidParameters("validationType must be provided")
         }
-        let validTypes: [OnboardingDataType] = [.applicantProfile, .skeletonTimeline, .enabledSections, .knowledgeCard, .candidateDossier, .experienceDefaults]
+        let validTypes: [OnboardingDataType] = [.applicantProfile, .skeletonTimeline, .enabledSections, .knowledgeCard, .candidateDossier, .experienceDefaults, .sectionCards]
         let validTypeStrings = validTypes.map(\.rawValue)
         guard validTypeStrings.contains(type) else {
             throw ToolError.invalidParameters("validationType must be one of: \(validTypeStrings.joined(separator: ", "))")
         }
         self.validationType = type
-        // For skeleton_timeline, data is optional (will be auto-fetched from coordinator)
-        // For experience_defaults, data may be empty (auto-fetched from ExperienceDefaultsStore)
+        // For skeleton_timeline, experience_defaults, section_cards: data is optional (auto-fetched)
         // For other types, data must be provided
-        if type == OnboardingDataType.skeletonTimeline.rawValue || type == OnboardingDataType.experienceDefaults.rawValue {
+        let autoFetchTypes: Set<String> = [
+            OnboardingDataType.skeletonTimeline.rawValue,
+            OnboardingDataType.experienceDefaults.rawValue,
+            OnboardingDataType.sectionCards.rawValue
+        ]
+        if autoFetchTypes.contains(type) {
             self.data = json["data"]
         } else {
             guard let data = json["data"].dictionary, !data.isEmpty else {
