@@ -336,7 +336,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 contentRect: NSRect(x: 0, y: 0, width: windowW, height: 700)
             )
             hostingView.wantsLayer = true
-            hostingView.layer?.masksToBounds = false
+            hostingView.layer?.masksToBounds = true
+            hostingView.layer?.cornerRadius = 44  // Match SwiftUI cardShape cornerRadius
+            hostingView.layer?.cornerCurve = .continuous
             onboardingInterviewWindow?.contentView = hostingView
             onboardingInterviewWindow?.isReleasedWhenClosed = false
             onboardingInterviewWindow?.center()
