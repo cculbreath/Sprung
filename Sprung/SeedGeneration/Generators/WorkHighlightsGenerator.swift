@@ -65,29 +65,41 @@ final class WorkHighlightsGenerator: BaseSectionGenerator {
 
         let taskContext = buildTaskContext(entry: entry, kcs: relevantKCs)
 
-        let systemPrompt = "You are a professional resume writer. Generate impactful work highlights."
+        let systemPrompt = "You are a professional resume writer. Generate work highlights based strictly on documented evidence."
 
         let taskPrompt = """
             ## Task: Generate Work Highlights
 
-            Generate compelling bullet point highlights for this work experience.
+            Generate resume bullet points for this position.
 
-            ## Context for This Position
+            ## Position Context
 
             \(taskContext)
 
-            ## Instructions
+            ## Requirements
 
-            Generate 3-4 bullet point highlights for this position.
-            Each bullet should:
-            - Start with a strong action verb
-            - Include specific, quantifiable achievements when possible
-            - Be 1-2 sentences (15-25 words)
-            - Highlight impact and results, not just duties
+            Generate 3-4 bullet points that:
 
-            Return your response as JSON in this format:
+            1. **Use ONLY facts from the Knowledge Cards** - Every claim must have evidence in the KCs provided above
+
+            2. **Match the candidate's voice** - Write in their style as shown in the writing samples, not generic resume-speak
+
+            3. **Describe work narratively** - Focus on what was built, created, discovered, or accomplished
+
+            4. **Vary sentence structure** - Don't start every bullet the same way
+
+            ## FORBIDDEN
+
+            - Inventing metrics, percentages, or numbers not explicitly stated in KCs
+            - Generic phrases: "spearheaded", "leveraged", "drove results", "cross-functional"
+            - Vague impact claims: "significantly improved", "enhanced capabilities", "streamlined processes"
+            - Formulaic structure: "[Verb] [thing] resulting in [X]% improvement"
+
+            ## Output Format
+
+            Return JSON with 3-4 bullets:
             {
-                "highlights": ["bullet 1", "bullet 2", "bullet 3", "bullet 4"]
+                "highlights": ["First bullet point", "Second bullet point", "Third bullet point", "Fourth bullet point (optional)"]
             }
             """
 
@@ -133,14 +145,18 @@ final class WorkHighlightsGenerator: BaseSectionGenerator {
 
     override func buildSectionPrompt() -> String {
         """
-        Generate compelling bullet point highlights for a work experience entry.
+        Generate resume bullet points for a work experience entry.
 
-        Your highlights should:
-        - Demonstrate value delivered to the organization
-        - Use industry-appropriate terminology
-        - Quantify impact where evidence supports it
-        - Avoid generic phrases like "responsible for" or "worked on"
-        - Be tailored to the candidate's voice and style
+        Your bullets should:
+        - Describe specific work and contributions
+        - Use the candidate's natural voice (see writing samples)
+        - Include only facts that appear in the Knowledge Cards
+        - Frame achievements narratively rather than with fabricated metrics
+
+        Do NOT:
+        - Invent percentages or quantitative improvements
+        - Use generic corporate/LinkedIn language
+        - Write every bullet with the same structure
         """
     }
 

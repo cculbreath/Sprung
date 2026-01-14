@@ -51,8 +51,8 @@ final class PromptCacheService {
         sections.append(buildProfileSection(context.applicantProfile))
 
         // 3. Voice and style guidelines
-        if !context.writingSamples.isEmpty {
-            sections.append(buildVoiceSection(context.writingSamples))
+        if !context.writingSamples.isEmpty || context.voicePrimer != nil {
+            sections.append(buildVoiceSection(context.writingSamples, voicePrimer: context.voicePrimer))
         }
 
         // 4. Knowledge card summaries
@@ -152,17 +152,63 @@ final class PromptCacheService {
         """
         # Role: Resume Content Generator
 
-        You are an expert resume writer generating content for a specific candidate.
-        Your task is to create compelling, professional resume content that:
+        You are generating resume content for a specific candidate based on their documented experiences.
 
-        1. **Uses concrete evidence** - Draw from the candidate's actual experiences and achievements
-        2. **Matches their voice** - Reflect their professional communication style
-        3. **Highlights strengths** - Emphasize the candidate's unique value proposition
-        4. **Is honest and accurate** - Never fabricate or exaggerate
-        5. **Is concise and impactful** - Use strong action verbs and quantify where possible
+        ## CRITICAL CONSTRAINTS
 
-        Below is comprehensive context about the candidate. Use this information to create
-        tailored content that authentically represents them.
+        ### 1. NO FABRICATED METRICS
+
+        You may ONLY include quantitative claims that appear VERBATIM in the Knowledge Cards.
+        If no metric exists in the source material, describe the work narratively without inventing numbers.
+
+        FORBIDDEN (unless exact figures appear in a Knowledge Card):
+        - "reduced time by 40%"
+        - "improved efficiency by 25%"
+        - "increased engagement by 3x"
+        - "significantly improved"
+        - Any percentage or multiplier not directly quoted from evidence
+
+        ALLOWED:
+        - "resulted in 3 peer-reviewed publications" (if KC states exactly this)
+        - "built a system that..." (narrative description)
+        - "developed novel approach to..." (qualitative impact)
+
+        ### 2. NO GENERIC RESUME VOICE
+
+        Do NOT write in formulaic LinkedIn/corporate style. Avoid:
+        - "Spearheaded initiatives that drove..."
+        - "Leveraged expertise to deliver..."
+        - "Collaborated cross-functionally to..."
+        - "Proven track record of..."
+
+        Instead, write in the candidate's actual voice as demonstrated in their writing samples.
+        Match their vocabulary, sentence structure, and professional register.
+
+        ### 3. EVIDENCE-BASED ONLY
+
+        Every factual claim must trace to a Knowledge Card. If you cannot cite evidence for a claim, do not include it.
+
+        ## Role-Appropriate Framing
+
+        Tailor bullet structure to the position type:
+
+        **For R&D / Academic / Research positions:**
+        - What problem or gap existed?
+        - What novel approach was taken?
+        - What was created, discovered, or published?
+        - Who uses it or what opportunities did it open?
+
+        **For Industry / Engineering / Corporate positions:**
+        - What system or process did they own?
+        - What was their specific technical contribution?
+        - What concrete outcome resulted? (only if documented)
+
+        **For Teaching / Education positions:**
+        - What did they build or redesign?
+        - What pedagogical approach did they use?
+        - What was the scope and impact on students?
+
+        Below is comprehensive context about the candidate. Use this to generate content that authentically represents them.
         """
     }
 
@@ -192,20 +238,75 @@ final class PromptCacheService {
         return lines.joined(separator: "\n")
     }
 
-    private func buildVoiceSection(_ writingSamples: [CoverRef]) -> String {
-        var lines = ["## Voice & Style Guidelines"]
+    private func buildVoiceSection(_ writingSamples: [CoverRef], voicePrimer: CoverRef?) -> String {
+        var lines = ["## Voice & Style Reference"]
 
-        lines.append("""
-            The candidate's writing style characteristics (derived from their writing samples):
+        // Include structured voice primer analysis if available
+        if let primer = voicePrimer, let analysis = primer.voicePrimer {
+            lines.append("""
 
-            - Use language that matches their professional register
-            - Maintain their typical sentence structure patterns
-            - Reflect their vocabulary choices and industry terminology
-            - Preserve their tone (formal/informal, confident/modest, etc.)
-            """)
+                ### Analyzed Voice Characteristics
 
-        // Include sample excerpts for context
-        lines.append("\n*\(writingSamples.count) writing sample(s) analyzed for voice patterns.*")
+                The following voice profile was extracted from the candidate's writing samples.
+                Generated content MUST match these characteristics.
+                """)
+
+            if let tone = analysis["tone"]["description"].string, !tone.isEmpty {
+                lines.append("**Tone:** \(tone)")
+            }
+            if let structure = analysis["structure"]["description"].string, !structure.isEmpty {
+                lines.append("**Sentence Structure:** \(structure)")
+            }
+            if let vocab = analysis["vocabulary"]["description"].string, !vocab.isEmpty {
+                lines.append("**Vocabulary:** \(vocab)")
+            }
+            if let rhetoric = analysis["rhetoric"]["description"].string, !rhetoric.isEmpty {
+                lines.append("**Rhetoric Style:** \(rhetoric)")
+            }
+
+            let strengths = analysis["markers"]["strengths"].arrayValue.compactMap { $0.string }
+            if !strengths.isEmpty {
+                lines.append("**Writing Strengths:** \(strengths.joined(separator: ", "))")
+            }
+
+            let quirks = analysis["markers"]["quirks"].arrayValue.compactMap { $0.string }
+            if !quirks.isEmpty {
+                lines.append("**Distinctive Traits:** \(quirks.joined(separator: ", "))")
+            }
+
+            let recommendations = analysis["markers"]["recommendations"].arrayValue.compactMap { $0.string }
+            if !recommendations.isEmpty {
+                lines.append("**Style Notes:** \(recommendations.joined(separator: "; "))")
+            }
+        }
+
+        // Include actual writing sample text for voice matching
+        if !writingSamples.isEmpty {
+            lines.append("""
+
+                ### Writing Samples (Full Text)
+
+                The following are actual writing samples from this candidate.
+                Study these carefully and match their:
+                - Vocabulary choices and technical terminology
+                - Sentence length and structure patterns
+                - Level of formality
+                - How they describe technical work
+                - How they frame achievements (narrative vs. metric-focused)
+                """)
+
+            for (index, sample) in writingSamples.prefix(3).enumerated() {
+                lines.append("")
+                lines.append("#### Sample \(index + 1): \(sample.name)")
+                lines.append("")
+                lines.append(sample.content)
+            }
+
+            if writingSamples.count > 3 {
+                lines.append("")
+                lines.append("*(\(writingSamples.count - 3) additional samples available but omitted for context length)*")
+            }
+        }
 
         return lines.joined(separator: "\n")
     }

@@ -238,23 +238,36 @@ final class ProjectsGenerator: BaseSectionGenerator {
         let entry = context.getTimelineEntry(id: targetId)
         let taskContext = buildTaskContext(entry: entry, context: context)
 
-        let systemPrompt = "You are a professional resume writer creating impactful project descriptions."
+        let systemPrompt = "You are a professional resume writer. Generate project content based strictly on documented evidence."
 
         let taskPrompt = """
             ## Task: Generate Project Content
 
-            Create compelling content for this project entry.
+            Generate content for this project entry based on documented evidence.
 
             ## Context
 
             \(taskContext)
 
-            ## Instructions
+            ## Requirements
 
             Generate:
             1. A description (2-3 sentences) explaining the project's purpose and your role
             2. 2-4 highlights showing key achievements or contributions
             3. Relevant keywords/technologies
+
+            ## CONSTRAINTS
+
+            1. Use ONLY facts from the provided Knowledge Cards
+            2. Do NOT invent metrics, percentages, or quantitative claims
+            3. Match the candidate's writing voice from the samples
+            4. Avoid generic resume phrases
+
+            ## FORBIDDEN
+
+            - Fabricated numbers ("increased by X%", "reduced by Y%")
+            - Generic phrases ("spearheaded", "leveraged", "drove")
+            - Vague claims ("significantly improved", "enhanced")
 
             Return JSON:
             {

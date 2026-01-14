@@ -65,23 +65,35 @@ final class EducationGenerator: BaseSectionGenerator {
 
         let taskContext = buildTaskContext(entry: entry, kcs: relevantKCs, skills: context.skills)
 
-        let systemPrompt = "You are a professional resume writer. Generate education content that highlights relevant skills and achievements."
+        let systemPrompt = "You are a professional resume writer. Generate education content based strictly on documented evidence."
 
         let taskPrompt = """
             ## Task: Generate Education Content
 
-            Generate a compelling description for this education entry that highlights
-            relevant achievements, focus areas, and skills developed.
+            Generate content for this education entry based on documented evidence.
 
             ## Context for This Entry
 
             \(taskContext)
 
-            ## Instructions
+            ## Requirements
 
             Generate:
             1. A brief description (1-2 sentences) highlighting the educational experience
             2. A list of 3-5 relevant courses that demonstrate skills valuable to employers
+
+            ## CONSTRAINTS
+
+            1. Use ONLY facts from the provided Knowledge Cards
+            2. Do NOT invent metrics, percentages, or quantitative claims
+            3. Match the candidate's writing voice from the samples
+            4. Avoid generic resume phrases
+
+            ## FORBIDDEN
+
+            - Fabricated numbers ("increased by X%", "reduced by Y%")
+            - Generic phrases ("spearheaded", "leveraged", "drove")
+            - Vague claims ("significantly improved", "enhanced")
 
             Return your response as JSON:
             {

@@ -64,23 +64,35 @@ final class VolunteerGenerator: BaseSectionGenerator {
 
         let taskContext = buildTaskContext(entry: entry, kcs: relevantKCs)
 
-        let systemPrompt = "You are a professional resume writer. Generate volunteer experience content that showcases leadership and impact."
+        let systemPrompt = "You are a professional resume writer. Generate volunteer content based strictly on documented evidence."
 
         let taskPrompt = """
             ## Task: Generate Volunteer Experience Content
 
-            Generate compelling content for this volunteer experience that demonstrates
-            leadership, impact, and transferable skills.
+            Generate content for this volunteer experience based on documented evidence.
 
             ## Context for This Entry
 
             \(taskContext)
 
-            ## Instructions
+            ## Requirements
 
             Generate:
             1. A summary (1-2 sentences) describing the volunteer role and its impact
             2. 2-3 highlight bullets showcasing achievements and contributions
+
+            ## CONSTRAINTS
+
+            1. Use ONLY facts from the provided Knowledge Cards
+            2. Do NOT invent metrics, percentages, or quantitative claims
+            3. Match the candidate's writing voice from the samples
+            4. Avoid generic resume phrases
+
+            ## FORBIDDEN
+
+            - Fabricated numbers ("increased by X%", "reduced by Y%")
+            - Generic phrases ("spearheaded", "leveraged", "drove")
+            - Vague claims ("significantly improved", "enhanced")
 
             Return your response as JSON:
             {

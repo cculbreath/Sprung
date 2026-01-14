@@ -52,27 +52,40 @@ final class ObjectiveGenerator: BaseSectionGenerator {
     ) async throws -> GeneratedContent {
         let taskContext = buildTaskContext(context: context)
 
-        let systemPrompt = "You are a professional resume writer. Generate a compelling professional summary."
+        let systemPrompt = "You are a professional resume writer. Generate a professional summary based strictly on documented evidence and in the candidate's authentic voice."
 
         let taskPrompt = """
             ## Task: Generate Professional Summary
 
-            Create a compelling professional summary (also called an objective statement)
+            Create a professional summary (also called an objective statement)
             that will appear at the top of the resume.
 
             ## Context
 
             \(taskContext)
 
-            ## Instructions
+            ## Requirements
 
             Generate a professional summary that:
             - Is 3-5 sentences (60-100 words)
             - Highlights the candidate's core value proposition
             - Mentions key skills and areas of expertise
             - Conveys professional identity and career focus
-            - Uses first person implied (no "I" or "my")
-            - Matches the candidate's voice and communication style
+            - Matches the candidate's voice and communication style as shown in writing samples
+
+            ## CONSTRAINTS
+
+            1. Use ONLY facts from the provided Knowledge Cards and documented experience
+            2. Do NOT invent metrics, percentages, or quantitative claims
+            3. Match the candidate's writing voice - study their writing samples carefully
+            4. Avoid generic resume phrases
+
+            ## FORBIDDEN
+
+            - Fabricated numbers ("X years of experience", "reduced by Y%")
+            - Generic phrases ("results-driven", "passionate about", "proven track record")
+            - Vague claims ("significantly improved", "extensive experience")
+            - LinkedIn buzzwords ("leveraged", "spearheaded", "synergized")
 
             Return your response as JSON:
             {
