@@ -68,7 +68,7 @@ struct TitleSetsBrowserTab: View {
                 ScrollView {
                     LazyVStack(spacing: 8) {
                         ForEach(store.allTitleSets) { titleSet in
-                            TitleSetRow(
+                            TitleSetBrowserRow(
                                 titleSet: titleSet,
                                 isSelected: selectedSetId == titleSet.id,
                                 onSelect: { selectedSetId = titleSet.id },
@@ -523,7 +523,7 @@ private struct WordSlotView: View {
 
 // MARK: - Title Set Row
 
-private struct TitleSetRow: View {
+private struct TitleSetBrowserRow: View {
     let titleSet: TitleSetRecord
     let isSelected: Bool
     let onSelect: () -> Void

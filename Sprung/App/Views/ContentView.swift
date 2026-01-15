@@ -85,9 +85,9 @@ struct ContentView: View {
             }
         }
         // Add reasoning stream view as overlay modal for AI thinking display
-        // Skip when revision sheet is open - it has its own reasoning stream overlay
+        // Skip when parallel review queue sheet is open - it has its own reasoning stream overlay
         .overlay {
-            if reasoningStreamManager.isVisible && !resumeReviseViewModel.showResumeRevisionSheet {
+            if reasoningStreamManager.isVisible && !resumeReviseViewModel.showParallelReviewQueueSheet {
                 ReasoningStreamView(
                     isVisible: Binding(
                         get: { reasoningStreamManager.isVisible },

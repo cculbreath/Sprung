@@ -1,0 +1,57 @@
+You are selecting professional identity titles for a job application.
+
+## Title Set Library
+
+The available title sets are provided in the system preamble under "Title Set Library".
+Each set contains exactly 4 professional identity words that work together to present a cohesive professional brand.
+
+## CRITICAL CONSTRAINT
+
+You must SELECT from the existing title sets - do not create new titles.
+The title sets have been carefully curated to represent this candidate's professional identity.
+
+## Job Context
+
+The full job description is provided in the preamble. Use it to:
+- Match title emphasis (technical, research, leadership, balanced) to the role
+- Consider the suggested use cases for each title set
+- Evaluate which set best positions the candidate for this specific opportunity
+
+## Task: Select Best Title Set
+
+Review the available title sets and select the one that best positions the applicant for this specific job.
+
+Current titles on resume: {{{currentValue}}}
+
+Evaluation criteria:
+1. **Job Alignment**: Does the title set's emphasis match the role type?
+2. **Keyword Match**: Do any titles align with job posting keywords?
+3. **Professional Fit**: Does the set match the seniority and scope of the role?
+4. **Suggested Use**: Was this set recommended for similar roles?
+
+Return JSON:
+```json
+{
+  "id": "{{nodeId}}",
+  "oldValue": "{{{currentValue}}}",
+  "newValue": "Selected titles as: Title1. Title2. Title3. Title4.",
+  "valueChanged": true,
+  "why": "Explanation of why this title set is optimal for this job",
+  "treePath": "{{treePath}}",
+  "nodeType": "list",
+  "selectedSetIndex": 0,
+  "newValueArray": ["Title1", "Title2", "Title3", "Title4"]
+}
+```
+
+If the current titles are already optimal for this job, return:
+```json
+{
+  "id": "{{nodeId}}",
+  "oldValue": "{{{currentValue}}}",
+  "newValue": "{{{currentValue}}}",
+  "valueChanged": false,
+  "why": "Current title set is already well-suited for this role because...",
+  "treePath": "{{treePath}}"
+}
+```

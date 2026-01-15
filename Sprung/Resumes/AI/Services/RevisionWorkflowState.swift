@@ -14,6 +14,7 @@ class RevisionWorkflowState {
     enum WorkflowKind {
         case customize
         case clarifying
+        case parallel
     }
 
     // MARK: - Workflow State

@@ -81,20 +81,20 @@ struct AppSheetsModifier: ViewModifier {
     @Environment(LLMFacade.self) private var llmFacade
     @State private var showReprocessConfirmation = false
     @State private var newlyAddedCardName: String = ""
-    private var revisionSheetBinding: Binding<Bool> {
-        Binding(
-            get: { resumeReviseViewModel.showResumeRevisionSheet },
-            set: { newValue in
-                resumeReviseViewModel.showResumeRevisionSheet = newValue
-            }
-        )
-    }
-
     private var skillExperiencePickerBinding: Binding<Bool> {
         Binding(
             get: { resumeReviseViewModel.showSkillExperiencePicker },
             set: { newValue in
                 resumeReviseViewModel.showSkillExperiencePicker = newValue
+            }
+        )
+    }
+
+    private var parallelReviewQueueBinding: Binding<Bool> {
+        Binding(
+            get: { resumeReviseViewModel.showParallelReviewQueueSheet },
+            set: { newValue in
+                resumeReviseViewModel.showParallelReviewQueueSheet = newValue
             }
         )
     }
@@ -158,12 +158,6 @@ struct AppSheetsModifier: ViewModifier {
                 if let selectedResume = jobAppStore.selectedApp?.selectedRes {
                     ResumeReviewSheet(selectedResume: .constant(selectedResume))
                 }
-            }
-            .sheet(isPresented: revisionSheetBinding) {
-                RevisionReviewSheetContent(
-                    resumeReviseViewModel: resumeReviseViewModel,
-                    selectedResume: jobAppStore.selectedApp?.selectedRes
-                )
             }
             .sheet(isPresented: $sheets.showMultiModelChooseBest) {
                 if jobAppStore.selectedApp != nil,
@@ -269,42 +263,51 @@ struct AppSheetsModifier: ViewModifier {
                     }
                 )
             }
+            .sheet(isPresented: parallelReviewQueueBinding) {
+                ParallelReviewQueueSheetContent(
+                    resumeReviseViewModel: resumeReviseViewModel,
+                    selectedResume: jobAppStore.selectedApp?.selectedRes
+                )
+            }
     }
 }
-// MARK: - Revision Review Sheet Content
-/// Wrapper view that includes the reasoning stream overlay inside the sheet
-private struct RevisionReviewSheetContent: View {
+// MARK: - Parallel Review Queue Sheet Content
+/// Wrapper view for the parallel customization review queue
+private struct ParallelReviewQueueSheetContent: View {
     @Bindable var resumeReviseViewModel: ResumeReviseViewModel
     let selectedResume: Resume?
     @Environment(ReasoningStreamManager.self) private var reasoningStreamManager
 
     var body: some View {
         ZStack {
-            if let resume = selectedResume {
-                RevisionReviewView(
-                    viewModel: resumeReviseViewModel,
-                    resume: .constant(resume)
-                )
-                .frame(minWidth: 850)
-                .onAppear {
-                    Logger.debug(
-                        "🔍 [AppSheets] Creating RevisionReviewView with resume: \(resume.id.uuidString)",
-                        category: .ui
-                    )
-                    Logger.debug(
-                        "🔍 [AppSheets] ViewModel has \(resumeReviseViewModel.resumeRevisions.count) revisions",
-                        category: .ui
-                    )
-                }
-            } else {
-                Text("Error: Missing resume")
-                    .frame(width: 400, height: 300)
-                    .onAppear {
-                        Logger.debug("🔍 [AppSheets] Failed to get selectedResume", category: .ui)
+            if let _ = selectedResume,
+               let reviewQueue = resumeReviseViewModel.parallelReviewQueue {
+                CustomizationReviewQueueView(
+                    reviewQueue: reviewQueue,
+                    onComplete: {
+                        resumeReviseViewModel.showParallelReviewQueueSheet = false
+                    },
+                    onCancel: {
+                        resumeReviseViewModel.showParallelReviewQueueSheet = false
                     }
+                )
+                .frame(minWidth: 900, minHeight: 600)
+            } else {
+                VStack(spacing: 12) {
+                    if selectedResume == nil {
+                        Text("Error: Missing resume")
+                    } else {
+                        Text("No items to review")
+                    }
+                    Button("Close") {
+                        resumeReviseViewModel.showParallelReviewQueueSheet = false
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
+                .frame(width: 400, height: 300)
             }
         }
-        // Reasoning stream as sheet-level overlay so it appears on top
+        // Reasoning stream as sheet-level overlay
         .overlay {
             if reasoningStreamManager.isVisible {
                 ReasoningStreamView(

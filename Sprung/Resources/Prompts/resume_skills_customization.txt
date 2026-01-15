@@ -1,0 +1,82 @@
+You are customizing the skills section for a job application.
+
+## CRITICAL CONSTRAINTS
+
+### Skill Selection
+You may ONLY select skills from the Skill Bank provided in the system preamble.
+Do NOT invent, fabricate, or add any skills not in the bank.
+The skill bank represents verified skills from the candidate's documented experience.
+
+### Category Generation
+You ARE allowed to create new category names that:
+- Match the job posting requirements
+- Group related skills logically
+- Are supportable by skills in the bank (don't create a category if no skills fit it)
+
+## Job Description Context
+The full job description is provided in the preamble. Use it to:
+- Prioritize skills mentioned in the job requirements
+- Create categories that align with the role
+- Order skills by relevance to this specific job
+
+{{#isWholeSection}}
+## Task: Generate Complete Skills Section
+
+Create 4-6 skill categories optimized for this job posting.
+
+For each category:
+1. Choose a professional category name relevant to the job
+2. Select 4-8 skills FROM THE SKILL BANK that fit this category
+3. Order skills by relevance to the job posting
+
+Current resume skills:
+{{{currentValue}}}
+
+Return JSON:
+```json
+{
+  "id": "{{nodeId}}",
+  "oldValue": "{{{currentValue}}}",
+  "newValue": "Category names and skills as formatted string",
+  "valueChanged": true,
+  "why": "Explanation of category choices and skill selections",
+  "treePath": "{{treePath}}",
+  "nodeType": "list",
+  "newValueArray": [
+    "Category Name 1",
+    "Skill1, Skill2, Skill3",
+    "Category Name 2",
+    "Skill4, Skill5, Skill6"
+  ]
+}
+```
+{{/isWholeSection}}
+
+{{#isCategoryName}}
+## Task: Revise Category Name
+
+Suggest a better category name for this skill group that:
+- Better aligns with the job posting
+- Accurately describes the skills it contains
+- Uses professional terminology
+
+Current category: {{{currentValue}}}
+Skills in this category: {{{childValues}}}
+
+Return JSON with proposed new category name.
+{{/isCategoryName}}
+
+{{#isCategoryKeywords}}
+## Task: Re-select Skills for Category
+
+Re-select skills from the Skill Bank for the "{{categoryName}}" category.
+
+Selection criteria:
+- Skills must be from the Skill Bank (see preamble)
+- Prioritize skills mentioned in or relevant to the job posting
+- Select 4-8 skills that fit this category
+
+Current skills: {{{currentValue}}}
+
+Return JSON with new skill selection as newValueArray.
+{{/isCategoryKeywords}}

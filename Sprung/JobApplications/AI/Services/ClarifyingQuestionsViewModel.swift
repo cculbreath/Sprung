@@ -18,6 +18,7 @@ class ClarifyingQuestionsViewModel {
     private let exportCoordinator: ResumeExportCoordinator
     private let applicantProfileStore: ApplicantProfileStore
     private let knowledgeCardStore: KnowledgeCardStore
+    private let coverRefStore: CoverRefStore
     private var activeStreamingHandle: LLMStreamingHandle?
     // MARK: - UI State
     var isGeneratingQuestions: Bool = false
@@ -34,7 +35,8 @@ class ClarifyingQuestionsViewModel {
         defaultResumeReviseViewModel: ResumeReviseViewModel,
         exportCoordinator: ResumeExportCoordinator,
         applicantProfileStore: ApplicantProfileStore,
-        knowledgeCardStore: KnowledgeCardStore
+        knowledgeCardStore: KnowledgeCardStore,
+        coverRefStore: CoverRefStore
     ) {
         self.llm = llmFacade
         self.openRouterService = openRouterService
@@ -43,6 +45,7 @@ class ClarifyingQuestionsViewModel {
         self.exportCoordinator = exportCoordinator
         self.applicantProfileStore = applicantProfileStore
         self.knowledgeCardStore = knowledgeCardStore
+        self.coverRefStore = coverRefStore
     }
     // MARK: - Public Interface
     /// Start the clarifying questions workflow
@@ -156,105 +159,43 @@ class ClarifyingQuestionsViewModel {
             throw error
         }
     }
-    /// Process user answers and hand off conversation to ResumeReviseViewModel
+    /// Process user answers and hand off to parallel workflow
+    /// The clarifying Q&A will be prepended to the preamble of all parallel tasks
     /// - Parameters:
     ///   - answers: User answers to the clarifying questions
     ///   - resume: The resume being revised
-    ///   - resumeReviseViewModel: The ViewModel to receive the conversation handoff
+    ///   - resumeReviseViewModel: The ViewModel to receive the workflow handoff
     func processAnswersAndHandoffConversation(
         answers: [QuestionAnswer],
         resume: Resume,
         resumeReviseViewModel: ResumeReviseViewModel
     ) async throws {
-        guard let conversationId = currentConversationId else {
-            throw ClarifyingQuestionsError.noActiveConversation
-        }
-        guard let modelId = currentModelId, !modelId.isEmpty else {
-            throw ModelConfigurationError.modelNotConfigured(
-                settingKey: "currentModelId",
-                operationName: "Clarifying Questions"
-            )
-        }
-        // Add the user's answers to the conversation
-        let answerPrompt = createAnswerPrompt(answers: answers)
-        // Check if model supports reasoning for streaming
-            let model = openRouterService.findModel(id: modelId)
-        let supportsReasoning = model?.supportsReasoning ?? false
-        Logger.debug("🤖 [processAnswersAndHandoffConversation] Model: \(modelId)")
-        Logger.debug("🤖 [processAnswersAndHandoffConversation] Supports reasoning: \(supportsReasoning)")
-        if supportsReasoning {
-            // Use streaming with reasoning for supported models
-            Logger.info("🧠 Using streaming with reasoning for clarifying question answers: \(modelId)")
-            // Configure reasoning parameters using user setting
-            let userEffort = UserDefaults.standard.string(forKey: "reasoningEffort") ?? "medium"
-            let reasoning = OpenRouterReasoning(
-                effort: userEffort,
-                includeReasoning: true
-            )
-            // Show reasoning modal for answer processing
-            reasoningStreamManager.clear()
-            reasoningStreamManager.modelName = modelId
-            reasoningStreamManager.isVisible = true
-            reasoningStreamManager.startReasoning(modelName: modelId)
-            cancelActiveStreaming()
-            let handle = try await llm.continueConversationStreaming(
-                userMessage: answerPrompt,
-                modelId: modelId,
-                conversationId: conversationId,
-                images: [],
-                temperature: nil,
-                reasoning: reasoning,
-                jsonSchema: nil
-            )
-            activeStreamingHandle = handle
-            // Process the stream
-            for try await chunk in handle.stream {
-                // Handle reasoning content (supports both legacy and new reasoning_details format)
-                if let reasoningContent = chunk.allReasoningText {
-                    reasoningStreamManager.reasoningText += reasoningContent
-                }
-                // Handle completion
-                if chunk.isFinished {
-                    reasoningStreamManager.isStreaming = false
-                    // Keep modal visible - it will be handled by revision generation
-                }
-            }
-            cancelActiveStreaming()
-        } else {
-            // Use non-streaming for models without reasoning
-            Logger.info("📝 Using non-streaming for clarifying question answers: \(modelId)")
-            _ = try await llm.continueConversation(
-                userMessage: answerPrompt,
-                modelId: modelId,
-                conversationId: conversationId
-            )
-        }
-        Logger.debug("✅ User answers added to conversation \(conversationId)")
-        // Hand off the conversation to ResumeReviseViewModel - it will generate revisions
-        await handoffConversationToResumeReviseViewModel(
+        Logger.debug("✅ Processing \(answers.count) clarifying question answers")
+        // Hand off to parallel workflow with clarifying Q&A prepended to preamble
+        // (No need to continue the conversation - the Q&A context will be included in the preamble)
+        await handoffToParallelWorkflow(
             resumeReviseViewModel: resumeReviseViewModel,
-            conversationId: conversationId,
-            resume: resume
+            resume: resume,
+            answers: answers
         )
     }
     private func cancelActiveStreaming() {
         activeStreamingHandle?.cancel()
         activeStreamingHandle = nil
     }
-    // MARK: - ResumeReviseViewModel Handoff
-    /// Hand off conversation context to ResumeReviseViewModel for revision generation
-    /// This is the core handoff method mentioned in LLM_MULTI_TURN_WORKFLOWS.md
+    // MARK: - Parallel Workflow Handoff
+    /// Hand off to parallel workflow with clarifying Q&A prepended to preamble
     /// - Parameters:
-    ///   - resumeReviseViewModel: The ViewModel to receive the conversation handoff
-    ///   - conversationId: The conversation ID with established Q&A context
+    ///   - resumeReviseViewModel: The ViewModel to receive the workflow handoff
     ///   - resume: The resume being revised
+    ///   - answers: User answers to prepend to all parallel tasks
     @MainActor
-    private func handoffConversationToResumeReviseViewModel(
+    private func handoffToParallelWorkflow(
         resumeReviseViewModel: ResumeReviseViewModel,
-        conversationId: UUID,
-        resume: Resume
+        resume: Resume,
+        answers: [QuestionAnswer]
     ) async {
-        Logger.debug("🔄 Handing off conversation \(conversationId) to ResumeReviseViewModel")
+        Logger.debug("🔄 Handing off to parallel workflow with \(questions.count) Q&A pairs")
         do {
             guard let modelId = currentModelId, !modelId.isEmpty else {
                 throw ModelConfigurationError.modelNotConfigured(
@@ -262,30 +203,20 @@ class ClarifyingQuestionsViewModel {
                     operationName: "Clarifying Questions"
                 )
             }
-            // Pass conversation context - ResumeReviseViewModel will generate revisions
-            // using the existing conversation thread (no duplicate background docs needed)
-            try await resumeReviseViewModel.continueConversationAndGenerateRevisions(
-                conversationId: conversationId,
+            // Build clarifying Q&A pairs for the parallel workflow preamble
+            let clarifyingQA = zip(questions, answers).map { ($0, $1) }
+            // Start parallel workflow with clarifying Q&A prepended to preamble
+            try await resumeReviseViewModel.startParallelRevisionWorkflow(
                 resume: resume,
-                modelId: modelId
+                modelId: modelId,
+                clarifyingQA: clarifyingQA,
+                coverRefStore: coverRefStore
             )
-            Logger.debug("✅ Conversation handoff complete - ResumeReviseViewModel is managing the workflow")
+            Logger.debug("✅ Parallel workflow started with clarifying Q&A context")
         } catch {
-            Logger.error("Error in conversation handoff: \(error.localizedDescription)")
-            // If it's a JSON parsing error, show the full response for debugging
-            let nsError = error as NSError
-            if nsError.domain == "ResumeReviseViewModel",
-               let fullResponse = nsError.userInfo["fullResponse"] as? String {
-                DispatchQueue.main.async {
-                    self.lastError = "AI returned an unexpected response format. Full response:\n\n\(fullResponse)"
-                    self.showError = true
-                }
-            } else {
-                DispatchQueue.main.async {
-                    self.lastError = "Error processing AI response: \(error.localizedDescription)"
-                    self.showError = true
-                }
-            }
+            Logger.error("Error starting parallel workflow: \(error.localizedDescription)")
+            lastError = "Error starting customization: \(error.localizedDescription)"
+            showError = true
         }
     }
     // MARK: - Private Helpers
@@ -318,44 +249,29 @@ class ClarifyingQuestionsViewModel {
             await proceedDirectlyToRevisions(resume: resume, modelId: modelId)
         }
     }
-    /// Proceed directly to revisions without questions
+    /// Proceed directly to parallel workflow without clarifying questions
     private func proceedDirectlyToRevisions(
         resume: Resume,
         modelId: String
     ) async {
-        Logger.info("🎯 Proceeding directly to revisions workflow without clarifying questions")
+        Logger.info("🎯 Proceeding directly to parallel workflow without clarifying questions")
         do {
             let reviseViewModel = defaultResumeReviseViewModel
-            Logger.debug("🔍 [ClarifyingQuestionsViewModel] Using shared ResumeReviseViewModel at address: \(String(describing: Unmanaged.passUnretained(reviseViewModel).toOpaque()))")
-            // Start the fresh revision workflow
-            try await reviseViewModel.startFreshRevisionWorkflow(
+            Logger.debug("🔍 [ClarifyingQuestionsViewModel] Using shared ResumeReviseViewModel")
+            // Start the parallel revision workflow without clarifying Q&A
+            try await reviseViewModel.startParallelRevisionWorkflow(
                 resume: resume,
                 modelId: modelId,
-                workflow: .clarifying
+                clarifyingQA: nil,
+                coverRefStore: coverRefStore
             )
-            // Update our state to indicate we're showing revisions
-            Logger.info("✅ Direct revision workflow completed, transitioning to review")
-            // Signal that revisions are ready (this will be handled by the view layer)
-                await MainActor.run {
-                    // Ensure reasoning modal is hidden before transitioning
-                    reasoningStreamManager.isVisible = false
-                }
+            Logger.info("✅ Parallel workflow started, transitioning to review")
+            // Ensure reasoning modal is hidden before transitioning
+            reasoningStreamManager.isVisible = false
         } catch {
-            Logger.error("❌ Direct revision workflow failed: \(error.localizedDescription)")
-            // If it's a JSON parsing error, show the full response for debugging
-            let nsError = error as NSError
-            if nsError.domain == "ResumeReviseViewModel",
-               let fullResponse = nsError.userInfo["fullResponse"] as? String {
-                await MainActor.run {
-                    lastError = "AI returned an unexpected response format. Full response:\n\n\(fullResponse)"
-                    showError = true
-                }
-            } else {
-                await MainActor.run {
-                    lastError = "Failed to generate revisions: \(error.localizedDescription)"
-                    showError = true
-                }
-            }
+            Logger.error("❌ Parallel workflow failed: \(error.localizedDescription)")
+            lastError = "Failed to start customization: \(error.localizedDescription)"
+            showError = true
         }
     }
     /// Create prompt from user answers

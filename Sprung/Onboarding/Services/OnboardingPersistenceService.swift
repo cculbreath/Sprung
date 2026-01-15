@@ -186,6 +186,44 @@ final class OnboardingPersistenceService {
             Logger.info("📋 Propagated \(ui.publicationCards.count) publication cards", category: .ai)
         }
 
+        // Propagate section cards (awards, languages, references - stored separately from timeline)
+        let awardCards = ui.sectionCards.filter { $0.sectionType == .award }
+        let languageCards = ui.sectionCards.filter { $0.sectionType == .language }
+        let referenceCards = ui.sectionCards.filter { $0.sectionType == .reference }
+
+        let hasAgentAwards = !draft.awards.isEmpty
+        if !hasAgentAwards && !awardCards.isEmpty {
+            for card in awardCards {
+                let awardDraft = createAwardDraftFromCard(card)
+                draft.awards.append(awardDraft)
+                propagatedCount += 1
+            }
+            draft.isAwardsEnabled = true
+            Logger.info("📋 Propagated \(awardCards.count) award cards", category: .ai)
+        }
+
+        let hasAgentLanguages = !draft.languages.isEmpty
+        if !hasAgentLanguages && !languageCards.isEmpty {
+            for card in languageCards {
+                let langDraft = createLanguageDraftFromCard(card)
+                draft.languages.append(langDraft)
+                propagatedCount += 1
+            }
+            draft.isLanguagesEnabled = true
+            Logger.info("📋 Propagated \(languageCards.count) language cards", category: .ai)
+        }
+
+        let hasAgentReferences = !draft.references.isEmpty
+        if !hasAgentReferences && !referenceCards.isEmpty {
+            for card in referenceCards {
+                let refDraft = createReferenceDraftFromCard(card)
+                draft.references.append(refDraft)
+                propagatedCount += 1
+            }
+            draft.isReferencesEnabled = true
+            Logger.info("📋 Propagated \(referenceCards.count) reference cards", category: .ai)
+        }
+
         // Save the draft
         experienceDefaultsStore.save(draft: draft)
         if propagatedCount > 0 {
@@ -519,6 +557,31 @@ final class OnboardingPersistenceService {
         draft.releaseDate = card.releaseDate
         draft.url = card.url
         draft.summary = card.summary
+        return draft
+    }
+
+    // MARK: - Section Card Converters (Awards, Languages, References)
+
+    private func createAwardDraftFromCard(_ card: AdditionalSectionEntry) -> AwardExperienceDraft {
+        var draft = AwardExperienceDraft()
+        draft.title = card.title ?? ""
+        draft.date = card.date ?? ""
+        draft.awarder = card.awarder ?? ""
+        draft.summary = card.awardSummary ?? ""
+        return draft
+    }
+
+    private func createLanguageDraftFromCard(_ card: AdditionalSectionEntry) -> LanguageExperienceDraft {
+        var draft = LanguageExperienceDraft()
+        draft.language = card.language ?? ""
+        draft.fluency = card.fluency ?? ""
+        return draft
+    }
+
+    private func createReferenceDraftFromCard(_ card: AdditionalSectionEntry) -> ReferenceExperienceDraft {
+        var draft = ReferenceExperienceDraft()
+        draft.name = card.referenceName ?? ""
+        draft.reference = card.referenceText ?? ""
         return draft
     }
 }
