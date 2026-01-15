@@ -555,9 +555,11 @@ final class ExperienceDefaultsToTree {
         ))
 
         // Build a lookup of user data by normalized key
+        // Strip "custom." prefix since manifest keys don't have it
         var userDataByKey: [String: CustomFieldValue] = [:]
         for field in experienceDefaults.customFields {
-            let normalizedKey = field.key.lowercased().filter { $0.isLetter || $0.isNumber }
+            let keyWithoutPrefix = field.key.hasPrefix("custom.") ? String(field.key.dropFirst(7)) : field.key
+            let normalizedKey = keyWithoutPrefix.lowercased().filter { $0.isLetter || $0.isNumber }
             userDataByKey[normalizedKey] = field
         }
 
@@ -615,23 +617,25 @@ final class ExperienceDefaultsToTree {
 
         // Then, add any user-defined fields not in the manifest
         for field in experienceDefaults.customFields {
-            let normalizedKey = field.key.lowercased().filter { $0.isLetter || $0.isNumber }
+            let keyWithoutPrefix = field.key.hasPrefix("custom.") ? String(field.key.dropFirst(7)) : field.key
+            let normalizedKey = keyWithoutPrefix.lowercased().filter { $0.isLetter || $0.isNumber }
             guard !processedKeys.contains(normalizedKey) else { continue }
 
+            // Use key without prefix for node name to match manifest convention
             let fieldNode = customContainer.addChild(TreeNode(
-                name: field.key,
+                name: keyWithoutPrefix,
                 value: "",
                 inEditor: true,
                 status: .isNotLeaf,
                 resume: resume
             ))
 
-            applyEditorLabel(to: fieldNode, for: field.key)
+            applyEditorLabel(to: fieldNode, for: keyWithoutPrefix)
             if fieldNode.editorLabel == nil {
-                applyEditorLabel(to: fieldNode, for: "custom.\(field.key)")
+                applyEditorLabel(to: fieldNode, for: "custom.\(keyWithoutPrefix)")
             }
 
-            let isRepeatable = section?.fields.first(where: { $0.key == field.key })?.repeatable == true
+            let isRepeatable = section?.fields.first(where: { $0.key == keyWithoutPrefix })?.repeatable == true
             if field.values.count > 1 || isRepeatable {
                 for value in field.values {
                     _ = fieldNode.addChild(TreeNode(

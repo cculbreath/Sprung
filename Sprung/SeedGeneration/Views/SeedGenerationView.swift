@@ -9,6 +9,7 @@ import SwiftUI
 
 /// Selection for the sidebar
 enum SeedGenerationSelection: Hashable {
+    case titleSets
     case section(ExperienceSectionKey)
     case reviewQueue
 }
@@ -18,22 +19,130 @@ struct SeedGenerationView: View {
     @State var orchestrator: SeedGenerationOrchestrator
 
     @Environment(ExperienceDefaultsStore.self) private var defaultsStore
+    @Environment(TitleSetStore.self) private var titleSetStore
+    @Environment(LLMFacade.self) private var llmFacade
 
     @State private var selectedItem: SeedGenerationSelection?
     @State private var hasApplied = false
+    @State private var isGeneratingProjects = false
+    @State private var hasStartedGeneration = false
+
+    /// Number of project proposals awaiting user decision
+    private var pendingProjectProposalCount: Int {
+        guard let proposals = orchestrator.projectProposals else { return 0 }
+        return proposals.filter { !$0.isApproved }.count
+    }
+
+    /// Whether there are approved projects that need content generated
+    private var hasApprovedProjectsNeedingContent: Bool {
+        guard let proposals = orchestrator.projectProposals else { return false }
+        let approvedCount = proposals.filter { $0.isApproved }.count
+        // Check if any approved projects are missing from the review queue
+        let projectTasksInQueue = orchestrator.reviewQueue.items.filter { $0.task.section == .projects }.count
+        return approvedCount > 0 && projectTasksInQueue < approvedCount
+    }
+
+    /// Whether title sets exist and generation can proceed
+    private var hasTitleSets: Bool {
+        titleSetStore.hasTitleSets
+    }
+
+    /// Number of title sets available
+    private var titleSetCount: Int {
+        titleSetStore.titleSetCount
+    }
 
     var body: some View {
         VStack(spacing: 0) {
             headerBar
             Divider()
+            if !hasTitleSets {
+                titleSetsRequiredBanner
+            } else if !hasStartedGeneration {
+                titleSetsReadyBanner
+            } else if pendingProjectProposalCount > 0 {
+                projectProposalsBanner
+            } else if hasApprovedProjectsNeedingContent {
+                generateProjectsBanner
+            }
             mainContent
             Divider()
             SeedGenerationStatusBar(tracker: orchestrator.activityTracker)
         }
         .frame(minWidth: 800, minHeight: 600)
-        .task {
-            await orchestrator.startGeneration()
+        .onAppear {
+            // Auto-select title sets if none exist
+            if !hasTitleSets {
+                selectedItem = .titleSets
+            }
         }
+        .onChange(of: hasTitleSets) { _, newValue in
+            // When title sets become available, keep showing the ready banner
+            // User needs to click Continue to start generation
+        }
+    }
+
+    // MARK: - Title Sets Banners
+
+    private var titleSetsRequiredBanner: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.orange)
+                .font(.title3)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Title Sets Required")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                Text("Create professional identity title sets before generating content. These define how you present yourself (e.g., \"Physicist · Developer · Educator\").")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+
+            Button {
+                selectedItem = .titleSets
+            } label: {
+                Label("Create Title Sets", systemImage: "person.crop.rectangle.stack")
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(.orange)
+        }
+        .padding()
+        .background(.orange.opacity(0.1))
+    }
+
+    private var titleSetsReadyBanner: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "checkmark.circle.fill")
+                .foregroundStyle(.green)
+                .font(.title3)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("\(titleSetCount) title set\(titleSetCount == 1 ? "" : "s") ready")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                Text("Your professional identity is defined. Continue to generate experience content.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+
+            Button {
+                Task {
+                    hasStartedGeneration = true
+                    await orchestrator.startGeneration()
+                }
+            } label: {
+                Label("Continue to Generation", systemImage: "arrow.right.circle")
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(.green)
+        }
+        .padding()
+        .background(.green.opacity(0.1))
     }
 
     // MARK: - Header Bar
@@ -68,6 +177,75 @@ struct SeedGenerationView: View {
         .padding(.vertical, 12)
     }
 
+    // MARK: - Project Banners
+
+    private var projectProposalsBanner: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "lightbulb.fill")
+                .foregroundStyle(.yellow)
+                .font(.title3)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("\(pendingProjectProposalCount) project proposal\(pendingProjectProposalCount == 1 ? "" : "s") to review")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                Text("AI discovered potential projects from your experience. Review and approve before generating content.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+
+            Button {
+                selectedItem = .section(.projects)
+            } label: {
+                Label("Review Projects", systemImage: "arrow.right.circle")
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(.yellow)
+        }
+        .padding()
+        .background(.yellow.opacity(0.1))
+    }
+
+    private var generateProjectsBanner: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "sparkles")
+                .foregroundStyle(.blue)
+                .font(.title3)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Ready to generate project content")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                Text("Generate descriptions and highlights for your approved projects.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+
+            Button {
+                Task {
+                    isGeneratingProjects = true
+                    await orchestrator.generateApprovedProjects()
+                    isGeneratingProjects = false
+                }
+            } label: {
+                if isGeneratingProjects {
+                    ProgressView()
+                        .controlSize(.small)
+                } else {
+                    Label("Generate Content", systemImage: "wand.and.stars")
+                }
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(isGeneratingProjects)
+        }
+        .padding()
+        .background(.blue.opacity(0.1))
+    }
+
     // MARK: - Actions
 
     private func applyToDefaults() {
@@ -94,10 +272,38 @@ struct SeedGenerationView: View {
 
     private var sidebar: some View {
         List(selection: $selectedItem) {
-            Section("Generation Progress") {
-                ForEach(orchestrator.sectionProgress) { progress in
-                    SectionProgressRow(progress: progress)
-                        .tag(SeedGenerationSelection.section(progress.section))
+            // Title Sets section - always shown at top
+            Section("Professional Identity") {
+                Label {
+                    HStack {
+                        Text("Title Sets")
+                        Spacer()
+                        if hasTitleSets {
+                            Text("\(titleSetCount)")
+                                .font(.caption)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 2)
+                                .background(.cyan, in: Capsule())
+                                .foregroundStyle(.white)
+                        } else {
+                            Image(systemName: "exclamationmark.circle.fill")
+                                .foregroundStyle(.orange)
+                        }
+                    }
+                } icon: {
+                    Image(systemName: "person.crop.rectangle.stack")
+                        .foregroundStyle(hasTitleSets ? .cyan : .orange)
+                }
+                .tag(SeedGenerationSelection.titleSets)
+            }
+
+            // Generation Progress - only show if generation has started
+            if hasStartedGeneration {
+                Section("Generation Progress") {
+                    ForEach(orchestrator.sectionProgress) { progress in
+                        SectionProgressRow(progress: progress)
+                            .tag(SeedGenerationSelection.section(progress.section))
+                    }
                 }
             }
 
@@ -130,12 +336,17 @@ struct SeedGenerationView: View {
     @ViewBuilder
     private var detailView: some View {
         switch selectedItem {
+        case .titleSets:
+            TitleSetsBrowserTab(titleSetStore: titleSetStore, llmFacade: llmFacade)
         case .reviewQueue:
             ReviewQueueView(queue: orchestrator.reviewQueue)
         case .section(let section):
             sectionDetailView(for: section)
         case nil:
-            if orchestrator.reviewQueue.hasPendingItems {
+            if !hasTitleSets {
+                // Default to title sets if none exist
+                TitleSetsBrowserTab(titleSetStore: titleSetStore, llmFacade: llmFacade)
+            } else if orchestrator.reviewQueue.hasPendingItems {
                 ReviewQueueView(queue: orchestrator.reviewQueue)
             } else {
                 welcomeView

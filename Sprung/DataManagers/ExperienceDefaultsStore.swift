@@ -53,4 +53,50 @@ final class ExperienceDefaultsStore: SwiftDataStore {
         cachedDefaults = defaults
         saveContext()
     }
+
+    /// Clear SGM-generated content while preserving timeline facts.
+    /// Clears: summaries, descriptions, highlights/bullets, categorized skills.
+    /// Preserves: names, dates, locations, positions, institutions, etc.
+    func clearGeneratedContent() {
+        let defaults = currentDefaults()
+
+        // Clear work summaries and highlights (keep name, position, location, dates, url)
+        for i in defaults.work.indices {
+            defaults.work[i].summary = ""
+            defaults.work[i].highlights = []
+        }
+
+        // Clear volunteer summaries and highlights (keep org, position, dates, url)
+        for i in defaults.volunteer.indices {
+            defaults.volunteer[i].summary = ""
+            defaults.volunteer[i].highlights = []
+        }
+
+        // Clear project descriptions, highlights, keywords (keep name, dates, url, org, type, roles)
+        for i in defaults.projects.indices {
+            defaults.projects[i].description = ""
+            defaults.projects[i].highlights = []
+            defaults.projects[i].keywords = []
+        }
+
+        // Clear award summaries (keep title, date, awarder)
+        for i in defaults.awards.indices {
+            defaults.awards[i].summary = ""
+        }
+
+        // Clear publication summaries (keep name, publisher, releaseDate, url)
+        for i in defaults.publications.indices {
+            defaults.publications[i].summary = ""
+        }
+
+        // Clear categorized skills entirely (SGM generates these groupings)
+        defaults.skills = []
+
+        // Reset the seed generation flag
+        defaults.seedCreated = false
+
+        cachedDefaults = defaults
+        saveContext()
+        Logger.info("Cleared SGM-generated content from ExperienceDefaults", category: .data)
+    }
 }

@@ -34,6 +34,7 @@ final class AppDependencies {
     let resumeReviseViewModel: ResumeReviseViewModel
     let searchOpsCoordinator: DiscoveryCoordinator
     let guidanceStore: InferenceGuidanceStore
+    let titleSetStore: TitleSetStore
     // MARK: - UI State
     let dragInfo: DragInfo
     let debugSettingsStore: DebugSettingsStore
@@ -61,6 +62,7 @@ final class AppDependencies {
         self.candidateDossierStore = CandidateDossierStore(context: modelContext)
         let guidanceStore = InferenceGuidanceStore(context: modelContext)
         self.guidanceStore = guidanceStore
+        self.titleSetStore = TitleSetStore(context: modelContext)
         // Core export orchestration
         let resumeExportService = ResumeExportService(
             templateStore: templateStore,

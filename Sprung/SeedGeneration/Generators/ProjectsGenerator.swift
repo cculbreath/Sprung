@@ -68,7 +68,8 @@ final class ProjectsGenerator: BaseSectionGenerator {
     func discoverProjects(
         context: SeedGenerationContext,
         llmFacade: LLMFacade,
-        modelId: String
+        modelId: String,
+        preamble: String
     ) async throws -> [ProjectProposal] {
         var proposals: [ProjectProposal] = []
 
@@ -87,13 +88,13 @@ final class ProjectsGenerator: BaseSectionGenerator {
             proposals.append(proposal)
         }
 
-        // 2. Extract project-worthy content from KCs
+        // 2. Extract project-worthy content from KCs typed as projects
         let projectKCs = context.projectKnowledgeCards
         for kc in projectKCs {
             let proposal = ProjectProposal(
                 id: UUID(),
                 name: kc.title,
-                description: kc.narrative.prefix(200) + "...",
+                description: String(kc.narrative.prefix(200)) + "...",
                 rationale: "Project identified in your knowledge cards",
                 sourceType: .knowledgeCard,
                 sourceId: kc.id.uuidString,
@@ -102,8 +103,13 @@ final class ProjectsGenerator: BaseSectionGenerator {
             proposals.append(proposal)
         }
 
-        // 3. Use LLM to propose additional projects from context
-        let llmProposals = try await discoverProjectsViaLLM(context: context, llmFacade: llmFacade, modelId: modelId)
+        // 3. Use LLM to discover additional projects from ALL evidence (uses cached preamble)
+        let llmProposals = try await discoverProjectsViaLLM(
+            context: context,
+            llmFacade: llmFacade,
+            modelId: modelId,
+            preamble: preamble
+        )
         proposals.append(contentsOf: llmProposals)
 
         return proposals
@@ -112,45 +118,80 @@ final class ProjectsGenerator: BaseSectionGenerator {
     private func discoverProjectsViaLLM(
         context: SeedGenerationContext,
         llmFacade: LLMFacade,
-        modelId: String
+        modelId: String,
+        preamble: String
     ) async throws -> [ProjectProposal] {
-        let systemPrompt = "You are a resume expert identifying impactful projects from a candidate's experience."
+        // Build list of existing timeline projects to avoid duplicates
+        let existingProjects = context.projectEntries
+        let existingProjectsList = existingProjects.isEmpty
+            ? "None currently in timeline"
+            : existingProjects.map { "- \($0["name"].stringValue)" }.joined(separator: "\n")
 
-        let prompt = """
-            Analyze the candidate's background and identify potential projects that would strengthen their resume.
+        // Build list of project-typed KCs (these are already being proposed separately)
+        let projectKCs = context.projectKnowledgeCards
+        let projectKCsList = projectKCs.isEmpty
+            ? "None"
+            : projectKCs.map { "- \($0.title)" }.joined(separator: "\n")
 
-            ## Available Evidence
+        // The preamble contains full KC content via prompt caching.
+        // This task prompt focuses specifically on discovering NEW projects.
+        let taskPrompt = """
+            ## Task: Discover Resume-Worthy Projects
 
-            ### Knowledge Cards
-            \(context.knowledgeCards.prefix(10).map { "- \($0.title): \($0.narrative.prefix(100))..." }.joined(separator: "\n"))
+            Review ALL Knowledge Cards in the preamble above and identify projects that should be added to the resume.
 
-            ### Skills
-            \(context.skills.prefix(20).map { $0.canonical }.joined(separator: ", "))
+            ### Already Captured (DO NOT suggest these)
 
-            ### Work Experience
-            \(context.workEntries.prefix(5).map { "\($0["title"].stringValue) at \($0["company"].stringValue)" }.joined(separator: "\n"))
+            **Existing Timeline Projects:**
+            \(existingProjectsList)
 
-            ## Instructions
+            **Project-typed Knowledge Cards (already being proposed):**
+            \(projectKCsList)
 
-            Identify 2-4 potential projects that:
-            - Demonstrate technical skills or leadership
-            - Could be highlighted on a resume
-            - Are supported by the evidence above
+            ### What to Look For
+
+            Search the Knowledge Cards for project-worthy work that is NOT yet captured:
+
+            1. **Technical initiatives** within employment KCs - systems built, tools created, infrastructure deployed
+            2. **Significant deliverables** - product launches, platform migrations, major features shipped
+            3. **Research outputs** - papers, prototypes, novel implementations
+            4. **Independent work** - open source contributions, side projects, hackathon builds
+            5. **Cross-functional efforts** - process improvements, team tools, documentation systems
+
+            ### Requirements for Each Proposal
+
+            - Must have clear evidence in a Knowledge Card (cite the specific KC)
+            - Must be distinct from existing timeline projects and project KCs
+            - Must be substantial enough to warrant a standalone resume entry
+            - Must demonstrate skills or impact relevant to job searching
+
+            ### Output
+
+            Propose 0-4 new projects. If no qualifying projects are found, return an empty array.
 
             Return JSON:
             {
                 "proposals": [
                     {
-                        "name": "Project name",
-                        "description": "Brief description",
-                        "rationale": "Why this would be valuable on a resume"
+                        "name": "Concise project name",
+                        "description": "2-3 sentence description based on KC evidence",
+                        "rationale": "Why this deserves a project entry, citing which KC contains the evidence"
                     }
                 ]
             }
             """
 
+        // Combine cached preamble (with full KC content) with task-specific prompt
+        let fullPrompt = """
+            \(preamble)
+
+            ---
+
+            \(taskPrompt)
+            """
+
         let response: ProjectProposalsResponse = try await llmFacade.executeStructuredWithDictionarySchema(
-            prompt: "\(systemPrompt)\n\n\(prompt)",
+            prompt: fullPrompt,
             modelId: modelId,
             as: ProjectProposalsResponse.self,
             schema: [

@@ -11,7 +11,7 @@ struct CoverLetterGenerateButton: View {
             showCoverLetterModelSheet = true
         }, label: {
             Label {
-                Text("Cover Letter")
+                Text("Create Letter")
             } icon: {
                 if coverLetterStore.isGeneratingCoverLetter {
                     Image("custom.append.page.badge.plus")

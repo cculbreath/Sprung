@@ -109,10 +109,20 @@ struct NodeLeafView: View {
     var body: some View {
         let isSectionLabelEntry = node.parent?.name == "section-labels"
         HStack(spacing: 5) {
-            if node.value.isEmpty && !isSectionLabelEntry {
+            if node.value.isEmpty && !isSectionLabelEntry && !isEditing {
                 Spacer().frame(width: 50)
-                Text(node.name)
+                Text(node.name.isEmpty ? "Empty" : node.name)
                     .foregroundColor(.gray)
+                    .italic()
+                // Allow editing empty nodes
+                Button(action: { vm.startEditing(node: node) }) {
+                    Image(systemName: "square.and.pencil")
+                        .foregroundColor(isHoveringEdit ? .primary : .secondary)
+                        .font(.system(size: 14))
+                        .padding(5)
+                }
+                .buttonStyle(PlainButtonStyle())
+                .onHover { hovering in isHoveringEdit = hovering }
             } else {
                 // Show SparkleButton for: normal nodes, solo nodes, and revnode leaves (container enum + iterate attr)
                 // Hide for: bundle attribute children (background is sufficient)

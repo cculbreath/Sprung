@@ -28,6 +28,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var coverRefStore: CoverRefStore?
     var knowledgeCardStore: KnowledgeCardStore?
     var skillStore: SkillStore?
+    var titleSetStore: TitleSetStore?
     func applicationDidFinishLaunching(_: Notification) {
         // Wait until the app is fully loaded before modifying the menu
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
@@ -649,13 +650,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             let hostingView: NSHostingView<AnyView>
 
             if let experienceDefaultsStore,
-               let guidanceStore {
+               let guidanceStore,
+               let titleSetStore {
                 let root = sgmView
                     .modelContainer(modelContainer)
                     .environment(appEnvironment)
                     .environment(appEnvironment.appState)
+                    .environment(appEnvironment.llmFacade)
                     .environment(experienceDefaultsStore)
                     .environment(guidanceStore)
+                    .environment(titleSetStore)
                 hostingView = NSHostingView(rootView: AnyView(root))
             } else {
                 hostingView = NSHostingView(rootView: AnyView(

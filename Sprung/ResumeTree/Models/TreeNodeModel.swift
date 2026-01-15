@@ -254,6 +254,24 @@ enum LeafStatus: String, Codable, Hashable {
         return collection.enumeratedAttributes?.contains(containerName) == true
     }
 
+    /// Evaluates the schemaTitleTemplate by replacing {{fieldName}} with child values.
+    /// Falls back to displayLabel if no template or evaluation fails.
+    var computedTitle: String {
+        guard let template = schemaTitleTemplate, !template.isEmpty else {
+            return displayLabel
+        }
+        var result = template
+        // Replace {{fieldName}} patterns with child values
+        let pattern = /\{\{(\w+)\}\}/
+        for match in template.matches(of: pattern) {
+            let fieldName = String(match.1)
+            if let child = orderedChildren.first(where: { $0.name == fieldName || $0.schemaKey == fieldName }) {
+                result = result.replacingOccurrences(of: String(match.0), with: child.value)
+            }
+        }
+        return result.isEmpty ? displayLabel : result
+    }
+
     init(
         name: String, value: String = "", children: [TreeNode]? = nil,
         parent: TreeNode? = nil, inEditor: Bool, status: LeafStatus = LeafStatus.disabled,

@@ -123,8 +123,8 @@ final class SeedGenerationOrchestrator {
 
         let preamble = promptCacheService.buildPreamble(context: context)
 
-        // Phase 1: Discover projects (special workflow)
-        await discoverProjects(context: context)
+        // Phase 1: Discover projects (special workflow) - use preamble for full KC context
+        await discoverProjects(context: context, preamble: preamble)
 
         // Phase 2: Create tasks for all sections
         createAllTasks(context: context)
@@ -137,7 +137,7 @@ final class SeedGenerationOrchestrator {
 
     // MARK: - Project Discovery
 
-    private func discoverProjects(context: SeedGenerationContext) async {
+    private func discoverProjects(context: SeedGenerationContext, preamble: String) async {
         guard let projectsGenerator = generators.first(where: { $0 is ProjectsGenerator }) as? ProjectsGenerator else {
             return
         }
@@ -148,7 +148,8 @@ final class SeedGenerationOrchestrator {
             let proposals = try await projectsGenerator.discoverProjects(
                 context: context,
                 llmFacade: llmFacade,
-                modelId: modelId
+                modelId: modelId,
+                preamble: preamble
             )
             projectProposals = proposals
             Logger.info("Discovered \(proposals.count) project proposals", category: .ai)

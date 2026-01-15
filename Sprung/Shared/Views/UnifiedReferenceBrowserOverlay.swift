@@ -10,6 +10,7 @@ struct UnifiedReferenceBrowserOverlay: View {
         case knowledge = "Knowledge Cards"
         case writing = "Writing Samples"
         case skills = "Skills"
+        case titleSets = "Title Sets"
         case dossier = "Dossier"
 
         var id: String { rawValue }
@@ -19,6 +20,7 @@ struct UnifiedReferenceBrowserOverlay: View {
             case .knowledge: return "brain.head.profile"
             case .writing: return "doc.text"
             case .skills: return "star.fill"
+            case .titleSets: return "person.crop.rectangle.stack"
             case .dossier: return "person.text.rectangle"
             }
         }
@@ -28,6 +30,7 @@ struct UnifiedReferenceBrowserOverlay: View {
             case .knowledge: return .purple
             case .writing: return .blue
             case .skills: return .orange
+            case .titleSets: return .cyan
             case .dossier: return .green
             }
         }
@@ -38,6 +41,7 @@ struct UnifiedReferenceBrowserOverlay: View {
             case .knowledge: return "Knowledge"
             case .writing: return "Writing"
             case .skills: return "Skills"
+            case .titleSets: return "Titles"
             case .dossier: return "Dossier"
             }
         }
@@ -66,6 +70,9 @@ struct UnifiedReferenceBrowserOverlay: View {
 
     // Dossier store (SwiftData-backed)
     let dossierStore: CandidateDossierStore?
+
+    // Title Set store
+    let titleSetStore: TitleSetStore?
 
     // Optional LLM for analysis
     let llmFacade: LLMFacade?
@@ -132,6 +139,7 @@ struct UnifiedReferenceBrowserOverlay: View {
         case .knowledge: return knowledgeCards.count
         case .writing: return writingSamples.count
         case .skills: return skillStore?.skills.count ?? 0
+        case .titleSets: return titleSetStore?.titleSetCount ?? 0
         case .dossier: return dossierStore?.dossier != nil ? 1 : 0
         }
     }
@@ -149,6 +157,11 @@ struct UnifiedReferenceBrowserOverlay: View {
                     Label("Export Skills", systemImage: "star.fill")
                 }
             }
+            if let store = titleSetStore, store.hasTitleSets {
+                Button(action: { exportTitleSets(store.allTitleSets) }) {
+                    Label("Export Title Sets", systemImage: "person.crop.rectangle.stack")
+                }
+            }
             Divider()
             Button(action: exportAll) {
                 Label("Export All", systemImage: "square.and.arrow.up")
@@ -158,6 +171,19 @@ struct UnifiedReferenceBrowserOverlay: View {
                 .font(.title3)
         }
         .menuStyle(.borderlessButton)
+    }
+
+    private func exportTitleSets(_ titleSets: [TitleSetRecord]) {
+        // Convert to exportable format
+        let exportable = titleSets.map { record in
+            TitleSetExport(
+                id: record.id.uuidString,
+                words: record.words.map { $0.text },
+                notes: record.notes,
+                createdAt: record.createdAt
+            )
+        }
+        exportToJSON(exportable, filename: "title-sets.json")
     }
 
     // MARK: - Tab Content
@@ -183,6 +209,8 @@ struct UnifiedReferenceBrowserOverlay: View {
             )
         case .skills:
             SkillsBankBrowser(skillStore: skillStore, llmFacade: llmFacade)
+        case .titleSets:
+            TitleSetsBrowserTab(titleSetStore: titleSetStore, llmFacade: llmFacade)
         case .dossier:
             DossierBrowserTab(dossierStore: dossierStore)
         }
@@ -211,10 +239,19 @@ struct UnifiedReferenceBrowserOverlay: View {
     }
 
     private func exportAll() {
+        let titleSetExports = (titleSetStore?.allTitleSets ?? []).map { record in
+            TitleSetExport(
+                id: record.id.uuidString,
+                words: record.words.map { $0.text },
+                notes: record.notes,
+                createdAt: record.createdAt
+            )
+        }
         let bundle = ReferenceBundleExport(
             knowledgeCards: knowledgeCards,
             writingSamples: writingSamples,
             skills: skillStore?.skills ?? [],
+            titleSets: titleSetExports,
             dossier: dossierStore?.dossier
         )
         exportToJSON(bundle, filename: "all-references.json")
@@ -413,19 +450,28 @@ private struct DossierBrowserTab: View {
     }
 }
 
-// MARK: - Export Bundle
+// MARK: - Export Types
+
+private struct TitleSetExport: Codable {
+    let id: String
+    let words: [String]
+    let notes: String?
+    let createdAt: Date
+}
 
 private struct ReferenceBundleExport: Codable {
     let knowledgeCards: [KnowledgeCard]
     let writingSamples: [CoverRef]
     let skills: [Skill]
+    let titleSets: [TitleSetExport]
     let dossier: CandidateDossier?
     let exportedAt: Date
 
-    init(knowledgeCards: [KnowledgeCard], writingSamples: [CoverRef], skills: [Skill], dossier: CandidateDossier?) {
+    init(knowledgeCards: [KnowledgeCard], writingSamples: [CoverRef], skills: [Skill], titleSets: [TitleSetExport], dossier: CandidateDossier?) {
         self.knowledgeCards = knowledgeCards
         self.writingSamples = writingSamples
         self.skills = skills
+        self.titleSets = titleSets
         self.dossier = dossier
         self.exportedAt = Date()
     }

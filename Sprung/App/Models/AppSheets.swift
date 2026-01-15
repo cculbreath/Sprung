@@ -45,6 +45,18 @@ struct AppSheets {
             }
         }
     }
+    // Title Sets browser
+    var showTitleSetsBrowser: Bool {
+        get { showUnifiedReferenceBrowser && unifiedBrowserInitialTab == .titleSets }
+        set {
+            if newValue {
+                unifiedBrowserInitialTab = .titleSets
+                showUnifiedReferenceBrowser = true
+            } else {
+                showUnifiedReferenceBrowser = false
+            }
+        }
+    }
     // Setup wizard (first-run configuration)
     var showSetupWizard = false
     // Job capture from URL scheme (sprung://capture-job?url=...)
@@ -65,6 +77,8 @@ struct AppSheetsModifier: ViewModifier {
     @Environment(CoverRefStore.self) private var coverRefStore
     @Environment(SkillStore.self) private var skillStore
     @Environment(CandidateDossierStore.self) private var candidateDossierStore
+    @Environment(TitleSetStore.self) private var titleSetStore
+    @Environment(LLMFacade.self) private var llmFacade
     @State private var showReprocessConfirmation = false
     @State private var newlyAddedCardName: String = ""
     private var revisionSheetBinding: Binding<Bool> {
@@ -222,7 +236,8 @@ struct AppSheetsModifier: ViewModifier {
                     },
                     skillStore: skillStore,
                     dossierStore: candidateDossierStore,
-                    llmFacade: nil   // Regeneration not available outside onboarding
+                    titleSetStore: titleSetStore,
+                    llmFacade: llmFacade
                 )
             }
             .alert("Re-run Job Pre-processing?", isPresented: $showReprocessConfirmation) {

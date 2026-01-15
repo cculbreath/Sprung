@@ -73,6 +73,8 @@ struct EditingControls: View {
     private func valueEditor() -> some View {
         let inputKind = node.schemaInputKind ?? node.parent?.schemaInputKind
         let requiresMultilineEditor = shouldUseMultilineEditor(for: inputKind)
+        // If chips input kind is inherited from parent, this is a single leaf item - use text field
+        let isLeafUnderChipsContainer = inputKind == .chips && node.schemaInputKind == nil
         Logger.debug(
             """
             🛠 EditingControls.valueEditor \
@@ -80,6 +82,7 @@ struct EditingControls: View {
             schemaInputKind=\(inputKind?.rawValue ?? "nil") \
             parentInputKind=\(node.parent?.schemaInputKind?.rawValue ?? "nil") \
             requiresMultiline=\(requiresMultilineEditor) \
+            isLeafUnderChipsContainer=\(isLeafUnderChipsContainer) \
             tempValueLength=\(tempValue.count)
             """
         )
@@ -94,8 +97,16 @@ struct EditingControls: View {
                     onChange: { clearValidation() }
                 )
             case .chips:
-                ChipsEditor(text: $tempValue, placeholder: node.schemaPlaceholder)
-                    .onChange(of: tempValue) { _, _ in clearValidation() }
+                // Single leaf item under a chips container - simple text field
+                if isLeafUnderChipsContainer {
+                    TextField(node.schemaPlaceholder ?? "Value", text: $tempValue)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .onChange(of: tempValue) { _, _ in clearValidation() }
+                } else {
+                    ChipsEditor(text: $tempValue, placeholder: node.schemaPlaceholder)
+                        .onChange(of: tempValue) { _, _ in clearValidation() }
+                }
             case .toggle:
                 Toggle("Enabled", isOn: Binding(
                     get: { tempValue.lowercased() == "true" },

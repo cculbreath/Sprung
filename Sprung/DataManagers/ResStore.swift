@@ -175,9 +175,20 @@ final class ResStore: SwiftDataStore {
 
         resume.includeFonts = true
 
-        // Create FontSizeNode for each font size, sorted alphabetically for consistent indexing
-        let sortedFontSizes = fontSizes.sorted { $0.key < $1.key }
-        for (index, (key, value)) in sortedFontSizes.enumerated() {
+        // Use fontSizeOrder array if present to preserve manifest order,
+        // otherwise fall back to alphabetical sorting
+        let orderedKeys: [String]
+        if let fontSizeOrder = defaultContext["fontSizeOrder"] as? [String] {
+            // Use explicit order, appending any keys not in the order array
+            let orderSet = Set(fontSizeOrder)
+            let extraKeys = fontSizes.keys.filter { !orderSet.contains($0) }.sorted()
+            orderedKeys = fontSizeOrder.filter { fontSizes[$0] != nil } + extraKeys
+        } else {
+            orderedKeys = fontSizes.keys.sorted()
+        }
+
+        for (index, key) in orderedKeys.enumerated() {
+            guard let value = fontSizes[key] else { continue }
             let node = FontSizeNode(
                 key: key,
                 index: index,

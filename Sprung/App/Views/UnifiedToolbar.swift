@@ -106,7 +106,7 @@ struct UnifiedToolbar: CustomizableToolbarContent {
                 Button(action: {
                     sheets.showCreateResume = true
                 }, label: {
-                    Label("Resume", systemImage: "doc.badge.plus")
+                    Label("Create Resume", systemImage: "doc.badge.plus")
                         .font(.system(size: 14, weight: .light))
                 })
                 .buttonStyle(.automatic)
@@ -195,6 +195,42 @@ struct UnifiedToolbar: CustomizableToolbarContent {
                     NotificationCenter.default.post(name: .showSettings, object: nil)
                 }
                 .help("Open Settings")
+            }
+
+            ToolbarItem(id: "templateEditor", placement: .primaryAction, showsByDefault: false) {
+                Button("Templates", systemImage: "compass.drawing") {
+                    Task { @MainActor in
+                        if !NSApp.sendAction(#selector(AppDelegate.showTemplateEditorWindow), to: nil, from: nil),
+                           let delegate = NSApplication.shared.delegate as? AppDelegate {
+                            delegate.showTemplateEditorWindow()
+                        }
+                    }
+                }
+                .help("Open Template Editor")
+            }
+
+            ToolbarItem(id: "experienceEditor", placement: .primaryAction, showsByDefault: false) {
+                Button("Experience", systemImage: "briefcase") {
+                    Task { @MainActor in
+                        if !NSApp.sendAction(#selector(AppDelegate.showExperienceEditorWindow), to: nil, from: nil),
+                           let delegate = NSApplication.shared.delegate as? AppDelegate {
+                            delegate.showExperienceEditorWindow()
+                        }
+                    }
+                }
+                .help("Open Experience Editor")
+            }
+
+            ToolbarItem(id: "applicantProfile", placement: .primaryAction, showsByDefault: false) {
+                Button("Profile", systemImage: "person.text.rectangle") {
+                    Task { @MainActor in
+                        if !NSApp.sendAction(#selector(AppDelegate.showApplicantProfileWindow), to: nil, from: nil),
+                           let delegate = NSApplication.shared.delegate as? AppDelegate {
+                            delegate.showApplicantProfileWindow()
+                        }
+                    }
+                }
+                .help("Open Applicant Profile")
             }
 
             ToolbarItem(id: "ttsReadAloud", placement: .primaryAction, showsByDefault: false) {

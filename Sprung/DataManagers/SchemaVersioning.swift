@@ -46,7 +46,9 @@ enum SprungSchema {
         // Job Search Coach Models
         CoachingSession.self,
         // Inference Guidance
-        InferenceGuidance.self
+        InferenceGuidance.self,
+        // Title Sets
+        TitleSetRecord.self
     ]
     static var schema: Schema {
         Schema(models)

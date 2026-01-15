@@ -23,6 +23,7 @@ enum StandardSection: String, CaseIterable, Codable {
 struct TemplateManifestOverrides: Codable {
     struct Styling: Codable {
         var fontSizes: [String: String]?
+        var fontSizeOrder: [String]?
         var pageMargins: [String: String]?
         var includeFonts: Bool?
     }
@@ -552,6 +553,9 @@ private extension TemplateManifest.Section {
         var dictionary = dictionaryDefaultValue()
         if let fontSizes = override.fontSizes {
             dictionary["fontSizes"] = fontSizes
+        }
+        if let fontSizeOrder = override.fontSizeOrder {
+            dictionary["fontSizeOrder"] = fontSizeOrder
         }
         if let pageMargins = override.pageMargins {
             dictionary["pageMargins"] = pageMargins

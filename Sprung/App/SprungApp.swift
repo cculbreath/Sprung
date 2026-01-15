@@ -87,6 +87,7 @@ struct SprungApp: App {
                     appDelegate.coverRefStore = appDependencies.coverRefStore
                     appDelegate.knowledgeCardStore = appDependencies.knowledgeCardStore
                     appDelegate.skillStore = appDependencies.skillStore
+                    appDelegate.titleSetStore = appDependencies.titleSetStore
                 }
         }
         .modelContainer(modelContainer)

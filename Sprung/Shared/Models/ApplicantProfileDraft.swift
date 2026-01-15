@@ -124,7 +124,13 @@ struct ApplicantProfileDraft: Equatable {
         self.socialProfiles = socialProfiles
         self.pictureData = pictureData
         self.pictureMimeType = pictureMimeType
-        self.providedFields = Set(Field.allCases)
+        // Only mark .picture as provided if we actually have picture data
+        // This prevents apply(to:replaceMissing:false) from clearing existing photos
+        var fields = Set(Field.allCases)
+        if pictureData == nil {
+            fields.remove(.picture)
+        }
+        self.providedFields = fields
         self.suggestedEmails = suggestedEmails.uniquedPreservingOrder()
     }
     init(profile: ApplicantProfile) {
@@ -142,7 +148,12 @@ struct ApplicantProfileDraft: Equatable {
         self.socialProfiles = profile.profiles.map(ApplicantSocialProfileDraft.init(model:))
         self.pictureData = profile.pictureData
         self.pictureMimeType = profile.pictureMimeType
-        self.providedFields = Set(Field.allCases)
+        // Only mark .picture as provided if we actually have picture data
+        var fields = Set(Field.allCases)
+        if profile.pictureData == nil {
+            fields.remove(.picture)
+        }
+        self.providedFields = fields
         self.suggestedEmails = []
     }
     init(json: JSON) {

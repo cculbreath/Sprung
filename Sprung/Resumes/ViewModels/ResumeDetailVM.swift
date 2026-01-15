@@ -64,32 +64,33 @@ final class ResumeDetailVM {
             Logger.debug("➕ addChild skipped: parent \(parent.name) does not allow manual mutations")
             return
         }
+        let newNode: TreeNode
         if let template = parent.orderedChildren.first {
-            let clone = template.makeTemplateClone(for: resume)
-            parent.addChild(clone)
-            refreshPDF()
-            return
-        }
-        // Determine if this parent uses both name & value fields in its children
-        let usesNameValue = parent.orderedChildren.contains { !$0.name.isEmpty && !$0.value.isEmpty }
-        // Set up default placeholders
-        let newName: String
-        let newValue: String
-        if usesNameValue {
-            newName = "New Name"
-            newValue = "New Value"
+            newNode = template.makeTemplateClone(for: resume)
         } else {
-            newName = ""
-            newValue = "New Child"
+            // Determine if this parent uses both name & value fields in its children
+            let usesNameValue = parent.orderedChildren.contains { !$0.name.isEmpty && !$0.value.isEmpty }
+            // Set up default placeholders
+            let newName: String
+            let newValue: String
+            if usesNameValue {
+                newName = "New Name"
+                newValue = "New Value"
+            } else {
+                newName = ""
+                newValue = ""
+            }
+            newNode = TreeNode(
+                name: newName,
+                value: newValue,
+                inEditor: true,
+                status: .saved,
+                resume: resume
+            )
         }
-        let newNode = TreeNode(
-            name: newName,
-            value: newValue,
-            inEditor: true,
-            status: .saved,
-            resume: resume
-        )
         parent.addChild(newNode)
+        // Start editing the new node immediately
+        startEditing(node: newNode)
         refreshPDF()
     }
     /// Deletes a node from the tree.

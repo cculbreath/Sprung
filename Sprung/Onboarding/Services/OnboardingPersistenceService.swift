@@ -74,7 +74,9 @@ final class OnboardingPersistenceService {
 
     /// Convert a writing sample artifact to CoverRef and persist
     private func persistWritingSampleToCoverRef(sample: ArtifactRecord) {
-        let name = sample.metadataString("name") ??
+        // Check for LLM-generated descriptive name (stored at metadata.name during processing)
+        let name = sample.nestedMetadataString(path: ["metadata", "name"]) ??
+                   sample.title ??
                    sample.filename.replacingOccurrences(of: ".txt", with: "")
         let content = sample.extractedContent
 
@@ -170,6 +172,18 @@ final class OnboardingPersistenceService {
                     propagatedCount += 1
                 }
             }
+        }
+
+        // Propagate publication cards (stored separately from timeline)
+        let hasAgentPublications = !draft.publications.isEmpty
+        if !hasAgentPublications && !ui.publicationCards.isEmpty {
+            for card in ui.publicationCards {
+                let pubDraft = createPublicationDraftFromCard(card)
+                draft.publications.append(pubDraft)
+                propagatedCount += 1
+            }
+            draft.isPublicationsEnabled = true
+            Logger.info("📋 Propagated \(ui.publicationCards.count) publication cards", category: .ai)
         }
 
         // Save the draft
