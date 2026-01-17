@@ -630,12 +630,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 return
             }
 
-            // Get model and backend from settings
+            // Get model and backend from settings (per-backend model persistence)
             let backendString = UserDefaults.standard.string(forKey: "seedGenerationBackend") ?? "anthropic"
             let backend: LLMFacade.Backend = backendString == "anthropic" ? .anthropic : .openRouter
-            guard let modelId = UserDefaults.standard.string(forKey: "seedGenerationModelId"),
+            let modelKey = backendString == "anthropic" ? "seedGenerationAnthropicModelId" : "seedGenerationOpenRouterModelId"
+            guard let modelId = UserDefaults.standard.string(forKey: modelKey),
                   !modelId.isEmpty else {
-                Logger.error("🌱 Cannot show seed generation: no model configured. Please select a model in Settings > Onboarding Models.", category: .ui)
+                Logger.error("🌱 Cannot show seed generation: no model configured. Please select a model in Settings > Models.", category: .ui)
                 return
             }
 

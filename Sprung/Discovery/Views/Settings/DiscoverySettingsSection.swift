@@ -3,11 +3,10 @@
 //  Sprung
 //
 //  Settings section for Search Operations module.
-//  Add to SettingsView.swift with: DiscoverySettingsSection(coordinator: searchOpsCoordinator)
+//  Model pickers have been moved to ModelsSettingsView.
 //
 
 import SwiftUI
-import SwiftOpenAI
 
 struct DiscoverySettingsSection: View {
     @Bindable var coordinator: DiscoveryCoordinator
@@ -15,51 +14,9 @@ struct DiscoverySettingsSection: View {
     @State private var isRefreshingSources = false
     @State private var showResetConfirmation = false
     @State private var sourceRefreshError: String?
-    @State private var llmModelId: String = ""
-    @State private var reasoningEffort: String = "low"
-
-    @AppStorage("discoveryCoachingModelId") private var coachingModelId: String = ""
-    @State private var openAIModels: [ModelObject] = []
-    @State private var isLoadingModels = false
-    @State private var modelError: String?
-
-    @Environment(EnabledLLMStore.self) private var enabledLLMStore: EnabledLLMStore?
-
-    private let reasoningOptions = [
-        (value: "low", label: "Low"),
-        (value: "medium", label: "Medium"),
-        (value: "high", label: "High")
-    ]
-
-    private var openaiAPIKey: String {
-        APIKeyManager.get(.openAI) ?? ""
-    }
-
-    private var hasOpenAIKey: Bool {
-        !openaiAPIKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-    }
-
-    /// Filtered models: gpt-4o*, gpt-5*, gpt-6*, gpt-7* (for Responses API compatibility)
-    private var filteredModels: [ModelObject] {
-        openAIModels
-            .filter { model in
-                let id = model.id.lowercased()
-                return id.hasPrefix("gpt-4o") || id.hasPrefix("gpt-5") || id.hasPrefix("gpt-6") || id.hasPrefix("gpt-7")
-            }
-            .sorted { $0.id < $1.id }
-    }
 
     var body: some View {
         Section {
-            // LLM Model Picker
-            llmModelPicker
-
-            // Coaching Model Picker
-            coachingModelPicker
-
-            Divider()
-                .padding(.vertical, 4)
-
             // Calendar Integration
             calendarSettings
 
@@ -76,157 +33,6 @@ struct DiscoverySettingsSection: View {
             actionButtons
         } header: {
             SettingsSectionHeader(title: "Discovery", systemImage: "magnifyingglass.circle.fill")
-        }
-    }
-
-    // MARK: - LLM Model Picker
-
-    private var llmModelPicker: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            if !hasOpenAIKey {
-                Label("Add OpenAI API key in API Keys settings first", systemImage: "exclamationmark.triangle.fill")
-                    .foregroundStyle(.orange)
-                    .font(.callout)
-            } else if isLoadingModels {
-                HStack {
-                    ProgressView()
-                        .controlSize(.small)
-                    Text("Loading models...")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                }
-            } else if let error = modelError {
-                HStack {
-                    Label(error, systemImage: "exclamationmark.triangle.fill")
-                        .foregroundStyle(.orange)
-                        .font(.callout)
-                    Button("Retry") {
-                        Task { await loadOpenAIModels() }
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                }
-            } else if filteredModels.isEmpty {
-                HStack {
-                    Text("No GPT-4o/5/6/7 models available")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                    Button("Refresh") {
-                        Task { await loadOpenAIModels() }
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                }
-            } else {
-                // AI Model picker
-                Picker("AI Model", selection: $llmModelId) {
-                    ForEach(filteredModels, id: \.id) { model in
-                        Text(model.id).tag(model.id)
-                    }
-                }
-                .pickerStyle(.menu)
-
-                // Reasoning effort picker
-                Picker("Reasoning Effort", selection: $reasoningEffort) {
-                    ForEach(reasoningOptions, id: \.value) { option in
-                        Text(option.label).tag(option.value)
-                    }
-                }
-                .pickerStyle(.menu)
-
-                Text("Model and reasoning effort for source discovery and daily tasks.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .task {
-            let s = coordinator.settingsStore.current()
-            llmModelId = s.llmModelId
-            reasoningEffort = s.reasoningEffort
-            if hasOpenAIKey && openAIModels.isEmpty {
-                await loadOpenAIModels()
-            }
-        }
-        .onChange(of: llmModelId) { _, newValue in
-            guard !newValue.isEmpty else { return }
-            var s = coordinator.settingsStore.current()
-            guard s.llmModelId != newValue else { return }
-            s.llmModelId = newValue
-            coordinator.settingsStore.update(s)
-        }
-        .onChange(of: reasoningEffort) { _, newValue in
-            var s = coordinator.settingsStore.current()
-            guard s.reasoningEffort != newValue else { return }
-            s.reasoningEffort = newValue
-            coordinator.settingsStore.update(s)
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .apiKeysChanged)) { _ in
-            if hasOpenAIKey && openAIModels.isEmpty {
-                Task { await loadOpenAIModels() }
-            }
-        }
-    }
-
-    private func loadOpenAIModels() async {
-        guard hasOpenAIKey else { return }
-        isLoadingModels = true
-        modelError = nil
-        defer { isLoadingModels = false }
-
-        do {
-            let service = OpenAIServiceFactory.service(apiKey: openaiAPIKey)
-            let response = try await service.listModels()
-            openAIModels = response.data
-            // Validate current selection is still available
-            if !filteredModels.contains(where: { $0.id == llmModelId }) {
-                if let first = filteredModels.first {
-                    llmModelId = first.id
-                    var s = coordinator.settingsStore.current()
-                    s.llmModelId = first.id
-                    coordinator.settingsStore.update(s)
-                }
-            }
-        } catch {
-            modelError = error.localizedDescription
-        }
-    }
-
-    // MARK: - Coaching Model Picker
-
-    private var coachingModelPicker: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            if let store = enabledLLMStore {
-                let enabledModels = store.enabledModels.sorted { $0.displayName < $1.displayName }
-
-                if enabledModels.isEmpty {
-                    Text("No enabled models. Add models in LLM Settings.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                } else {
-                    Picker("Coaching Model", selection: $coachingModelId) {
-                        ForEach(enabledModels, id: \.modelId) { model in
-                            Text(model.displayName).tag(model.modelId)
-                        }
-                    }
-                    .pickerStyle(.menu)
-
-                    Text("Model for daily coaching. Uses OpenRouter (different from Discovery which uses OpenAI direct).")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                }
-            } else {
-                Text("LLM store not available")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .task {
-            // Auto-select first model if none selected
-            if coachingModelId.isEmpty,
-               let store = enabledLLMStore,
-               let firstModel = store.enabledModels.sorted(by: { $0.displayName < $1.displayName }).first {
-                coachingModelId = firstModel.modelId
-            }
         }
     }
 
@@ -445,10 +251,10 @@ struct DiscoverySettingsSection: View {
         do {
             // TODO: Call LLM to discover new job sources
             try await Task.sleep(for: .seconds(1))
-            Logger.info("✅ Job sources refreshed", category: .ai)
+            Logger.info("Job sources refreshed", category: .ai)
         } catch {
             sourceRefreshError = error.localizedDescription
-            Logger.error("❌ Failed to refresh job sources: \(error)", category: .ai)
+            Logger.error("Failed to refresh job sources: \(error)", category: .ai)
         }
     }
 
@@ -461,6 +267,6 @@ struct DiscoverySettingsSection: View {
         prefs.relocationTargets = []
         prefs.updatedAt = Date()
         coordinator.preferencesStore.update(prefs)
-        Logger.info("🔄 Search preferences reset", category: .appLifecycle)
+        Logger.info("Search preferences reset", category: .appLifecycle)
     }
 }

@@ -4,6 +4,7 @@ import SwiftData
 
 enum SettingsCategory: String, CaseIterable, Identifiable {
     case apiKeys = "API Keys"
+    case models = "Models"
     case resume = "Resume & Cover Letter"
     case onboarding = "Onboarding"
     case discovery = "Job Discovery"
@@ -16,6 +17,7 @@ enum SettingsCategory: String, CaseIterable, Identifiable {
     var systemImage: String {
         switch self {
         case .apiKeys: return "key.fill"
+        case .models: return "cpu"
         case .resume: return "doc.text.fill"
         case .onboarding: return "wand.and.stars"
         case .discovery: return "briefcase.fill"
@@ -68,10 +70,12 @@ struct SettingsView: View {
         switch selectedCategory {
         case .apiKeys:
             apiKeysDetail
+        case .models:
+            ModelsSettingsView()
         case .resume:
             ResumeSettingsSection()
         case .onboarding:
-            OnboardingModelSettingsView()
+            OnboardingProcessingSettingsView()
         case .discovery:
             discoveryDetail
         case .voice:
