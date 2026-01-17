@@ -212,7 +212,21 @@ final class LLMFacade {
             }
             return try decoder.decode(T.self, from: data)
 
-        case .openRouter, .openAI, .anthropic:
+        case .anthropic:
+            // Use Anthropic's structured output directly via specialized APIs
+            let systemContent: [AnthropicSystemBlock] = [
+                AnthropicSystemBlock(text: "You are a helpful assistant that responds with well-structured JSON.")
+            ]
+            return try await executeStructuredWithAnthropicCaching(
+                systemContent: systemContent,
+                userPrompt: prompt,
+                modelId: modelId,
+                responseType: type,
+                schema: schema,
+                temperature: temperature
+            )
+
+        case .openRouter, .openAI:
             let jsonSchema = try JSONSchema.from(dictionary: schema)
             return try await executeStructuredWithSchema(
                 prompt: prompt,

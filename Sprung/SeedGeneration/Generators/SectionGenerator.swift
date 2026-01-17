@@ -17,19 +17,22 @@ struct GeneratorExecutionConfig {
     let backend: LLMFacade.Backend
     let preamble: String
     let anthropicSystemContent: [AnthropicSystemBlock]?
+    let experienceDefaultsStore: ExperienceDefaultsStore?
 
     init(
         llmFacade: LLMFacade,
         modelId: String,
         backend: LLMFacade.Backend,
         preamble: String,
-        anthropicSystemContent: [AnthropicSystemBlock]? = nil
+        anthropicSystemContent: [AnthropicSystemBlock]? = nil,
+        experienceDefaultsStore: ExperienceDefaultsStore? = nil
     ) {
         self.llmFacade = llmFacade
         self.modelId = modelId
         self.backend = backend
         self.preamble = preamble
         self.anthropicSystemContent = anthropicSystemContent
+        self.experienceDefaultsStore = experienceDefaultsStore
     }
 
     var usesAnthropicCaching: Bool {

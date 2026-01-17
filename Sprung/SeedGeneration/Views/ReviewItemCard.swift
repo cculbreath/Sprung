@@ -40,52 +40,71 @@ struct ReviewItemCard: View {
     // MARK: - Rejection Comment Sheet
 
     private var rejectionCommentSheet: some View {
-        VStack(spacing: 16) {
-            Text("Rejection Feedback")
-                .font(.headline)
+        VStack(spacing: 20) {
+            // Header
+            VStack(spacing: 8) {
+                Image(systemName: "arrow.triangle.2.circlepath")
+                    .font(.system(size: 32))
+                    .foregroundStyle(.orange)
 
-            Text("What should be different? Your feedback will guide regeneration.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
+                Text("Request Regeneration")
+                    .font(.title3)
+                    .fontWeight(.semibold)
 
-            TextEditor(text: $rejectionComment)
-                .font(.body)
-                .frame(minHeight: 100)
-                .padding(8)
-                .background(.background)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(.quaternary, lineWidth: 1)
-                )
+                Text("Describe what you'd like changed. The AI will generate new content based on your feedback.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
 
-            HStack {
-                Button("Cancel") {
-                    showingRejectionSheet = false
-                    rejectionComment = ""
-                }
-                .buttonStyle(.bordered)
+            // Feedback input
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Feedback (optional)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
 
-                Button("Reject Without Comment") {
-                    showingRejectionSheet = false
-                    onReject(nil)
-                    rejectionComment = ""
-                }
-                .buttonStyle(.bordered)
+                TextEditor(text: $rejectionComment)
+                    .font(.body)
+                    .frame(height: 120)
+                    .scrollContentBackground(.hidden)
+                    .padding(10)
+                    .background(Color(.textBackgroundColor))
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(.quaternary, lineWidth: 1)
+                    )
+            }
 
-                Button("Submit & Regenerate") {
+            // Action buttons - stacked vertically for clarity
+            VStack(spacing: 10) {
+                Button {
                     showingRejectionSheet = false
                     onReject(rejectionComment.isEmpty ? nil : rejectionComment)
                     rejectionComment = ""
+                } label: {
+                    Text(rejectionComment.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                         ? "Regenerate Without Feedback"
+                         : "Regenerate with Feedback")
+                        .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
-                .tint(.red)
-                .disabled(rejectionComment.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .tint(.orange)
+                .controlSize(.large)
+
+                Button {
+                    showingRejectionSheet = false
+                    rejectionComment = ""
+                } label: {
+                    Text("Cancel")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.large)
             }
         }
-        .padding(24)
-        .frame(width: 400)
+        .padding(28)
+        .frame(width: 380)
     }
 
     // MARK: - Header

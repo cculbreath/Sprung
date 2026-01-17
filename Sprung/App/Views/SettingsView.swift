@@ -39,7 +39,7 @@ struct SettingsView: View {
         } detail: {
             detailView
         }
-        .frame(minWidth: 720, idealWidth: 800, maxWidth: 1000,
+        .frame(minWidth: 820, idealWidth: 900, maxWidth: 1100,
                minHeight: 500, idealHeight: 650, maxHeight: .infinity)
         .sheet(isPresented: $showSetupWizard) {
             SetupWizardView {

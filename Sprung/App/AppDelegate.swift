@@ -640,18 +640,23 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 return
             }
 
+            guard let experienceDefaultsStore else {
+                Logger.error("🌱 Cannot show seed generation: no ExperienceDefaultsStore", category: .ui)
+                return
+            }
+
             let orchestrator = SeedGenerationOrchestrator(
                 context: context,
                 llmFacade: appEnvironment.llmFacade,
                 modelId: modelId,
-                backend: backend
+                backend: backend,
+                experienceDefaultsStore: experienceDefaultsStore
             )
 
             let sgmView = SeedGenerationView(orchestrator: orchestrator)
             let hostingView: NSHostingView<AnyView>
 
-            if let experienceDefaultsStore,
-               let guidanceStore,
+            if let guidanceStore,
                let titleSetStore {
                 let root = sgmView
                     .modelContainer(modelContainer)
@@ -717,6 +722,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let writingSamples = allCoverRefs.filter { $0.type == .writingSample }
         let voicePrimer = allCoverRefs.first { $0.type == .voicePrimer }
 
+        // Get title sets from library for LLM selection
+        let titleSets = titleSetStore?.allTitleSets ?? []
+
         // Dossier is not used in current SGM implementation
         // Future: Could get from CandidateDossierStore if needed
 
@@ -727,7 +735,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             skills: skillStore.skills,
             writingSamples: writingSamples,
             voicePrimer: voicePrimer,
-            dossier: nil
+            dossier: nil,
+            titleSets: titleSets
         )
     }
 

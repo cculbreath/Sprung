@@ -35,6 +35,7 @@ final class SeedGenerationOrchestrator {
     private let backend: LLMFacade.Backend
     private let promptCacheService: PromptCacheService
     private let parallelExecutor: ParallelLLMExecutor
+    private let experienceDefaultsStore: ExperienceDefaultsStore
 
     // MARK: - Generators
 
@@ -54,7 +55,8 @@ final class SeedGenerationOrchestrator {
         context: SeedGenerationContext,
         llmFacade: LLMFacade,
         modelId: String,
-        backend: LLMFacade.Backend = .openRouter
+        backend: LLMFacade.Backend = .openRouter,
+        experienceDefaultsStore: ExperienceDefaultsStore
     ) {
         self.context = context
         self.llmFacade = llmFacade
@@ -62,6 +64,7 @@ final class SeedGenerationOrchestrator {
         self.backend = backend
         self.promptCacheService = PromptCacheService(backend: backend)
         self.parallelExecutor = ParallelLLMExecutor()
+        self.experienceDefaultsStore = experienceDefaultsStore
 
         initializeSectionProgress()
         setupRegenerationCallback()
@@ -149,6 +152,7 @@ final class SeedGenerationOrchestrator {
                 context: context,
                 llmFacade: llmFacade,
                 modelId: modelId,
+                backend: backend,
                 preamble: preamble
             )
             projectProposals = proposals
@@ -200,7 +204,8 @@ final class SeedGenerationOrchestrator {
             llmFacade: llmFacade,
             modelId: modelId,
             backend: backend,
-            preamble: preamble
+            preamble: preamble,
+            experienceDefaultsStore: experienceDefaultsStore
         )
 
         for generator in generators {
@@ -260,6 +265,27 @@ final class SeedGenerationOrchestrator {
 
         proposals[index].isApproved = true
         projectProposals = proposals
+
+        // Save project shell to ExperienceDefaults immediately
+        // The proposal's UUID becomes the project's ID for later lookup
+        let projectEntry = ProjectExperienceDraft(
+            id: proposal.id,
+            name: proposal.name,
+            description: proposal.description,
+            startDate: "",
+            endDate: "",
+            url: "",
+            organization: "",
+            type: "",
+            highlights: [],
+            keywords: [],
+            roles: []
+        )
+
+        var defaults = experienceDefaultsStore.currentDefaults()
+        defaults.projects.append(projectEntry)
+        experienceDefaultsStore.save(defaults)
+        Logger.info("Saved approved project to ExperienceDefaults: \(proposal.name)", category: .ai)
     }
 
     func rejectProject(_ proposal: ProjectProposal) {
@@ -276,17 +302,27 @@ final class SeedGenerationOrchestrator {
         }
 
         let approvedProposals = proposals.filter { $0.isApproved }
-        guard !approvedProposals.isEmpty else { return }
+        guard !approvedProposals.isEmpty else {
+            // No approved projects - mark as completed with 0 tasks
+            updateSectionStatus(.projects, to: .completed)
+            return
+        }
 
         let projectTasks = projectsGenerator.createTasks(for: approvedProposals, context: context)
         tasks.append(contentsOf: projectTasks)
+
+        // Update progress tracking for projects section
+        if let index = sectionProgress.firstIndex(where: { $0.section == .projects }) {
+            sectionProgress[index].totalTasks = projectTasks.count
+        }
 
         let preamble = promptCacheService.buildPreamble(context: context)
         let config = GeneratorExecutionConfig(
             llmFacade: llmFacade,
             modelId: modelId,
             backend: backend,
-            preamble: preamble
+            preamble: preamble,
+            experienceDefaultsStore: experienceDefaultsStore
         )
 
         for task in projectTasks {
@@ -301,12 +337,15 @@ final class SeedGenerationOrchestrator {
 
                 reviewQueue.add(task: task, content: content)
                 activityTracker.completeTask(id: task.id)
+                incrementCompletedCount(for: .projects)
 
             } catch {
                 Logger.error("Project generation failed: \(task.displayName) - \(error)", category: .ai)
                 activityTracker.failTask(id: task.id, error: error.localizedDescription)
             }
         }
+
+        updateSectionStatus(.projects, to: .completed)
     }
 
     // MARK: - Apply Approved Content
@@ -351,7 +390,8 @@ final class SeedGenerationOrchestrator {
             llmFacade: llmFacade,
             modelId: modelId,
             backend: backend,
-            preamble: preamble
+            preamble: preamble,
+            experienceDefaultsStore: experienceDefaultsStore
         )
 
         do {

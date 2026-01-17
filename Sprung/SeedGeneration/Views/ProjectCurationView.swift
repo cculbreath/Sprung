@@ -136,7 +136,16 @@ private struct ProjectProposalCard: View {
 
     @ViewBuilder
     private var actionButtons: some View {
-        if !proposal.isApproved {
+        if proposal.isApproved {
+            // Show remove button for approved projects (including timeline entries)
+            Button {
+                onReject()
+            } label: {
+                Label("Remove", systemImage: "minus.circle")
+            }
+            .buttonStyle(.bordered)
+            .foregroundStyle(.red)
+        } else {
             HStack(spacing: 12) {
                 Button {
                     onApprove()

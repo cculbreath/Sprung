@@ -69,6 +69,7 @@ final class ProjectsGenerator: BaseSectionGenerator {
         context: SeedGenerationContext,
         llmFacade: LLMFacade,
         modelId: String,
+        backend: LLMFacade.Backend,
         preamble: String
     ) async throws -> [ProjectProposal] {
         var proposals: [ProjectProposal] = []
@@ -108,6 +109,7 @@ final class ProjectsGenerator: BaseSectionGenerator {
             context: context,
             llmFacade: llmFacade,
             modelId: modelId,
+            backend: backend,
             preamble: preamble
         )
         proposals.append(contentsOf: llmProposals)
@@ -119,6 +121,7 @@ final class ProjectsGenerator: BaseSectionGenerator {
         context: SeedGenerationContext,
         llmFacade: LLMFacade,
         modelId: String,
+        backend: LLMFacade.Backend,
         preamble: String
     ) async throws -> [ProjectProposal] {
         // Build list of existing timeline projects to avoid duplicates
@@ -214,7 +217,8 @@ final class ProjectsGenerator: BaseSectionGenerator {
                 "required": ["proposals"],
                 "additionalProperties": false
             ],
-            schemaName: "project_proposals"
+            schemaName: "project_proposals",
+            backend: backend
         )
 
         return response.proposals.map { item in
@@ -241,6 +245,7 @@ final class ProjectsGenerator: BaseSectionGenerator {
                 section: .projects,
                 targetId: proposal.id.uuidString,
                 displayName: "Project: \(proposal.name)",
+                generatorType: "ProjectsGenerator",
                 status: .pending
             )
         }
@@ -277,9 +282,9 @@ final class ProjectsGenerator: BaseSectionGenerator {
             throw GeneratorError.missingContext("No targetId for project task")
         }
 
-        // Try to find in timeline first
+        // Try to find in timeline first, then check ExperienceDefaults store
         let entry = context.getTimelineEntry(id: targetId)
-        let taskContext = buildTaskContext(entry: entry, context: context)
+        let taskContext = buildTaskContext(entry: entry, targetId: targetId, context: context, store: config.experienceDefaultsStore)
 
         let systemPrompt = "You are a professional resume writer. Generate project content based strictly on documented evidence."
 
@@ -362,7 +367,7 @@ final class ProjectsGenerator: BaseSectionGenerator {
         }
 
         let entry = context.getTimelineEntry(id: targetId)
-        let taskContext = buildTaskContext(entry: entry, context: context)
+        let taskContext = buildTaskContext(entry: entry, targetId: targetId, context: context, store: config.experienceDefaultsStore)
         let regenerationContext = buildRegenerationContext(originalContent: originalContent, feedback: feedback)
 
         let systemPrompt = "You are a professional resume writer. Generate project content based strictly on documented evidence."
@@ -441,10 +446,16 @@ final class ProjectsGenerator: BaseSectionGenerator {
 
     // MARK: - Context Building
 
-    private func buildTaskContext(entry: JSON?, context: SeedGenerationContext) -> String {
+    private func buildTaskContext(
+        entry: JSON?,
+        targetId: String?,
+        context: SeedGenerationContext,
+        store: ExperienceDefaultsStore?
+    ) -> String {
         var lines: [String] = []
 
         if let entry = entry {
+            // Timeline entry exists - use it
             lines.append("### Project Details")
             if let name = entry["name"].string { lines.append("**Name:** \(name)") }
             if let description = entry["description"].string { lines.append("**Description:** \(description)") }
@@ -458,6 +469,35 @@ final class ProjectsGenerator: BaseSectionGenerator {
                     lines.append("- \(highlight.stringValue)")
                 }
             }
+        } else if let targetId = targetId,
+                  let store = store,
+                  let projectUUID = UUID(uuidString: targetId),
+                  let project = store.currentDefaults().projects.first(where: { $0.id == projectUUID }) {
+            // Found in ExperienceDefaults (single source of truth)
+            lines.append("### Project Details")
+            lines.append("**Name:** \(project.name)")
+            if !project.description.isEmpty {
+                lines.append("**Description:** \(project.description)")
+            }
+            if !project.startDate.isEmpty { lines.append("**Start Date:** \(project.startDate)") }
+            if !project.endDate.isEmpty { lines.append("**End Date:** \(project.endDate)") }
+            if !project.url.isEmpty { lines.append("**URL:** \(project.url)") }
+
+            // Search for relevant KCs by project name
+            let relevantKCs = context.knowledgeCards.filter { kc in
+                kc.narrative.localizedCaseInsensitiveContains(project.name) ||
+                kc.title.localizedCaseInsensitiveContains(project.name)
+            }
+            if !relevantKCs.isEmpty {
+                lines.append("\n### Relevant Knowledge Cards")
+                for kc in relevantKCs.prefix(3) {
+                    lines.append("\n#### \(kc.title)")
+                    lines.append(String(kc.narrative.prefix(500)) + (kc.narrative.count > 500 ? "..." : ""))
+                }
+            }
+        } else {
+            lines.append("### Project Details")
+            lines.append("**WARNING:** No project details available for this task (targetId: \(targetId ?? "nil")).")
         }
 
         // Include relevant skills

@@ -50,6 +50,15 @@ struct ExperienceEditorView: View {
                 saveState = .idle
             }
         }
+        .onChange(of: defaultsStore.changeVersion) { oldVersion, newVersion in
+            // Reload draft when store changes externally (e.g., from SGM apply)
+            // Only reload if we don't have unsaved changes
+            if !hasChanges && oldVersion != newVersion {
+                Task {
+                    await loadDraft()
+                }
+            }
+        }
         .sheet(isPresented: $showImportSheet) {
             ExperienceDefaultsImportSheet(
                 currentDraft: draft,

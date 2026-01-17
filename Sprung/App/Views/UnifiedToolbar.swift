@@ -192,7 +192,12 @@ struct UnifiedToolbar: CustomizableToolbarContent {
 
             ToolbarItem(id: "settings", placement: .primaryAction, showsByDefault: false) {
                 Button("Settings", systemImage: "gear") {
-                    NotificationCenter.default.post(name: .showSettings, object: nil)
+                    Task { @MainActor in
+                        if !NSApp.sendAction(#selector(AppDelegate.showSettingsWindow), to: nil, from: nil),
+                           let delegate = NSApplication.shared.delegate as? AppDelegate {
+                            delegate.showSettingsWindow()
+                        }
+                    }
                 }
                 .help("Open Settings")
             }

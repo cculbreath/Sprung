@@ -26,6 +26,7 @@ struct SeedGenerationView: View {
     @State private var hasApplied = false
     @State private var isGeneratingProjects = false
     @State private var hasStartedGeneration = false
+    @State private var hasAcknowledgedProjectProposals = false
 
     /// Number of project proposals awaiting user decision
     private var pendingProjectProposalCount: Int {
@@ -60,9 +61,9 @@ struct SeedGenerationView: View {
                 titleSetsRequiredBanner
             } else if !hasStartedGeneration {
                 titleSetsReadyBanner
-            } else if pendingProjectProposalCount > 0 {
+            } else if pendingProjectProposalCount > 0 && !hasAcknowledgedProjectProposals {
                 projectProposalsBanner
-            } else if hasApprovedProjectsNeedingContent {
+            } else if pendingProjectProposalCount == 0 && hasApprovedProjectsNeedingContent {
                 generateProjectsBanner
             }
             mainContent
@@ -79,6 +80,10 @@ struct SeedGenerationView: View {
         .onChange(of: hasTitleSets) { _, newValue in
             // When title sets become available, keep showing the ready banner
             // User needs to click Continue to start generation
+        }
+        .onChange(of: orchestrator.projectProposals?.count) { _, _ in
+            // Reset acknowledgment when new proposals arrive so banner shows
+            hasAcknowledgedProjectProposals = false
         }
     }
 
@@ -372,6 +377,9 @@ struct SeedGenerationView: View {
                     onApprove: { orchestrator.approveProject($0) },
                     onReject: { orchestrator.rejectProject($0) }
                 )
+                .onAppear {
+                    hasAcknowledgedProjectProposals = true
+                }
             } else {
                 sectionPlaceholder(for: section)
             }

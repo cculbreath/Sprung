@@ -6,6 +6,11 @@ import SwiftData
 final class ExperienceDefaultsStore: SwiftDataStore {
     let modelContext: ModelContext
     private var cachedDefaults: ExperienceDefaults?
+
+    /// Change counter to trigger SwiftUI view updates when defaults are mutated.
+    /// Views observing this will re-render when data changes.
+    private(set) var changeVersion: Int = 0
+
     init(context: ModelContext) {
         self.modelContext = context
     }
@@ -26,6 +31,7 @@ final class ExperienceDefaultsStore: SwiftDataStore {
     func save(_ defaults: ExperienceDefaults) {
         cachedDefaults = defaults
         saveContext()
+        changeVersion += 1
     }
     func loadDraft() -> ExperienceDefaultsDraft {
         let defaults = currentDefaults()
@@ -36,6 +42,7 @@ final class ExperienceDefaultsStore: SwiftDataStore {
         draft.apply(to: defaults)
         cachedDefaults = defaults
         saveContext()
+        changeVersion += 1
     }
     func clearCache() {
         cachedDefaults = nil
@@ -52,6 +59,7 @@ final class ExperienceDefaultsStore: SwiftDataStore {
         defaults.seedCreated = true
         cachedDefaults = defaults
         saveContext()
+        changeVersion += 1
     }
 
     /// Clear SGM-generated content while preserving timeline facts.
@@ -97,6 +105,7 @@ final class ExperienceDefaultsStore: SwiftDataStore {
 
         cachedDefaults = defaults
         saveContext()
+        changeVersion += 1
         Logger.info("Cleared SGM-generated content from ExperienceDefaults", category: .data)
     }
 }

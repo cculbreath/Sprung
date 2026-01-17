@@ -63,60 +63,405 @@ struct ModelsSettingsView: View {
 
     private let googleAIService = GoogleAIService()
 
-    private let reasoningOptions = [
-        (value: "low", label: "Low"),
-        (value: "medium", label: "Medium"),
-        (value: "high", label: "High")
-    ]
+    // Column widths
+    private let operationWidth: CGFloat = 180
+    private let backendWidth: CGFloat = 100
 
     var body: some View {
-        Form {
-            Section {
-                interviewModelPicker
-            } header: {
-                SettingsSectionHeader(title: "Interview", systemImage: "bubble.left.and.bubble.right")
-            }
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                // Header row
+                headerRow
+                Divider()
 
-            Section {
-                seedGenerationModelPicker
-            } header: {
-                SettingsSectionHeader(title: "Experience Defaults Generation", systemImage: "wand.and.stars")
-            }
+                // Model rows
+                modelRows
 
-            Section {
-                documentProcessingPickers
-            } header: {
-                SettingsSectionHeader(title: "Document Processing", systemImage: "doc.viewfinder")
-            }
+                Divider()
+                    .padding(.top, 8)
 
-            Section {
-                skillProcessingPickers
-            } header: {
-                SettingsSectionHeader(title: "Skill Processing", systemImage: "list.bullet.rectangle")
+                // Additional settings
+                additionalSettings
             }
-
-            Section {
-                additionalModelPickers
-            } header: {
-                SettingsSectionHeader(title: "Additional Models", systemImage: "cpu")
-            }
-
-            Section {
-                discoveryModelPickers
-            } header: {
-                SettingsSectionHeader(title: "Discovery", systemImage: "magnifyingglass.circle.fill")
-            }
+            .padding()
         }
-        .formStyle(.grouped)
         .onAppear {
-            // Force-refresh all model lists when settings opens
             Task {
                 await refreshAllModelLists()
             }
-            // Load Discovery settings from coordinator
             let s = discoveryCoordinator.settingsStore.current()
             discoveryLLMModelId = s.llmModelId
             discoveryReasoningEffort = s.reasoningEffort
+        }
+    }
+
+    // MARK: - Header
+
+    private var headerRow: some View {
+        HStack(spacing: 0) {
+            Text("Operation")
+                .font(.headline)
+                .frame(width: operationWidth, alignment: .leading)
+            Text("Backend")
+                .font(.headline)
+                .frame(width: backendWidth, alignment: .leading)
+            Text("Model")
+                .font(.headline)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.vertical, 8)
+    }
+
+    // MARK: - Model Rows
+
+    @ViewBuilder
+    private var modelRows: some View {
+        // Interview
+        modelRow(operation: "Interview", backend: .anthropic) {
+            anthropicPicker(selection: $onboardingAnthropicModelId)
+        }
+
+        // Experience Defaults - special case with backend switcher
+        experienceDefaultsRow
+
+        Divider().padding(.vertical, 4)
+
+        // Document Processing
+        modelRow(operation: "PDF Extraction", backend: .gemini) {
+            geminiPicker(selection: $pdfExtractionModelId, minTokens: 64000)
+        }
+        modelRow(operation: "Doc Summary", backend: .gemini) {
+            geminiPicker(selection: $docSummaryModelId, minTokens: 64000)
+        }
+        modelRow(operation: "Card Merge", backend: .openRouter) {
+            openRouterPicker(selection: $cardMergeModelId)
+        }
+
+        Divider().padding(.vertical, 4)
+
+        // Skill Processing
+        modelRow(operation: "Skill Bank", backend: .gemini) {
+            geminiPicker(selection: $skillBankModelId, minTokens: 16000)
+        }
+        modelRow(operation: "Narrative Cards", backend: .gemini) {
+            geminiPicker(selection: $kcExtractionModelId, minTokens: 32000)
+        }
+        modelRow(operation: "Inference Guidance", backend: .gemini) {
+            geminiPicker(selection: $guidanceExtractionModelId, minTokens: 4000)
+        }
+        modelRow(operation: "Skills Processing", backend: .gemini) {
+            geminiPicker(selection: $skillsProcessingModelId, minTokens: 64000)
+        }
+
+        Divider().padding(.vertical, 4)
+
+        // Additional Models
+        modelRow(operation: "Voice Primer", backend: .openRouter) {
+            openRouterPicker(selection: $voicePrimerModelId)
+        }
+        modelRow(operation: "KC Agent", backend: .openRouter) {
+            openRouterPicker(selection: $kcAgentModelId)
+        }
+        modelRow(operation: "Git Ingest", backend: .openRouter) {
+            openRouterPicker(selection: $gitIngestModelId)
+        }
+        modelRow(operation: "Background Processing", backend: .openRouter) {
+            openRouterPicker(selection: $backgroundProcessingModelId)
+        }
+
+        Divider().padding(.vertical, 4)
+
+        // Discovery
+        discoveryAIRow
+        discoveryReasoningRow
+        modelRow(operation: "Discovery Coaching", backend: .openRouter) {
+            openRouterPicker(selection: $coachingModelId)
+        }
+    }
+
+    // MARK: - Row Builder
+
+    private func modelRow<P: View>(
+        operation: String,
+        backend: Backend,
+        @ViewBuilder picker: () -> P
+    ) -> some View {
+        HStack(spacing: 0) {
+            Text(operation)
+                .frame(width: operationWidth, alignment: .leading)
+            backendBadge(backend)
+                .frame(width: backendWidth, alignment: .leading)
+            picker()
+            Spacer()
+        }
+        .padding(.vertical, 6)
+    }
+
+    // MARK: - Special Rows
+
+    private var experienceDefaultsRow: some View {
+        HStack(spacing: 0) {
+            Text("Experience Defaults")
+                .frame(width: operationWidth, alignment: .leading)
+
+            // Backend switcher
+            Menu {
+                Button("Anthropic") { seedGenerationBackend = "anthropic" }
+                Button("OpenRouter") { seedGenerationBackend = "openrouter" }
+            } label: {
+                HStack(spacing: 4) {
+                    Text(seedGenerationBackend == "anthropic" ? "Anthropic" : "OpenRouter")
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .menuStyle(.borderlessButton)
+            .frame(width: backendWidth, alignment: .leading)
+
+            // Model picker based on backend
+            if seedGenerationBackend == "anthropic" {
+                anthropicPicker(selection: $seedGenerationAnthropicModelId)
+            } else {
+                openRouterPicker(selection: $seedGenerationOpenRouterModelId)
+            }
+            Spacer()
+        }
+        .padding(.vertical, 6)
+    }
+
+    private var discoveryAIRow: some View {
+        HStack(spacing: 0) {
+            Text("Discovery AI")
+                .frame(width: operationWidth, alignment: .leading)
+            backendBadge(.openAI)
+                .frame(width: backendWidth, alignment: .leading)
+            openAIPicker(selection: $discoveryLLMModelId)
+            Spacer()
+        }
+        .padding(.vertical, 6)
+    }
+
+    private var discoveryReasoningRow: some View {
+        HStack(spacing: 0) {
+            Text("Discovery Reasoning")
+                .frame(width: operationWidth, alignment: .leading)
+            Text("")
+                .frame(width: backendWidth, alignment: .leading)
+            Menu {
+                Button("Low") {
+                    discoveryReasoningEffort = "low"
+                    updateReasoningEffort("low")
+                }
+                Button("Medium") {
+                    discoveryReasoningEffort = "medium"
+                    updateReasoningEffort("medium")
+                }
+                Button("High") {
+                    discoveryReasoningEffort = "high"
+                    updateReasoningEffort("high")
+                }
+            } label: {
+                HStack(spacing: 4) {
+                    Text(discoveryReasoningEffort.capitalized)
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .menuStyle(.borderlessButton)
+            Spacer()
+        }
+        .padding(.vertical, 6)
+    }
+
+    // MARK: - Additional Settings
+
+    private var additionalSettings: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Additional Settings")
+                .font(.headline)
+                .padding(.top, 8)
+
+            HStack {
+                Text("Parallel ATS Agents")
+                Stepper(value: $skillsProcessingParallelAgents, in: 1...24) {
+                    Text("\(skillsProcessingParallelAgents)")
+                        .monospacedDigit()
+                        .frame(width: 30)
+                }
+            }
+            Text("Number of parallel agents for ATS synonym expansion.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    // MARK: - Backend Badge
+
+    private enum Backend {
+        case anthropic, gemini, openRouter, openAI
+
+        var name: String {
+            switch self {
+            case .anthropic: return "Anthropic"
+            case .gemini: return "Gemini"
+            case .openRouter: return "OpenRouter"
+            case .openAI: return "OpenAI"
+            }
+        }
+
+        var color: Color {
+            switch self {
+            case .anthropic: return .orange
+            case .gemini: return .blue
+            case .openRouter: return .purple
+            case .openAI: return .green
+            }
+        }
+    }
+
+    private func backendBadge(_ backend: Backend) -> some View {
+        Text(backend.name)
+            .font(.caption)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(backend.color.opacity(0.15), in: Capsule())
+            .foregroundStyle(backend.color)
+    }
+
+    // MARK: - Pickers
+
+    @ViewBuilder
+    private func anthropicPicker(selection: Binding<String>) -> some View {
+        if !hasAnthropicKey {
+            Text("No API key")
+                .foregroundStyle(.secondary)
+        } else if isLoadingAnthropicModels {
+            ProgressView().controlSize(.small)
+        } else if let error = anthropicModelError {
+            Label(error, systemImage: "exclamationmark.triangle.fill")
+                .foregroundStyle(.red)
+                .font(.caption)
+        } else if filteredAnthropicModels.isEmpty {
+            Text("No models")
+                .foregroundStyle(.secondary)
+        } else {
+            let selectedModel = filteredAnthropicModels.first { $0.id == selection.wrappedValue }
+            Menu {
+                ForEach(filteredAnthropicModels) { model in
+                    Button(model.displayName) {
+                        selection.wrappedValue = model.id
+                    }
+                }
+            } label: {
+                HStack(spacing: 4) {
+                    Text(selectedModel?.displayName ?? "Select...")
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .menuStyle(.borderlessButton)
+        }
+    }
+
+    @ViewBuilder
+    private func geminiPicker(selection: Binding<String>, minTokens: Int) -> some View {
+        if !hasGeminiKey {
+            Text("No API key")
+                .foregroundStyle(.secondary)
+        } else if isLoadingGeminiModels {
+            ProgressView().controlSize(.small)
+        } else if let error = geminiModelError {
+            Label(error, systemImage: "exclamationmark.triangle.fill")
+                .foregroundStyle(.red)
+                .font(.caption)
+        } else if geminiModels.isEmpty {
+            Text("No models")
+                .foregroundStyle(.secondary)
+        } else {
+            let filtered = geminiModels.filter { $0.outputTokenLimit >= minTokens }
+            let selectedModel = filtered.first { $0.id == selection.wrappedValue }
+            Menu {
+                ForEach(filtered) { model in
+                    Button(model.displayName) {
+                        selection.wrappedValue = model.id
+                    }
+                }
+            } label: {
+                HStack(spacing: 4) {
+                    Text(selectedModel?.displayName ?? "Select...")
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .menuStyle(.borderlessButton)
+        }
+    }
+
+    @ViewBuilder
+    private func openRouterPicker(selection: Binding<String>) -> some View {
+        if allOpenRouterModels.isEmpty {
+            Text("No models enabled")
+                .foregroundStyle(.secondary)
+        } else {
+            let selectedModel = allOpenRouterModels.first { $0.modelId == selection.wrappedValue }
+            let displayName = selectedModel.map { $0.displayName.isEmpty ? $0.modelId : $0.displayName } ?? "Select..."
+            Menu {
+                ForEach(allOpenRouterModels, id: \.modelId) { model in
+                    Button(model.displayName.isEmpty ? model.modelId : model.displayName) {
+                        selection.wrappedValue = model.modelId
+                    }
+                }
+            } label: {
+                HStack(spacing: 4) {
+                    Text(displayName)
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .menuStyle(.borderlessButton)
+        }
+    }
+
+    @ViewBuilder
+    private func openAIPicker(selection: Binding<String>) -> some View {
+        if !hasOpenAIKey {
+            Text("No API key")
+                .foregroundStyle(.secondary)
+        } else if isLoadingOpenAIModels {
+            ProgressView().controlSize(.small)
+        } else if let error = openAIModelError {
+            Label(error, systemImage: "exclamationmark.triangle.fill")
+                .foregroundStyle(.red)
+                .font(.caption)
+        } else if filteredOpenAIModels.isEmpty {
+            Text("No models")
+                .foregroundStyle(.secondary)
+        } else {
+            let selectedModel = filteredOpenAIModels.first { $0.id == selection.wrappedValue }
+            Menu {
+                ForEach(filteredOpenAIModels, id: \.id) { model in
+                    Button(model.id) {
+                        selection.wrappedValue = model.id
+                        var s = discoveryCoordinator.settingsStore.current()
+                        guard s.llmModelId != model.id else { return }
+                        s.llmModelId = model.id
+                        discoveryCoordinator.settingsStore.update(s)
+                    }
+                }
+            } label: {
+                HStack(spacing: 4) {
+                    Text(selectedModel?.id ?? "Select...")
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .menuStyle(.borderlessButton)
         }
     }
 
@@ -160,494 +505,15 @@ struct ModelsSettingsView: View {
                     < (rhs.displayName.isEmpty ? rhs.modelId : rhs.displayName)
             }
     }
-
-    private var currentSeedModelBinding: Binding<String> {
-        seedGenerationBackend == "anthropic"
-            ? $seedGenerationAnthropicModelId
-            : $seedGenerationOpenRouterModelId
-    }
 }
 
-// MARK: - Interview Model Picker
+// MARK: - Helpers
 private extension ModelsSettingsView {
-    @ViewBuilder
-    var interviewModelPicker: some View {
-        modelPickerRow(
-            title: "Interview Model",
-            backend: "Anthropic",
-            backendColor: .orange
-        ) {
-            if !hasAnthropicKey {
-                missingKeyWarning("Add Anthropic API key to enable interview model selection.")
-            } else if isLoadingAnthropicModels {
-                loadingIndicator("Loading Claude models...")
-            } else if let error = anthropicModelError {
-                errorView(error) { Task { await loadAnthropicModels() } }
-            } else if filteredAnthropicModels.isEmpty {
-                emptyModelsView("No Claude models available") { Task { await loadAnthropicModels() } }
-            } else {
-                Picker("Model", selection: $onboardingAnthropicModelId) {
-                    ForEach(filteredAnthropicModels) { model in
-                        Text(model.displayName).tag(model.id)
-                    }
-                }
-                .pickerStyle(.menu)
-                Text("Claude models support extended thinking and tool use natively.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
-        }
-    }
-}
-
-// MARK: - Seed Generation Model Picker
-private extension ModelsSettingsView {
-    @ViewBuilder
-    var seedGenerationModelPicker: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Picker("Backend", selection: $seedGenerationBackend) {
-                Text("Anthropic (Direct)").tag("anthropic")
-                Text("OpenRouter").tag("openrouter")
-            }
-            .pickerStyle(.segmented)
-
-            Text(seedGenerationBackend == "anthropic"
-                ? "Direct Anthropic API with prompt caching for faster, cheaper generation."
-                : "OpenRouter for model flexibility. Caching depends on underlying provider.")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-
-            Divider()
-                .padding(.vertical, 4)
-
-            if seedGenerationBackend == "anthropic" {
-                modelPickerRow(
-                    title: "Model",
-                    backend: "Anthropic",
-                    backendColor: .orange
-                ) {
-                    if !hasAnthropicKey {
-                        missingKeyWarning("Add Anthropic API key to use direct Anthropic backend.")
-                    } else if filteredAnthropicModels.isEmpty {
-                        loadingIndicator("Loading models...")
-                    } else {
-                        Picker("", selection: $seedGenerationAnthropicModelId) {
-                            ForEach(filteredAnthropicModels) { model in
-                                Text(model.displayName).tag(model.id)
-                            }
-                        }
-                        .pickerStyle(.menu)
-                        .labelsHidden()
-                    }
-                }
-            } else {
-                modelPickerRow(
-                    title: "Model",
-                    backend: "OpenRouter",
-                    backendColor: .purple
-                ) {
-                    Picker("", selection: $seedGenerationOpenRouterModelId) {
-                        ForEach(allOpenRouterModels, id: \.modelId) { model in
-                            Text(model.displayName.isEmpty ? model.modelId : model.displayName)
-                                .tag(model.modelId)
-                        }
-                    }
-                    .pickerStyle(.menu)
-                    .labelsHidden()
-                }
-            }
-
-            Text("Generates professional descriptions for work history, education, and projects after onboarding.")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-        }
-    }
-}
-
-// MARK: - Document Processing Pickers
-private extension ModelsSettingsView {
-    @ViewBuilder
-    var documentProcessingPickers: some View {
-        // PDF Extraction
-        modelPickerRow(
-            title: "PDF Extraction Model",
-            backend: "Gemini",
-            backendColor: .blue
-        ) {
-            if !hasGeminiKey {
-                missingKeyWarning("Add Google Gemini API key to enable native PDF extraction.")
-            } else if isLoadingGeminiModels {
-                loadingIndicator("Loading Gemini models...")
-            } else if let error = geminiModelError {
-                errorView(error) { Task { await loadGeminiModels() } }
-            } else if geminiModels.isEmpty {
-                emptyModelsView("No Gemini models available") { Task { await loadGeminiModels() } }
-            } else {
-                Picker("", selection: $pdfExtractionModelId) {
-                    ForEach(geminiModels.filter { $0.outputTokenLimit >= 64000 }) { model in
-                        Text(model.displayName).tag(model.id)
-                    }
-                }
-                .pickerStyle(.menu)
-                .labelsHidden()
-                Text("Uses Google's Files API for native PDF processing up to 2GB.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
-        }
-
-        // Doc Summary
-        modelPickerRow(
-            title: "Doc Summary Model",
-            backend: "Gemini",
-            backendColor: .blue
-        ) {
-            if !hasGeminiKey {
-                missingKeyWarning("Add Google Gemini API key to enable document summarization.")
-            } else if geminiModels.isEmpty {
-                emptyModelsView("No Gemini models available") { Task { await loadGeminiModels() } }
-            } else {
-                Picker("", selection: $docSummaryModelId) {
-                    ForEach(geminiModels.filter { $0.outputTokenLimit >= 64000 }) { model in
-                        Text(model.displayName).tag(model.id)
-                    }
-                }
-                .pickerStyle(.menu)
-                .labelsHidden()
-                Text("Generates summaries of uploaded documents. Flash-Lite recommended for cost.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
-        }
-
-        // Card Merge
-        modelPickerRow(
-            title: "Card Merge Model",
-            backend: "OpenRouter",
-            backendColor: .purple
-        ) {
-            if allOpenRouterModels.isEmpty {
-                missingKeyWarning("Enable OpenRouter models to configure card merge.")
-            } else {
-                Picker("", selection: $cardMergeModelId) {
-                    ForEach(allOpenRouterModels, id: \.modelId) { model in
-                        Text(model.displayName.isEmpty ? model.modelId : model.displayName)
-                            .tag(model.modelId)
-                    }
-                }
-                .pickerStyle(.menu)
-                .labelsHidden()
-                Text("Card deduplication and experience defaults generation.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
-        }
-    }
-}
-
-// MARK: - Skill Processing Pickers
-private extension ModelsSettingsView {
-    @ViewBuilder
-    var skillProcessingPickers: some View {
-        if !hasGeminiKey {
-            missingKeyWarning("Add Google Gemini API key to enable skill/narrative extraction.")
-        } else if geminiModels.isEmpty {
-            emptyModelsView("No Gemini models available") { Task { await loadGeminiModels() } }
-        } else {
-            // Skill Bank
-            modelPickerRow(title: "Skill Bank Model", backend: "Gemini", backendColor: .blue) {
-                Picker("", selection: $skillBankModelId) {
-                    ForEach(geminiModels.filter { $0.outputTokenLimit >= 16000 }) { model in
-                        Text(model.displayName).tag(model.id)
-                    }
-                }
-                .pickerStyle(.menu)
-                .labelsHidden()
-                Text("Extracts comprehensive skill inventories. Flash recommended for speed.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
-
-            // Narrative Card
-            modelPickerRow(title: "Narrative Card Model", backend: "Gemini", backendColor: .blue) {
-                Picker("", selection: $kcExtractionModelId) {
-                    ForEach(geminiModels.filter { $0.outputTokenLimit >= 32000 }) { model in
-                        Text(model.displayName).tag(model.id)
-                    }
-                }
-                .pickerStyle(.menu)
-                .labelsHidden()
-                Text("Generates narrative knowledge cards. Pro recommended for quality.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
-
-            // Inference Guidance
-            modelPickerRow(title: "Inference Guidance Model", backend: "Gemini", backendColor: .blue) {
-                Picker("", selection: $guidanceExtractionModelId) {
-                    ForEach(geminiModels.filter { $0.outputTokenLimit >= 4000 }) { model in
-                        Text(model.displayName).tag(model.id)
-                    }
-                }
-                .pickerStyle(.menu)
-                .labelsHidden()
-                Text("Generates identity vocabulary, title sets, and voice profiles. Flash recommended.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
-
-            Divider()
-                .padding(.vertical, 4)
-
-            // Skills Processing
-            modelPickerRow(title: "Skills Processing Model", backend: "Gemini", backendColor: .blue) {
-                Picker("", selection: $skillsProcessingModelId) {
-                    ForEach(geminiModels.filter { $0.outputTokenLimit >= 64000 }) { model in
-                        Text(model.displayName).tag(model.id)
-                    }
-                }
-                .pickerStyle(.menu)
-                .labelsHidden()
-                Text("Deduplicates skills and generates ATS synonym variants. Flash recommended.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
-
-            // Parallel Agents
-            Stepper(value: $skillsProcessingParallelAgents, in: 1...24) {
-                HStack {
-                    Text("Parallel ATS Agents")
-                    Spacer()
-                    Text("\(skillsProcessingParallelAgents)")
-                        .foregroundStyle(.secondary)
-                        .monospacedDigit()
-                }
-            }
-            Text("Number of parallel agents for ATS synonym expansion. Higher values process faster.")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-        }
-    }
-}
-
-// MARK: - Additional Model Pickers
-private extension ModelsSettingsView {
-    @ViewBuilder
-    var additionalModelPickers: some View {
-        // Voice Primer
-        modelPickerRow(title: "Voice Primer Model", backend: "OpenRouter", backendColor: .purple) {
-            if allOpenRouterModels.isEmpty {
-                missingKeyWarning("Enable OpenRouter models to configure voice extraction.")
-            } else {
-                Picker("", selection: $voicePrimerModelId) {
-                    ForEach(allOpenRouterModels, id: \.modelId) { model in
-                        Text(model.displayName.isEmpty ? model.modelId : model.displayName)
-                            .tag(model.modelId)
-                    }
-                }
-                .pickerStyle(.menu)
-                .labelsHidden()
-                Text("Extracts voice characteristics from writing samples. Fast model recommended.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
-        }
-
-        // KC Agent
-        modelPickerRow(title: "KC Agent Model", backend: "OpenRouter", backendColor: .purple) {
-            if allOpenRouterModels.isEmpty {
-                missingKeyWarning("Enable OpenRouter models to configure KC agent.")
-            } else {
-                Picker("", selection: $kcAgentModelId) {
-                    ForEach(allOpenRouterModels, id: \.modelId) { model in
-                        Text(model.displayName.isEmpty ? model.modelId : model.displayName)
-                            .tag(model.modelId)
-                    }
-                }
-                .pickerStyle(.menu)
-                .labelsHidden()
-                Text("Metadata extraction for knowledge cards. Haiku recommended for speed.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
-        }
-
-        // Git Ingest
-        modelPickerRow(title: "Git Ingest Model", backend: "OpenRouter", backendColor: .purple) {
-            if allOpenRouterModels.isEmpty {
-                missingKeyWarning("Enable OpenRouter models to adjust Git ingest model.")
-            } else {
-                Picker("", selection: $gitIngestModelId) {
-                    ForEach(allOpenRouterModels, id: \.modelId) { model in
-                        Text(model.displayName.isEmpty ? model.modelId : model.displayName)
-                            .tag(model.modelId)
-                    }
-                }
-                .pickerStyle(.menu)
-                .labelsHidden()
-                Text("Analyzes git repositories for coding skills during onboarding.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
-        }
-
-        // Background Processing
-        modelPickerRow(title: "Background Processing Model", backend: "OpenRouter", backendColor: .purple) {
-            if allOpenRouterModels.isEmpty {
-                Text("No models enabled. Enable models in API Keys settings.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-            } else {
-                Picker("", selection: $backgroundProcessingModelId) {
-                    ForEach(allOpenRouterModels) { model in
-                        Text(model.displayName.isEmpty ? model.modelId : model.displayName)
-                            .tag(model.modelId)
-                    }
-                }
-                .pickerStyle(.menu)
-                .labelsHidden()
-                Text("Used for job requirement extraction. Fast, inexpensive models recommended.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
-        }
-    }
-}
-
-// MARK: - Discovery Model Pickers
-private extension ModelsSettingsView {
-    @ViewBuilder
-    var discoveryModelPickers: some View {
-        // AI Model (OpenAI)
-        modelPickerRow(title: "AI Model", backend: "OpenAI", backendColor: .green) {
-            if !hasOpenAIKey {
-                missingKeyWarning("Add OpenAI API key in API Keys settings first.")
-            } else if isLoadingOpenAIModels {
-                loadingIndicator("Loading models...")
-            } else if let error = openAIModelError {
-                errorView(error) { Task { await loadOpenAIModels() } }
-            } else if filteredOpenAIModels.isEmpty {
-                emptyModelsView("No GPT-4o/5/6/7 models available") { Task { await loadOpenAIModels() } }
-            } else {
-                Picker("", selection: $discoveryLLMModelId) {
-                    ForEach(filteredOpenAIModels, id: \.id) { model in
-                        Text(model.id).tag(model.id)
-                    }
-                }
-                .pickerStyle(.menu)
-                .labelsHidden()
-                .onChange(of: discoveryLLMModelId) { _, newValue in
-                    guard !newValue.isEmpty else { return }
-                    var s = discoveryCoordinator.settingsStore.current()
-                    guard s.llmModelId != newValue else { return }
-                    s.llmModelId = newValue
-                    discoveryCoordinator.settingsStore.update(s)
-                }
-
-                // Reasoning effort
-                Picker("Reasoning Effort", selection: $discoveryReasoningEffort) {
-                    ForEach(reasoningOptions, id: \.value) { option in
-                        Text(option.label).tag(option.value)
-                    }
-                }
-                .pickerStyle(.menu)
-                .onChange(of: discoveryReasoningEffort) { _, newValue in
-                    var s = discoveryCoordinator.settingsStore.current()
-                    guard s.reasoningEffort != newValue else { return }
-                    s.reasoningEffort = newValue
-                    discoveryCoordinator.settingsStore.update(s)
-                }
-
-                Text("Model and reasoning effort for source discovery and daily tasks.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
-        }
-
-        // Coaching Model (OpenRouter)
-        modelPickerRow(title: "Coaching Model", backend: "OpenRouter", backendColor: .purple) {
-            if allOpenRouterModels.isEmpty {
-                Text("No enabled models. Add models in LLM Settings.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            } else {
-                Picker("", selection: $coachingModelId) {
-                    ForEach(allOpenRouterModels, id: \.modelId) { model in
-                        Text(model.displayName).tag(model.modelId)
-                    }
-                }
-                .pickerStyle(.menu)
-                .labelsHidden()
-                Text("Model for daily coaching. Uses OpenRouter.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
-        }
-    }
-}
-
-// MARK: - Helper Views
-private extension ModelsSettingsView {
-    func modelPickerRow<Content: View>(
-        title: String,
-        backend: String,
-        backendColor: Color,
-        @ViewBuilder content: () -> Content
-    ) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text(title)
-                Spacer()
-                Text(backend)
-                    .font(.caption2)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(backendColor.opacity(0.15), in: Capsule())
-                    .foregroundStyle(backendColor)
-            }
-            content()
-        }
-    }
-
-    func missingKeyWarning(_ message: String) -> some View {
-        Label(message, systemImage: "exclamationmark.triangle.fill")
-            .foregroundStyle(.orange)
-            .font(.callout)
-    }
-
-    func loadingIndicator(_ message: String) -> some View {
-        HStack(spacing: 8) {
-            ProgressView()
-                .controlSize(.small)
-            Text(message)
-                .font(.callout)
-                .foregroundStyle(.secondary)
-        }
-    }
-
-    func errorView(_ error: String, retry: @escaping () -> Void) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Label("Failed to load models", systemImage: "exclamationmark.triangle.fill")
-                .foregroundStyle(.orange)
-                .font(.callout)
-            Text(error)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            Button("Retry", action: retry)
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-        }
-    }
-
-    func emptyModelsView(_ message: String, load: @escaping () -> Void) -> some View {
-        HStack {
-            Text(message)
-                .font(.callout)
-                .foregroundStyle(.secondary)
-            Button("Load Models", action: load)
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-        }
+    func updateReasoningEffort(_ newValue: String) {
+        var s = discoveryCoordinator.settingsStore.current()
+        guard s.reasoningEffort != newValue else { return }
+        s.reasoningEffort = newValue
+        discoveryCoordinator.settingsStore.update(s)
     }
 }
 
@@ -662,16 +528,12 @@ private extension ModelsSettingsView {
 
     @MainActor
     func loadAnthropicModels() async {
-        guard hasAnthropicKey else {
-            anthropicModelError = "Anthropic API key not configured"
-            return
-        }
+        guard hasAnthropicKey else { return }
         isLoadingAnthropicModels = true
         anthropicModelError = nil
         do {
             let response = try await llmFacade.anthropicListModels()
             anthropicModels = response.data
-            // Auto-select if current selection is invalid
             if !filteredAnthropicModels.contains(where: { $0.id == onboardingAnthropicModelId }) {
                 if let first = filteredAnthropicModels.first {
                     onboardingAnthropicModelId = first.id
@@ -690,10 +552,7 @@ private extension ModelsSettingsView {
 
     @MainActor
     func loadGeminiModels() async {
-        guard hasGeminiKey else {
-            geminiModelError = "Gemini API key not configured"
-            return
-        }
+        guard hasGeminiKey else { return }
         isLoadingGeminiModels = true
         geminiModelError = nil
         do {
@@ -706,10 +565,7 @@ private extension ModelsSettingsView {
 
     @MainActor
     func loadOpenAIModels() async {
-        guard hasOpenAIKey else {
-            openAIModelError = "OpenAI API key not configured"
-            return
-        }
+        guard hasOpenAIKey else { return }
         guard let apiKey = APIKeyManager.get(.openAI) else { return }
 
         isLoadingOpenAIModels = true
@@ -718,7 +574,6 @@ private extension ModelsSettingsView {
             let service = OpenAIServiceFactory.service(apiKey: apiKey)
             let response = try await service.listModels()
             openAIModels = response.data
-            // Validate current selection
             if !filteredOpenAIModels.contains(where: { $0.id == discoveryLLMModelId }) {
                 if let first = filteredOpenAIModels.first {
                     discoveryLLMModelId = first.id

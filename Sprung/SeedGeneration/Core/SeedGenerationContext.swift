@@ -34,6 +34,9 @@ struct SeedGenerationContext {
     /// Candidate dossier with strategic insights (if available)
     let dossier: JSON?
 
+    /// Available title sets from the library (for LLM selection)
+    let titleSets: [TitleSetRecord]
+
     // MARK: - Timeline Entry Access
 
     /// Get a specific timeline entry by ID
@@ -245,7 +248,8 @@ extension SeedGenerationContext {
         skills: [Skill],
         writingSamples: [CoverRef],
         voicePrimer: CoverRef?,
-        dossier: JSON?
+        dossier: JSON?,
+        titleSets: [TitleSetRecord]
     ) -> SeedGenerationContext {
         let profile: ApplicantProfileDraft
         if let profileJSON = artifacts.applicantProfile {
@@ -267,7 +271,8 @@ extension SeedGenerationContext {
             skills: skills,
             writingSamples: writingSamples.filter { $0.type == .writingSample },
             voicePrimer: voicePrimer,
-            dossier: dossier
+            dossier: dossier,
+            titleSets: titleSets
         )
     }
 
@@ -279,7 +284,8 @@ extension SeedGenerationContext {
         skills: [Skill],
         writingSamples: [CoverRef],
         voicePrimer: CoverRef?,
-        dossier: JSON?
+        dossier: JSON?,
+        titleSets: [TitleSetRecord]
     ) -> SeedGenerationContext {
         // Build enabled sections from defaults flags (as raw strings)
         var enabledSections: Set<String> = []
@@ -312,7 +318,8 @@ extension SeedGenerationContext {
             skills: skills,
             writingSamples: writingSamples.filter { $0.type == .writingSample },
             voicePrimer: voicePrimer,
-            dossier: dossier
+            dossier: dossier,
+            titleSets: titleSets
         )
     }
 

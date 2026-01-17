@@ -1,5 +1,15 @@
 import SwiftUI
 
+// MARK: - Refine Response Type
+
+private struct RefineResponse: Codable {
+    struct Refinement: Codable {
+        let skillId: String
+        let newName: String
+    }
+    let refinements: [Refinement]
+}
+
 /// Skills Bank browser showing skills grouped by category in an expandable list view.
 /// Includes LLM-powered tools for deduplication and ATS synonym expansion.
 struct SkillsBankBrowser: View {
@@ -21,9 +31,18 @@ struct SkillsBankBrowser: View {
     @State private var showResultAlert = false
     @State private var errorMessage: String?
 
+    // Inline editing state
+    @State private var editingSkillId: UUID?
+    @State private var editingSkillName: String = ""
+
+    // Refine feature state
+    @State private var showRefinePopover = false
+    @State private var refineInstruction = ""
+
     private enum ProcessingOperation {
         case deduplication
         case atsExpansion
+        case refine
     }
 
     /// All skills from the store
@@ -176,7 +195,83 @@ struct SkillsBankBrowser: View {
             .buttonStyle(.bordered)
             .disabled(isProcessing)
             .help("Use AI to add ATS-friendly synonym variants to all skills")
+
+            // Refine/cleanup button with popover
+            Button {
+                showRefinePopover = true
+            } label: {
+                HStack(spacing: 6) {
+                    if currentOperation == .refine {
+                        ProgressView()
+                            .scaleEffect(0.6)
+                            .frame(width: 12, height: 12)
+                    } else {
+                        Image(systemName: "wand.and.stars")
+                    }
+                    Text("Refine")
+                }
+                .font(.caption.weight(.medium))
+            }
+            .buttonStyle(.bordered)
+            .disabled(isProcessing)
+            .help("Use AI to refine skill names with custom instructions")
+            .popover(isPresented: $showRefinePopover, arrowEdge: .bottom) {
+                refinePopoverContent
+            }
         }
+    }
+
+    private var refinePopoverContent: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Refine Skill Names")
+                    .font(.headline)
+
+                Text("Enter instructions for how skill names should be refined.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Instructions")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                TextField("e.g., Limit to 3 words or fewer", text: $refineInstruction, axis: .vertical)
+                    .textFieldStyle(.plain)
+                    .padding(10)
+                    .background(Color(.textBackgroundColor))
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(.quaternary, lineWidth: 1)
+                    )
+                    .lineLimit(3...5)
+            }
+
+            Text("Examples: \"Use industry-standard abbreviations\", \"Remove vendor names\", \"Capitalize consistently\"")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+
+            HStack {
+                Button("Cancel") {
+                    showRefinePopover = false
+                    refineInstruction = ""
+                }
+                .buttonStyle(.bordered)
+
+                Spacer()
+
+                Button("Refine All Skills") {
+                    showRefinePopover = false
+                    refineSkills()
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(refineInstruction.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+        }
+        .padding(20)
+        .frame(width: 340)
     }
 
     private var processingOverlay: some View {
@@ -291,6 +386,138 @@ struct SkillsBankBrowser: View {
         }
     }
 
+    private func refineSkills() {
+        guard let skillStore = skillStore, let facade = llmFacade else { return }
+        let instruction = refineInstruction.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !instruction.isEmpty else { return }
+
+        isProcessing = true
+        currentOperation = .refine
+        processingMessage = "Refining skill names..."
+        processingProgress = 0
+
+        Task {
+            do {
+                let allSkills = skillStore.skills
+                let totalSkills = allSkills.count
+
+                // Build the prompt with all skills
+                let skillList = allSkills.enumerated().map { index, skill in
+                    "\(index + 1). \(skill.id.uuidString): \(skill.canonical)"
+                }.joined(separator: "\n")
+
+                let prompt = """
+                    You are a professional resume skills editor. Refine the following skill names according to this instruction:
+
+                    **Instruction:** \(instruction)
+
+                    **Skills to refine:**
+                    \(skillList)
+
+                    For each skill, provide the refined name. If a skill name already meets the criteria, keep it unchanged.
+
+                    Return a JSON object with a "refinements" array containing objects with "skillId" and "newName" fields.
+                    Only include skills whose names should change.
+                    """
+
+                let schema: [String: Any] = [
+                    "type": "object",
+                    "properties": [
+                        "refinements": [
+                            "type": "array",
+                            "items": [
+                                "type": "object",
+                                "properties": [
+                                    "skillId": ["type": "string"],
+                                    "newName": ["type": "string"]
+                                ],
+                                "required": ["skillId", "newName"]
+                            ]
+                        ]
+                    ],
+                    "required": ["refinements"]
+                ]
+
+                guard let modelId = UserDefaults.standard.string(forKey: "skillsProcessingModelId"), !modelId.isEmpty else {
+                    throw SkillsProcessingError.llmNotConfigured
+                }
+
+                processingMessage = "AI is refining \(totalSkills) skills..."
+
+                let response: RefineResponse = try await facade.executeStructuredWithDictionarySchema(
+                    prompt: prompt,
+                    modelId: modelId,
+                    as: RefineResponse.self,
+                    schema: schema,
+                    schemaName: "skill_refinements",
+                    backend: .gemini
+                )
+
+                // Apply refinements
+                var modifiedCount = 0
+                for refinement in response.refinements {
+                    if let skillUUID = UUID(uuidString: refinement.skillId),
+                       let skill = skillStore.skill(withId: skillUUID) {
+                        let newName = refinement.newName.trimmingCharacters(in: .whitespacesAndNewlines)
+                        if !newName.isEmpty && newName != skill.canonical {
+                            skill.canonical = newName
+                            skillStore.update(skill)
+                            modifiedCount += 1
+                        }
+                    }
+                }
+
+                await MainActor.run {
+                    lastResult = SkillsProcessingResult(
+                        operation: "Refine",
+                        skillsProcessed: totalSkills,
+                        skillsModified: modifiedCount,
+                        details: "Refined \(modifiedCount) of \(totalSkills) skill names"
+                    )
+                    isProcessing = false
+                    currentOperation = nil
+                    refineInstruction = ""
+                    showResultAlert = true
+                }
+            } catch {
+                await MainActor.run {
+                    errorMessage = error.localizedDescription
+                    isProcessing = false
+                    currentOperation = nil
+                    showResultAlert = true
+                }
+            }
+        }
+    }
+
+    // MARK: - Inline Editing
+
+    private func startEditing(_ skill: Skill) {
+        editingSkillId = skill.id
+        editingSkillName = skill.canonical
+    }
+
+    private func commitEdit() {
+        guard let skillId = editingSkillId,
+              let skill = skillStore?.skill(withId: skillId) else {
+            cancelEdit()
+            return
+        }
+
+        let newName = editingSkillName.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !newName.isEmpty && newName != skill.canonical {
+            skill.canonical = newName
+            skillStore?.update(skill)
+        }
+
+        cancelEdit()
+    }
+
+    private func cancelEdit() {
+        editingSkillId = nil
+        editingSkillName = ""
+    }
+
     // MARK: - Existing UI Components
 
     private func proficiencyChip(_ proficiency: Proficiency?, label: String) -> some View {
@@ -394,15 +621,65 @@ struct SkillsBankBrowser: View {
                 }
 
                 VStack(alignment: .leading, spacing: 4) {
-                    // Skill name with proficiency dot
+                    // Skill name with proficiency dot - editable
                     HStack(spacing: 6) {
                         if hasVariants {
                             Circle()
                                 .fill(colorFor(skill.proficiency))
                                 .frame(width: 8, height: 8)
                         }
-                        Text(skill.canonical)
-                            .font(.subheadline.weight(.medium))
+
+                        if editingSkillId == skill.id {
+                            // Inline editing mode
+                            TextField("Skill name", text: $editingSkillName)
+                                .font(.subheadline.weight(.medium))
+                                .textFieldStyle(.plain)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Color(.textBackgroundColor))
+                                .clipShape(RoundedRectangle(cornerRadius: 4))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 4)
+                                        .stroke(Color.accentColor, lineWidth: 1)
+                                )
+                                .onSubmit {
+                                    commitEdit()
+                                }
+
+                            Button {
+                                commitEdit()
+                            } label: {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .foregroundStyle(.green)
+                            }
+                            .buttonStyle(.plain)
+
+                            Button {
+                                cancelEdit()
+                            } label: {
+                                Image(systemName: "xmark.circle.fill")
+                                    .foregroundStyle(.secondary)
+                            }
+                            .buttonStyle(.plain)
+                        } else {
+                            // Display mode - double-click to edit
+                            Text(skill.canonical)
+                                .font(.subheadline.weight(.medium))
+                                .onTapGesture(count: 2) {
+                                    startEditing(skill)
+                                }
+
+                            // Edit button on hover
+                            Button {
+                                startEditing(skill)
+                            } label: {
+                                Image(systemName: "pencil")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                            .buttonStyle(.plain)
+                            .opacity(0.5)
+                        }
                     }
 
                     // ATS variants preview (collapsed) or count indicator
@@ -446,7 +723,8 @@ struct SkillsBankBrowser: View {
             .padding(.vertical, 8)
             .contentShape(Rectangle())
             .onTapGesture {
-                if hasVariants {
+                // Only expand/collapse if not editing and has variants
+                if editingSkillId != skill.id && hasVariants {
                     withAnimation(.easeInOut(duration: 0.2)) {
                         if isExpanded {
                             expandedSkills.remove(skill.id)
