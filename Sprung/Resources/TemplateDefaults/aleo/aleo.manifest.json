@@ -1,43 +1,37 @@
 {
-  "sections": {
-    "work": {
-      "type": "arrayOfObjects",
-      "hiddenFields": [
-        "description",
-        "summary",
-        "url",
-        "location"
-      ]
-    },
-    "projects": {
-      "type": "arrayOfObjects",
-      "hiddenFields": [
-        "highlights",
-        "url",
-        "startDate",
-        "endDate",
-        "keywords",
-        "roles",
-        "entity",
-        "type"
-      ]
-    }
-  },
-  "custom": {
-    "fields": [
+  "custom" : {
+    "fields" : [
       {
-        "allowsManualMutations": true,
-        "input": "text",
-        "key": "jobTitles",
-        "repeatable": true
+        "allowsManualMutations" : true,
+        "input" : "text",
+        "key" : "jobTitles",
+        "repeatable" : true
       },
       {
-        "input": "textarea",
-        "key": "moreInfo"
+        "input" : "textarea",
+        "key" : "moreInfo"
       }
     ]
   },
-  "keys-in-editor": [
+  "defaultAIFields" : [
+    "custom.objective",
+    "work[].highlights",
+    "projects[].description",
+    "skills.*.name",
+    "skills[].keywords",
+    "custom.jobTitles[]"
+  ],
+  "editorLabels" : {
+    "basics" : "Contact Info",
+    "custom.jobTitles" : "Job Titles",
+    "custom.moreInfo" : "Additional Info",
+    "custom.objective" : "Objective",
+    "education" : "Education",
+    "projects" : "Projects",
+    "skills" : "Skills",
+    "work" : "Work Experience"
+  },
+  "keys-in-editor" : [
     "work",
     "projects",
     "education",
@@ -46,19 +40,33 @@
     "custom.moreInfo",
     "styling"
   ],
-  "section-visibility": {
-    "education": true,
-    "projects": true,
-    "skills": true,
-    "work": true
+  "reviewPhases" : {
+    "skills" : [
+      {
+        "bundle" : false,
+        "field" : "skills.*.name",
+        "phase" : 1
+      },
+      {
+        "bundle" : false,
+        "field" : "skills[].keywords",
+        "phase" : 2
+      }
+    ]
   },
-  "section-visibility-labels": {
-    "education": "Education",
-    "projects": "Projects",
-    "skills": "Skills",
-    "work": "Work Experience"
+  "section-visibility" : {
+    "education" : true,
+    "projects" : true,
+    "skills" : true,
+    "work" : true
   },
-  "sectionOrder": [
+  "section-visibility-labels" : {
+    "education" : "Education",
+    "projects" : "Projects",
+    "skills" : "Skills",
+    "work" : "Work Experience"
+  },
+  "sectionOrder" : [
     "work",
     "projects",
     "education",
@@ -66,26 +74,32 @@
     "custom",
     "styling"
   ],
-  "styling": {
-    "fontSizes": {
-      "name": "48pt",
-      "jobTitles": "16pt",
-      "contact": "11.5pt",
-      "objective": "11pt",
-      "sectionTitle": "16pt",
-      "boxTitles": "24pt",
-      "employerName": "11pt",
-      "workDates": "9.5pt",
-      "workHighlights": "10pt",
-      "projectText": "10pt",
-      "degreeNames": "12.5pt",
-      "graduationDate": "11pt",
-      "schools": "11pt",
-      "skillNames": "12.5pt",
-      "skillDescriptions": "11pt",
-      "moreInfo": "11pt"
+  "sections" : {
+    "projects" : {
+      "hiddenFields" : [
+        "highlights",
+        "url",
+        "startDate",
+        "endDate",
+        "keywords",
+        "roles",
+        "entity",
+        "type"
+      ],
+      "type" : "arrayOfObjects"
     },
-    "fontSizeOrder": [
+    "work" : {
+      "hiddenFields" : [
+        "description",
+        "summary",
+        "url",
+        "location"
+      ],
+      "type" : "arrayOfObjects"
+    }
+  },
+  "styling" : {
+    "fontSizeOrder" : [
       "name",
       "jobTitles",
       "contact",
@@ -102,34 +116,24 @@
       "skillNames",
       "skillDescriptions",
       "moreInfo"
-    ]
-  },
-  "transparentKeys": [
-    "basics",
-    "custom"
-  ],
-  "editorLabels": {
-    "basics": "Contact Info",
-    "custom.objective": "Objective",
-    "work": "Work Experience",
-    "projects": "Projects",
-    "education": "Education",
-    "skills": "Skills",
-    "custom.jobTitles": "Job Titles",
-    "custom.moreInfo": "Additional Info"
-  },
-  "defaultAIFields": [
-    "custom.objective",
-    "work[].highlights",
-    "projects[].description",
-    "skills.*.name",
-    "skills[].keywords",
-    "custom.jobTitles[]"
-  ],
-  "reviewPhases": {
-    "skills": [
-      { "phase": 1, "field": "skills.*.name" },
-      { "phase": 2, "field": "skills[].keywords" }
-    ]
+    ],
+    "fontSizes" : {
+      "boxTitles" : "24pt",
+      "contact" : "11.5pt",
+      "degreeNames" : "12.5pt",
+      "employerName" : "11pt",
+      "graduationDate" : "16pt",
+      "jobTitles" : "16pt",
+      "moreInfo" : "11pt",
+      "name" : "52pt",
+      "objective" : "11pt",
+      "projectText" : "10pt",
+      "schools" : "10pt",
+      "sectionTitle" : "16pt",
+      "skillDescriptions" : "11pt",
+      "skillNames" : "12.5pt",
+      "workDates" : "9.5pt",
+      "workHighlights" : "10pt"
+    }
   }
 }

@@ -27,6 +27,9 @@
                 margin-top: 0;
                 padding: 6pt 0;
                 width: 100%;
+                height: 10.125in; /* 11in - 0.375in top - 0.5in bottom */
+                display: flex;
+                flex-direction: column;
                 box-sizing: border-box;
             }
             .flex-container {
@@ -44,6 +47,7 @@
                 grid-template-columns: 2.35in 1fr;
                 column-gap: 20pt;
                 width: 100%;
+                flex: 1;
                 margin: 4pt 0 0 0;
                 padding: 0 4pt;
                 border: var(--debug-border-width) solid var(--debug-border-color);
@@ -52,7 +56,6 @@
                 font-variant-numeric: lining-nums;
                 display: flex;
                 flex-direction: column;
-                justify-content: flex-start;
                 border: var(--debug-border-width) solid var(--debug-border-color-secondary);
             }
             .right-column {
@@ -166,7 +169,7 @@
             }
             .info-box .light { font-family: 'Aleo'; font-weight: 400; }
             .info-box .lightitalic {font-family: 'Aleo'; font-weight: 300; font-style: italic; }
-			.edu-line { display: block; margin-top: -2px; margin-bottom: 5px; font-family: 'Aleo'; font-weight: 300; font-style: italic; font-size: {{styling.fontSizes.schools}};}
+			.edu-line { display: block;margin-bottom: 5px; font-family: 'Aleo'; font-weight: 300; font-style: italic; font-size: {{styling.fontSizes.schools}};}
             /* 8. B	ullet Lists */
             .info-box ul {
                 margin: 0;
@@ -191,7 +194,7 @@
 
             /* Category title (same line as star) */
             .skill-category {
-              font-weight: 700;
+              font-weight: 500;
               font-size: {{styling.fontSizes.skillNames}};
               display: inline; /* critical: prevents star from landing on its own line */
             }
@@ -202,6 +205,10 @@
               font-style: italic;
               font-weight: 300;
               line-height: 1.22;
+            }
+            /* Individual keyword spans - separator added via JS */
+            .skill-keywords .kw.has-sep::after {
+              content: " ·";
             }
             .edu-head {
 				  display: block;
@@ -223,7 +230,6 @@
                 font-family: 'Aleo';
                 font-weight: 300;
                 color: #666;
-                margin-top: 1pt;
             }
             /* 9. Top Box (Work Experience Bullets) */
             .top-box {
@@ -262,13 +268,14 @@
             }
             .project-list li { margin-bottom: 4pt; }
             .bottom-box {
-				margin-top: 10pt;
-                border: 0.5pt solid #444;
+                border: 0.5pt #d9d7d0 solid;
                 border-radius: 9px;
                 text-align: center;
                 font-family: 'Aleo';
-                font-weight: 600;
+                font-weight: 500;
                 padding: 4pt;
+                margin-top: auto;
+                margin-bottom: 0;
             }
             /* 11. Right Column List Adjustments */
             .right-column ul {
@@ -298,12 +305,10 @@
                 line-height: 1.5;
             }
 			.skill-box {
-				margin-bottom: auto;
-                flex-direction: column;
-                justify-content: space-between;
-				
 			}
 			.edu-box {
+				margin-top: auto;
+				margin-bottom: 0;
 				padding-bottom: 0;
 			}
             /* 13. Hidden/Visually Hidden */
@@ -326,7 +331,7 @@
                 white-space: nowrap;
             }
             /* 14. Print Styles */
-            @page { size: 8.5in 11in; margin: 0.375in; }
+            @page { size: 8.5in 11in; margin: 0.375in 0.375in 0.5in 0.375in; }
             @media print {
                 body { margin: 0; padding: 0; }
             }
@@ -391,12 +396,12 @@
                         
                             {{#skills}}
                             <div class="skill-div">
-                              <span class="skill-category">{{{name}}}</span>
-                              <div class="skill-keywords lightitalic">{{ join(keywords, ", ") }}</div>
-                            </div>
-                            {{/skills}}
+  <span class="skill-category">{{{name}}}</span>
+  <div class="skill-keywords lightitalic">{{{ spanKeywords(keywords) }}}</div>
+</div>
+{{/skills}}
                         
-                    </div>
+</div>
                     <div class="info-box edu-box">
                         <h2>{{{template.sectionLabels.education}}}</h2>
                         <ul class="edu-list">
@@ -452,5 +457,22 @@
                 </div>
             </div>
         </div>
+        <script>
+        window.onload = function() {
+            // Keyword separators
+            document.querySelectorAll('.skill-keywords').forEach(container => {
+                const spans = container.querySelectorAll('.kw');
+                spans.forEach((span, i) => {
+                    if (i === spans.length - 1) return;
+                    const next = spans[i + 1];
+                    const spanRect = span.getBoundingClientRect();
+                    const nextRect = next.getBoundingClientRect();
+                    if (Math.abs(spanRect.top - nextRect.top) < 2) {
+                        span.classList.add('has-sep');
+                    }
+                });
+            });
+        };
+        </script>
     </body>
 </html>

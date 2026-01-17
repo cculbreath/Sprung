@@ -149,19 +149,25 @@ struct GenerationTurn: Codable, Identifiable {
 final class TitleSetStore: SwiftDataStore {
     let modelContext: ModelContext
 
+    /// Cached title sets - stored property for @Observable tracking
+    private(set) var allTitleSets: [TitleSetRecord] = []
+
     init(context: ModelContext) {
         self.modelContext = context
+        refreshCache()
         Logger.info("TitleSetStore initialized", category: .data)
     }
 
-    // MARK: - Queries
+    // MARK: - Cache Management
 
-    var allTitleSets: [TitleSetRecord] {
+    private func refreshCache() {
         let descriptor = FetchDescriptor<TitleSetRecord>(
             sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
         )
-        return (try? modelContext.fetch(descriptor)) ?? []
+        allTitleSets = (try? modelContext.fetch(descriptor)) ?? []
     }
+
+    // MARK: - Queries
 
     var titleSetCount: Int {
         allTitleSets.count
@@ -180,18 +186,21 @@ final class TitleSetStore: SwiftDataStore {
     func add(_ titleSet: TitleSetRecord) {
         modelContext.insert(titleSet)
         saveContext()
+        refreshCache()
         Logger.info("Added title set: \(titleSet.compactDisplayString)", category: .data)
     }
 
     func update(_ titleSet: TitleSetRecord) {
         titleSet.updatedAt = Date()
         saveContext()
+        refreshCache()
         Logger.info("Updated title set: \(titleSet.compactDisplayString)", category: .data)
     }
 
     func delete(_ titleSet: TitleSetRecord) {
         modelContext.delete(titleSet)
         saveContext()
+        refreshCache()
         Logger.info("Deleted title set", category: .data)
     }
 
@@ -200,6 +209,7 @@ final class TitleSetStore: SwiftDataStore {
             modelContext.delete(titleSet)
         }
         saveContext()
+        refreshCache()
         Logger.info("Deleted all title sets", category: .data)
     }
 
@@ -212,6 +222,7 @@ final class TitleSetStore: SwiftDataStore {
         titleSet.history = history
         titleSet.updatedAt = Date()
         saveContext()
+        refreshCache()
     }
 
     /// Build conversation context for LLM from history

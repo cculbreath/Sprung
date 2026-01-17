@@ -326,7 +326,7 @@ enum TemplateManifestDefaults {
             field("score", input: .text),
             field("courses", input: .text, repeatable: true, allowsManualMutations: true)
         ]
-        return arraySection(children: children, titleTemplate: "{{studyType}} in {{area}}")
+        return arraySection(children: children, titleTemplate: "{{area}}")
     }
     private static func projectsSection() -> TemplateManifest.Section {
         let children: [TemplateManifest.Section.FieldDescriptor] = [

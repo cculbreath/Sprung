@@ -13,6 +13,7 @@ enum TemplateFilters {
         template.register(sectionLineFilter, forKey: "sectionLine")
         template.register(joinFilter, forKey: "join")
         template.register(joinBulletFilter, forKey: "joinBullet")
+        template.register(spanKeywordsFilter, forKey: "spanKeywords")
         template.register(concatPairFilter, forKey: "concatPair")
         template.register(htmlStripFilter, forKey: "htmlStrip")
         template.register(htmlDecodeFilter, forKey: "htmlDecode")
@@ -55,6 +56,15 @@ enum TemplateFilters {
         let decodedItems = items.map { $0.decodingHTMLEntities() }
         let joined = TextFormatHelpers.joiner(decodedItems, separator: " \u{00B7} ")
         return joined.isEmpty ? nil : joined
+    }
+    /// Wraps each keyword in a span element with class "kw" for CSS-based separator styling.
+    /// The CSS can then use ::after to add separators that stay with their preceding word on line breaks.
+    private static let spanKeywordsFilter = VariadicFilter { boxes -> Any? in
+        guard let arrayBox = boxes.first else { return nil }
+        guard let items = arrayOfStrings(from: arrayBox), !items.isEmpty else { return nil }
+        let decodedItems = items.map { $0.decodingHTMLEntities() }
+        let spans = decodedItems.map { "<span class=\"kw\">\($0)</span>" }
+        return spans.joined(separator: " ")
     }
     private static let concatPairFilter = VariadicFilter { boxes -> Any? in
         guard boxes.count >= 2 else { return nil }

@@ -337,7 +337,11 @@ struct SeedGenerationView: View {
     private var detailView: some View {
         switch selectedItem {
         case .titleSets:
-            TitleSetsBrowserTab(titleSetStore: titleSetStore, llmFacade: llmFacade)
+            TitleSetsBrowserTab(
+                titleSetStore: titleSetStore,
+                llmFacade: llmFacade,
+                skills: orchestrator.context?.skills ?? []
+            )
         case .reviewQueue:
             ReviewQueueView(queue: orchestrator.reviewQueue)
         case .section(let section):
@@ -345,7 +349,11 @@ struct SeedGenerationView: View {
         case nil:
             if !hasTitleSets {
                 // Default to title sets if none exist
-                TitleSetsBrowserTab(titleSetStore: titleSetStore, llmFacade: llmFacade)
+                TitleSetsBrowserTab(
+                    titleSetStore: titleSetStore,
+                    llmFacade: llmFacade,
+                    skills: orchestrator.context?.skills ?? []
+                )
             } else if orchestrator.reviewQueue.hasPendingItems {
                 ReviewQueueView(queue: orchestrator.reviewQueue)
             } else {

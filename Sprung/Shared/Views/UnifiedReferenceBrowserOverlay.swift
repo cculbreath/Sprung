@@ -210,7 +210,11 @@ struct UnifiedReferenceBrowserOverlay: View {
         case .skills:
             SkillsBankBrowser(skillStore: skillStore, llmFacade: llmFacade)
         case .titleSets:
-            TitleSetsBrowserTab(titleSetStore: titleSetStore, llmFacade: llmFacade)
+            TitleSetsBrowserTab(
+                titleSetStore: titleSetStore,
+                llmFacade: llmFacade,
+                skills: skillStore?.skills ?? []
+            )
         case .dossier:
             DossierBrowserTab(dossierStore: dossierStore)
         }

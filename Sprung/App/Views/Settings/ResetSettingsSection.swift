@@ -95,38 +95,42 @@ struct ResetSettingsSection: View {
             Text("Clear specific data types without a full reset:")
                 .font(.callout)
 
-            HStack(spacing: 12) {
-                Button(role: .destructive) {
-                    showClearArtifactsConfirmation = true
-                } label: {
-                    Label("Clear Artifacts", systemImage: "doc.badge.ellipsis")
-                }
-                .buttonStyle(.bordered)
-                .disabled(isResetting)
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 12) {
+                    Button(role: .destructive) {
+                        showClearArtifactsConfirmation = true
+                    } label: {
+                        Label("Clear Artifacts", systemImage: "doc.badge.ellipsis")
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(isResetting)
 
-                Button(role: .destructive) {
-                    showClearKnowledgeCardsConfirmation = true
-                } label: {
-                    Label("Clear Knowledge Cards", systemImage: "rectangle.stack.badge.minus")
+                    Button(role: .destructive) {
+                        showClearKnowledgeCardsConfirmation = true
+                    } label: {
+                        Label("Clear Knowledge Cards", systemImage: "rectangle.stack.badge.minus")
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(isResetting)
                 }
-                .buttonStyle(.bordered)
-                .disabled(isResetting)
 
-                Button(role: .destructive) {
-                    showClearWritingSamplesConfirmation = true
-                } label: {
-                    Label("Clear Writing Samples", systemImage: "text.badge.minus")
-                }
-                .buttonStyle(.bordered)
-                .disabled(isResetting)
+                HStack(spacing: 12) {
+                    Button(role: .destructive) {
+                        showClearWritingSamplesConfirmation = true
+                    } label: {
+                        Label("Clear Writing Samples", systemImage: "text.badge.minus")
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(isResetting)
 
-                Button(role: .destructive) {
-                    showClearSGMContentConfirmation = true
-                } label: {
-                    Label("Reset Generated Content", systemImage: "sparkles")
+                    Button(role: .destructive) {
+                        showClearSGMContentConfirmation = true
+                    } label: {
+                        Label("Reset Generated Content", systemImage: "sparkles")
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(isResetting)
                 }
-                .buttonStyle(.bordered)
-                .disabled(isResetting)
             }
 
             if let message = clearResultMessage {
