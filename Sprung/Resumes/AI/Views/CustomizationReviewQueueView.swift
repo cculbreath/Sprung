@@ -16,7 +16,6 @@ struct CustomizationReviewQueueView: View {
     let onCancel: () -> Void
 
     @State private var filter: ReviewFilter = .pending
-    @State private var expandedItemId: UUID?
 
     enum ReviewFilter: String, CaseIterable {
         case pending = "Pending"
@@ -35,14 +34,14 @@ struct CustomizationReviewQueueView: View {
             // Filter tabs
             filterTabs
 
-            // Scrollable list of review cards
+            // Scrollable list of review cards - compact spacing
             ScrollView {
-                LazyVStack(spacing: 12) {
+                LazyVStack(spacing: 8) {
                     ForEach(filteredItems) { item in
                         CustomizationReviewCard(
                             item: item,
-                            isExpanded: expandedItemId == item.id,
-                            onToggleExpand: { expandedItemId = expandedItemId == item.id ? nil : item.id },
+                            isExpanded: true,  // Always expanded
+                            onToggleExpand: { },  // No-op
                             onApprove: { reviewQueue.setAction(for: item.id, action: .approved) },
                             onReject: { feedback in
                                 if let feedback = feedback, !feedback.isEmpty {
@@ -53,11 +52,15 @@ struct CustomizationReviewQueueView: View {
                             },
                             onEdit: { content in
                                 reviewQueue.setEditedContent(for: item.id, content: content)
+                            },
+                            onEditArray: { children in
+                                reviewQueue.setEditedChildren(for: item.id, children: children)
                             }
                         )
                     }
                 }
-                .padding()
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
             }
 
             Divider()
@@ -248,52 +251,69 @@ struct CustomizationReviewQueueView: View {
 
 struct CustomizationReviewCard: View {
     let item: CustomizationReviewItem
-    let isExpanded: Bool
-    let onToggleExpand: () -> Void
+    let isExpanded: Bool  // Kept for API compatibility but ignored
+    let onToggleExpand: () -> Void  // Kept for API compatibility but ignored
     let onApprove: () -> Void
     let onReject: (String?) -> Void
     let onEdit: (String) -> Void
+    let onEditArray: ([String]) -> Void
 
     @State private var editedContent: String = ""
+    @State private var editedItems: [String] = []
     @State private var isEditing: Bool = false
     @State private var rejectionFeedback: String = ""
     @State private var showRejectionSheet: Bool = false
 
+    /// Whether this content type uses array editing
+    private var isArrayContent: Bool {
+        item.revision.nodeType == .list ||
+        (item.revision.newValueArray != nil && !item.revision.newValueArray!.isEmpty) ||
+        (item.task.revNode.sourceNodeIds != nil && !item.task.revNode.sourceNodeIds!.isEmpty)
+    }
+
+    /// Get the array elements from the revision
+    private var contentArray: [String] {
+        item.revision.newValueArray ?? []
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            // Header: display name + status badge + regenerating indicator
-            HStack {
+        VStack(alignment: .leading, spacing: 6) {
+            // Header row: name + status + regenerating indicator
+            HStack(spacing: 8) {
                 Text(item.task.revNode.displayName)
-                    .font(.system(.headline, design: .rounded))
+                    .font(.system(.subheadline, design: .rounded, weight: .semibold))
                     .lineLimit(1)
 
                 Spacer()
 
-                statusBadge
-
                 if item.isRegenerating {
                     ProgressView()
-                        .scaleEffect(0.7)
-                        .padding(.leading, 4)
+                        .scaleEffect(0.6)
                 }
 
-                Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(.secondary)
-                    .padding(.leading, 4)
+                statusBadge
             }
-            .contentShape(Rectangle())
-            .onTapGesture { onToggleExpand() }
 
-            if isExpanded {
-                expandedContent
+            // Compact content - always visible
+            compactContent
+
+            // Action buttons (only if pending and not regenerating)
+            if item.userAction == nil && !item.isRegenerating {
+                actionButtons
+            }
+
+            // Regeneration count (compact)
+            if item.regenerationCount > 0 {
+                Label("Regenerated \(item.regenerationCount)×", systemImage: "arrow.triangle.2.circlepath")
+                    .font(.system(.caption2, design: .rounded))
+                    .foregroundStyle(.secondary)
             }
         }
-        .padding(16)
+        .padding(10)
         .background(cardBackground)
-        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
         .overlay(
-            RoundedRectangle(cornerRadius: 10)
+            RoundedRectangle(cornerRadius: 8)
                 .stroke(cardBorderColor.opacity(0.3), lineWidth: 1)
         )
         .sheet(isPresented: $showRejectionSheet) {
@@ -309,73 +329,142 @@ struct CustomizationReviewCard: View {
         }
     }
 
-    // MARK: - Expanded Content
+    // MARK: - Compact Content (always visible, no collapse)
 
     @ViewBuilder
-    private var expandedContent: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Divider()
-                .padding(.vertical, 4)
-
-            // Original value (read-only, dimmed)
-            GroupBox {
-                Text(item.revision.oldValue.isEmpty ? "(empty)" : item.revision.oldValue)
-                    .font(.system(.body, design: .rounded))
-                    .foregroundColor(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            } label: {
-                Label("Original", systemImage: "doc.text")
-                    .font(.system(.subheadline, design: .rounded, weight: .medium))
+    private var compactContent: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            // Original value - compact inline label
+            HStack(alignment: .top, spacing: 6) {
+                Text("Was:")
+                    .font(.system(.caption, design: .rounded, weight: .medium))
                     .foregroundStyle(.secondary)
-            }
+                    .frame(width: 36, alignment: .trailing)
 
-            // Proposed value (editable if editing)
-            GroupBox {
-                if isEditing {
-                    TextEditor(text: $editedContent)
-                        .font(.system(.body, design: .rounded))
-                        .frame(minHeight: 60)
-                        .scrollContentBackground(.hidden)
+                if isArrayContent, let oldArray = item.revision.oldValueArray, !oldArray.isEmpty {
+                    VStack(alignment: .leading, spacing: 2) {
+                        ForEach(oldArray, id: \.self) { value in
+                            HStack(alignment: .top, spacing: 4) {
+                                Text("\u{2022}")
+                                    .foregroundStyle(.secondary)
+                                SelectableText(value)
+                                    .font(.system(.callout, design: .rounded))
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
                 } else {
-                    Text(item.revision.newValue.isEmpty ? "(empty)" : item.revision.newValue)
-                        .font(.system(.body, design: .rounded))
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-            } label: {
-                Label("Proposed", systemImage: "sparkles")
-                    .font(.system(.subheadline, design: .rounded, weight: .medium))
-                    .foregroundStyle(.blue)
-            }
-
-            // Why explanation
-            if !item.revision.why.isEmpty {
-                GroupBox {
-                    Text(item.revision.why)
+                    SelectableText(item.revision.oldValue.isEmpty ? "(empty)" : item.revision.oldValue)
                         .font(.system(.callout, design: .rounded))
-                        .foregroundColor(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                } label: {
-                    Label("Rationale", systemImage: "lightbulb")
-                        .font(.system(.subheadline, design: .rounded, weight: .medium))
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            // Proposed value - editable or selectable
+            HStack(alignment: .top, spacing: 6) {
+                Text("Now:")
+                    .font(.system(.caption, design: .rounded, weight: .medium))
+                    .foregroundStyle(.blue)
+                    .frame(width: 36, alignment: .trailing)
+
+                if isEditing {
+                    if isArrayContent {
+                        arrayEditingView
+                    } else {
+                        scalarEditingView
+                    }
+                } else {
+                    if isArrayContent, !contentArray.isEmpty {
+                        VStack(alignment: .leading, spacing: 2) {
+                            ForEach(contentArray, id: \.self) { value in
+                                HStack(alignment: .top, spacing: 4) {
+                                    Text("\u{2022}")
+                                        .foregroundStyle(.blue)
+                                    SelectableText(value)
+                                        .font(.system(.callout, design: .rounded))
+                                }
+                            }
+                        }
+                    } else {
+                        SelectableText(item.revision.newValue.isEmpty ? "(empty)" : item.revision.newValue)
+                            .font(.system(.callout, design: .rounded))
+                    }
+                }
+            }
+
+            // Why - only if present, very compact
+            if !item.revision.why.isEmpty {
+                HStack(alignment: .top, spacing: 6) {
+                    Text("Why:")
+                        .font(.system(.caption, design: .rounded, weight: .medium))
                         .foregroundStyle(.purple)
-                }
-            }
+                        .frame(width: 36, alignment: .trailing)
 
-            // Action buttons (only if pending and not regenerating)
-            if item.userAction == nil && !item.isRegenerating {
-                actionButtons
-            }
-
-            // Show regeneration count if item has been regenerated
-            if item.regenerationCount > 0 {
-                HStack {
-                    Image(systemName: "arrow.triangle.2.circlepath")
-                        .font(.system(size: 12))
-                    Text("Regenerated \(item.regenerationCount) time(s)")
+                    SelectableText(item.revision.why)
                         .font(.system(.caption, design: .rounded))
+                        .foregroundStyle(.secondary)
                 }
-                .foregroundStyle(.secondary)
-                .padding(.top, 4)
+            }
+        }
+    }
+
+    // MARK: - Editing Views
+
+    /// Editing view for scalar (single text) content
+    private var scalarEditingView: some View {
+        TextEditor(text: $editedContent)
+            .font(.system(.callout, design: .rounded))
+            .frame(minHeight: 40)
+            .scrollContentBackground(.hidden)
+            .padding(4)
+            .background(Color(NSColor.textBackgroundColor))
+            .clipShape(RoundedRectangle(cornerRadius: 4))
+    }
+
+    /// Editing view for array content (per-element text fields)
+    private var arrayEditingView: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Spacer()
+                Button {
+                    editedItems.append("")
+                } label: {
+                    Label("Add", systemImage: "plus.circle")
+                        .font(.caption)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.mini)
+            }
+
+            ForEach(editedItems.indices, id: \.self) { index in
+                HStack(spacing: 6) {
+                    Text("\(index + 1).")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .frame(width: 18)
+
+                    TextField("Item \(index + 1)", text: $editedItems[index], axis: .vertical)
+                        .textFieldStyle(.plain)
+                        .font(.system(.callout, design: .rounded))
+                        .padding(6)
+                        .background(Color(NSColor.textBackgroundColor))
+                        .clipShape(RoundedRectangle(cornerRadius: 4))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 4)
+                                .stroke(.quaternary, lineWidth: 1)
+                        )
+
+                    Button {
+                        if editedItems.count > 1 {
+                            editedItems.remove(at: index)
+                        }
+                    } label: {
+                        Image(systemName: "minus.circle")
+                            .foregroundStyle(editedItems.count > 1 ? .red : .gray)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(editedItems.count <= 1)
+                }
             }
         }
     }
@@ -383,50 +472,65 @@ struct CustomizationReviewCard: View {
     // MARK: - Action Buttons
 
     private var actionButtons: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 8) {
             Button {
                 onApprove()
             } label: {
                 Label("Approve", systemImage: "checkmark")
             }
             .buttonStyle(.borderedProminent)
-            .controlSize(.small)
+            .controlSize(.mini)
 
             Button {
                 if isEditing {
-                    onEdit(editedContent)
+                    // Save changes
+                    if isArrayContent {
+                        // Filter out empty items and save
+                        let nonEmptyItems = editedItems.filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+                        onEditArray(nonEmptyItems)
+                    } else {
+                        onEdit(editedContent)
+                    }
                     isEditing = false
                 } else {
-                    editedContent = item.revision.newValue
+                    // Start editing
+                    if isArrayContent {
+                        editedItems = contentArray.isEmpty ? [""] : contentArray
+                    } else {
+                        editedContent = item.revision.newValue
+                    }
                     isEditing = true
                 }
             } label: {
-                Label(isEditing ? "Save Edit" : "Edit", systemImage: isEditing ? "checkmark.circle" : "pencil")
+                Label(isEditing ? "Save" : "Edit", systemImage: isEditing ? "checkmark.circle" : "pencil")
             }
             .buttonStyle(.bordered)
-            .controlSize(.small)
+            .controlSize(.mini)
 
             if isEditing {
                 Button {
                     isEditing = false
                     editedContent = ""
+                    editedItems = []
                 } label: {
-                    Label("Cancel", systemImage: "xmark")
+                    Image(systemName: "xmark")
                 }
                 .buttonStyle(.bordered)
-                .controlSize(.small)
+                .controlSize(.mini)
             }
 
             Button {
                 showRejectionSheet = true
             } label: {
-                Label("Reject", systemImage: "xmark.circle")
+                Label("Reject", systemImage: "arrow.clockwise")
             }
             .buttonStyle(.bordered)
-            .controlSize(.small)
+            .controlSize(.mini)
             .foregroundStyle(.orange)
+
+            Spacer()
         }
-        .padding(.top, 8)
+        .padding(.top, 4)
     }
 
     // MARK: - Status Badge
@@ -555,5 +659,22 @@ struct RejectionFeedbackSheet: View {
         .padding(24)
         .frame(width: 450, height: 320)
         .background(Color(NSColor.windowBackgroundColor))
+    }
+}
+
+// MARK: - Selectable Text Helper
+
+/// Text view that allows selection and copying on macOS
+struct SelectableText: View {
+    let text: String
+
+    init(_ text: String) {
+        self.text = text
+    }
+
+    var body: some View {
+        Text(text)
+            .textSelection(.enabled)
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 }

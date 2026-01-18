@@ -148,8 +148,8 @@ class RevisionWorkflowOrchestrator {
             )
         }
 
-        // If no Phase 1 nodes, proceed directly to Phase 2
-        if phase1Nodes.isEmpty && !phase2Nodes.isEmpty {
+        // 7. Phase 2 execution (always runs if there are Phase 2 nodes)
+        if !phase2Nodes.isEmpty {
             try await executeParallelPhase(
                 nodes: phase2Nodes,
                 phase: 2,
@@ -382,7 +382,17 @@ class RevisionWorkflowOrchestrator {
     private func applyReviewItemToResume(_ item: CustomizationReviewItem, resume: Resume) {
         guard item.isApproved else { return }
 
-        // Get the value to apply (edited or proposed)
+        // Check if this is a bundled/array node
+        if let sourceNodeIds = item.task.revNode.sourceNodeIds, !sourceNodeIds.isEmpty {
+            applyBundledChanges(item: item, sourceNodeIds: sourceNodeIds, resume: resume)
+        } else {
+            // Scalar node - apply single value
+            applySingleChange(item: item, resume: resume)
+        }
+    }
+
+    /// Apply changes for a scalar (single value) node
+    private func applySingleChange(item: CustomizationReviewItem, resume: Resume) {
         let valueToApply: String
         if let editedContent = item.editedContent {
             valueToApply = editedContent
@@ -390,13 +400,64 @@ class RevisionWorkflowOrchestrator {
             valueToApply = item.revision.newValue
         }
 
-        // Find the tree node and apply the change
         if let treeNode = resume.nodes.first(where: { $0.id == item.task.revNode.id }) {
             treeNode.value = valueToApply
-            Logger.debug("✅ Applied change to node: \(item.task.revNode.displayName)")
+            Logger.debug("✅ Applied scalar change to node: \(item.task.revNode.displayName)")
         } else {
             Logger.warning("⚠️ Could not find tree node: \(item.task.revNode.id)")
         }
+    }
+
+    /// Apply changes for a bundled/array node
+    private func applyBundledChanges(item: CustomizationReviewItem, sourceNodeIds: [String], resume: Resume) {
+        // Get the values to apply - prefer edited children, then new value array, then parse from newValue
+        let valuesToApply: [String]
+        if let editedChildren = item.editedChildren, !editedChildren.isEmpty {
+            valuesToApply = editedChildren
+        } else if let newValueArray = item.revision.newValueArray, !newValueArray.isEmpty {
+            valuesToApply = newValueArray
+        } else {
+            // Parse from newValue string (comma or newline separated)
+            valuesToApply = parseArrayFromString(item.revision.newValue)
+        }
+
+        // Apply each value to its corresponding source node
+        for (index, nodeId) in sourceNodeIds.enumerated() {
+            guard index < valuesToApply.count else {
+                Logger.warning("⚠️ Not enough values for source node at index \(index)")
+                continue
+            }
+
+            if let treeNode = resume.nodes.first(where: { $0.id == nodeId }) {
+                treeNode.value = valuesToApply[index]
+                Logger.debug("✅ Applied array value to node \(index): \(nodeId)")
+            } else {
+                Logger.warning("⚠️ Could not find source tree node: \(nodeId)")
+            }
+        }
+
+        Logger.info("✅ Applied bundled changes (\(valuesToApply.count) values) for: \(item.task.revNode.displayName)")
+    }
+
+    /// Parse array values from a string (handles comma-separated or newline-separated lists)
+    private func parseArrayFromString(_ text: String) -> [String] {
+        // Try newline-separated first (for bullet lists)
+        let lines = text.components(separatedBy: .newlines)
+            .map { line in
+                // Remove bullet points, dashes, numbers
+                line.trimmingCharacters(in: .whitespaces)
+                    .replacingOccurrences(of: "^[•\\-\\*\\d\\.\\)]+\\s*", with: "", options: .regularExpression)
+            }
+            .filter { !$0.isEmpty }
+
+        if lines.count > 1 {
+            return lines
+        }
+
+        // Fall back to comma-separated
+        return text.components(separatedBy: ",")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
     }
 }
 

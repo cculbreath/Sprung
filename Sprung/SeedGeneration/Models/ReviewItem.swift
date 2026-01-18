@@ -16,8 +16,10 @@ struct ReviewItem: Identifiable, Equatable {
     var generatedContent: GeneratedContent
     /// User's action on this item (nil if not yet acted upon)
     var userAction: UserAction?
-    /// User-edited content if they made changes
+    /// User-edited content if they made changes (for scalar values)
     var editedContent: String?
+    /// User-edited children if they made changes (for array values like highlights)
+    var editedChildren: [String]?
     /// Timestamp when added to queue
     let addedAt: Date
     /// Number of times this item has been regenerated
@@ -33,6 +35,7 @@ struct ReviewItem: Identifiable, Equatable {
         generatedContent: GeneratedContent,
         userAction: UserAction? = nil,
         editedContent: String? = nil,
+        editedChildren: [String]? = nil,
         addedAt: Date = Date(),
         regenerationCount: Int = 0,
         isRegenerating: Bool = false,
@@ -43,6 +46,7 @@ struct ReviewItem: Identifiable, Equatable {
         self.generatedContent = generatedContent
         self.userAction = userAction
         self.editedContent = editedContent
+        self.editedChildren = editedChildren
         self.addedAt = addedAt
         self.regenerationCount = regenerationCount
         self.isRegenerating = isRegenerating
@@ -206,10 +210,18 @@ final class ReviewQueue {
         }
     }
 
-    /// Set edited content for an item
+    /// Set edited content for an item (scalar values)
     func setEditedContent(for itemId: UUID, content: String) {
         if let index = items.firstIndex(where: { $0.id == itemId }) {
             items[index].editedContent = content
+            items[index].userAction = .edited
+        }
+    }
+
+    /// Set edited children for an item (array values like highlights)
+    func setEditedChildren(for itemId: UUID, children: [String]) {
+        if let index = items.firstIndex(where: { $0.id == itemId }) {
+            items[index].editedChildren = children
             items[index].userAction = .edited
         }
     }

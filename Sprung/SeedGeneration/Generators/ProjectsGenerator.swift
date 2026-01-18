@@ -65,28 +65,62 @@ final class ProjectsGenerator: BaseSectionGenerator {
 
     /// Discover potential projects from the generation context.
     /// Returns proposals that the user can approve/reject.
+    /// Also saves pre-approved timeline projects to ExperienceDefaults for generation.
     func discoverProjects(
         context: SeedGenerationContext,
         llmFacade: LLMFacade,
         modelId: String,
         backend: LLMFacade.Backend,
-        preamble: String
+        preamble: String,
+        experienceDefaultsStore: ExperienceDefaultsStore? = nil
     ) async throws -> [ProjectProposal] {
         var proposals: [ProjectProposal] = []
 
         // 1. Add existing timeline project entries
+        // IMPORTANT: Use the timeline entry's original ID, not a new UUID.
+        // This ensures context.getTimelineEntry(id:) can find the entry during generation.
         let timelineProjects = context.timelineEntries(for: .projects)
         for entry in timelineProjects {
+            // Use original timeline ID if available, otherwise generate new UUID
+            let timelineId = entry["id"].string
+            let proposalId = timelineId.flatMap { UUID(uuidString: $0) } ?? UUID()
+
             let proposal = ProjectProposal(
-                id: UUID(),
+                id: proposalId,
                 name: entry["name"].stringValue,
                 description: entry["description"].stringValue,
                 rationale: "Existing project from your timeline",
                 sourceType: .timeline,
-                sourceId: entry["id"].string,
+                sourceId: timelineId,
                 isApproved: true  // Pre-approve timeline entries
             )
             proposals.append(proposal)
+
+            // Save timeline projects to ExperienceDefaults immediately so generation can find them
+            // This mirrors what approveProject() does for user-approved projects
+            if let store = experienceDefaultsStore {
+                let projectEntry = ProjectExperienceDraft(
+                    id: proposalId,
+                    name: entry["name"].stringValue,
+                    description: entry["description"].stringValue,
+                    startDate: entry["startDate"].stringValue,
+                    endDate: entry["endDate"].stringValue,
+                    url: entry["url"].stringValue,
+                    organization: entry["organization"].stringValue,
+                    type: "",
+                    highlights: entry["highlights"].arrayValue.map { ProjectHighlightDraft(text: $0.stringValue) },
+                    keywords: entry["keywords"].arrayValue.map { KeywordDraft(keyword: $0.stringValue) },
+                    roles: []
+                )
+                let defaults = store.currentDefaults()
+                // Only add if not already present (avoid duplicates on re-run)
+                if !defaults.projects.contains(where: { $0.id == projectEntry.id }) {
+                    defaults.projects.append(projectEntry)
+                    defaults.isProjectsEnabled = true
+                    store.save(defaults)
+                    Logger.info("Saved timeline project to ExperienceDefaults: \(projectEntry.name)", category: .ai)
+                }
+            }
         }
 
         // 2. Extract project-worthy content from KCs typed as projects

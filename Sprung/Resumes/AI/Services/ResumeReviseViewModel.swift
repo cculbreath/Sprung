@@ -87,6 +87,8 @@ class ResumeReviseViewModel {
         applicantProfileStore: ApplicantProfileStore,
         knowledgeCardStore: KnowledgeCardStore,
         guidanceStore: InferenceGuidanceStore? = nil,
+        skillStore: SkillStore? = nil,
+        titleSetStore: TitleSetStore? = nil,
         streamingService: RevisionStreamingService? = nil,
         toolRegistry: ResumeToolRegistry? = nil
     ) {
@@ -126,6 +128,8 @@ class ResumeReviseViewModel {
             toolRunner: self.toolRunner,
             phaseReviewManager: self.phaseReviewManager,
             guidanceStore: guidanceStore,
+            skillStore: skillStore,
+            titleSetStore: titleSetStore,
             workflowState: self.workflowState
         )
 

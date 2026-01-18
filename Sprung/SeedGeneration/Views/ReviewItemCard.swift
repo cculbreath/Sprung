@@ -13,11 +13,37 @@ struct ReviewItemCard: View {
     let onApprove: () -> Void
     let onReject: (String?) -> Void
     let onEdit: (String) -> Void
+    let onEditArray: ([String]) -> Void
 
     @State private var isEditing = false
     @State private var editedText = ""
+    @State private var editedItems: [String] = []
     @State private var showingRejectionSheet = false
     @State private var rejectionComment = ""
+
+    /// Whether this content type uses array editing
+    private var isArrayContent: Bool {
+        switch item.generatedContent.type {
+        case .workHighlights, .volunteerDescription, .projectDescription:
+            return true
+        default:
+            return false
+        }
+    }
+
+    /// Extract the array elements from the content
+    private var contentArray: [String] {
+        switch item.generatedContent.type {
+        case .workHighlights(_, let highlights):
+            return highlights
+        case .volunteerDescription(_, _, let highlights):
+            return highlights
+        case .projectDescription(_, _, let highlights, _):
+            return highlights
+        default:
+            return []
+        }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -133,9 +159,19 @@ struct ReviewItemCard: View {
     private var contentView: some View {
         switch item.generatedContent.type {
         case .workHighlights(_, let highlights),
-             .volunteerDescription(_, _, let highlights),
-             .projectDescription(_, _, let highlights, _):
+             .volunteerDescription(_, _, let highlights):
             BulletListView(items: highlights)
+
+        case .projectDescription(_, let description, let highlights, _):
+            VStack(alignment: .leading, spacing: 8) {
+                if !description.isEmpty {
+                    Text(description)
+                        .font(.body)
+                }
+                if !highlights.isEmpty {
+                    BulletListView(items: highlights)
+                }
+            }
 
         case .educationDescription(_, let description, let courses):
             VStack(alignment: .leading, spacing: 8) {
@@ -167,7 +203,17 @@ struct ReviewItemCard: View {
 
     // MARK: - Editing
 
+    @ViewBuilder
     private var editingView: some View {
+        if isArrayContent {
+            arrayEditingView
+        } else {
+            scalarEditingView
+        }
+    }
+
+    /// Editing view for scalar (single text) content
+    private var scalarEditingView: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Edit Content")
                 .font(.caption)
@@ -184,19 +230,86 @@ struct ReviewItemCard: View {
                         .stroke(.quaternary, lineWidth: 1)
                 )
 
+            editingButtons(isArray: false)
+        }
+    }
+
+    /// Editing view for array content (per-element text fields)
+    private var arrayEditingView: some View {
+        VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Button("Cancel") {
-                    isEditing = false
-                    editedText = ""
+                Text("Edit Items")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                Spacer()
+
+                Button {
+                    editedItems.append("")
+                } label: {
+                    Label("Add", systemImage: "plus.circle")
+                        .font(.caption)
                 }
                 .buttonStyle(.bordered)
-
-                Button("Save Changes") {
-                    onEdit(editedText)
-                    isEditing = false
-                }
-                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
             }
+
+            ForEach(editedItems.indices, id: \.self) { index in
+                HStack(spacing: 8) {
+                    Text("\(index + 1).")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .frame(width: 20)
+
+                    TextField("Item \(index + 1)", text: $editedItems[index], axis: .vertical)
+                        .textFieldStyle(.plain)
+                        .font(.body)
+                        .padding(8)
+                        .background(Color(.textBackgroundColor))
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 6)
+                                .stroke(.quaternary, lineWidth: 1)
+                        )
+
+                    Button {
+                        if editedItems.count > 1 {
+                            editedItems.remove(at: index)
+                        }
+                    } label: {
+                        Image(systemName: "minus.circle")
+                            .foregroundStyle(editedItems.count > 1 ? .red : .gray)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(editedItems.count <= 1)
+                }
+            }
+
+            editingButtons(isArray: true)
+        }
+    }
+
+    /// Save/Cancel buttons for editing
+    private func editingButtons(isArray: Bool) -> some View {
+        HStack {
+            Button("Cancel") {
+                isEditing = false
+                editedText = ""
+                editedItems = []
+            }
+            .buttonStyle(.bordered)
+
+            Button("Save Changes") {
+                if isArray {
+                    // Filter out empty items and save
+                    let nonEmptyItems = editedItems.filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+                    onEditArray(nonEmptyItems)
+                } else {
+                    onEdit(editedText)
+                }
+                isEditing = false
+            }
+            .buttonStyle(.borderedProminent)
         }
     }
 
@@ -215,7 +328,12 @@ struct ReviewItemCard: View {
 
                 Button {
                     isEditing = true
-                    editedText = extractEditableText()
+                    if isArrayContent {
+                        // Initialize with existing array elements
+                        editedItems = contentArray
+                    } else {
+                        editedText = extractEditableText()
+                    }
                 } label: {
                     Label("Edit", systemImage: "pencil")
                 }
@@ -311,6 +429,15 @@ struct ReviewItemCard: View {
             return description
         case .volunteerDescription(_, let summary, _):
             return summary
+        case .projectDescription(_, let description, let highlights, _):
+            var parts: [String] = []
+            if !description.isEmpty {
+                parts.append(description)
+            }
+            if !highlights.isEmpty {
+                parts.append(highlights.map { "- \($0)" }.joined(separator: "\n"))
+            }
+            return parts.joined(separator: "\n\n")
         default:
             return ""
         }

@@ -153,7 +153,8 @@ final class SeedGenerationOrchestrator {
                 llmFacade: llmFacade,
                 modelId: modelId,
                 backend: backend,
-                preamble: preamble
+                preamble: preamble,
+                experienceDefaultsStore: experienceDefaultsStore
             )
             projectProposals = proposals
             Logger.info("Discovered \(proposals.count) project proposals", category: .ai)
@@ -282,7 +283,7 @@ final class SeedGenerationOrchestrator {
             roles: []
         )
 
-        var defaults = experienceDefaultsStore.currentDefaults()
+        let defaults = experienceDefaultsStore.currentDefaults()
         defaults.projects.append(projectEntry)
         experienceDefaultsStore.save(defaults)
         Logger.info("Saved approved project to ExperienceDefaults: \(proposal.name)", category: .ai)
@@ -353,10 +354,115 @@ final class SeedGenerationOrchestrator {
     func applyApprovedContent(to defaults: inout ExperienceDefaults) {
         for item in reviewQueue.approvedItems {
             let generator = generators.first { $0.sectionKey == item.task.section }
-            generator?.apply(content: item.generatedContent, to: &defaults)
+
+            // Determine the content to apply based on edit type
+            let contentToApply: GeneratedContent
+            if let editedChildren = item.editedChildren {
+                // User edited array content - use editedChildren directly
+                contentToApply = applyEditedChildren(editedChildren, to: item.generatedContent)
+            } else if let editedContent = item.editedContent {
+                // User edited scalar content - parse from text
+                contentToApply = parseEditedContent(editedContent, originalContent: item.generatedContent)
+            } else {
+                // No edits - use original
+                contentToApply = item.generatedContent
+            }
+
+            generator?.apply(content: contentToApply, to: &defaults)
         }
 
         Logger.info("Applied \(reviewQueue.approvedItems.count) approved items to defaults", category: .ai)
+    }
+
+    /// Apply edited children array directly to the content (no parsing needed)
+    private func applyEditedChildren(_ children: [String], to originalContent: GeneratedContent) -> GeneratedContent {
+        switch originalContent.type {
+        case .workHighlights(let targetId, _):
+            return GeneratedContent(type: .workHighlights(targetId: targetId, highlights: children))
+
+        case .volunteerDescription(let targetId, let summary, _):
+            return GeneratedContent(type: .volunteerDescription(targetId: targetId, summary: summary, highlights: children))
+
+        case .projectDescription(let targetId, let description, _, let keywords):
+            return GeneratedContent(type: .projectDescription(targetId: targetId, description: description, highlights: children, keywords: keywords))
+
+        default:
+            Logger.warning("applyEditedChildren called on non-array content type", category: .ai)
+            return originalContent
+        }
+    }
+
+    /// Parse user-edited text back into GeneratedContent structure
+    private func parseEditedContent(_ editedText: String, originalContent: GeneratedContent) -> GeneratedContent {
+        switch originalContent.type {
+        case .workHighlights(let targetId, _):
+            let highlights = parseArrayFromText(editedText)
+            return GeneratedContent(type: .workHighlights(targetId: targetId, highlights: highlights))
+
+        case .volunteerDescription(let targetId, _, _):
+            // Parse summary and highlights from edited text
+            let (summary, highlights) = parseDescriptionAndHighlights(editedText)
+            return GeneratedContent(type: .volunteerDescription(targetId: targetId, summary: summary, highlights: highlights))
+
+        case .projectDescription(let targetId, _, _, let keywords):
+            // Parse description and highlights, keep keywords
+            let (description, highlights) = parseDescriptionAndHighlights(editedText)
+            return GeneratedContent(type: .projectDescription(targetId: targetId, description: description, highlights: highlights, keywords: keywords))
+
+        case .educationDescription(let targetId, _, let courses):
+            // For education, edited text is just the description
+            return GeneratedContent(type: .educationDescription(targetId: targetId, description: editedText.trimmingCharacters(in: .whitespacesAndNewlines), courses: courses))
+
+        case .objective:
+            return GeneratedContent(type: .objective(summary: editedText.trimmingCharacters(in: .whitespacesAndNewlines)))
+
+        default:
+            // For types we don't handle, return original
+            Logger.warning("Unhandled content type for edited content: \(originalContent.type)", category: .ai)
+            return originalContent
+        }
+    }
+
+    /// Parse bullet-point text into array of strings
+    private func parseArrayFromText(_ text: String) -> [String] {
+        text.components(separatedBy: .newlines)
+            .map { line in
+                line.trimmingCharacters(in: .whitespaces)
+                    .replacingOccurrences(of: "^[•\\-\\*]+\\s*", with: "", options: .regularExpression)
+            }
+            .filter { !$0.isEmpty }
+    }
+
+    /// Parse text that may contain description followed by bullet points
+    private func parseDescriptionAndHighlights(_ text: String) -> (description: String, highlights: [String]) {
+        let lines = text.components(separatedBy: .newlines)
+        var descriptionParts: [String] = []
+        var highlights: [String] = []
+        var inHighlights = false
+
+        for line in lines {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if trimmed.isEmpty { continue }
+
+            // Check if this line starts a bullet list
+            if trimmed.hasPrefix("-") || trimmed.hasPrefix("•") || trimmed.hasPrefix("*") {
+                inHighlights = true
+                let bulletText = trimmed
+                    .replacingOccurrences(of: "^[•\\-\\*]+\\s*", with: "", options: .regularExpression)
+                if !bulletText.isEmpty {
+                    highlights.append(bulletText)
+                }
+            } else if inHighlights {
+                // Non-bullet line after bullets started - treat as continuation or new highlight
+                highlights.append(trimmed)
+            } else {
+                // Before bullets - part of description
+                descriptionParts.append(trimmed)
+            }
+        }
+
+        let description = descriptionParts.joined(separator: " ")
+        return (description, highlights)
     }
 
     // MARK: - Regeneration
