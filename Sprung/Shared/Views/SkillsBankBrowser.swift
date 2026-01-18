@@ -34,10 +34,17 @@ struct SkillsBankBrowser: View {
     // Inline editing state
     @State private var editingSkillId: UUID?
     @State private var editingSkillName: String = ""
+    @State private var editingSkillProficiency: Proficiency = .proficient
 
     // Refine feature state
     @State private var showRefinePopover = false
     @State private var refineInstruction = ""
+
+    // Add skill feature state (inline)
+    @State private var addingToCategory: SkillCategory?
+    @State private var newSkillName = ""
+    @State private var newSkillProficiency: Proficiency = .proficient
+    @State private var isAddingSkill = false
 
     private enum ProcessingOperation {
         case deduplication
@@ -113,6 +120,145 @@ struct SkillsBankBrowser: View {
                 Text("Error: \(error)")
             }
         }
+    }
+
+    // MARK: - Inline Add Skill
+
+    private func startAddingSkill(to category: SkillCategory) {
+        addingToCategory = category
+        newSkillName = ""
+        newSkillProficiency = .proficient
+        // Ensure category is expanded
+        expandedCategories.insert(category)
+    }
+
+    private func cancelAddingSkill() {
+        addingToCategory = nil
+        newSkillName = ""
+        newSkillProficiency = .proficient
+        isAddingSkill = false
+    }
+
+    private func commitNewSkill() {
+        guard let skillStore = skillStore,
+              let category = addingToCategory else { return }
+        let trimmedName = newSkillName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedName.isEmpty else { return }
+
+        isAddingSkill = true
+
+        Task {
+            // Create the skill first
+            let newSkill = Skill(
+                canonical: trimmedName,
+                category: category,
+                proficiency: newSkillProficiency
+            )
+            skillStore.add(newSkill)
+
+            // Generate ATS variants if we have the facade
+            if let facade = llmFacade {
+                do {
+                    let service = SkillsProcessingService(skillStore: skillStore, facade: facade)
+                    let variants = try await service.generateATSVariantsForSkill(newSkill)
+                    newSkill.atsVariants = variants
+                    skillStore.update(newSkill)
+                } catch {
+                    Logger.warning("⚠️ Failed to generate ATS variants for new skill: \(error.localizedDescription)", category: .ai)
+                    // Skill was still added, just without ATS variants
+                }
+            }
+
+            await MainActor.run {
+                cancelAddingSkill()
+            }
+        }
+    }
+
+    private func inlineAddSkillRow(for category: SkillCategory) -> some View {
+        HStack(alignment: .center, spacing: 12) {
+            // Status indicator
+            if isAddingSkill {
+                ProgressView()
+                    .controlSize(.small)
+                    .frame(width: 10)
+            } else {
+                Circle()
+                    .fill(colorFor(newSkillProficiency))
+                    .frame(width: 8, height: 8)
+            }
+
+            VStack(alignment: .leading, spacing: 6) {
+                // Skill name field
+                HStack(spacing: 6) {
+                    TextField("New skill name...", text: $newSkillName)
+                        .font(.subheadline.weight(.medium))
+                        .textFieldStyle(.plain)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 4)
+                        .background(Color(.textBackgroundColor))
+                        .clipShape(RoundedRectangle(cornerRadius: 4))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 4)
+                                .stroke(Color.accentColor, lineWidth: 1)
+                        )
+                        .onSubmit {
+                            if !newSkillName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                commitNewSkill()
+                            }
+                        }
+                        .disabled(isAddingSkill)
+
+                    // Save button
+                    Button {
+                        commitNewSkill()
+                    } label: {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(.green)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(newSkillName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isAddingSkill)
+
+                    // Cancel button
+                    Button {
+                        cancelAddingSkill()
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(isAddingSkill)
+                }
+
+                // Proficiency picker
+                HStack(spacing: 8) {
+                    Text("Proficiency:")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    Picker("", selection: $newSkillProficiency) {
+                        Text("Expert").tag(Proficiency.expert)
+                        Text("Proficient").tag(Proficiency.proficient)
+                        Text("Familiar").tag(Proficiency.familiar)
+                    }
+                    .pickerStyle(.segmented)
+                    .controlSize(.small)
+                    .frame(maxWidth: 200)
+                    .disabled(isAddingSkill)
+
+                    if isAddingSkill {
+                        Text("Generating ATS synonyms...")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+
+            Spacer()
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(Color.accentColor.opacity(0.05))
     }
 
     private var filterBar: some View {
@@ -450,7 +596,8 @@ struct SkillsBankBrowser: View {
                     as: RefineResponse.self,
                     schema: schema,
                     schemaName: "skill_refinements",
-                    backend: .gemini
+                    backend: .gemini,
+                    thinkingLevel: "low"  // Use low thinking for simple transformations to reduce token usage
                 )
 
                 // Apply refinements
@@ -495,6 +642,7 @@ struct SkillsBankBrowser: View {
     private func startEditing(_ skill: Skill) {
         editingSkillId = skill.id
         editingSkillName = skill.canonical
+        editingSkillProficiency = skill.proficiency
     }
 
     private func commitEdit() {
@@ -504,12 +652,30 @@ struct SkillsBankBrowser: View {
             return
         }
 
+        var didChange = false
         let newName = editingSkillName.trimmingCharacters(in: .whitespacesAndNewlines)
         if !newName.isEmpty && newName != skill.canonical {
             skill.canonical = newName
+            didChange = true
+        }
+        if skill.proficiency != editingSkillProficiency {
+            skill.proficiency = editingSkillProficiency
+            didChange = true
+        }
+        if didChange {
             skillStore?.update(skill)
         }
 
+        cancelEdit()
+    }
+
+    private func deleteEditingSkill() {
+        guard let skillId = editingSkillId,
+              let skill = skillStore?.skill(withId: skillId) else {
+            cancelEdit()
+            return
+        }
+        skillStore?.delete(skill)
         cancelEdit()
     }
 
@@ -556,36 +722,56 @@ struct SkillsBankBrowser: View {
 
         return VStack(alignment: .leading, spacing: 0) {
             // Category header
-            Button(action: { toggleCategory(category) }) {
-                HStack {
-                    Image(systemName: iconFor(category))
+            HStack(spacing: 0) {
+                Button(action: { toggleCategory(category) }) {
+                    HStack {
+                        Image(systemName: iconFor(category))
+                            .font(.title3)
+                            .foregroundStyle(colorFor(category))
+                            .frame(width: 24)
+
+                        Text(category.rawValue)
+                            .font(.headline)
+
+                        Text("(\(skills.count))")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+
+                        Spacer()
+
+                        Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .buttonStyle(.plain)
+
+                // Add skill button
+                Button {
+                    startAddingSkill(to: category)
+                } label: {
+                    Image(systemName: "plus.circle.fill")
                         .font(.title3)
                         .foregroundStyle(colorFor(category))
-                        .frame(width: 24)
-
-                    Text(category.rawValue)
-                        .font(.headline)
-
-                    Text("(\(skills.count))")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-
-                    Spacer()
-
-                    Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
                 }
-                .padding(12)
-                .background(Color(nsColor: .controlBackgroundColor))
+                .buttonStyle(.plain)
+                .help("Add skill to \(category.rawValue)")
+                .padding(.trailing, 4)
+                .disabled(addingToCategory != nil)
             }
-            .buttonStyle(.plain)
+            .padding(12)
+            .background(Color(nsColor: .controlBackgroundColor))
 
             // Skills list (when expanded)
             if isExpanded {
                 VStack(spacing: 1) {
                     ForEach(skills.sorted { $0.proficiency.sortOrder < $1.proficiency.sortOrder }) { skill in
                         skillRow(skill)
+                    }
+
+                    // Inline add row when adding to this category
+                    if addingToCategory == category {
+                        inlineAddSkillRow(for: category)
                     }
                 }
                 .padding(.leading, 36)
@@ -613,9 +799,9 @@ struct SkillsBankBrowser: View {
                         .frame(width: 10)
                         .padding(.top, 6)
                 } else {
-                    // Proficiency indicator when no variants
+                    // Proficiency indicator when no variants (use editing value when editing)
                     Circle()
-                        .fill(colorFor(skill.proficiency))
+                        .fill(colorFor(editingSkillId == skill.id ? editingSkillProficiency : skill.proficiency))
                         .frame(width: 8, height: 8)
                         .padding(.top, 6)
                 }
@@ -624,43 +810,77 @@ struct SkillsBankBrowser: View {
                     // Skill name with proficiency dot - editable
                     HStack(spacing: 6) {
                         if hasVariants {
+                            // Use editing value when editing this skill
                             Circle()
-                                .fill(colorFor(skill.proficiency))
+                                .fill(colorFor(editingSkillId == skill.id ? editingSkillProficiency : skill.proficiency))
                                 .frame(width: 8, height: 8)
                         }
 
                         if editingSkillId == skill.id {
                             // Inline editing mode
-                            TextField("Skill name", text: $editingSkillName)
-                                .font(.subheadline.weight(.medium))
-                                .textFieldStyle(.plain)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(Color(.textBackgroundColor))
-                                .clipShape(RoundedRectangle(cornerRadius: 4))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 4)
-                                        .stroke(Color.accentColor, lineWidth: 1)
-                                )
-                                .onSubmit {
-                                    commitEdit()
+                            VStack(alignment: .leading, spacing: 6) {
+                                // Name field with action buttons
+                                HStack(spacing: 6) {
+                                    TextField("Skill name", text: $editingSkillName)
+                                        .font(.subheadline.weight(.medium))
+                                        .textFieldStyle(.plain)
+                                        .padding(.horizontal, 6)
+                                        .padding(.vertical, 2)
+                                        .background(Color(.textBackgroundColor))
+                                        .clipShape(RoundedRectangle(cornerRadius: 4))
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 4)
+                                                .stroke(Color.accentColor, lineWidth: 1)
+                                        )
+                                        .onSubmit {
+                                            commitEdit()
+                                        }
+
+                                    Button {
+                                        commitEdit()
+                                    } label: {
+                                        Image(systemName: "checkmark.circle.fill")
+                                            .foregroundStyle(.green)
+                                    }
+                                    .buttonStyle(.plain)
+
+                                    Button {
+                                        cancelEdit()
+                                    } label: {
+                                        Image(systemName: "xmark.circle.fill")
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    .buttonStyle(.plain)
+
+                                    Spacer()
+
+                                    // Delete button
+                                    Button {
+                                        deleteEditingSkill()
+                                    } label: {
+                                        Image(systemName: "trash")
+                                            .foregroundStyle(.red)
+                                    }
+                                    .buttonStyle(.plain)
+                                    .help("Delete skill")
                                 }
 
-                            Button {
-                                commitEdit()
-                            } label: {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .foregroundStyle(.green)
-                            }
-                            .buttonStyle(.plain)
+                                // Proficiency picker
+                                HStack(spacing: 8) {
+                                    Text("Proficiency:")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
 
-                            Button {
-                                cancelEdit()
-                            } label: {
-                                Image(systemName: "xmark.circle.fill")
-                                    .foregroundStyle(.secondary)
+                                    Picker("", selection: $editingSkillProficiency) {
+                                        Text("Expert").tag(Proficiency.expert)
+                                        Text("Proficient").tag(Proficiency.proficient)
+                                        Text("Familiar").tag(Proficiency.familiar)
+                                    }
+                                    .pickerStyle(.segmented)
+                                    .controlSize(.small)
+                                    .frame(maxWidth: 200)
+                                }
                             }
-                            .buttonStyle(.plain)
                         } else {
                             // Display mode - double-click to edit
                             Text(skill.canonical)

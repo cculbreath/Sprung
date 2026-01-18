@@ -241,7 +241,8 @@ final class LLMFacadeSpecializedAPIs {
         modelId: String,
         temperature: Double,
         maxOutputTokens: Int,
-        jsonSchema: [String: Any]
+        jsonSchema: [String: Any],
+        thinkingLevel: String? = nil
     ) async throws -> String {
         guard let service = googleAIService else {
             throw LLMError.clientError("Google AI service is not configured. Call registerGoogleAIService first.")
@@ -251,7 +252,8 @@ final class LLMFacadeSpecializedAPIs {
             modelId: modelId,
             temperature: temperature,
             maxOutputTokens: maxOutputTokens,
-            jsonSchema: jsonSchema
+            jsonSchema: jsonSchema,
+            thinkingLevel: thinkingLevel
         )
     }
 

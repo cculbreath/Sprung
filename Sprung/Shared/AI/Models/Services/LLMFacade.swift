@@ -193,7 +193,8 @@ final class LLMFacade {
         temperature: Double? = nil,
         maxOutputTokens: Int = 32768,
         keyDecodingStrategy: JSONDecoder.KeyDecodingStrategy = .useDefaultKeys,
-        backend: Backend = .openRouter
+        backend: Backend = .openRouter,
+        thinkingLevel: String? = nil
     ) async throws -> T {
         let decoder = JSONDecoder()
         decoder.keyDecodingStrategy = keyDecodingStrategy
@@ -205,7 +206,8 @@ final class LLMFacade {
                 modelId: modelId,
                 temperature: temperature ?? 0.2,
                 maxOutputTokens: maxOutputTokens,
-                jsonSchema: schema
+                jsonSchema: schema,
+                thinkingLevel: thinkingLevel
             )
             guard let data = jsonString.data(using: .utf8) else {
                 throw LLMError.clientError("Failed to convert Gemini response to data")

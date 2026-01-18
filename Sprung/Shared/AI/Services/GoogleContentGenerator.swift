@@ -256,13 +256,16 @@ actor GoogleContentGenerator {
     ///   - temperature: Generation temperature (default 0.2 for consistent JSON)
     ///   - maxOutputTokens: Maximum output tokens (default 65536 for large structured outputs)
     ///   - jsonSchema: Optional JSON Schema dictionary. When provided, enables native structured output.
+    ///   - thinkingLevel: Controls reasoning behavior for Gemini 3+ models. Options: "minimal", "low", "medium", "high".
+    ///                    Use "low" for simple transformations. Nil uses server defaults.
     /// - Returns: Raw JSON string response guaranteed to match the schema
     func generateStructuredJSON(
         prompt: String,
         modelId: String? = nil,
         temperature: Double = 0.2,
         maxOutputTokens: Int = 65536,
-        jsonSchema: [String: Any]? = nil
+        jsonSchema: [String: Any]? = nil,
+        thinkingLevel: String? = nil
     ) async throws -> String {
         // Use provided model or require configuration
         let effectiveModelId: String
@@ -297,8 +300,13 @@ actor GoogleContentGenerator {
             Logger.info("📝 Using Gemini native structured output with schema (maxTokens: \(maxOutputTokens))", category: .ai)
         }
 
-        // Models with "thinking" in the name REQUIRE thinking mode - must set a budget > 0
-        if effectiveModelId.contains("thinking") {
+        // Configure thinking mode for Gemini 3+ models
+        if let level = thinkingLevel {
+            // Use thinkingLevel parameter for Gemini 3+ models to control reasoning behavior
+            generationConfig["thinkingConfig"] = ["thinkingLevel": level]
+            Logger.info("🧠 Using thinkingLevel=\(level) for \(effectiveModelId)", category: .ai)
+        } else if effectiveModelId.contains("thinking") {
+            // Models with "thinking" in the name REQUIRE thinking mode - must set a budget > 0
             generationConfig["thinkingConfig"] = ["thinkingBudget": 8192]
             Logger.info("🧠 Using thinking mode for \(effectiveModelId) with budget 8192", category: .ai)
         }

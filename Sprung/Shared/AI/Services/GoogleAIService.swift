@@ -210,12 +210,16 @@ actor GoogleAIService {
     }
 
     /// Generate structured JSON output from a prompt.
+    /// - Parameters:
+    ///   - thinkingLevel: Controls reasoning for Gemini 3+ models. Options: "minimal", "low", "medium", "high".
+    ///                    Use "low" for simple transformations to reduce token usage from thinking.
     func generateStructuredJSON(
         prompt: String,
         modelId: String? = nil,
         temperature: Double = 0.2,
         maxOutputTokens: Int = 65536,
-        jsonSchema: [String: Any]? = nil
+        jsonSchema: [String: Any]? = nil,
+        thinkingLevel: String? = nil
     ) async throws -> String {
         do {
             return try await contentGenerator.generateStructuredJSON(
@@ -223,7 +227,8 @@ actor GoogleAIService {
                 modelId: modelId,
                 temperature: temperature,
                 maxOutputTokens: maxOutputTokens,
-                jsonSchema: jsonSchema
+                jsonSchema: jsonSchema,
+                thinkingLevel: thinkingLevel
             )
         } catch let error as GoogleContentGenerator.ContentGeneratorError {
             throw mapContentError(error)

@@ -667,6 +667,71 @@ final class SkillsProcessingService {
         return response.skills
     }
 
+    // MARK: - Single Skill ATS Generation
+
+    /// Generate ATS variants for a single skill.
+    /// Used when manually adding a new skill to generate synonyms on save.
+    func generateATSVariantsForSkill(_ skill: Skill) async throws -> [String] {
+        guard let facade = facade else {
+            throw SkillsProcessingError.llmNotConfigured
+        }
+
+        let modelId = try getModelId()
+
+        let prompt = """
+        Generate ATS (Applicant Tracking System) synonym variants for this skill:
+
+        Skill: \(skill.canonical)
+        Category: \(skill.category.rawValue)
+
+        Generate variants that ATS systems commonly recognize, including:
+        - Alternative spellings (e.g., "Javascript" → ["JavaScript", "JS"])
+        - Abbreviations and acronyms (e.g., "Machine Learning" → ["ML"])
+        - Full forms of abbreviations (e.g., "SQL" → ["Structured Query Language"])
+        - Common misspellings that ATS should match
+        - Version-agnostic forms (e.g., "Python 3.9" → ["Python", "Python 3"])
+        - Framework/library associations (e.g., "React" → ["React.js", "ReactJS"])
+        - Professional synonyms (e.g., "Agile" → ["Agile Methodology", "Scrum", "Kanban"])
+
+        Guidelines:
+        - Generate 3-8 variants
+        - Include the most common ATS variations
+        - Focus on variants that actually appear in job postings
+        - Don't include unrelated skills as variants
+        """
+
+        let schema: [String: Any] = [
+            "type": "object",
+            "properties": [
+                "variants": [
+                    "type": "array",
+                    "description": "ATS synonym variants for the skill",
+                    "items": ["type": "string"]
+                ]
+            ],
+            "required": ["variants"]
+        ]
+
+        struct SingleSkillATSResponse: Codable {
+            let variants: [String]
+        }
+
+        Logger.info("🔧 Generating ATS variants for skill: \(skill.canonical)", category: .ai)
+
+        let response: SingleSkillATSResponse = try await facade.executeStructuredWithDictionarySchema(
+            prompt: prompt,
+            modelId: modelId,
+            as: SingleSkillATSResponse.self,
+            schema: schema,
+            schemaName: "single_skill_ats",
+            backend: .gemini,
+            thinkingLevel: "low"  // Simple transformation doesn't need heavy reasoning
+        )
+
+        Logger.info("🔧 Generated \(response.variants.count) ATS variants for \(skill.canonical)", category: .ai)
+        return response.variants
+    }
+
     // MARK: - Combined Processing
 
     /// Run both deduplication and ATS expansion in sequence.
