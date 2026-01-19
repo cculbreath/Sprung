@@ -95,28 +95,34 @@ final class RevisionTaskBuilder {
     /// Generate prompt for skills section revision.
     private func generateSkillsPrompt(for revNode: ExportedReviewNode) -> String {
         """
-        Generate skill categories optimized for this job posting.
+        Re-select skills from the Skill Bank for each category to better match this job posting.
 
-        CONSTRAINTS:
-        - Create 4-6 categories that match the job requirements
-        - Category names should be professional and job-relevant
-        - Categories must be supportable by skills in the Skill Bank
+        CRITICAL CONSTRAINTS:
+        - PRESERVE the existing category names exactly as shown below
+        - DO NOT rename, merge, or reorganize categories
+        - ONLY change which skills appear under each category
+        - Select skills from the Skill Bank that are most relevant to the job requirements
         - Do NOT invent skills - only select from the Skill Bank provided in the preamble
 
-        Current skills on resume:
+        Current skills on resume (preserve these category names):
         \(revNode.value)
+
+        Your task: For each existing category, select the most job-relevant skills from the Skill Bank.
+        Keep the same category names but optimize the skill selection within each.
 
         Return a JSON object with this structure:
         {
           "id": "\(revNode.id)",
           "oldValue": "\(escapeForJSON(revNode.value))",
-          "newValue": "{{proposed categories and skills as comma-separated list}}",
+          "newValue": "{{categories with updated skills as comma-separated list}}",
           "valueChanged": true,
-          "why": "explanation",
+          "why": "explanation of skill selection changes (not category changes)",
           "treePath": "\(revNode.path)",
           "nodeType": "list",
-          "newValueArray": ["Category1: skill1, skill2", "Category2: skill3, skill4"]
+          "newValueArray": ["ExistingCategory1: skill1, skill2", "ExistingCategory2: skill3, skill4"]
         }
+
+        Remember: Category names must match the original exactly. Only the skills within each category should change.
         """
     }
 

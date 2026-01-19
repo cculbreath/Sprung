@@ -80,7 +80,6 @@ struct AppWindowView: View {
                     Label(TabList.submitApp.rawValue, systemImage: "paperplane")
                 }
                 .tag(TabList.submitApp)
-                .disabled(jobAppStore.selectedApp?.selectedRes == nil)
         }
     }
     // MARK: - Toolbar Action Methods

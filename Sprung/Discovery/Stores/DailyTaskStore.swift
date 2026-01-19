@@ -13,11 +13,19 @@ import Foundation
 final class DailyTaskStore: SwiftDataStore {
     unowned let modelContext: ModelContext
 
+    /// Incremented on mutations to trigger SwiftUI observation
+    private(set) var changeCounter: Int = 0
+
     init(context: ModelContext) {
         modelContext = context
     }
 
+    private func notifyChanged() {
+        changeCounter += 1
+    }
+
     var allTasks: [DailyTask] {
+        _ = changeCounter  // Establish observation dependency
         (try? modelContext.fetch(
             FetchDescriptor<DailyTask>(sortBy: [SortDescriptor(\.priority, order: .reverse)])
         )) ?? []
@@ -37,6 +45,7 @@ final class DailyTaskStore: SwiftDataStore {
     func add(_ task: DailyTask) {
         modelContext.insert(task)
         saveContext()
+        notifyChanged()
     }
 
     func addMultiple(_ tasks: [DailyTask]) {
@@ -44,17 +53,20 @@ final class DailyTaskStore: SwiftDataStore {
             modelContext.insert(task)
         }
         saveContext()
+        notifyChanged()
     }
 
     func complete(_ task: DailyTask) {
         task.isCompleted = true
         task.completedAt = Date()
         saveContext()
+        notifyChanged()
     }
 
     func delete(_ task: DailyTask) {
         modelContext.delete(task)
         saveContext()
+        notifyChanged()
     }
 
     /// Clear old tasks (older than specified days)
@@ -65,6 +77,7 @@ final class DailyTaskStore: SwiftDataStore {
             modelContext.delete(task)
         }
         saveContext()
+        notifyChanged()
     }
 
     /// Get completed tasks this week

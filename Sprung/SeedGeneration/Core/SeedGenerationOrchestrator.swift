@@ -352,7 +352,10 @@ final class SeedGenerationOrchestrator {
     // MARK: - Apply Approved Content
 
     func applyApprovedContent(to defaults: inout ExperienceDefaults) {
-        for item in reviewQueue.approvedItems {
+        // Filter to only items that should apply content (excludes useOriginal)
+        let itemsToApply = reviewQueue.approvedItems.filter { $0.shouldApplyContent }
+
+        for item in itemsToApply {
             let generator = generators.first { $0.sectionKey == item.task.section }
 
             // Determine the content to apply based on edit type
@@ -364,14 +367,15 @@ final class SeedGenerationOrchestrator {
                 // User edited scalar content - parse from text
                 contentToApply = parseEditedContent(editedContent, originalContent: item.generatedContent)
             } else {
-                // No edits - use original
+                // No edits - use original generated content
                 contentToApply = item.generatedContent
             }
 
             generator?.apply(content: contentToApply, to: &defaults)
         }
 
-        Logger.info("Applied \(reviewQueue.approvedItems.count) approved items to defaults", category: .ai)
+        let keptOriginalCount = reviewQueue.approvedItems.count - itemsToApply.count
+        Logger.info("Applied \(itemsToApply.count) items to defaults (\(keptOriginalCount) kept original)", category: .ai)
     }
 
     /// Apply edited children array directly to the content (no parsing needed)

@@ -29,6 +29,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var knowledgeCardStore: KnowledgeCardStore?
     var skillStore: SkillStore?
     var titleSetStore: TitleSetStore?
+    var candidateDossierStore: CandidateDossierStore?
     func applicationDidFinishLaunching(_: Notification) {
         // Wait until the app is fully loaded before modifying the menu
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
@@ -437,7 +438,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                let coverRefStore,
                let knowledgeCardStore,
                let applicantProfileStore,
-               let guidanceStore {
+               let guidanceStore,
+               let candidateDossierStore {
                 let root = searchOpsView
                     .modelContainer(modelContainer)
                     .environment(appEnvironment)
@@ -447,6 +449,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     .environment(knowledgeCardStore)
                     .environment(applicantProfileStore)
                     .environment(guidanceStore)
+                    .environment(candidateDossierStore)
                 hostingView = NSHostingView(rootView: AnyView(root))
             } else if let modelContainer {
                 hostingView = NSHostingView(rootView: AnyView(searchOpsView.modelContainer(modelContainer)))

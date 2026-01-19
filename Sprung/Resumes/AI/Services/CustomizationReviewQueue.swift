@@ -16,6 +16,7 @@ enum CustomizationReviewAction: Equatable {
     case rejected
     case rejectedWithComment(String)
     case edited
+    case useOriginal  // Keep original value, do not regenerate
 }
 
 // MARK: - Review Item
@@ -71,8 +72,18 @@ struct CustomizationReviewItem: Identifiable, Equatable {
         userAction != nil
     }
 
-    /// Whether this item was approved (with or without edits)
+    /// Whether this item was approved (including useOriginal which keeps the original value)
     var isApproved: Bool {
+        switch userAction {
+        case .approved, .edited, .useOriginal:
+            return true
+        default:
+            return false
+        }
+    }
+
+    /// Whether the LLM's proposed change should be applied (excludes useOriginal)
+    var shouldApplyRevision: Bool {
         switch userAction {
         case .approved, .edited:
             return true

@@ -106,6 +106,9 @@ struct ReviewQueueView: View {
                             },
                             onEditArray: { editedChildren in
                                 queue.setEditedChildren(for: item.id, children: editedChildren)
+                            },
+                            onUseOriginal: {
+                                queue.setAction(for: item.id, action: .useOriginal)
                             }
                         )
                     }

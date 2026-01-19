@@ -380,7 +380,7 @@ class RevisionWorkflowOrchestrator {
 
     /// Apply a review item's changes to the resume tree
     private func applyReviewItemToResume(_ item: CustomizationReviewItem, resume: Resume) {
-        guard item.isApproved else { return }
+        guard item.shouldApplyRevision else { return }  // Skip useOriginal items
 
         // Check if this is a bundled/array node
         if let sourceNodeIds = item.task.revNode.sourceNodeIds, !sourceNodeIds.isEmpty {

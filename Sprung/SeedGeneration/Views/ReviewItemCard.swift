@@ -14,6 +14,7 @@ struct ReviewItemCard: View {
     let onReject: (String?) -> Void
     let onEdit: (String) -> Void
     let onEditArray: ([String]) -> Void
+    let onUseOriginal: () -> Void
 
     @State private var isEditing = false
     @State private var editedText = ""
@@ -340,12 +341,20 @@ struct ReviewItemCard: View {
                 .buttonStyle(.bordered)
 
                 Button {
-                    showingRejectionSheet = true
+                    onUseOriginal()
                 } label: {
-                    Label("Reject", systemImage: "xmark.circle")
+                    Label("Use Original", systemImage: "arrow.uturn.backward")
                 }
                 .buttonStyle(.bordered)
-                .tint(.red)
+                .foregroundStyle(.secondary)
+
+                Button {
+                    showingRejectionSheet = true
+                } label: {
+                    Label("Regenerate", systemImage: "arrow.triangle.2.circlepath")
+                }
+                .buttonStyle(.bordered)
+                .tint(.orange)
             }
         }
     }
@@ -395,8 +404,10 @@ struct ReviewItemCard: View {
         switch action {
         case .approved, .edited:
             return .green.opacity(0.5)
+        case .useOriginal:
+            return .gray.opacity(0.5)
         case .rejected, .rejectedWithComment:
-            return .red.opacity(0.5)
+            return .orange.opacity(0.5)
         }
     }
 
@@ -405,8 +416,9 @@ struct ReviewItemCard: View {
             switch action {
             case .approved: return ("Approved", .green)
             case .edited: return ("Edited", .blue)
-            case .rejected: return ("Rejected", .red)
-            case .rejectedWithComment: return ("Rejected", .red)
+            case .useOriginal: return ("Kept Original", .gray)
+            case .rejected: return ("Regenerating", .orange)
+            case .rejectedWithComment: return ("Regenerating", .orange)
             }
         }()
 

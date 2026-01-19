@@ -55,6 +55,9 @@ struct CustomizationReviewQueueView: View {
                             },
                             onEditArray: { children in
                                 reviewQueue.setEditedChildren(for: item.id, children: children)
+                            },
+                            onUseOriginal: {
+                                reviewQueue.setAction(for: item.id, action: .useOriginal)
                             }
                         )
                     }
@@ -257,6 +260,7 @@ struct CustomizationReviewCard: View {
     let onReject: (String?) -> Void
     let onEdit: (String) -> Void
     let onEditArray: ([String]) -> Void
+    let onUseOriginal: () -> Void
 
     @State private var editedContent: String = ""
     @State private var editedItems: [String] = []
@@ -520,9 +524,18 @@ struct CustomizationReviewCard: View {
             }
 
             Button {
+                onUseOriginal()
+            } label: {
+                Label("Use Original", systemImage: "arrow.uturn.backward")
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.mini)
+            .foregroundStyle(.secondary)
+
+            Button {
                 showRejectionSheet = true
             } label: {
-                Label("Reject", systemImage: "arrow.clockwise")
+                Label("Regenerate", systemImage: "arrow.clockwise")
             }
             .buttonStyle(.bordered)
             .controlSize(.mini)
@@ -558,10 +571,12 @@ struct CustomizationReviewCard: View {
             return ("Approved", .green)
         case .edited:
             return ("Edited", .green)
+        case .useOriginal:
+            return ("Kept Original", .gray)
         case .rejected:
-            return ("Rejected", .orange)
+            return ("Regenerating", .orange)
         case .rejectedWithComment:
-            return ("Rejected w/ Feedback", .orange)
+            return ("Regenerating", .orange)
         case nil:
             return ("Pending", .gray)
         }
@@ -577,6 +592,8 @@ struct CustomizationReviewCard: View {
         switch item.userAction {
         case .approved, .edited:
             return Color.green.opacity(0.05)
+        case .useOriginal:
+            return Color.gray.opacity(0.05)
         case .rejected, .rejectedWithComment:
             return Color.orange.opacity(0.05)
         case nil:
@@ -592,6 +609,8 @@ struct CustomizationReviewCard: View {
         switch item.userAction {
         case .approved, .edited:
             return .green
+        case .useOriginal:
+            return .gray
         case .rejected, .rejectedWithComment:
             return .orange
         case nil:

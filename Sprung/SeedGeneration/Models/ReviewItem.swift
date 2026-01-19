@@ -59,6 +59,7 @@ struct ReviewItem: Identifiable, Equatable {
         case rejected
         case rejectedWithComment(String)
         case edited
+        case useOriginal  // Keep original value, do not regenerate
     }
 
     /// Whether this item has been acted upon
@@ -66,8 +67,18 @@ struct ReviewItem: Identifiable, Equatable {
         userAction != nil
     }
 
-    /// Whether this item was approved (with or without edits)
+    /// Whether this item was approved (including useOriginal which keeps the original value)
     var isApproved: Bool {
+        switch userAction {
+        case .approved, .edited, .useOriginal:
+            return true
+        default:
+            return false
+        }
+    }
+
+    /// Whether the generated content should be applied (excludes useOriginal)
+    var shouldApplyContent: Bool {
         switch userAction {
         case .approved, .edited:
             return true
