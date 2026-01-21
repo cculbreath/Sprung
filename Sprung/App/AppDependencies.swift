@@ -38,6 +38,11 @@ final class AppDependencies {
     // MARK: - UI State
     let dragInfo: DragInfo
     let debugSettingsStore: DebugSettingsStore
+    // MARK: - Module Navigation
+    let moduleNavigation: ModuleNavigationService
+    let focusState: UnifiedJobFocusState
+    let windowCoordinator: WindowCoordinator
+    let globalKeyboardHandler: GlobalKeyboardHandler
     // MARK: - Core Services
     let appEnvironment: AppEnvironment
     // MARK: - Init
@@ -92,6 +97,16 @@ final class AppDependencies {
         self.navigationState = NavigationStateService()
         // UI state
         self.dragInfo = DragInfo()
+
+        // Module navigation services
+        let focusState = UnifiedJobFocusState()
+        self.focusState = focusState
+        let windowCoordinator = WindowCoordinator(focusState: focusState)
+        self.windowCoordinator = windowCoordinator
+        let moduleNavigation = ModuleNavigationService()
+        self.moduleNavigation = moduleNavigation
+        windowCoordinator.moduleNavigation = moduleNavigation
+        self.globalKeyboardHandler = GlobalKeyboardHandler(windowCoordinator: windowCoordinator)
         // Core services
         let openRouterService = OpenRouterService()
         let modelValidationService = ModelValidationService()

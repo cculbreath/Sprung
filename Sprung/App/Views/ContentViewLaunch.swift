@@ -52,6 +52,10 @@ struct ContentViewLaunch: View {
             .environment(deps.appEnvironment.llmFacade)
             .environment(deps.reasoningStreamManager)
             .environment(deps.resumeReviseViewModel)
+            .environment(deps.moduleNavigation)
+            .environment(deps.focusState)
+            .environment(deps.windowCoordinator)
+            .environment(deps.searchOpsCoordinator)
     }
     private func restoreLatestBackup() {
         guard !isRestoring else { return }

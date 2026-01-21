@@ -100,4 +100,7 @@ extension Notification.Name {
     static let discoveryTriggerSourceDiscovery = Notification.Name("discoveryTriggerSourceDiscovery")
     static let discoveryTriggerEventDiscovery = Notification.Name("discoveryTriggerEventDiscovery")
     static let discoveryTriggerTaskGeneration = Notification.Name("discoveryTriggerTaskGeneration")
+    // Module Navigation
+    /// Navigate to a specific module (userInfo: ["module": String (AppModule.rawValue)])
+    static let navigateToModule = Notification.Name("navigateToModule")
 }

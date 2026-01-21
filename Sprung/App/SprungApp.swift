@@ -73,6 +73,9 @@ struct SprungApp: App {
                 .environment(appDependencies.careerKeywordStore)
                 .environment(appDependencies.guidanceStore)
                 .environment(appDependencies.candidateDossierStore)
+                .environment(appDependencies.moduleNavigation)
+                .environment(appDependencies.focusState)
+                .environment(appDependencies.windowCoordinator)
                 .onAppear {
                     // Pass environment and dependencies to AppDelegate for windows
                     appDelegate.appEnvironment = appEnvironment
@@ -164,12 +167,12 @@ struct SprungApp: App {
         // MARK: - Applicant Menu
         .commands {
             CommandMenu("Applicant") {
-                Button("Applicant Profile...") {
-                    appDelegate.showApplicantProfileWindow()
+                Button("Profile") {
+                    NotificationCenter.default.post(name: .navigateToModule, object: nil, userInfo: ["module": AppModule.profile.rawValue])
                 }
                 .keyboardShortcut("p", modifiers: [.command, .shift])
-                Button("Experience Editor...") {
-                    appDelegate.showExperienceEditorWindow()
+                Button("Experience") {
+                    NotificationCenter.default.post(name: .navigateToModule, object: nil, userInfo: ["module": AppModule.experience.rawValue])
                 }
                 .keyboardShortcut("x", modifiers: [.command, .shift])
                 Button("Generate Experience Defaults...") {
@@ -177,14 +180,10 @@ struct SprungApp: App {
                 }
                 .keyboardShortcut("g", modifiers: [.command, .shift])
                 Divider()
-                Button("Knowledge Cards...") {
-                    NotificationCenter.default.post(name: .toggleKnowledgeCards, object: nil)
+                Button("References") {
+                    NotificationCenter.default.post(name: .navigateToModule, object: nil, userInfo: ["module": AppModule.references.rawValue])
                 }
                 .keyboardShortcut("k", modifiers: [.command, .option])
-                Button("Dossier & Writing Samples...") {
-                    NotificationCenter.default.post(name: .showWritingContextBrowser, object: nil)
-                }
-                .keyboardShortcut("w", modifiers: [.command, .option])
             }
         }
         // MARK: - Listing Menu
@@ -276,13 +275,12 @@ struct SprungApp: App {
                 }
             }
         }
-        // MARK: - Discovery Menu (renamed from Search Ops)
+        // MARK: - Discovery Menu (uses module navigation)
         .commands {
             CommandMenu("Discovery") {
-                Button("Open Discovery") {
-                    Logger.info("🔍 Menu command requested Discovery window", category: .ui)
-                    NotificationCenter.default.post(name: .showDiscovery, object: nil)
-                    appDelegate.showDiscoveryWindow()
+                Button("Pipeline") {
+                    Logger.info("Menu: navigating to Pipeline module", category: .ui)
+                    NotificationCenter.default.post(name: .navigateToModule, object: nil, userInfo: ["module": AppModule.pipeline.rawValue])
                 }
                 .keyboardShortcut("d", modifiers: [.command, .shift])
                 Divider()
@@ -291,32 +289,41 @@ struct SprungApp: App {
                 }
                 Divider()
                 Button("Discover Job Sources") {
-                    NotificationCenter.default.post(name: .discoverJobSources, object: nil)
+                    NotificationCenter.default.post(name: .navigateToModule, object: nil, userInfo: ["module": AppModule.sources.rawValue])
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        NotificationCenter.default.post(name: .discoveryTriggerSourceDiscovery, object: nil)
+                    }
                 }
                 Button("Discover Networking Events") {
-                    NotificationCenter.default.post(name: .discoverNetworkingEvents, object: nil)
+                    NotificationCenter.default.post(name: .navigateToModule, object: nil, userInfo: ["module": AppModule.events.rawValue])
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        NotificationCenter.default.post(name: .discoveryTriggerEventDiscovery, object: nil)
+                    }
                 }
                 Button("Generate Daily Tasks") {
-                    NotificationCenter.default.post(name: .generateDailyTasks, object: nil)
+                    NotificationCenter.default.post(name: .navigateToModule, object: nil, userInfo: ["module": AppModule.dailyTasks.rawValue])
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        NotificationCenter.default.post(name: .discoveryTriggerTaskGeneration, object: nil)
+                    }
                 }
                 Button("Generate Weekly Reflection") {
-                    NotificationCenter.default.post(name: .generateWeeklyReflection, object: nil)
+                    NotificationCenter.default.post(name: .navigateToModule, object: nil, userInfo: ["module": AppModule.weeklyReview.rawValue])
                 }
                 Divider()
                 Button("Job Sources") {
-                    NotificationCenter.default.post(name: .showDiscoveryJobSources, object: nil)
+                    NotificationCenter.default.post(name: .navigateToModule, object: nil, userInfo: ["module": AppModule.sources.rawValue])
                 }
                 Button("Contacts & Network") {
-                    NotificationCenter.default.post(name: .showDiscoveryContacts, object: nil)
+                    NotificationCenter.default.post(name: .navigateToModule, object: nil, userInfo: ["module": AppModule.contacts.rawValue])
                 }
                 Button("Events") {
-                    NotificationCenter.default.post(name: .showDiscoveryEvents, object: nil)
+                    NotificationCenter.default.post(name: .navigateToModule, object: nil, userInfo: ["module": AppModule.events.rawValue])
                 }
-                Button("Daily Briefing") {
-                    NotificationCenter.default.post(name: .showDiscoveryDailyBriefing, object: nil)
+                Button("Daily Tasks") {
+                    NotificationCenter.default.post(name: .navigateToModule, object: nil, userInfo: ["module": AppModule.dailyTasks.rawValue])
                 }
                 Button("Weekly Review") {
-                    NotificationCenter.default.post(name: .showDiscoveryWeeklyReview, object: nil)
+                    NotificationCenter.default.post(name: .navigateToModule, object: nil, userInfo: ["module": AppModule.weeklyReview.rawValue])
                 }
             }
         }
