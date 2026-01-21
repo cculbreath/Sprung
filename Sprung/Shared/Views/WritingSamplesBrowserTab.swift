@@ -49,8 +49,8 @@ struct WritingSamplesBrowserTab: View {
                 get: { filteredCards },
                 set: { _ in }
             ),
-            cardWidth: 340,
-            cardHeight: 400,
+            cardWidth: 520,
+            cardHeight: 500,
             accentColor: .blue
         ) { card, isTopCard in
             CoverRefCardView(

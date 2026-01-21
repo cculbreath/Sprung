@@ -66,8 +66,8 @@ struct KnowledgeCardsBrowserTab: View {
                 get: { filteredCards },
                 set: { _ in }  // Read-only binding for filtered view
             ),
-            cardWidth: 360,
-            cardHeight: 420,
+            cardWidth: 520,
+            cardHeight: 500,
             accentColor: .purple
         ) { card, isTopCard in
             // Card content
