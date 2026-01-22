@@ -2,13 +2,12 @@
 //  ResumeEditorModuleView.swift
 //  Sprung
 //
-//  Resume Editor module - wrapper for existing resume editing functionality.
-//  This embeds the existing ContentView body (sidebar + tabs + PDF preview) unchanged.
+//  Resume Editor module with unified collapsible sidebar matching IconBar styling.
 //
 
 import SwiftUI
 
-/// Resume Editor module - embeds existing resume editor with sidebar and tabs
+/// Resume Editor module - embeds existing resume editor with collapsible sidebar
 struct ResumeEditorModuleView: View {
     @Environment(AppState.self) private var appState
     @Environment(AppEnvironment.self) private var appEnvironment
@@ -23,7 +22,6 @@ struct ResumeEditorModuleView: View {
 
     @State var tabRefresh: Bool = false
     @State var showSlidingList: Bool = false
-    @State private var sidebarVisibility: NavigationSplitViewVisibility = .doubleColumn
     @State private var sheets = AppSheets()
     @State private var clarifyingQuestions: [ClarifyingQuestion] = []
     @State private var listingButtons = SaveButtons()
@@ -31,60 +29,35 @@ struct ResumeEditorModuleView: View {
     @State private var refPopup: Bool = false
     @State private var menuHandler = MenuNotificationHandler()
 
+    // Sidebar collapse state - persisted
+    @AppStorage("resumeEditorSidebarExpanded") private var isSidebarExpanded: Bool = true
+
+    private let sidebarCollapsedWidth: CGFloat = 0
+    private let sidebarExpandedWidth: CGFloat = 260
+
     var body: some View {
         @Bindable var jobAppStore = jobAppStore
         @Bindable var navigationState = navigationState
 
-        NavigationSplitView(columnVisibility: $sidebarVisibility) {
-            // --- Sidebar Column ---
-            SidebarView(
-                tabRefresh: $tabRefresh,
-                selectedApp: $jobAppStore.selectedApp,
-                showSlidingList: $showSlidingList
-            )
-            .frame(minWidth: 220, maxWidth: .infinity)
-        } detail: {
-            // --- Detail Column ---
-            VStack(alignment: .leading) {
-                if jobAppStore.selectedApp != nil {
-                    AppWindowView(
-                        selectedTab: $navigationState.selectedTab,
-                        refPopup: $refPopup,
-                        hasVisitedResumeTab: $hasVisitedResumeTab,
-                        tabRefresh: $tabRefresh,
-                        showSlidingList: $showSlidingList,
-                        sheets: $sheets,
-                        clarifyingQuestions: $clarifyingQuestions
-                    )
-                    .background {
-                        Rectangle()
-                            .fill(.clear)
-                            .ignoresSafeArea(.all)
-                    }
-                } else {
-                    VStack {
-                        Spacer()
-                        Text("Select a job application from the sidebar to begin")
-                            .font(.title2)
-                            .foregroundColor(.secondary)
-                        Spacer()
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                }
+        HStack(spacing: 0) {
+            // Collapsible sidebar
+            if isSidebarExpanded {
+                sidebarContent
+                    .frame(width: sidebarExpandedWidth)
+                    .transition(.move(edge: .leading).combined(with: .opacity))
+
+                // Separator
+                Rectangle()
+                    .fill(Color(.separatorColor))
+                    .frame(width: 1)
             }
-            .frame(minWidth: 200, maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-            .toolbar(id: "sprungMainToolbar") {
-                buildUnifiedToolbar(
-                    selectedTab: $navigationState.selectedTab,
-                    listingButtons: $listingButtons,
-                    refresh: $tabRefresh,
-                    sheets: $sheets,
-                    clarifyingQuestions: $clarifyingQuestions,
-                    showNewAppSheet: $sheets.showNewJobApp
-                )
-            }
+
+            // Main content
+            detailContent
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        // Reasoning stream overlay (for AI thinking display)
+        .animation(.easeInOut(duration: 0.2), value: isSidebarExpanded)
+        // Reasoning stream overlay
         .overlay {
             if reasoningStreamManager.isVisible && !resumeReviseViewModel.showParallelReviewQueueSheet {
                 ReasoningStreamView(
@@ -113,17 +86,14 @@ struct ResumeEditorModuleView: View {
         .onChange(of: jobAppStore.selectedApp) { _, newValue in
             navigationState.saveSelectedJobApp(newValue)
             updateMyLetter()
-            // Sync to unified focus state
             focusState.focusedJob = newValue
         }
         .onChange(of: focusState.focusedJob) { _, newFocusedJob in
-            // Sync from unified focus state (when navigating from Pipeline)
             if let job = newFocusedJob, job.id != jobAppStore.selectedApp?.id {
                 jobAppStore.selectedApp = job
             }
         }
         .onChange(of: focusState.focusedTab) { _, newTab in
-            // Sync tab from unified focus state
             navigationState.selectedTab = newTab
         }
         .onChange(of: navigationState.selectedTab) { _, newTab in
@@ -147,7 +117,6 @@ struct ResumeEditorModuleView: View {
             updateMyLetter()
             hasVisitedResumeTab = false
 
-            // Restore from unified focus state if available
             if let job = focusState.focusedJob, jobAppStore.selectedApp == nil {
                 jobAppStore.selectedApp = job
             }
@@ -159,6 +128,125 @@ struct ResumeEditorModuleView: View {
             }
         }
         .focusedValue(\.knowledgeCardsVisible, $showSlidingList)
+    }
+
+    // MARK: - Sidebar
+
+    private var sidebarContent: some View {
+        @Bindable var jobAppStore = jobAppStore
+
+        return VStack(spacing: 0) {
+            // Sidebar header with collapse toggle
+            HStack {
+                Text("Jobs")
+                    .font(.headline)
+                    .foregroundStyle(.secondary)
+
+                Spacer()
+
+                PanelToggleButton(
+                    edge: .leading,
+                    isExpanded: $isSidebarExpanded,
+                    collapsedIcon: "sidebar.left",
+                    expandedIcon: "sidebar.left"
+                )
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+
+            Divider()
+
+            // Job list
+            SidebarView(
+                tabRefresh: $tabRefresh,
+                selectedApp: $jobAppStore.selectedApp,
+                showSlidingList: $showSlidingList
+            )
+        }
+        .background(Color(.windowBackgroundColor))
+    }
+
+    // MARK: - Detail Content
+
+    private var detailContent: some View {
+        @Bindable var navigationState = navigationState
+
+        return VStack(alignment: .leading, spacing: 0) {
+            // Toolbar area with sidebar toggle when collapsed
+            if !isSidebarExpanded {
+                HStack {
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            isSidebarExpanded = true
+                        }
+                    } label: {
+                        Image(systemName: "sidebar.left")
+                            .font(.system(size: 14))
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Show sidebar")
+                    .padding(.leading, 12)
+
+                    Spacer()
+                }
+                .frame(height: 32)
+                .background(Color(.windowBackgroundColor))
+
+                Divider()
+            }
+
+            if jobAppStore.selectedApp != nil {
+                AppWindowView(
+                    selectedTab: $navigationState.selectedTab,
+                    refPopup: $refPopup,
+                    hasVisitedResumeTab: $hasVisitedResumeTab,
+                    tabRefresh: $tabRefresh,
+                    showSlidingList: $showSlidingList,
+                    sheets: $sheets,
+                    clarifyingQuestions: $clarifyingQuestions
+                )
+                .background {
+                    Rectangle()
+                        .fill(.clear)
+                        .ignoresSafeArea(.all)
+                }
+                .toolbar(id: "sprungMainToolbar") {
+                    buildUnifiedToolbar(
+                        selectedTab: $navigationState.selectedTab,
+                        listingButtons: $listingButtons,
+                        refresh: $tabRefresh,
+                        sheets: $sheets,
+                        clarifyingQuestions: $clarifyingQuestions,
+                        showNewAppSheet: $sheets.showNewJobApp
+                    )
+                }
+            } else {
+                emptyState
+            }
+        }
+    }
+
+    private var emptyState: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "doc.text.magnifyingglass")
+                .font(.system(size: 48))
+                .foregroundStyle(.tertiary)
+
+            Text("Select a job application")
+                .font(.title2)
+                .foregroundColor(.secondary)
+
+            if !isSidebarExpanded {
+                Button("Show Sidebar") {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        isSidebarExpanded = true
+                    }
+                }
+                .buttonStyle(.bordered)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     // MARK: - Helper Methods

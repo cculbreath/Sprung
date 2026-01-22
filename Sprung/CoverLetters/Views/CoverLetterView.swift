@@ -10,15 +10,57 @@ struct CoverLetterView: View {
     @Environment(CoverLetterStore.self) private var coverLetterStore: CoverLetterStore
     @Binding var showCoverLetterInspector: Bool
     @State private var isEditing = false
+
+    private let inspectorWidth: CGFloat = 340
+
     var body: some View {
-        HStack {
-            contentView()
+        GeometryReader { geo in
+            HStack(spacing: 0) {
+                // Main content
+                contentView()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                // Collapsible inspector panel
+                if showCoverLetterInspector {
+                    Rectangle()
+                        .fill(Color(.separatorColor))
+                        .frame(width: 1)
+
+                    coverLetterInspectorPanel
+                        .frame(width: inspectorWidth, height: geo.size.height)
+                        .transition(.move(edge: .trailing).combined(with: .opacity))
+                }
+            }
+            .animation(.easeInOut(duration: 0.2), value: showCoverLetterInspector)
+        }
+    }
+
+    private var coverLetterInspectorPanel: some View {
+        VStack(spacing: 0) {
+            // Inspector header with collapse toggle
+            HStack {
+                Text("Inspector")
+                    .font(.headline)
+                    .foregroundStyle(.secondary)
+
+                Spacer()
+
+                PanelToggleButton(
+                    edge: .trailing,
+                    isExpanded: $showCoverLetterInspector,
+                    collapsedIcon: "sidebar.right",
+                    expandedIcon: "sidebar.right"
+                )
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+
+            Divider()
+
+            CoverLetterInspectorView(isEditing: $isEditing)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .inspectorColumnWidth(min: 250, ideal: 300, max: 400)
-        .inspector(isPresented: $showCoverLetterInspector) {
-            CoverLetterInspectorView(isEditing: $isEditing)
-        }
+        .background(Color(.windowBackgroundColor))
     }
     @ViewBuilder
     private func contentView() -> some View {
