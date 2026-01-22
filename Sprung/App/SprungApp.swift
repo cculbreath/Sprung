@@ -154,14 +154,15 @@ struct SprungApp: App {
         // MARK: - View Menu
         .commands {
             CommandGroup(after: .sidebar) {
-                Button("Show Resume Inspector") {
-                    NotificationCenter.default.post(name: .showResumeInspector, object: nil)
+                Button("Toggle Job App Pane") {
+                    NotificationCenter.default.post(name: .toggleJobAppPane, object: nil)
                 }
-                .keyboardShortcut("1", modifiers: [.command, .option])
+                .keyboardShortcut("0", modifiers: [.command, .option])
+                Divider()
                 Button("Show Cover Letter Inspector") {
                     NotificationCenter.default.post(name: .showCoverLetterInspector, object: nil)
                 }
-                .keyboardShortcut("2", modifiers: [.command, .option])
+                .keyboardShortcut("1", modifiers: [.command, .option])
             }
         }
         // MARK: - Applicant Menu

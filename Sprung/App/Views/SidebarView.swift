@@ -54,6 +54,7 @@ struct SidebarView: View {
                 }
             }
             .listStyle(.sidebar)
+            .scrollContentBackground(.hidden)
             .frame(maxHeight: .infinity) // List takes remaining space
             // Draggable Sliding Source List (conditionally shown)
             if showSlidingList {

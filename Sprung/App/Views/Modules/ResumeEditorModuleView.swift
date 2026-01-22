@@ -2,7 +2,7 @@
 //  ResumeEditorModuleView.swift
 //  Sprung
 //
-//  Resume Editor module with unified collapsible sidebar matching IconBar styling.
+//  Resume Editor module with unified collapsible sidebar and Resumes drawer.
 //
 
 import SwiftUI
@@ -19,6 +19,7 @@ struct ResumeEditorModuleView: View {
     @Environment(ResumeReviseViewModel.self) private var resumeReviseViewModel
     @Environment(WindowCoordinator.self) private var windowCoordinator
     @Environment(UnifiedJobFocusState.self) private var focusState
+    @Environment(ResStore.self) private var resStore
 
     @State var tabRefresh: Bool = false
     @State var showSlidingList: Bool = false
@@ -31,25 +32,38 @@ struct ResumeEditorModuleView: View {
 
     // Sidebar collapse state - persisted
     @AppStorage("resumeEditorSidebarExpanded") private var isSidebarExpanded: Bool = true
+    @AppStorage("resumeEditorSidebarWidth") private var sidebarWidth: Double = 280
 
-    private let sidebarCollapsedWidth: CGFloat = 0
-    private let sidebarExpandedWidth: CGFloat = 260
+    // Resumes drawer state
+    @AppStorage("resumeEditorDrawerExpanded") private var isResumesDrawerExpanded: Bool = true
+    @AppStorage("resumeEditorResumeListHeight") private var resumeListHeight: Double = 160
+
+    private let collapsedHandleWidth: CGFloat = 12
+    private let minSidebarWidth: CGFloat = 200
+    private let maxSidebarWidth: CGFloat = 400
+    private let minResumeListHeight: CGFloat = 80
+    private let maxResumeListHeight: CGFloat = 300
 
     var body: some View {
         @Bindable var jobAppStore = jobAppStore
         @Bindable var navigationState = navigationState
 
         HStack(spacing: 0) {
-            // Collapsible sidebar
+            // Collapsible sidebar (skinny handle when collapsed)
             if isSidebarExpanded {
                 sidebarContent
-                    .frame(width: sidebarExpandedWidth)
+                    .frame(width: sidebarWidth)
                     .transition(.move(edge: .leading).combined(with: .opacity))
 
-                // Separator
-                Rectangle()
-                    .fill(Color(.separatorColor))
-                    .frame(width: 1)
+                // Draggable resize handle
+                VerticalResizeHandle(
+                    width: $sidebarWidth,
+                    minWidth: minSidebarWidth,
+                    maxWidth: maxSidebarWidth
+                )
+            } else {
+                // Skinny collapsed handle
+                CollapsedPanelHandle(edge: .leading, isExpanded: $isSidebarExpanded)
             }
 
             // Main content
@@ -127,6 +141,11 @@ struct ResumeEditorModuleView: View {
                 jobAppStore.selectedApp = jobApp
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .toggleJobAppPane)) { _ in
+            withAnimation(.easeInOut(duration: 0.2)) {
+                isSidebarExpanded.toggle()
+            }
+        }
         .focusedValue(\.knowledgeCardsVisible, $showSlidingList)
     }
 
@@ -136,7 +155,7 @@ struct ResumeEditorModuleView: View {
         @Bindable var jobAppStore = jobAppStore
 
         return VStack(spacing: 0) {
-            // Sidebar header with collapse toggle
+            // Sidebar header with collapse chevron
             HStack {
                 Text("Jobs")
                     .font(.headline)
@@ -144,17 +163,11 @@ struct ResumeEditorModuleView: View {
 
                 Spacer()
 
-                PanelToggleButton(
-                    edge: .leading,
-                    isExpanded: $isSidebarExpanded,
-                    collapsedIcon: "sidebar.left",
-                    expandedIcon: "sidebar.left"
-                )
+                PanelChevronToggle(edge: .leading, isExpanded: $isSidebarExpanded)
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-
-            Divider()
+            .glassEffect(.regular, in: .rect(cornerRadius: 0))
 
             // Job list
             SidebarView(
@@ -162,8 +175,119 @@ struct ResumeEditorModuleView: View {
                 selectedApp: $jobAppStore.selectedApp,
                 showSlidingList: $showSlidingList
             )
+
+            // Resumes drawer at bottom
+            if jobAppStore.selectedApp != nil {
+                resumesDrawer
+            }
         }
-        .background(Color(.windowBackgroundColor))
+    }
+
+    // MARK: - Resumes Drawer
+
+    private var resumesDrawer: some View {
+        @Bindable var jobAppStore = jobAppStore
+
+        return VStack(spacing: 0) {
+            // Top shadow/separator for visual distinction
+            Rectangle()
+                .fill(Color.primary.opacity(0.2))
+                .frame(height: 1)
+                .shadow(color: .black.opacity(0.3), radius: 3, x: 0, y: 2)
+
+            // Disclosure header
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    isResumesDrawerExpanded.toggle()
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: isResumesDrawerExpanded ? "chevron.down" : "chevron.right")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 12)
+
+                    Text("Resumes")
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(.primary)
+
+                    // Resume count badge
+                    if let selApp = jobAppStore.selectedApp, !selApp.resumes.isEmpty {
+                        Text("\(selApp.resumes.count)")
+                            .font(.caption2.weight(.medium))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Capsule().fill(Color.secondary))
+                    }
+
+                    Spacer()
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            if isResumesDrawerExpanded, let selApp = jobAppStore.selectedApp {
+                @Bindable var selApp = selApp
+
+                VStack(spacing: 0) {
+                    // Resume list with resizable height
+                    if !selApp.resumes.isEmpty {
+                        // Drag handle at top of resume list
+                        HorizontalResizeHandle(
+                            height: $resumeListHeight,
+                            minHeight: minResumeListHeight,
+                            maxHeight: maxResumeListHeight,
+                            inverted: true
+                        )
+
+                        ScrollView {
+                            VStack(spacing: 2) {
+                                ForEach(selApp.resumes) { resume in
+                                    SidebarResumeRowView(
+                                        resume: resume,
+                                        isSelected: selApp.selectedRes?.id == resume.id,
+                                        onSelect: { selApp.selectedRes = resume }
+                                    )
+                                }
+                            }
+                            .padding(.horizontal, 8)
+                        }
+                        .frame(height: resumeListHeight)
+                    }
+
+                    Divider()
+                        .padding(.vertical, 8)
+
+                    // Template picker and create button
+                    VStack(spacing: 8) {
+                        HStack {
+                            Text("Select Template")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                        }
+
+                        HStack(spacing: 8) {
+                            TemplatePicker()
+                                .frame(maxWidth: .infinity)
+                                .glassEffect(.regular, in: .rect(cornerRadius: 6))
+
+                            Button("Create Resume") {
+                                createResume(for: selApp)
+                            }
+                            .buttonStyle(.glassProminent)
+                        }
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, 12)
+                }
+                .clipped()
+            }
+        }
+        .glassEffect(.regular, in: .rect(cornerRadius: 0))
     }
 
     // MARK: - Detail Content
@@ -172,30 +296,6 @@ struct ResumeEditorModuleView: View {
         @Bindable var navigationState = navigationState
 
         return VStack(alignment: .leading, spacing: 0) {
-            // Toolbar area with sidebar toggle when collapsed
-            if !isSidebarExpanded {
-                HStack {
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            isSidebarExpanded = true
-                        }
-                    } label: {
-                        Image(systemName: "sidebar.left")
-                            .font(.system(size: 14))
-                            .foregroundStyle(.secondary)
-                    }
-                    .buttonStyle(.plain)
-                    .help("Show sidebar")
-                    .padding(.leading, 12)
-
-                    Spacer()
-                }
-                .frame(height: 32)
-                .background(Color(.windowBackgroundColor))
-
-                Divider()
-            }
-
             if jobAppStore.selectedApp != nil {
                 AppWindowView(
                     selectedTab: $navigationState.selectedTab,
@@ -251,6 +351,14 @@ struct ResumeEditorModuleView: View {
 
     // MARK: - Helper Methods
 
+    private func createResume(for jobApp: JobApp) {
+        if let template = appEnvironment.templateStore.templates().first {
+            if resStore.create(jobApp: jobApp, sources: [], template: template) != nil {
+                tabRefresh.toggle()
+            }
+        }
+    }
+
     func updateMyLetter() {
         if let selectedApp = jobAppStore.selectedApp {
             let letter: CoverLetter
@@ -262,6 +370,59 @@ struct ResumeEditorModuleView: View {
             coverLetterStore.cL = letter
         } else {
             coverLetterStore.cL = nil
+        }
+    }
+}
+
+// MARK: - Sidebar Resume Row View
+
+private struct SidebarResumeRowView: View {
+    let resume: Resume
+    let isSelected: Bool
+    let onSelect: () -> Void
+
+    var body: some View {
+        Button(action: onSelect) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(resume.createdDateString)
+                    .font(.subheadline)
+                    .lineLimit(1)
+                    .foregroundStyle(isSelected ? .white : .primary)
+
+                Text(resume.template?.name ?? "No template")
+                    .font(.caption)
+                    .foregroundStyle(isSelected ? .white.opacity(0.8) : .secondary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(isSelected ? Color.accentColor : Color.clear)
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+// MARK: - Template Picker
+
+private struct TemplatePicker: View {
+    @Environment(AppEnvironment.self) private var appEnvironment
+    @State private var selectedTemplate: String = ""
+
+    var body: some View {
+        Picker("", selection: $selectedTemplate) {
+            ForEach(appEnvironment.templateStore.templates()) { template in
+                Text(template.name).tag(template.name)
+            }
+        }
+        .labelsHidden()
+        .onAppear {
+            if let first = appEnvironment.templateStore.templates().first {
+                selectedTemplate = first.name
+            }
         }
     }
 }

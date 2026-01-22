@@ -60,7 +60,6 @@ struct AppWindowView: View {
             ResumeSplitView(
                 isWide: .constant(true),
                 tab: $selectedTab,
-                showResumeInspector: $sheets.showResumeInspector,
                 refresh: $tabRefresh,
                 sheets: $sheets,
                 clarifyingQuestions: $clarifyingQuestions

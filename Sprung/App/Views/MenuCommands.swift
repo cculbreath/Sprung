@@ -65,6 +65,9 @@ extension Notification.Name {
     static let showDiscoveryEvents = Notification.Name("showDiscoveryEvents")
     static let showDiscoveryDailyBriefing = Notification.Name("showDiscoveryDailyBriefing")
     static let showDiscoveryWeeklyReview = Notification.Name("showDiscoveryWeeklyReview")
+    // Panel Toggle Commands
+    static let toggleJobAppPane = Notification.Name("toggleJobAppPane")
+
     // Window Commands (for toolbar buttons)
     static let showSettings = Notification.Name("showSettings")
     static let showApplicantProfile = Notification.Name("showApplicantProfile")
