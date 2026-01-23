@@ -44,9 +44,12 @@ struct ResumeSplitView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
+    private let minPdfPreviewWidth: CGFloat = 260
+    private let maxPdfPreviewWidth: CGFloat = 800
+
     private func mainEditorContent(selApp: JobApp, selRes: Resume) -> some View {
         ZStack(alignment: .topLeading) {
-            HSplitView {
+            HStack(spacing: 0) {
                 ResumeDetailView(
                     resume: selRes,
                     tab: $tab,
@@ -55,30 +58,14 @@ struct ResumeSplitView: View {
                 )
                 .frame(
                     minWidth: isWide ? 300 : 220,
-                    idealWidth: isWide ? 480 : 320,
                     maxWidth: .infinity,
                     maxHeight: .infinity
                 )
                 .id(selRes.id)
-                .layoutPriority(1)
 
                 if pdfPreviewVisible {
-                    GeometryReader { geometry in
-                        ResumePDFView(resume: selRes)
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                            .onChange(of: geometry.size.width) { _, newWidth in
-                                if newWidth > 200 {
-                                    pdfPreviewWidth = newWidth
-                                }
-                            }
-                    }
-                    .frame(
-                        minWidth: 260, idealWidth: pdfPreviewWidth,
-                        maxWidth: .infinity, maxHeight: .infinity
-                    )
-                    .id(selRes.id)
-                    .layoutPriority(1)
-                    .transition(.move(edge: .trailing).combined(with: .opacity))
+                    pdfPreviewSection(resume: selRes)
+                        .transition(.move(edge: .trailing).combined(with: .opacity))
                 }
             }
             .padding(.top, actionBarHeight)
@@ -111,6 +98,19 @@ struct ResumeSplitView: View {
                 .padding()
             }
         }
+    }
+
+    @ViewBuilder
+    private func pdfPreviewSection(resume: Resume) -> some View {
+        VerticalResizeHandle(
+            width: $pdfPreviewWidth,
+            minWidth: minPdfPreviewWidth,
+            maxWidth: maxPdfPreviewWidth
+        )
+
+        ResumePDFView(resume: resume)
+            .frame(width: pdfPreviewWidth)
+            .id(resume.id)
     }
 
     // MARK: - Empty States
