@@ -104,11 +104,12 @@ struct DebugSettingsView: View {
                     .buttonStyle(.bordered)
                     .disabled(isReprocessing || activeJobAppsCount == 0)
 
-                    if isReprocessing {
+                    if isReprocessing || pendingCount > 0 {
                         HStack(spacing: 6) {
                             ProgressView()
                                 .controlSize(.small)
-                            Text("\(pendingCount) of \(totalQueued) remaining")
+                            let total = totalQueued > 0 ? totalQueued : activeJobAppsCount
+                            Text("\(pendingCount) of \(total) remaining")
                                 .font(.footnote)
                                 .foregroundStyle(.secondary)
                                 .monospacedDigit()
@@ -116,9 +117,19 @@ struct DebugSettingsView: View {
                     }
                 }
 
-                Text("Re-runs skill matching and requirement extraction on \(activeJobAppsCount) active job applications.")
+                Text("Re-runs skill matching and requirement extraction on \(activeJobAppsCount) active job applications. Runs 5 jobs in parallel.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
+            }
+            .onAppear {
+                // Restore tracking if processing is still in progress
+                if pendingCount > 0 && !isReprocessing {
+                    isReprocessing = true
+                    if totalQueued == 0 {
+                        totalQueued = activeJobAppsCount
+                    }
+                    startProgressTracking()
+                }
             }
             .onDisappear {
                 progressTimer?.invalidate()
