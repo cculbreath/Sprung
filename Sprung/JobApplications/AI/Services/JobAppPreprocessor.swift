@@ -104,7 +104,7 @@ class JobAppPreprocessor {
     // MARK: - Concurrency Control
 
     /// Semaphore to limit concurrent preprocessing jobs
-    private let concurrencyLimit = 5
+    private let concurrencyLimit = 8
     private var activeJobCount = 0
     private var pendingJobs: [(jobApp: JobApp, cards: [KnowledgeCard], context: ModelContext)] = []
 

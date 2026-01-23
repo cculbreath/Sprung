@@ -117,7 +117,7 @@ struct DebugSettingsView: View {
                     }
                 }
 
-                Text("Re-runs skill matching and requirement extraction on \(activeJobAppsCount) active job applications. Runs 5 jobs in parallel.")
+                Text("Re-runs skill matching and requirement extraction on \(activeJobAppsCount) active job applications. Runs 8 jobs in parallel.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
