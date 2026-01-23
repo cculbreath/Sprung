@@ -96,6 +96,16 @@ struct ResumeEditorModuleView: View {
                 .zIndex(1000)
             }
         }
+        .toolbar(id: "sprungMainToolbar") {
+            buildUnifiedToolbar(
+                selectedTab: $navigationState.selectedTab,
+                listingButtons: $listingButtons,
+                refresh: $tabRefresh,
+                sheets: $sheets,
+                clarifyingQuestions: $clarifyingQuestions,
+                showNewAppSheet: $sheets.showNewJobApp
+            )
+        }
         .appSheets(sheets: $sheets, clarifyingQuestions: $clarifyingQuestions, refPopup: $refPopup)
         .onChange(of: jobAppStore.selectedApp) { _, newValue in
             navigationState.saveSelectedJobApp(newValue)
@@ -310,16 +320,6 @@ struct ResumeEditorModuleView: View {
                     Rectangle()
                         .fill(.clear)
                         .ignoresSafeArea(.all)
-                }
-                .toolbar(id: "sprungMainToolbar") {
-                    buildUnifiedToolbar(
-                        selectedTab: $navigationState.selectedTab,
-                        listingButtons: $listingButtons,
-                        refresh: $tabRefresh,
-                        sheets: $sheets,
-                        clarifyingQuestions: $clarifyingQuestions,
-                        showNewAppSheet: $sheets.showNewJobApp
-                    )
                 }
             } else {
                 emptyState

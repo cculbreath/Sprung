@@ -178,7 +178,7 @@ struct UnifiedToolbar: CustomizableToolbarContent {
                 .help("Open Settings")
             }
 
-            ToolbarItem(id: "templateEditor", placement: .primaryAction, showsByDefault: false) {
+            ToolbarItem(id: "templateEditorSecondary", placement: .primaryAction, showsByDefault: false) {
                 Button("Templates", systemImage: "compass.drawing") {
                     Task { @MainActor in
                         if !NSApp.sendAction(#selector(AppDelegate.showTemplateEditorWindow), to: nil, from: nil),

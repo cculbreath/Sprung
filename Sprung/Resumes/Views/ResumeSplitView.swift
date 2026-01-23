@@ -19,6 +19,8 @@ struct ResumeSplitView: View {
     @Binding var clarifyingQuestions: [ClarifyingQuestion]
 
     @State private var showCreateResumeSheet = false
+    @AppStorage("pdfPreviewVisible") private var pdfPreviewVisible = true
+    @AppStorage("pdfPreviewWidth") private var pdfPreviewWidth: Double = 360
 
     private let actionBarHeight: CGFloat = 52
 
@@ -60,15 +62,27 @@ struct ResumeSplitView: View {
                 .id(selRes.id)
                 .layoutPriority(1)
 
-                ResumePDFView(resume: selRes)
+                if pdfPreviewVisible {
+                    GeometryReader { geometry in
+                        ResumePDFView(resume: selRes)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .onChange(of: geometry.size.width) { _, newWidth in
+                                if newWidth > 200 {
+                                    pdfPreviewWidth = newWidth
+                                }
+                            }
+                    }
                     .frame(
-                        minWidth: 260, idealWidth: 360,
+                        minWidth: 260, idealWidth: pdfPreviewWidth,
                         maxWidth: .infinity, maxHeight: .infinity
                     )
                     .id(selRes.id)
                     .layoutPriority(1)
+                    .transition(.move(edge: .trailing).combined(with: .opacity))
+                }
             }
             .padding(.top, actionBarHeight)
+            .animation(.easeInOut(duration: 0.2), value: pdfPreviewVisible)
 
             // Actions bar overlay
             VStack(spacing: 0) {
@@ -76,7 +90,8 @@ struct ResumeSplitView: View {
                     selectedTab: $tab,
                     sheets: $sheets,
                     clarifyingQuestions: $clarifyingQuestions,
-                    showCreateResumeSheet: $showCreateResumeSheet
+                    showCreateResumeSheet: $showCreateResumeSheet,
+                    pdfPreviewVisible: $pdfPreviewVisible
                 )
                 Divider()
             }
@@ -149,6 +164,7 @@ private struct ResumeActionsBar: View {
     @Binding var sheets: AppSheets
     @Binding var clarifyingQuestions: [ClarifyingQuestion]
     @Binding var showCreateResumeSheet: Bool
+    @Binding var pdfPreviewVisible: Bool
 
     var body: some View {
         HStack(spacing: 12) {
@@ -180,6 +196,18 @@ private struct ResumeActionsBar: View {
             }
             .buttonStyle(.automatic)
             .help("Create a new resume for this job application")
+
+            // PDF preview toggle
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    pdfPreviewVisible.toggle()
+                }
+            } label: {
+                Label(pdfPreviewVisible ? "Hide Preview" : "Show Preview", systemImage: "document.viewfinder")
+                    .font(.system(size: 14, weight: .light))
+            }
+            .buttonStyle(.automatic)
+            .help(pdfPreviewVisible ? "Hide PDF preview" : "Show PDF preview")
         }
         .padding(.horizontal)
         .padding(.top, 8)
