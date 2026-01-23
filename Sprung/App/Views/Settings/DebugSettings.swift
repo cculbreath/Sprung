@@ -10,7 +10,8 @@ struct DebugSettingsView: View {
     @Environment(JobAppStore.self) private var jobAppStore
     @State private var showClearSkillsConfirmation = false
     @State private var isReprocessing = false
-    @State private var reprocessingCount = 0
+    @State private var totalQueued = 0
+    @State private var progressTimer: Timer?
 
     private var saveDebugPromptsBinding: Binding<Bool> {
         Binding(
@@ -94,26 +95,24 @@ struct DebugSettingsView: View {
                 .padding(.vertical, 4)
 
             VStack(alignment: .leading, spacing: 8) {
-                HStack {
+                HStack(spacing: 12) {
                     Button {
                         rerunPreprocessingOnActiveApps()
                     } label: {
-                        if isReprocessing {
-                            ProgressView()
-                                .controlSize(.small)
-                                .frame(width: 16, height: 16)
-                            Text("Processing...")
-                        } else {
-                            Text("Re-run Preprocessing")
-                        }
+                        Text("Re-run Preprocessing")
                     }
                     .buttonStyle(.bordered)
                     .disabled(isReprocessing || activeJobAppsCount == 0)
 
-                    if reprocessingCount > 0 {
-                        Text("\(reprocessingCount) queued")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
+                    if isReprocessing {
+                        HStack(spacing: 6) {
+                            ProgressView()
+                                .controlSize(.small)
+                            Text("\(pendingCount) of \(totalQueued) remaining")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                                .monospacedDigit()
+                        }
                     }
                 }
 
@@ -121,33 +120,55 @@ struct DebugSettingsView: View {
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
+            .onDisappear {
+                progressTimer?.invalidate()
+            }
         }
     }
 
-    /// Count of job apps that are not in terminal states (submitted, withdrawn, rejected, accepted)
-    private var activeJobAppsCount: Int {
+    /// Job apps not in terminal states (submitted, withdrawn, rejected, accepted)
+    private var activeJobApps: [JobApp] {
         jobAppStore.jobApps.filter { app in
             app.status != .submitted && app.status != .withdrawn && app.status != .rejected && app.status != .accepted
-        }.count
+        }
+    }
+
+    private var activeJobAppsCount: Int {
+        activeJobApps.count
+    }
+
+    /// Count of active apps still waiting for preprocessing (extractedRequirements is nil)
+    private var pendingCount: Int {
+        activeJobApps.filter { $0.extractedRequirements == nil }.count
     }
 
     private func rerunPreprocessingOnActiveApps() {
-        let activeApps = jobAppStore.jobApps.filter { app in
-            app.status != .submitted && app.status != .withdrawn && app.status != .rejected && app.status != .accepted
-        }
+        let apps = activeJobApps
+        guard !apps.isEmpty else { return }
 
-        guard !activeApps.isEmpty else { return }
-
+        // Clear existing data and queue for reprocessing
+        totalQueued = apps.count
         isReprocessing = true
-        reprocessingCount = activeApps.count
 
-        for app in activeApps {
+        for app in apps {
             jobAppStore.rerunPreprocessing(for: app)
         }
 
-        // Reset state after a delay (preprocessing is async)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-            isReprocessing = false
+        // Start polling for completion
+        startProgressTracking()
+    }
+
+    private func startProgressTracking() {
+        progressTimer?.invalidate()
+        progressTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [self] timer in
+            Task { @MainActor in
+                let remaining = pendingCount
+                if remaining == 0 {
+                    timer.invalidate()
+                    progressTimer = nil
+                    isReprocessing = false
+                }
+            }
         }
     }
 }
