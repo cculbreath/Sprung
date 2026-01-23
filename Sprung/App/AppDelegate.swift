@@ -30,6 +30,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var skillStore: SkillStore?
     var titleSetStore: TitleSetStore?
     var candidateDossierStore: CandidateDossierStore?
+    var jobAppStore: JobAppStore?
     func applicationDidFinishLaunching(_: Notification) {
         // Wait until the app is fully loaded before modifying the menu
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
@@ -133,7 +134,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                let careerKeywordStore = self.careerKeywordStore,
                let guidanceStore = self.guidanceStore,
                let searchOpsCoordinator = self.searchOpsCoordinator,
-               let skillStore = self.skillStore {
+               let skillStore = self.skillStore,
+               let jobAppStore = self.jobAppStore {
                 let appState = appEnvironment.appState
                 let debugSettingsStore = appState.debugSettingsStore ?? appEnvironment.debugSettingsStore
                 let root = settingsView
@@ -151,6 +153,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     .environment(debugSettingsStore)
                     .environment(searchOpsCoordinator)
                     .environment(skillStore)
+                    .environment(jobAppStore)
                     .modelContainer(container)
                 hostingView = NSHostingView(rootView: AnyView(root))
             } else {
