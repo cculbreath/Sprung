@@ -431,6 +431,7 @@ extension TreeNode {
         schemaTitleTemplate = descriptor?.titleTemplate
         schemaAllowsChildMutation = descriptor?.allowsManualMutations ?? false
         schemaAllowsNodeDeletion = descriptor?.allowsManualMutations ?? false
+        schemaSourceKey = descriptor?.sourceKey
         if let validation = descriptor?.validation {
             schemaValidationRule = validation.rule.rawValue
             schemaValidationMessage = validation.message

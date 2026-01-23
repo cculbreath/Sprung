@@ -104,6 +104,7 @@ struct TemplateManifest: Codable {
             case behavior
             case binding
             case allowsManualMutations
+            case sourceKey
         }
         struct Validation: Codable {
             enum Rule: String, Codable {
@@ -136,6 +137,8 @@ struct TemplateManifest: Codable {
             let behavior: Behavior?
             let binding: Binding?
             let allowsManualMutations: Bool
+            /// Source key for browsing (e.g., "skillBank" enables skill bank browser)
+            let sourceKey: String?
             init(
                 key: String,
                 input: InputKind? = nil,
@@ -147,7 +150,8 @@ struct TemplateManifest: Codable {
                 placeholder: String? = nil,
                 behavior: Behavior? = nil,
                 binding: Binding? = nil,
-                allowsManualMutations: Bool = false
+                allowsManualMutations: Bool = false,
+                sourceKey: String? = nil
             ) {
                 self.key = key
                 self.input = input
@@ -160,6 +164,7 @@ struct TemplateManifest: Codable {
                 self.behavior = behavior
                 self.binding = binding
                 self.allowsManualMutations = allowsManualMutations
+                self.sourceKey = sourceKey
             }
             init(from decoder: Decoder) throws {
                 let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -174,6 +179,7 @@ struct TemplateManifest: Codable {
                 behavior = try container.decodeIfPresent(Behavior.self, forKey: .behavior)
                 binding = try container.decodeIfPresent(Binding.self, forKey: .binding)
                 allowsManualMutations = try container.decodeIfPresent(Bool.self, forKey: .allowsManualMutations) ?? false
+                sourceKey = try container.decodeIfPresent(String.self, forKey: .sourceKey)
             }
             func encode(to encoder: Encoder) throws {
                 var container = encoder.container(keyedBy: CodingKeys.self)
@@ -194,6 +200,7 @@ struct TemplateManifest: Codable {
                 if allowsManualMutations {
                     try container.encode(allowsManualMutations, forKey: .allowsManualMutations)
                 }
+                try container.encodeIfPresent(sourceKey, forKey: .sourceKey)
             }
         }
         /// Tracks whether section metadata was declared in the manifest or

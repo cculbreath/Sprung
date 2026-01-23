@@ -7,7 +7,10 @@ import SwiftUI
 struct DebugSettingsView: View {
     @Environment(DebugSettingsStore.self) private var debugSettings
     @Environment(SkillStore.self) private var skillStore
+    @Environment(JobAppStore.self) private var jobAppStore
     @State private var showClearSkillsConfirmation = false
+    @State private var isReprocessing = false
+    @State private var reprocessingCount = 0
 
     private var saveDebugPromptsBinding: Binding<Bool> {
         Binding(
@@ -86,6 +89,65 @@ struct DebugSettingsView: View {
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
+
+            Divider()
+                .padding(.vertical, 4)
+
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Button {
+                        rerunPreprocessingOnActiveApps()
+                    } label: {
+                        if isReprocessing {
+                            ProgressView()
+                                .controlSize(.small)
+                                .frame(width: 16, height: 16)
+                            Text("Processing...")
+                        } else {
+                            Text("Re-run Preprocessing")
+                        }
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(isReprocessing || activeJobAppsCount == 0)
+
+                    if reprocessingCount > 0 {
+                        Text("\(reprocessingCount) queued")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                Text("Re-runs skill matching and requirement extraction on \(activeJobAppsCount) active job applications.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    /// Count of job apps that are not in terminal states (submitted, withdrawn, rejected, accepted)
+    private var activeJobAppsCount: Int {
+        jobAppStore.jobApps.filter { app in
+            app.status != .submitted && app.status != .withdrawn && app.status != .rejected && app.status != .accepted
+        }.count
+    }
+
+    private func rerunPreprocessingOnActiveApps() {
+        let activeApps = jobAppStore.jobApps.filter { app in
+            app.status != .submitted && app.status != .withdrawn && app.status != .rejected && app.status != .accepted
+        }
+
+        guard !activeApps.isEmpty else { return }
+
+        isReprocessing = true
+        reprocessingCount = activeApps.count
+
+        for app in activeApps {
+            jobAppStore.rerunPreprocessing(for: app)
+        }
+
+        // Reset state after a delay (preprocessing is async)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+            isReprocessing = false
         }
     }
 }

@@ -181,7 +181,6 @@ private struct ResumeActionsBar: View {
             .buttonStyle(.automatic)
             .help("Create a new resume for this job application")
         }
-        .controlSize(.large)
         .padding(.horizontal)
         .padding(.top, 8)
         .padding(.bottom, 6)

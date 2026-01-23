@@ -60,9 +60,46 @@ class JobAppPreprocessor {
             additionalProperties: false
         )
     }()
+
+    /// Schema for skill matching response (second LLM call)
+    private static let skillMatchingSchema: JSONSchema = {
+        let skillRecommendationSchema = JSONSchema(
+            type: .object,
+            description: "A skill the user likely has based on existing expertise",
+            properties: [
+                "skill_name": JSONSchema(type: .string, description: "The job requirement skill they likely have"),
+                "category": JSONSchema(type: .string, description: "SkillCategory raw value"),
+                "confidence": JSONSchema(type: .string, description: "high, medium, or low"),
+                "reason": JSONSchema(type: .string, description: "Why this skill is inferred"),
+                "related_user_skills": JSONSchema(type: .array, description: "User skills suggesting this", items: JSONSchema(type: .string)),
+                "source_card_ids": JSONSchema(type: .array, description: "KC UUIDs evidencing this", items: JSONSchema(type: .string))
+            ],
+            required: ["skill_name", "category", "confidence", "reason", "related_user_skills", "source_card_ids"]
+        )
+
+        return JSONSchema(
+            type: .object,
+            description: "Skill matching and adjacent skill inference",
+            properties: [
+                "matched_skill_ids": JSONSchema(
+                    type: .array,
+                    description: "UUIDs of user skills that match job requirements",
+                    items: JSONSchema(type: .string)
+                ),
+                "skill_recommendations": JSONSchema(
+                    type: .array,
+                    description: "Skills the user likely has based on existing expertise",
+                    items: skillRecommendationSchema
+                )
+            ],
+            required: ["matched_skill_ids", "skill_recommendations"],
+            additionalProperties: false
+        )
+    }()
     // MARK: - Dependencies
 
     private weak var llmFacade: LLMFacade?
+    private weak var skillStore: SkillStore?
 
     // MARK: - Concurrency Control
 
@@ -85,6 +122,11 @@ class JobAppPreprocessor {
     init(llmFacade: LLMFacade?) {
         self.llmFacade = llmFacade
         Logger.info("🔧 JobAppPreprocessor initialized", category: .ai)
+    }
+
+    /// Set the skill store for skill matching during preprocessing
+    func setSkillStore(_ skillStore: SkillStore) {
+        self.skillStore = skillStore
     }
 
     // MARK: - Public API
@@ -156,8 +198,17 @@ class JobAppPreprocessor {
             )
         }
 
-        // Build card summaries for the LLM
-        let cardSummaries = cards.map { "- \($0.id.uuidString): \($0.title)" }.joined(separator: "\n")
+        // Build enriched card summaries with technologies and domains
+        let cardSummaries = cards.map { card -> String in
+            var summary = "- [\(card.id.uuidString)]: \(card.title)"
+            if !card.technologies.isEmpty {
+                summary += "\n  Technologies: \(card.technologies.joined(separator: ", "))"
+            }
+            if !card.extractable.domains.isEmpty {
+                summary += "\n  Domains: \(card.extractable.domains.joined(separator: ", "))"
+            }
+            return summary
+        }.joined(separator: "\n")
 
         let prompt = """
         Analyze this job posting and identify:
@@ -198,6 +249,26 @@ class JobAppPreprocessor {
             backend: .openRouter
         )
 
+        // Second call: Skill matching and inference (only if skill store available)
+        var matchedSkillIds: [String] = []
+        var skillRecommendations: [SkillRecommendation] = []
+
+        if let skillStore = skillStore {
+            let skills = await MainActor.run { skillStore.skills }
+            if !skills.isEmpty {
+                let skillResult = try await inferSkills(
+                    atsKeywords: response.atsKeywords,
+                    skills: skills,
+                    cards: cards,
+                    relevantCardIds: response.relevantCardIds,
+                    facade: facade,
+                    modelId: modelId
+                )
+                matchedSkillIds = skillResult.matchedSkillIds
+                skillRecommendations = skillResult.skillRecommendations.map { $0.toModel() }
+            }
+        }
+
         return PreprocessingResult(
             requirements: ExtractedRequirements(
                 mustHave: response.mustHave,
@@ -206,9 +277,93 @@ class JobAppPreprocessor {
                 cultural: response.cultural,
                 atsKeywords: response.atsKeywords,
                 extractedAt: Date(),
-                extractionModel: modelId
+                extractionModel: modelId,
+                matchedSkillIds: matchedSkillIds,
+                skillRecommendations: skillRecommendations
             ),
             relevantCardIds: response.relevantCardIds
+        )
+    }
+
+    // MARK: - Skill Inference (Second LLM Call)
+
+    private func inferSkills(
+        atsKeywords: [String],
+        skills: [Skill],
+        cards: [KnowledgeCard],
+        relevantCardIds: [String],
+        facade: LLMFacade,
+        modelId: String
+    ) async throws -> SkillMatchingResponse {
+        // Build skill bank summary
+        let skillSummaries = skills.map { skill -> String in
+            var line = "[\(skill.id.uuidString)]: \(skill.canonical) (\(skill.category.rawValue))"
+            if !skill.atsVariants.isEmpty {
+                line += " - variants: \(skill.atsVariants.joined(separator: ", "))"
+            }
+            return line
+        }.joined(separator: "\n")
+
+        // Build relevant cards summary (enriched)
+        let relevantCards = cards.filter { relevantCardIds.contains($0.id.uuidString) }
+        let relevantCardSummaries = relevantCards.map { card -> String in
+            var summary = "[\(card.id.uuidString)]: \(card.title)"
+            if !card.technologies.isEmpty {
+                summary += "\n  Technologies: \(card.technologies.joined(separator: ", "))"
+            }
+            if !card.extractable.domains.isEmpty {
+                summary += "\n  Domains: \(card.extractable.domains.joined(separator: ", "))"
+            }
+            return summary
+        }.joined(separator: "\n")
+
+        let prompt = """
+        Match user skills to job requirements and identify adjacent skills they likely have.
+
+        JOB REQUIREMENTS (ATS Keywords):
+        \(atsKeywords.joined(separator: ", "))
+
+        USER'S SKILL BANK:
+        \(skillSummaries)
+
+        RELEVANT KNOWLEDGE CARDS (evidence of experience):
+        \(relevantCardSummaries)
+
+        ---
+
+        TASK 1 - SKILL MATCHING:
+        Identify which skills from the user's skill bank match the job requirements.
+        Consider both exact matches and semantic equivalents (e.g., "Python" matches "python3").
+        Return their UUIDs in matched_skill_ids.
+
+        TASK 2 - ADJACENT SKILL INFERENCE:
+        Identify skills from the job requirements that the user likely has but hasn't explicitly listed.
+        Base these on:
+        1. Domain adjacency: If user has skills A and B in a domain, they likely have related skill C
+        2. Technology ecosystem: Skills often cluster (e.g., welding → flame cutting, SQL → database design)
+        3. KnowledgeCard evidence: Technologies/domains in cards suggest related capabilities
+
+        For each suggested skill:
+        - skill_name: The job requirement skill they likely have
+        - category: Appropriate SkillCategory (Programming Languages, Frameworks & Libraries, Tools & Platforms, Hardware & Electronics, Fabrication & Manufacturing, Scientific & Analysis, Leadership & Communication, Domain Expertise)
+        - confidence: "high" if multiple signals, "medium" if single strong signal, "low" if plausible inference
+        - reason: Brief explanation of why this is inferred
+        - related_user_skills: User's existing skill names that suggest this capability
+        - source_card_ids: KnowledgeCard UUIDs supporting this inference
+
+        Only suggest skills that MATCH JOB REQUIREMENTS. Don't suggest random related skills.
+
+        Return JSON matching the required structure.
+        """
+
+        return try await facade.executeStructuredWithSchema(
+            prompt: prompt,
+            modelId: modelId,
+            as: SkillMatchingResponse.self,
+            schema: Self.skillMatchingSchema,
+            schemaName: "skill_matching_response",
+            temperature: 0.2,
+            backend: .openRouter
         )
     }
 }
@@ -230,6 +385,45 @@ private struct PreprocessingResponse: Codable, Sendable {
         case cultural
         case atsKeywords = "ats_keywords"
         case relevantCardIds = "relevant_card_ids"
+    }
+}
+
+private struct SkillMatchingResponse: Codable, Sendable {
+    let matchedSkillIds: [String]
+    let skillRecommendations: [SkillRecommendationResponse]
+
+    enum CodingKeys: String, CodingKey {
+        case matchedSkillIds = "matched_skill_ids"
+        case skillRecommendations = "skill_recommendations"
+    }
+}
+
+private struct SkillRecommendationResponse: Codable, Sendable {
+    let skillName: String
+    let category: String
+    let confidence: String
+    let reason: String
+    let relatedUserSkills: [String]
+    let sourceCardIds: [String]
+
+    enum CodingKeys: String, CodingKey {
+        case skillName = "skill_name"
+        case category
+        case confidence
+        case reason
+        case relatedUserSkills = "related_user_skills"
+        case sourceCardIds = "source_card_ids"
+    }
+
+    func toModel() -> SkillRecommendation {
+        SkillRecommendation(
+            skillName: skillName,
+            category: category,
+            confidence: confidence,
+            reason: reason,
+            relatedUserSkills: relatedUserSkills,
+            sourceCardIds: sourceCardIds
+        )
     }
 }
 

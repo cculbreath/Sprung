@@ -195,6 +195,7 @@ final class AppDependencies {
 
         // Job App Preprocessor (background processing for job requirements and card selection)
         let jobAppPreprocessor = JobAppPreprocessor(llmFacade: llmFacade)
+        jobAppPreprocessor.setSkillStore(skillStore)
         jobAppStore.setPreprocessor(jobAppPreprocessor, knowledgeCardStore: knowledgeCardStore)
 
         self.appEnvironment = AppEnvironment(

@@ -88,6 +88,19 @@
       ],
       "type" : "arrayOfObjects"
     },
+    "skills" : {
+      "type" : "arrayOfObjects",
+      "fields" : [
+        { "key" : "name", "input" : "text" },
+        { "key" : "level", "input" : "text" },
+        {
+          "key" : "keywords",
+          "input" : "chips",
+          "allowsManualMutations" : true,
+          "sourceKey" : "skillBank"
+        }
+      ]
+    },
     "work" : {
       "hiddenFields" : [
         "description",

@@ -56,22 +56,15 @@ struct UnifiedToolbar: CustomizableToolbarContent {
                 .help("Create new job listing")
             }
 
-            ToolbarItem(id: "discovery", placement: .navigation, showsByDefault: true) {
+            ToolbarItem(id: "templateEditor", placement: .navigation, showsByDefault: true) {
                 Button(action: {
-                    Task { @MainActor in
-                        Logger.info("🔍 Toolbar Discovery button tapped", category: .ui)
-                        NotificationCenter.default.post(name: .showDiscovery, object: nil)
-                        if !NSApp.sendAction(#selector(AppDelegate.showDiscoveryWindow), to: nil, from: nil),
-                           let delegate = NSApplication.shared.delegate as? AppDelegate {
-                            delegate.showDiscoveryWindow()
-                        }
-                    }
+                    NotificationCenter.default.post(name: .showTemplateEditor, object: nil)
                 }, label: {
-                    Label("Discovery", systemImage: "magnifyingglass.circle")
+                    Label("Templates", systemImage: "compass.drawing")
                         .font(.system(size: 14, weight: .light))
                 })
                 .buttonStyle(.automatic)
-                .help("Open Discovery")
+                .help("Open Template Editor")
             }
 
             ToolbarItem(id: "bestJob", placement: .navigation, showsByDefault: false) {
