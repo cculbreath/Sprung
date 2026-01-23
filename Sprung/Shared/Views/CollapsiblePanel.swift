@@ -171,6 +171,7 @@ struct VerticalResizeHandle: View {
     @Binding var width: Double
     let minWidth: CGFloat
     let maxWidth: CGFloat
+    var inverted: Bool = false  // If true, dragging left increases width (for trailing panels)
 
     @State private var isHovered = false
     @State private var isDragging = false
@@ -197,7 +198,8 @@ struct VerticalResizeHandle: View {
                             dragStartWidth = width
                             NSCursor.resizeLeftRight.push()
                         }
-                        let newWidth = dragStartWidth + value.translation.width
+                        let delta = inverted ? -value.translation.width : value.translation.width
+                        let newWidth = dragStartWidth + delta
                         width = min(max(newWidth, Double(minWidth)), Double(maxWidth))
                     }
                     .onEnded { _ in

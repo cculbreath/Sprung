@@ -105,7 +105,8 @@ struct ResumeSplitView: View {
         VerticalResizeHandle(
             width: $pdfPreviewWidth,
             minWidth: minPdfPreviewWidth,
-            maxWidth: maxPdfPreviewWidth
+            maxWidth: maxPdfPreviewWidth,
+            inverted: true
         )
 
         ResumePDFView(resume: resume)
