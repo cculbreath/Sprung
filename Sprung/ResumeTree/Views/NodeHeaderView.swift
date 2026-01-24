@@ -929,10 +929,10 @@ enum AIReviewMode {
         switch self {
         case .bundle: return "square.on.square.squareshape.controlhandles"
         case .iterate: return "flowchart"
-        case .solo: return "sparkles"  // Use sparkles for solo - consistent with SparkleButton
-        case .containsSolo: return "sparkles"  // Not shown, but needed for completeness
-        case .included: return "sparkles"
-        case .off: return "sparkles"
+        case .solo: return "target"  // Target for single node AI review
+        case .containsSolo: return "target"
+        case .included: return "target"
+        case .off: return "sparkles"  // Sparkles for general AI menu
         }
     }
 }

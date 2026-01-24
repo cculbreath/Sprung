@@ -132,9 +132,29 @@ struct ResumeEntryCardView: View {
 
     @ViewBuilder
     private func nestedContainerRow(_ child: TreeNode) -> some View {
+        let containerName = child.name.isEmpty ? child.displayLabel : child.name
+        let collectionNode = node.parent  // The section (e.g., Skills)
+        let isBundled = collectionNode?.bundledAttributes?.contains(containerName) == true
+        let isIteratedBundled = collectionNode?.enumeratedAttributes?.contains(containerName) == true
+        let isIteratedEach = collectionNode?.enumeratedAttributes?.contains(containerName + "[]") == true
+        let hasAIConfig = isBundled || isIteratedBundled || isIteratedEach
+
+        // Accent color for the container
+        let accentColor: Color? = {
+            if isBundled { return .purple }
+            if isIteratedBundled || isIteratedEach { return .cyan }
+            return nil
+        }()
+
         VStack(alignment: .leading, spacing: 6) {
-            // Header row
+            // Header row with optional accent bar
             HStack(spacing: 6) {
+                if let color = accentColor {
+                    RoundedRectangle(cornerRadius: 1)
+                        .fill(color.opacity(0.6))
+                        .frame(width: 3, height: 14)
+                }
+
                 Text(child.displayLabel)
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(.secondary)
@@ -170,6 +190,85 @@ struct ResumeEntryCardView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
+        .contextMenu {
+            if let collection = collectionNode {
+                Text("AI Review: \(containerName)")
+
+                Divider()
+
+                // Bundle all (1 review for all items across all entries)
+                Button {
+                    setContainerMode(collection: collection, attr: containerName, mode: .bundle)
+                } label: {
+                    HStack {
+                        Image(systemName: "square.on.square.squareshape.controlhandles")
+                            .foregroundColor(.purple)
+                        Text("Bundle – 1 review")
+                        if isBundled { Image(systemName: "checkmark") }
+                    }
+                }
+
+                // Iterate bundled (N reviews, each entry's items together)
+                Button {
+                    setContainerMode(collection: collection, attr: containerName, mode: .iterate)
+                } label: {
+                    HStack {
+                        Image(systemName: "flowchart")
+                            .foregroundColor(.cyan)
+                        Text("Iterate (bundled) – N reviews")
+                        if isIteratedBundled { Image(systemName: "checkmark") }
+                    }
+                }
+
+                // Iterate each (N×M reviews, each item separate)
+                Button {
+                    setContainerMode(collection: collection, attr: containerName + "[]", mode: .iterate)
+                } label: {
+                    HStack {
+                        Image(systemName: "flowchart")
+                            .foregroundColor(.cyan)
+                        Text("Iterate (each) – N×M reviews")
+                        if isIteratedEach { Image(systemName: "checkmark") }
+                    }
+                }
+
+                if hasAIConfig {
+                    Divider()
+
+                    Button(role: .destructive) {
+                        setContainerMode(collection: collection, attr: containerName, mode: .off)
+                    } label: {
+                        Label("Disable AI Review", systemImage: "xmark.circle")
+                    }
+                }
+            }
+        }
+    }
+
+    private func setContainerMode(collection: TreeNode, attr: String, mode: AIReviewMode) {
+        let baseAttr = attr.replacingOccurrences(of: "[]", with: "")
+        let attrWithSuffix = baseAttr + "[]"
+
+        // Remove from both lists
+        if var bundled = collection.bundledAttributes {
+            bundled.removeAll { $0 == baseAttr || $0 == attrWithSuffix }
+            collection.bundledAttributes = bundled.isEmpty ? nil : bundled
+        }
+        if var enumerated = collection.enumeratedAttributes {
+            enumerated.removeAll { $0 == baseAttr || $0 == attrWithSuffix }
+            collection.enumeratedAttributes = enumerated.isEmpty ? nil : enumerated
+        }
+
+        // Add to appropriate list
+        if mode == .bundle {
+            var bundled = collection.bundledAttributes ?? []
+            bundled.append(baseAttr)
+            collection.bundledAttributes = bundled
+        } else if mode == .iterate {
+            var enumerated = collection.enumeratedAttributes ?? []
+            enumerated.append(attr)  // Use the attr as-is (may have [] suffix)
+            collection.enumeratedAttributes = enumerated
+        }
     }
 
     // MARK: - Helpers
@@ -229,6 +328,32 @@ private struct FieldValueEditor: View {
         return nil
     }
 
+    /// The collection (grandparent) node for AI configuration
+    private var collectionNode: TreeNode? {
+        node.parent?.parent
+    }
+
+    /// Attribute name for AI configuration
+    private var attrName: String {
+        node.name.isEmpty ? node.displayLabel : node.name
+    }
+
+    /// Whether this field can be configured for AI review
+    private var supportsAIConfig: Bool {
+        guard let collection = collectionNode else { return false }
+        return collection.parent != nil  // Has a great-grandparent (is under a collection)
+    }
+
+    /// Whether this attribute is bundled
+    private var isBundled: Bool {
+        collectionNode?.bundledAttributes?.contains(attrName) == true
+    }
+
+    /// Whether this attribute is iterated
+    private var isIterated: Bool {
+        collectionNode?.enumeratedAttributes?.contains(attrName) == true
+    }
+
     var body: some View {
         HStack(alignment: .top, spacing: 0) {
             // AI accent bar
@@ -247,6 +372,77 @@ private struct FieldValueEditor: View {
             }
         }
         .onHover { isHovering = $0 }
+        .contextMenu {
+            if supportsAIConfig {
+                attributeAIContextMenu
+            }
+        }
+    }
+
+    // MARK: - AI Context Menu
+
+    @ViewBuilder
+    private var attributeAIContextMenu: some View {
+        Text("AI Review: \(attrName)")
+
+        Divider()
+
+        Button {
+            setAttributeMode(.bundle)
+        } label: {
+            HStack {
+                Image(systemName: "square.on.square.squareshape.controlhandles")
+                    .foregroundColor(.purple)
+                Text("Bundle – 1 review")
+                if isBundled { Image(systemName: "checkmark") }
+            }
+        }
+
+        Button {
+            setAttributeMode(.iterate)
+        } label: {
+            HStack {
+                Image(systemName: "flowchart")
+                    .foregroundColor(.cyan)
+                Text("Iterate – N reviews")
+                if isIterated { Image(systemName: "checkmark") }
+            }
+        }
+
+        if hasAIReview {
+            Divider()
+
+            Button(role: .destructive) {
+                setAttributeMode(.off)
+            } label: {
+                Label("Disable AI Review", systemImage: "xmark.circle")
+            }
+        }
+    }
+
+    private func setAttributeMode(_ mode: AIReviewMode) {
+        guard let collection = collectionNode else { return }
+
+        // Remove from both first
+        if var bundled = collection.bundledAttributes {
+            bundled.removeAll { $0 == attrName }
+            collection.bundledAttributes = bundled.isEmpty ? nil : bundled
+        }
+        if var enumerated = collection.enumeratedAttributes {
+            enumerated.removeAll { $0 == attrName }
+            collection.enumeratedAttributes = enumerated.isEmpty ? nil : enumerated
+        }
+
+        // Add to appropriate list
+        if mode == .bundle {
+            var bundled = collection.bundledAttributes ?? []
+            bundled.append(attrName)
+            collection.bundledAttributes = bundled
+        } else if mode == .iterate {
+            var enumerated = collection.enumeratedAttributes ?? []
+            enumerated.append(attrName)
+            collection.enumeratedAttributes = enumerated
+        }
     }
 
     @ViewBuilder

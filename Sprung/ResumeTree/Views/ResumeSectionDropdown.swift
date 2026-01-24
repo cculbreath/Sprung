@@ -3,7 +3,7 @@
 //  Sprung
 //
 //  Section picker for navigating between resume sections.
-//  Shows AI indicator with context menu when the selected section has AI configuration.
+//  Shows AI configuration button (sparkle) for sections that support AI review.
 //
 
 import SwiftUI
@@ -53,7 +53,7 @@ struct ResumeSectionDropdown: View {
 
             // Navigation row
             HStack(spacing: 8) {
-                // Previous section button (circled)
+                // Previous section button
                 Button {
                     if canGoPrevious {
                         selectedSection = sections[currentIndex - 1].name
@@ -67,14 +67,13 @@ struct ResumeSectionDropdown: View {
                 .disabled(!canGoPrevious)
                 .help("Previous section")
 
-                // Section picker with AI indicators in menu
+                // Section picker
                 Menu {
                     ForEach(sections) { section in
                         Button {
                             selectedSection = section.name
                         } label: {
                             HStack {
-                                // AI status indicator (colored symbol only, not a badge)
                                 if sectionHasAIConfig(section.node) {
                                     let mode = detectAIMode(for: section.node)
                                     Image(systemName: mode.icon)
@@ -104,7 +103,7 @@ struct ResumeSectionDropdown: View {
                 }
                 .menuStyle(.borderlessButton)
 
-                // Next section button (circled)
+                // Next section button
                 Button {
                     if canGoNext {
                         selectedSection = sections[currentIndex + 1].name
@@ -118,9 +117,9 @@ struct ResumeSectionDropdown: View {
                 .disabled(!canGoNext)
                 .help("Next section")
 
-                // AI indicator for the selected section (interactive with context menu)
-                if let node = selectedSectionNode, sectionHasAIConfig(node) {
-                    SectionAIModeButton(node: node)
+                // AI configuration button (always show for collections)
+                if let node = selectedSectionNode, sectionSupportsAIConfig(node) {
+                    SectionAIModeMenu(node: node)
                 }
 
                 Spacer()
@@ -130,19 +129,16 @@ struct ResumeSectionDropdown: View {
         }
     }
 
-    /// Check if a section node has any AI configuration
     private func sectionHasAIConfig(_ node: TreeNode) -> Bool {
-        if node.bundledAttributes?.isEmpty == false ||
-           node.enumeratedAttributes?.isEmpty == false {
-            return true
-        }
-        if node.aiStatusChildren > 0 {
-            return true
-        }
-        return false
+        node.bundledAttributes?.isEmpty == false ||
+        node.enumeratedAttributes?.isEmpty == false ||
+        node.aiStatusChildren > 0
     }
 
-    /// Detect the primary AI mode for a section node
+    private func sectionSupportsAIConfig(_ node: TreeNode) -> Bool {
+        node.parent != nil && !node.orderedChildren.isEmpty
+    }
+
     private func detectAIMode(for node: TreeNode) -> AIReviewMode {
         if node.bundledAttributes?.isEmpty == false {
             return .bundle
@@ -155,13 +151,16 @@ struct ResumeSectionDropdown: View {
     }
 }
 
-// MARK: - Section AI Mode Button
+// MARK: - Section AI Mode Menu
 
-/// Interactive AI mode button for section-level configuration
-/// Matches the behavior of NodeHeaderView's AI button with context menu
-private struct SectionAIModeButton: View {
+/// Left-click menu for configuring AI review modes at section level
+private struct SectionAIModeMenu: View {
     let node: TreeNode
     @State private var isHovering = false
+
+    private var hasAIConfig: Bool {
+        node.bundledAttributes?.isEmpty == false || node.enumeratedAttributes?.isEmpty == false
+    }
 
     private var hasMixedModes: Bool {
         node.bundledAttributes?.isEmpty == false && node.enumeratedAttributes?.isEmpty == false
@@ -171,11 +170,6 @@ private struct SectionAIModeButton: View {
         NodeAIReviewModeDetector.aiMode(for: node)
     }
 
-    private var isCollectionNode: Bool {
-        node.isCollectionNode
-    }
-
-    /// Get attribute names available in this collection's entries
     private var availableAttributes: [String] {
         guard let firstChild = node.orderedChildren.first else { return [] }
         return firstChild.orderedChildren.compactMap {
@@ -184,7 +178,6 @@ private struct SectionAIModeButton: View {
         }
     }
 
-    /// Check if an attribute is itself an array (has children)
     private func isNestedArray(_ attrName: String) -> Bool {
         guard let firstChild = node.orderedChildren.first,
               let attr = firstChild.orderedChildren.first(where: {
@@ -193,70 +186,75 @@ private struct SectionAIModeButton: View {
         return !attr.orderedChildren.isEmpty
     }
 
-    /// Check if an attribute is currently in bundle mode
     private func isAttributeBundled(_ attr: String) -> Bool {
         node.bundledAttributes?.contains(attr) == true
     }
 
-    /// Check if an attribute is currently in iterate mode
     private func isAttributeIterated(_ attr: String) -> Bool {
         node.enumeratedAttributes?.contains(attr) == true
     }
 
-    /// Whether this collection contains scalar values (no nested attributes)
     private var isScalarArrayCollection: Bool {
-        guard !node.orderedChildren.isEmpty else { return false }
-        guard let firstChild = node.orderedChildren.first else { return false }
+        guard !node.orderedChildren.isEmpty,
+              let firstChild = node.orderedChildren.first else { return false }
         return firstChild.orderedChildren.isEmpty
     }
 
+    /// Icon based on current configuration
+    private var displayIcon: String {
+        if !hasAIConfig {
+            return "sparkles"
+        } else if hasMixedModes {
+            return "sparkles"
+        } else if aiMode == .bundle {
+            return "square.on.square.squareshape.controlhandles"
+        } else if aiMode == .iterate {
+            return "flowchart"
+        }
+        return "sparkles"
+    }
+
+    /// Color based on current configuration
+    private var displayColor: Color {
+        if !hasAIConfig {
+            return .secondary
+        } else if hasMixedModes {
+            return .orange
+        } else if aiMode == .bundle {
+            return .purple
+        } else if aiMode == .iterate {
+            return .cyan
+        }
+        return .secondary
+    }
+
     var body: some View {
-        HStack(spacing: 4) {
-            // Show both icons for mixed mode collections
-            if hasMixedModes && isCollectionNode {
-                AIModeIndicator(
-                    mode: .bundle,
-                    pathPattern: nil,
-                    isPerEntry: false
-                )
-                AIModeIndicator(
-                    mode: .iterate,
-                    pathPattern: nil,
-                    isPerEntry: true
-                )
+        Menu {
+            if isScalarArrayCollection {
+                scalarCollectionMenu
             } else {
-                AIModeIndicator(
-                    mode: aiMode,
-                    pathPattern: nil,
-                    isPerEntry: aiMode == .iterate
+                objectCollectionMenu
+            }
+        } label: {
+            Image(systemName: displayIcon)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(displayColor)
+                .padding(6)
+                .background(
+                    Circle()
+                        .fill(displayColor.opacity(hasAIConfig ? 0.15 : (isHovering ? 0.1 : 0)))
                 )
-            }
         }
+        .menuStyle(.borderlessButton)
         .onHover { isHovering = $0 }
-        .contextMenu {
-            if node.parent != nil && !node.orderedChildren.isEmpty {
-                collectionModeContextMenu
-            }
-        }
+        .help(hasAIConfig ? "Configure AI review" : "Enable AI review")
     }
 
-    // MARK: - Context Menu
-
-    @ViewBuilder
-    private var collectionModeContextMenu: some View {
-        if isScalarArrayCollection {
-            scalarCollectionMenu
-        } else {
-            objectCollectionMenu
-        }
-    }
+    // MARK: - Scalar Collection Menu
 
     @ViewBuilder
     private var scalarCollectionMenu: some View {
-        let containerName = node.name.isEmpty ? node.displayLabel : node.name
-
-        Text("AI Review Mode for \(containerName)")
-            .font(.headline)
+        Text("AI Review: \(node.displayLabel)")
 
         Divider()
 
@@ -267,9 +265,7 @@ private struct SectionAIModeButton: View {
             HStack {
                 Image(systemName: "square.on.square.squareshape.controlhandles")
                     .foregroundColor(.purple)
-                Text("Bundle All")
-                Text("– 1 review for all items")
-                    .foregroundColor(.secondary)
+                Text("Bundle All – 1 review")
                 if node.bundledAttributes?.contains("*") == true {
                     Image(systemName: "checkmark")
                 }
@@ -283,66 +279,52 @@ private struct SectionAIModeButton: View {
             HStack {
                 Image(systemName: "flowchart")
                     .foregroundColor(.cyan)
-                Text("Iterate")
-                Text("– N reviews (one per item)")
-                    .foregroundColor(.secondary)
+                Text("Iterate – N reviews")
                 if node.enumeratedAttributes?.contains("*") == true {
                     Image(systemName: "checkmark")
                 }
             }
         }
 
-        Button {
-            node.bundledAttributes = nil
-            node.enumeratedAttributes = nil
-        } label: {
-            HStack {
-                Image(systemName: "sparkles")
-                    .foregroundColor(.gray)
-                Text("Off")
-                if node.bundledAttributes == nil && node.enumeratedAttributes == nil {
-                    Image(systemName: "checkmark")
-                }
+        if hasAIConfig {
+            Divider()
+
+            Button(role: .destructive) {
+                node.bundledAttributes = nil
+                node.enumeratedAttributes = nil
+            } label: {
+                Label("Disable AI Review", systemImage: "xmark.circle")
             }
         }
     }
 
-    /// Menu for object array collections (e.g., skills - entries with attributes)
-    /// Structure: Bundle/Iterate → Attributes → (for collections) Bundle/Iterate
+    // MARK: - Object Collection Menu
+
     @ViewBuilder
     private var objectCollectionMenu: some View {
-        let hasAnyConfig = node.bundledAttributes?.isEmpty == false ||
-                           node.enumeratedAttributes?.isEmpty == false
+        Text("AI Review: \(node.displayLabel)")
 
-        // Top-level Bundle menu: skills.*.attr pattern (1 rev node for all)
+        Divider()
+
+        // Bundle menu
         Menu {
             ForEach(availableAttributes, id: \.self) { attr in
-                if isNestedArray(attr) {
-                    // Nested array: only Bundle option (all items combined across all entries)
-                    bundleNestedArrayButton(attr: attr)
-                } else {
-                    // Scalar attribute: toggle for bundle mode
-                    bundleScalarButton(attr: attr)
-                }
+                bundleAttributeButton(attr: attr)
             }
         } label: {
             HStack {
                 Image(systemName: "square.on.square.squareshape.controlhandles")
                     .foregroundColor(.purple)
-                Text("Bundle")
-                Text("– 1 review")
-                    .foregroundColor(.secondary)
+                Text("Bundle – 1 review")
             }
         }
 
-        // Top-level Iterate menu: skills[].attr pattern (N rev nodes, one per entry)
+        // Iterate menu
         Menu {
             ForEach(availableAttributes, id: \.self) { attr in
                 if isNestedArray(attr) {
-                    // Nested array: submenu with Bundle (per entry) or Iterate (each item)
                     iterateNestedArraySubmenu(attr: attr)
                 } else {
-                    // Scalar attribute: toggle for iterate mode
                     iterateScalarButton(attr: attr)
                 }
             }
@@ -350,14 +332,13 @@ private struct SectionAIModeButton: View {
             HStack {
                 Image(systemName: "flowchart")
                     .foregroundColor(.cyan)
-                Text("Iterate")
-                Text("– N reviews")
-                    .foregroundColor(.secondary)
+                Text("Iterate – N reviews")
             }
         }
 
-        if hasAnyConfig {
+        if hasAIConfig {
             Divider()
+
             Button(role: .destructive) {
                 node.bundledAttributes = nil
                 node.enumeratedAttributes = nil
@@ -369,28 +350,18 @@ private struct SectionAIModeButton: View {
 
     // MARK: - Bundle Menu Items
 
-    /// Scalar attribute under Bundle menu (skills.*.name → 1 rev node for all names)
     @ViewBuilder
-    private func bundleScalarButton(attr: String) -> some View {
+    private func bundleAttributeButton(attr: String) -> some View {
         let isActive = isAttributeBundled(attr)
 
         Button {
-            toggleBundleAttribute(attr)
-        } label: {
-            HStack {
-                Text(attr)
-                if isActive { Image(systemName: "checkmark") }
+            if isActive {
+                removeFromBundledAttributes(attr)
+            } else {
+                removeFromEnumeratedAttributes(attr)
+                removeFromEnumeratedAttributes(attr + "[]")
+                addToBundledAttributes(attr)
             }
-        }
-    }
-
-    /// Nested array under Bundle menu (skills.*.keywords → 1 rev node for all keywords)
-    @ViewBuilder
-    private func bundleNestedArrayButton(attr: String) -> some View {
-        let isActive = isAttributeBundled(attr)
-
-        Button {
-            toggleBundleAttribute(attr)
         } label: {
             HStack {
                 Text(attr)
@@ -401,13 +372,17 @@ private struct SectionAIModeButton: View {
 
     // MARK: - Iterate Menu Items
 
-    /// Scalar attribute under Iterate menu (skills[].name → N rev nodes, one per skill)
     @ViewBuilder
     private func iterateScalarButton(attr: String) -> some View {
         let isActive = isAttributeIterated(attr)
 
         Button {
-            toggleIterateAttribute(attr)
+            if isActive {
+                removeFromEnumeratedAttributes(attr)
+            } else {
+                removeFromBundledAttributes(attr)
+                addToEnumeratedAttributes(attr)
+            }
         } label: {
             HStack {
                 Text(attr)
@@ -416,9 +391,6 @@ private struct SectionAIModeButton: View {
         }
     }
 
-    /// Nested array submenu under Iterate menu
-    /// skills[].keywords → N rev nodes (each skill's keywords bundled together)
-    /// skills[].keywords[] → N×M rev nodes (each skill, each keyword separate)
     @ViewBuilder
     private func iterateNestedArraySubmenu(attr: String) -> some View {
         let attrWithSuffix = attr + "[]"
@@ -426,7 +398,6 @@ private struct SectionAIModeButton: View {
         let isIteratedEach = isAttributeIterated(attrWithSuffix)
 
         Menu {
-            // Bundle: skills[].keywords (N rev nodes, each skill's keywords together)
             Button {
                 removeAttributeFromBoth(attr)
                 addToEnumeratedAttributes(attr)
@@ -434,14 +405,11 @@ private struct SectionAIModeButton: View {
                 HStack {
                     Image(systemName: "square.on.square.squareshape.controlhandles")
                         .foregroundColor(.purple)
-                    Text("Bundle")
-                    Text("– N reviews")
-                        .foregroundColor(.secondary)
+                    Text("Bundle – N reviews")
                     if isBundledPerEntry { Image(systemName: "checkmark") }
                 }
             }
 
-            // Iterate: skills[].keywords[] (N×M rev nodes, each keyword separate)
             Button {
                 removeAttributeFromBoth(attr)
                 addToEnumeratedAttributes(attrWithSuffix)
@@ -449,9 +417,7 @@ private struct SectionAIModeButton: View {
                 HStack {
                     Image(systemName: "flowchart")
                         .foregroundColor(.cyan)
-                    Text("Iterate")
-                    Text("– N×M reviews")
-                        .foregroundColor(.secondary)
+                    Text("Iterate – N×M reviews")
                     if isIteratedEach { Image(systemName: "checkmark") }
                 }
             }
@@ -472,30 +438,7 @@ private struct SectionAIModeButton: View {
         }
     }
 
-    // MARK: - Attribute Mode Helpers
-
-    private func toggleBundleAttribute(_ attr: String) {
-        if isAttributeBundled(attr) {
-            // Remove from bundled
-            removeFromBundledAttributes(attr)
-        } else {
-            // Remove from enumerated (if present) and add to bundled
-            removeFromEnumeratedAttributes(attr)
-            removeFromEnumeratedAttributes(attr + "[]")
-            addToBundledAttributes(attr)
-        }
-    }
-
-    private func toggleIterateAttribute(_ attr: String) {
-        if isAttributeIterated(attr) {
-            // Remove from enumerated
-            removeFromEnumeratedAttributes(attr)
-        } else {
-            // Remove from bundled (if present) and add to enumerated
-            removeFromBundledAttributes(attr)
-            addToEnumeratedAttributes(attr)
-        }
-    }
+    // MARK: - Helpers
 
     private func removeAttributeFromBoth(_ attr: String) {
         removeFromBundledAttributes(attr)
