@@ -2,165 +2,249 @@
 //  ResumeDetailView.swift
 //  Sprung
 //
+//  Panel-based resume TreeNode editor with section dropdown,
+//  bottom drawers, and AI action controls.
 //
 import SwiftData
 import SwiftUI
-/// Tree-editor panel showing resume nodes and the optional font-size panel.
-/// It no longer mutates the model directly; all actions are routed through
-/// `ResumeDetailVM`.
+
+/// Tree-editor panel showing resume nodes with section dropdown navigation.
+/// AI and styling controls are in collapsible bottom drawers.
 struct ResumeDetailView: View {
     // External navigation bindings
     @Binding var tab: TabList
+    @Binding var sheets: AppSheets
+    @Binding var clarifyingQuestions: [ClarifyingQuestion]
+    @Binding var showCreateResumeSheet: Bool
+
     // View-model (owns UI state)
     @State private var vm: ResumeDetailVM
+
     // Popover state
     @State private var showNodeGroupPhasePopover = false
-    // MARK: – Init ---------------------------------------------------------
+
+    // Persisted UI state
+    @AppStorage("resumeEditorSelectedSection") private var selectedSection: String = "work"
+    @AppStorage("resumeEditorAIDrawerExpanded") private var isAIDrawerExpanded: Bool = true
+    @AppStorage("resumeEditorStylingDrawerExpanded") private var isStylingDrawerExpanded: Bool = false
+
+    // MARK: - Init
+
     private var externalIsWide: Binding<Bool>?
+
     init(
         resume: Resume,
         tab: Binding<TabList>,
         isWide: Binding<Bool>,
+        sheets: Binding<AppSheets>,
+        clarifyingQuestions: Binding<[ClarifyingQuestion]>,
+        showCreateResumeSheet: Binding<Bool>,
         exportCoordinator: ResumeExportCoordinator
     ) {
         _tab = tab
+        _sheets = sheets
+        _clarifyingQuestions = clarifyingQuestions
+        _showCreateResumeSheet = showCreateResumeSheet
         _vm = State(wrappedValue: ResumeDetailVM(resume: resume, exportCoordinator: exportCoordinator))
         externalIsWide = isWide
     }
-    // MARK: – Body ---------------------------------------------------------
+
+    // MARK: - Body
 
     /// Node names that are not user content (handled separately or flattened)
     private static let nonContentNodes: Set<String> = ["styling", "template", "custom"]
 
     var body: some View {
         @Bindable var vm = vm // enable Observation bindings
-        ScrollView {
-            VStack(alignment: .leading, spacing: 10) {
-                if let root = vm.rootNode {
-                    // Content section - user data nodes + custom fields (flattened)
-                    let contentNodes = root.orderedChildren.filter { !Self.nonContentNodes.contains($0.name) }
-                    let customNodes = root.orderedChildren.first(where: { $0.name == "custom" })?.orderedChildren ?? []
-                    let allContentNodes = contentNodes + customNodes
 
-                    if !allContentNodes.isEmpty {
-                        Text("Content")
-                            .font(.headline)
-                            .fontWeight(.semibold)
-                            .padding(.horizontal, 10)
-                            .padding(.top, 12)
-                        ForEach(contentNodes, id: \.id) { viewNode in
-                            topLevelNodeView(viewNode, depthOffset: 0)
-                        }
-                        // Custom fields are flattened (depth=2 displayed as depth=1)
-                        ForEach(customNodes, id: \.id) { viewNode in
-                            topLevelNodeView(viewNode, depthOffset: 1)
-                        }
-                    }
+        VStack(spacing: 0) {
+            // Section dropdown at top
+            ResumeSectionDropdown(
+                sections: contentSections,
+                selectedSection: $selectedSection
+            )
 
-                    // Template section - manifest-defined fields (rendered generically)
-                    // Template children are depth=2 but displayed as depth=1
-                    if let templateNode = root.orderedChildren.first(where: { $0.name == "template" }),
-                       !templateNode.orderedChildren.isEmpty {
-                        Text("Template")
-                            .font(.headline)
-                            .fontWeight(.semibold)
-                            .padding(.horizontal, 10)
-                            .padding(.top, 16)
-                        ForEach(templateNode.orderedChildren, id: \.id) { childNode in
-                            topLevelNodeView(childNode, depthOffset: 1)
-                        }
-                    }
-                }
+            Divider()
 
-                // Styling section - special-cased panels
-                let hasStylePanels = vm.hasFontSizeNodes || vm.hasSectionVisibilityOptions
-                if hasStylePanels {
-                    Text("Styling")
-                        .font(.headline)
-                        .fontWeight(.semibold)
-                        .padding(.horizontal, 10)
-                        .padding(.top, 16)
-                    VStack(alignment: .leading, spacing: 8) {
-                        if vm.hasFontSizeNodes {
-                            FontSizePanelView()
-                                .padding(.horizontal, 10)
-                        }
-                        if vm.hasSectionVisibilityOptions {
-                            SectionVisibilityPanelView()
-                                .padding(.horizontal, 10)
-                        }
-                    }
-                }
-
-                // Revnode count and phase assignment configuration
-                HStack {
-                    // Revnode count indicator (depends on revnodeRefreshTrigger for live updates)
-                    if let root = vm.rootNode {
-                        let _ = vm.revnodeRefreshTrigger  // Force re-evaluation when trigger changes
-                        let count = root.revnodeCount
-                        if count > 0 {
-                            HStack(spacing: 4) {
-                                Image(systemName: "sparkles")
-                                    .foregroundColor(.orange)
-                                Text("\(count) review item\(count == 1 ? "" : "s")")
+            // Main content - ONLY selected section
+            ScrollView {
+                VStack(alignment: .leading, spacing: 10) {
+                    if let sectionNode = selectedSectionNode {
+                        sectionContentView(sectionNode)
+                    } else if let firstSection = contentSections.first {
+                        // Fallback to first section if selected section not found
+                        sectionContentView(firstSection.node)
+                            .onAppear {
+                                selectedSection = firstSection.name
                             }
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                        }
                     }
 
-                    Spacer()
-
-                    Button(action: { showNodeGroupPhasePopover.toggle() }) {
-                        HStack(spacing: 4) {
-                            Image(systemName: "list.number")
-                            Text("Phase Assignments")
-                        }
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    }
-                    .buttonStyle(.plain)
-                    .popover(isPresented: $showNodeGroupPhasePopover, arrowEdge: .trailing) {
-                        NodeGroupPhasePanelPopover(resume: vm.resume)
+                    // Template section (when "template" is selected)
+                    if selectedSection == "template" {
+                        templateSectionContent
                     }
                 }
-                .padding(.horizontal, 10)
                 .padding(.top, 8)
             }
+
+            Spacer(minLength: 0)
+
+            // Bottom drawers
+            let hasStylePanels = vm.hasFontSizeNodes || vm.hasSectionVisibilityOptions
+            if hasStylePanels {
+                ResumeStylingDrawer(isExpanded: $isStylingDrawerExpanded)
+            }
+
+            ResumeAIDrawer(
+                isExpanded: $isAIDrawerExpanded,
+                selectedTab: $tab,
+                sheets: $sheets,
+                clarifyingQuestions: $clarifyingQuestions,
+                showCreateResumeSheet: $showCreateResumeSheet,
+                revnodeCount: vm.rootNode?.revnodeCount ?? 0,
+                showPhaseAssignments: $showNodeGroupPhasePopover,
+                resume: vm.resume
+            )
         }
-        // Provide the view-model to the subtree via environment so that
-        // NodeWithChildrenView can access it for add-child actions.
         .environment(vm)
         .onAppear {
             if let ext = externalIsWide {
                 vm.isWide = ext.wrappedValue
+            }
+            // Validate selected section exists
+            if !contentSections.contains(where: { $0.name == selectedSection }) {
+                if let firstSection = contentSections.first {
+                    selectedSection = firstSection.name
+                }
             }
         }
         .onChange(of: externalIsWide?.wrappedValue) { _, newVal in
             if let newVal { vm.isWide = newVal }
         }
     }
+
+    // MARK: - Computed Properties
+
+    /// All content sections available for the dropdown
+    private var contentSections: [SectionInfo] {
+        guard let root = vm.rootNode else { return [] }
+
+        var sections: [SectionInfo] = []
+
+        // Content nodes (excluding non-content)
+        let contentNodes = root.orderedChildren.filter { !Self.nonContentNodes.contains($0.name) }
+        for node in contentNodes {
+            sections.append(SectionInfo(
+                name: node.name,
+                displayLabel: node.displayLabel,
+                node: node
+            ))
+        }
+
+        // Custom fields flattened to top level
+        if let customNode = root.orderedChildren.first(where: { $0.name == "custom" }),
+           !customNode.orderedChildren.isEmpty {
+            for customChild in customNode.orderedChildren {
+                sections.append(SectionInfo(
+                    name: "custom_\(customChild.name)",
+                    displayLabel: customChild.displayLabel,
+                    node: customChild
+                ))
+            }
+        }
+
+        // Template section if it exists
+        if let templateNode = root.orderedChildren.first(where: { $0.name == "template" }),
+           !templateNode.orderedChildren.isEmpty {
+            sections.append(SectionInfo(
+                name: "template",
+                displayLabel: "Template",
+                node: templateNode
+            ))
+        }
+
+        return sections
+    }
+
+    /// The currently selected section node
+    private var selectedSectionNode: TreeNode? {
+        // Check for custom_ prefix
+        if selectedSection.hasPrefix("custom_") {
+            let customName = String(selectedSection.dropFirst("custom_".count))
+            if let customNode = vm.rootNode?.orderedChildren.first(where: { $0.name == "custom" }) {
+                return customNode.orderedChildren.first { $0.name == customName }
+            }
+        }
+
+        // Regular section lookup
+        return vm.rootNode?.orderedChildren.first { $0.name == selectedSection }
+    }
+
+    // MARK: - Section Content Views
+
+    /// Render the content of a section (its children without the disclosure triangle)
     @ViewBuilder
-    private func topLevelNodeView(_ node: TreeNode, depthOffset: Int = 0) -> some View {
-        if node.orderedChildren.isEmpty == false {
-            NodeWithChildrenView(node: node, depthOffset: depthOffset)
+    private func sectionContentView(_ sectionNode: TreeNode) -> some View {
+        // For sections with children (like work, skills), show children directly
+        if !sectionNode.orderedChildren.isEmpty {
+            ForEach(sectionNode.orderedChildren, id: \.id) { childNode in
+                if childNode.orderedChildren.isEmpty {
+                    // Leaf entry - show as reorderable row
+                    ReorderableLeafRow(
+                        node: childNode,
+                        siblings: sectionNode.orderedChildren,
+                        depthOffset: 1
+                    )
+                    .padding(.vertical, 4)
+                } else {
+                    // Container entry - show with its own expansion control
+                    NodeWithChildrenView(node: childNode, depthOffset: 1)
+                }
+                Divider()
+            }
         } else {
-            RootLeafDisclosureView(node: node, depthOffset: depthOffset)
+            // Section is a leaf (like summary) - show editor directly
+            NodeLeafView(node: sectionNode)
+                .padding(.horizontal, 10)
+        }
+    }
+
+    /// Template section content
+    @ViewBuilder
+    private var templateSectionContent: some View {
+        if let templateNode = vm.rootNode?.orderedChildren.first(where: { $0.name == "template" }) {
+            ForEach(templateNode.orderedChildren, id: \.id) { childNode in
+                if childNode.orderedChildren.isEmpty {
+                    ReorderableLeafRow(
+                        node: childNode,
+                        siblings: templateNode.orderedChildren,
+                        depthOffset: 1
+                    )
+                    .padding(.vertical, 4)
+                } else {
+                    NodeWithChildrenView(node: childNode, depthOffset: 1)
+                }
+                Divider()
+            }
         }
     }
 }
-// MARK: - Root-Level Leaf Disclosure ---------------------------------------
+
+// MARK: - Root-Level Leaf Disclosure
+
 private struct RootLeafDisclosureView: View {
     let node: TreeNode
     /// Depth offset to subtract when calculating indentation (for flattened container children)
     var depthOffset: Int = 0
     @Environment(ResumeDetailVM.self) private var vm: ResumeDetailVM
+
     private var expansionBinding: Binding<Bool> {
         Binding(
             get: { vm.isExpanded(node) },
             set: { _ in vm.toggleExpansion(for: node) }
         )
     }
+
     private var effectiveDepth: Int {
         max(0, node.depth - depthOffset)
     }
@@ -204,12 +288,13 @@ private struct RootLeafDisclosureView: View {
             .onTapGesture {
                 vm.toggleExpansion(for: node)
             }
+
             if vm.isExpanded(node) {
                 Divider()
                 NodeLeafView(node: node)
                     .padding(.leading, CGFloat(effectiveDepth) * 20)
                     .padding(.vertical, 4)
-           }
+            }
         }
     }
 }
