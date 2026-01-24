@@ -3,7 +3,7 @@
 //  Sprung
 //
 //  Card-based view for resume entries (work experience, education, skills, etc.)
-//  Clean, professional design with clear visual hierarchy.
+//  Professional design with clear visual hierarchy and refined styling.
 //
 
 import SwiftUI
@@ -29,28 +29,43 @@ struct ResumeEntryCardView: View {
                parent.enumeratedAttributes?.isEmpty == false
     }
 
-    /// Outline color for AI-enabled entries
-    private var outlineColor: Color {
-        guard isUnderAISection else { return Color.primary.opacity(0.08) }
+    /// Border color based on AI status
+    private var borderColor: Color {
+        guard isUnderAISection else { return Color(.separatorColor).opacity(0.5) }
         let innerColor = NodeAIReviewModeDetector.innerOutlineColor(for: node)
-        if innerColor != .clear { return innerColor.opacity(0.4) }
-        return Color.primary.opacity(0.08)
+        if innerColor != .clear { return innerColor.opacity(0.5) }
+        return Color(.separatorColor).opacity(0.5)
+    }
+
+    /// Children to display (filters out redundant "name" field)
+    private var displayChildren: [TreeNode] {
+        let title = node.computedTitle.lowercased()
+        return node.orderedChildren.filter { child in
+            // Skip "name" field if it just repeats the card title
+            if child.name.lowercased() == "name" && child.value.lowercased() == title {
+                return false
+            }
+            return true
+        }
     }
 
     var body: some View {
         DraggableNodeWrapper(node: node, siblings: node.parent?.orderedChildren ?? []) {
             VStack(alignment: .leading, spacing: 0) {
                 cardHeader
-                cardContent
+                if !displayChildren.isEmpty || node.orderedChildren.isEmpty {
+                    cardContent
+                }
             }
-            .background(Color(.textBackgroundColor).opacity(0.5))
-            .clipShape(RoundedRectangle(cornerRadius: 10))
+            .background(Color(.textBackgroundColor))
+            .clipShape(RoundedRectangle(cornerRadius: 8))
             .overlay(
-                RoundedRectangle(cornerRadius: 10)
-                    .stroke(outlineColor, lineWidth: 1)
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(borderColor, lineWidth: 1)
             )
+            .shadow(color: .black.opacity(0.04), radius: 2, y: 1)
         }
-        .padding(.horizontal, 6)
+        .padding(.horizontal, 4)
         .padding(.vertical, 3)
     }
 
@@ -58,9 +73,10 @@ struct ResumeEntryCardView: View {
 
     @ViewBuilder
     private var cardHeader: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 8) {
             Text(node.computedTitle)
-                .font(.headline)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(.primary)
                 .lineLimit(2)
 
             Spacer()
@@ -68,18 +84,16 @@ struct ResumeEntryCardView: View {
             if node.allowsChildAddition {
                 Button(action: { vm.addChild(to: node) }) {
                     Image(systemName: "plus")
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(.system(size: 10, weight: .semibold))
                         .foregroundStyle(.secondary)
-                        .padding(6)
-                        .background(Circle().fill(Color.primary.opacity(0.06)))
                 }
                 .buttonStyle(.plain)
                 .help("Add field")
             }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
-        .background(Color.primary.opacity(0.02))
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(Color(.windowBackgroundColor).opacity(0.5))
     }
 
     // MARK: - Card Content
@@ -89,13 +103,13 @@ struct ResumeEntryCardView: View {
         if node.orderedChildren.isEmpty {
             // Leaf node - show value editor
             FieldValueEditor(node: node, showLabel: false)
-                .padding(14)
-        } else {
+                .padding(12)
+        } else if !displayChildren.isEmpty {
             VStack(alignment: .leading, spacing: 0) {
-                ForEach(Array(node.orderedChildren.enumerated()), id: \.element.id) { index, child in
+                ForEach(Array(displayChildren.enumerated()), id: \.element.id) { index, child in
                     if index > 0 {
                         Divider()
-                            .padding(.leading, 14)
+                            .padding(.leading, 12)
                     }
                     fieldRow(child)
                 }
@@ -108,8 +122,8 @@ struct ResumeEntryCardView: View {
         if child.orderedChildren.isEmpty {
             // Simple field
             FieldValueEditor(node: child, showLabel: true)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
         } else {
             // Nested container (highlights, keywords)
             nestedContainerRow(child)
@@ -118,11 +132,11 @@ struct ResumeEntryCardView: View {
 
     @ViewBuilder
     private func nestedContainerRow(_ child: TreeNode) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 6) {
             // Header row
-            HStack(spacing: 8) {
+            HStack(spacing: 6) {
                 Text(child.displayLabel)
-                    .font(.subheadline)
+                    .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(.secondary)
 
                 Spacer()
@@ -130,8 +144,8 @@ struct ResumeEntryCardView: View {
                 if child.allowsChildAddition {
                     Button(action: { vm.addChild(to: child) }) {
                         Image(systemName: "plus")
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundStyle(.secondary)
+                            .font(.system(size: 9, weight: .medium))
+                            .foregroundStyle(.tertiary)
                     }
                     .buttonStyle(.plain)
                     .help("Add item")
@@ -147,15 +161,15 @@ struct ResumeEntryCardView: View {
                     sourceKey: chipSourceKey(for: child)
                 )
             } else {
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: 2) {
                     ForEach(child.orderedChildren, id: \.id) { grandchild in
                         BulletItemEditor(node: grandchild)
                     }
                 }
             }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
     }
 
     // MARK: - Helpers
@@ -198,61 +212,59 @@ private struct FieldValueEditor: View {
     /// Whether this field has AI review configured
     private var hasAIReview: Bool {
         if node.status == .aiToReplace { return true }
-        // Check if this attribute is in parent's collection config
         guard let parent = node.parent, let grandparent = parent.parent else { return false }
         let attrName = node.name.isEmpty ? node.displayLabel : node.name
         return grandparent.bundledAttributes?.contains(attrName) == true ||
                grandparent.enumeratedAttributes?.contains(attrName) == true
     }
 
-    /// Background based on AI status
-    private var fieldBackground: Color {
-        guard hasAIReview else { return .clear }
-        if node.status == .aiToReplace {
-            return .orange.opacity(0.08)
-        }
-        // Check collection-level config for this attribute
-        guard let parent = node.parent, let grandparent = parent.parent else { return .clear }
+    /// Left accent bar color based on AI status
+    private var accentColor: Color? {
+        guard hasAIReview else { return nil }
+        if node.status == .aiToReplace { return .orange }
+        guard let parent = node.parent, let grandparent = parent.parent else { return nil }
         let attrName = node.name.isEmpty ? node.displayLabel : node.name
-        if grandparent.enumeratedAttributes?.contains(attrName) == true {
-            return .cyan.opacity(0.06)
-        }
-        if grandparent.bundledAttributes?.contains(attrName) == true {
-            return .purple.opacity(0.06)
-        }
-        return .clear
+        if grandparent.enumeratedAttributes?.contains(attrName) == true { return .cyan }
+        if grandparent.bundledAttributes?.contains(attrName) == true { return .purple }
+        return nil
     }
 
     var body: some View {
-        HStack(alignment: .top, spacing: 10) {
+        HStack(alignment: .top, spacing: 0) {
+            // AI accent bar
+            if let color = accentColor {
+                RoundedRectangle(cornerRadius: 1)
+                    .fill(color.opacity(0.6))
+                    .frame(width: 3)
+                    .padding(.trailing, 8)
+            }
+
+            // Content
             if isEditing {
                 editingView
             } else {
                 displayView
             }
         }
-        .padding(.vertical, 4)
-        .padding(.horizontal, 8)
-        .background(fieldBackground)
-        .clipShape(RoundedRectangle(cornerRadius: 6))
         .onHover { isHovering = $0 }
     }
 
     @ViewBuilder
     private var displayView: some View {
-        // Content
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: 1) {
             if showLabel && !node.name.isEmpty {
                 Text(node.name)
-                    .font(.caption)
+                    .font(.system(size: 10))
                     .foregroundStyle(.tertiary)
             }
 
             if !node.value.isEmpty {
                 Text(node.value)
+                    .font(.system(size: 12))
                     .foregroundStyle(.primary)
             } else if node.value.isEmpty && node.name.isEmpty {
                 Text("Empty")
+                    .font(.system(size: 12))
                     .foregroundStyle(.tertiary)
                     .italic()
             }
@@ -264,8 +276,8 @@ private struct FieldValueEditor: View {
         if isHovering && node.status != .disabled {
             Button(action: { vm.startEditing(node: node) }) {
                 Image(systemName: "pencil")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
+                    .font(.system(size: 10))
+                    .foregroundStyle(.tertiary)
             }
             .buttonStyle(.plain)
             .transition(.opacity)
@@ -306,7 +318,6 @@ private struct BulletItemEditor: View {
     /// Whether this item has AI review configured
     private var hasAIReview: Bool {
         if node.status == .aiToReplace { return true }
-        // Check for [] suffix config (each item separate)
         guard let parent = node.parent,
               let entry = parent.parent,
               let collection = entry.parent else { return false }
@@ -315,20 +326,27 @@ private struct BulletItemEditor: View {
                collection.bundledAttributes?.contains(containerName + "[]") == true
     }
 
-    private var itemBackground: Color {
-        guard hasAIReview else { return .clear }
-        if node.status == .aiToReplace {
-            return .orange.opacity(0.1)
-        }
-        return .cyan.opacity(0.08)
+    /// Left accent color based on AI status
+    private var accentColor: Color? {
+        guard hasAIReview else { return nil }
+        if node.status == .aiToReplace { return .orange }
+        return .cyan
     }
 
     var body: some View {
-        HStack(alignment: .top, spacing: 8) {
-            Circle()
-                .fill(Color.secondary.opacity(0.4))
-                .frame(width: 5, height: 5)
-                .padding(.top, 7)
+        HStack(alignment: .top, spacing: 6) {
+            // Bullet or AI accent
+            if let color = accentColor {
+                Circle()
+                    .fill(color.opacity(0.7))
+                    .frame(width: 5, height: 5)
+                    .padding(.top, 5)
+            } else {
+                Circle()
+                    .fill(Color.secondary.opacity(0.3))
+                    .frame(width: 4, height: 4)
+                    .padding(.top, 6)
+            }
 
             if isEditing {
                 EditingControls(
@@ -348,6 +366,7 @@ private struct BulletItemEditor: View {
                 )
             } else {
                 Text(node.value.isEmpty ? node.name : node.value)
+                    .font(.system(size: 12))
                     .foregroundStyle(.primary)
 
                 Spacer(minLength: 0)
@@ -355,17 +374,14 @@ private struct BulletItemEditor: View {
                 if isHovering && node.status != .disabled {
                     Button(action: { vm.startEditing(node: node) }) {
                         Image(systemName: "pencil")
-                            .font(.system(size: 11))
-                            .foregroundStyle(.secondary)
+                            .font(.system(size: 10))
+                            .foregroundStyle(.tertiary)
                     }
                     .buttonStyle(.plain)
                 }
             }
         }
-        .padding(.vertical, 4)
-        .padding(.horizontal, 8)
-        .background(itemBackground)
-        .clipShape(RoundedRectangle(cornerRadius: 5))
+        .padding(.vertical, 2)
         .onHover { isHovering = $0 }
     }
 }

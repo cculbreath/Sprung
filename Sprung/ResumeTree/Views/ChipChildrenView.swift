@@ -128,17 +128,17 @@ struct ChipChildrenView: View {
                 isTextFieldFocused = true
             }
         } label: {
-            HStack(spacing: 3) {
+            HStack(spacing: 2) {
                 Image(systemName: "plus")
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(.system(size: 9, weight: .semibold))
                 Text("Add")
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.system(size: 10, weight: .medium))
             }
-            .foregroundStyle(.blue)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-            .background(Color.blue.opacity(0.1), in: Capsule())
-            .overlay(Capsule().strokeBorder(Color.blue.opacity(0.3), lineWidth: 1))
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(Color(.controlBackgroundColor).opacity(0.6), in: Capsule())
+            .overlay(Capsule().strokeBorder(Color(.separatorColor).opacity(0.5), lineWidth: 1))
         }
         .buttonStyle(.plain)
     }
@@ -148,8 +148,8 @@ struct ChipChildrenView: View {
             HStack(spacing: 4) {
                 TextField("Type to search...", text: $newChipText)
                     .textFieldStyle(.plain)
-                    .font(.system(size: 12))
-                    .frame(minWidth: 100, maxWidth: 160)
+                    .font(.system(size: 11))
+                    .frame(minWidth: 80, maxWidth: 140)
                     .focused($isTextFieldFocused)
                     .onChange(of: newChipText) { _, newValue in
                         showingSuggestions = !newValue.isEmpty && !autocompleteSuggestions.isEmpty
@@ -168,16 +168,16 @@ struct ChipChildrenView: View {
                 Button {
                     cancelAdd()
                 } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 14))
+                    Image(systemName: "xmark")
+                        .font(.system(size: 8, weight: .bold))
                         .foregroundStyle(.secondary)
                 }
                 .buttonStyle(.plain)
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
             .background(Color(.controlBackgroundColor), in: Capsule())
-            .overlay(Capsule().strokeBorder(Color.accentColor.opacity(0.5), lineWidth: 1.5))
+            .overlay(Capsule().strokeBorder(Color.accentColor.opacity(0.4), lineWidth: 1))
 
             // Autocomplete dropdown
             if showingSuggestions && !autocompleteSuggestions.isEmpty {
@@ -188,18 +188,18 @@ struct ChipChildrenView: View {
                         } label: {
                             HStack {
                                 Text(skill.canonical)
-                                    .font(.system(size: 12))
+                                    .font(.system(size: 11))
                                 Spacer()
                                 Text(skill.category.rawValue)
-                                    .font(.system(size: 10))
-                                    .foregroundStyle(.secondary)
+                                    .font(.system(size: 9))
+                                    .foregroundStyle(.tertiary)
                             }
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
-                        .background(Color(.controlBackgroundColor).opacity(0.8))
+                        .background(Color(.controlBackgroundColor).opacity(0.6))
 
                         if skill.id != autocompleteSuggestions.last?.id {
                             Divider()
@@ -207,9 +207,9 @@ struct ChipChildrenView: View {
                     }
                 }
                 .background(Color(.windowBackgroundColor))
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-                .shadow(color: .black.opacity(0.15), radius: 4, y: 2)
-                .frame(maxWidth: 250)
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+                .shadow(color: .black.opacity(0.1), radius: 2, y: 1)
+                .frame(maxWidth: 220)
             }
         }
     }
@@ -218,30 +218,30 @@ struct ChipChildrenView: View {
         Button {
             showingBrowser = true
         } label: {
-            HStack(spacing: 3) {
+            HStack(spacing: 2) {
                 Image(systemName: "list.bullet.rectangle")
-                    .font(.system(size: 10, weight: .medium))
+                    .font(.system(size: 9, weight: .medium))
                 Text("Browse")
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.system(size: 10, weight: .medium))
             }
             .foregroundStyle(.secondary)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-            .background(Color(.controlBackgroundColor), in: Capsule())
-            .overlay(Capsule().strokeBorder(Color.secondary.opacity(0.3), lineWidth: 1))
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(Color(.controlBackgroundColor).opacity(0.6), in: Capsule())
+            .overlay(Capsule().strokeBorder(Color(.separatorColor).opacity(0.5), lineWidth: 1))
         }
         .buttonStyle(.plain)
     }
 
     private var skillGapRow: some View {
         VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 4) {
-                Image(systemName: "checkmark.seal.fill")
-                    .font(.system(size: 9))
-                    .foregroundStyle(.green)
+            HStack(spacing: 3) {
+                Image(systemName: "checkmark.seal")
+                    .font(.system(size: 8))
+                    .foregroundStyle(.green.opacity(0.8))
                 Text("Matched skills not added:")
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(.secondary)
+                    .font(.system(size: 9))
+                    .foregroundStyle(.tertiary)
             }
 
             FlowStack(spacing: 4, verticalSpacing: 4) {
@@ -249,17 +249,17 @@ struct ChipChildrenView: View {
                     Button {
                         addFromSuggestion(skill)
                     } label: {
-                        HStack(spacing: 3) {
+                        HStack(spacing: 2) {
                             Image(systemName: "plus")
-                                .font(.system(size: 8, weight: .bold))
+                                .font(.system(size: 7, weight: .bold))
                             Text(skill.canonical)
-                                .font(.system(size: 11, weight: .medium))
+                                .font(.system(size: 10, weight: .medium))
                         }
-                        .foregroundStyle(.green)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Color.green.opacity(0.12), in: Capsule())
-                        .overlay(Capsule().strokeBorder(Color.green.opacity(0.4), lineWidth: 1))
+                        .foregroundStyle(.green.opacity(0.9))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 3)
+                        .background(Color.green.opacity(0.08), in: Capsule())
+                        .overlay(Capsule().strokeBorder(Color.green.opacity(0.25), lineWidth: 1))
                     }
                     .buttonStyle(.plain)
                 }
@@ -270,13 +270,13 @@ struct ChipChildrenView: View {
 
     private var recommendationsRow: some View {
         VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 4) {
+            HStack(spacing: 3) {
                 Image(systemName: "sparkles")
-                    .font(.system(size: 9))
-                    .foregroundStyle(.orange)
+                    .font(.system(size: 8))
+                    .foregroundStyle(.orange.opacity(0.8))
                 Text("Suggested skills:")
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(.secondary)
+                    .font(.system(size: 9))
+                    .foregroundStyle(.tertiary)
             }
 
             FlowStack(spacing: 4, verticalSpacing: 4) {
@@ -284,17 +284,17 @@ struct ChipChildrenView: View {
                     Button {
                         addFromRecommendation(rec)
                     } label: {
-                        HStack(spacing: 3) {
+                        HStack(spacing: 2) {
                             Image(systemName: "plus")
-                                .font(.system(size: 8, weight: .bold))
+                                .font(.system(size: 7, weight: .bold))
                             Text(rec.skillName)
-                                .font(.system(size: 11, weight: .medium))
+                                .font(.system(size: 10, weight: .medium))
                         }
-                        .foregroundStyle(.orange)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Color.orange.opacity(0.12), in: Capsule())
-                        .overlay(Capsule().strokeBorder(Color.orange.opacity(0.4), lineWidth: 1))
+                        .foregroundStyle(.orange.opacity(0.9))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 3)
+                        .background(Color.orange.opacity(0.08), in: Capsule())
+                        .overlay(Capsule().strokeBorder(Color.orange.opacity(0.25), lineWidth: 1))
                     }
                     .buttonStyle(.plain)
                     .help(rec.reason)
@@ -306,18 +306,18 @@ struct ChipChildrenView: View {
 
     private var syncToggleRow: some View {
         Toggle(isOn: $syncToSkillLibrary) {
-            HStack(spacing: 4) {
+            HStack(spacing: 3) {
                 Image(systemName: "arrow.triangle.2.circlepath")
-                    .font(.system(size: 10))
-                    .foregroundStyle(.secondary)
+                    .font(.system(size: 9))
+                    .foregroundStyle(.tertiary)
                 Text("Apply changes to skill library")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
+                    .font(.system(size: 10))
+                    .foregroundStyle(.tertiary)
             }
         }
         .toggleStyle(.checkbox)
         .controlSize(.small)
-        .padding(.top, 6)
+        .padding(.top, 4)
         .help("When enabled, edits to skill names will also update the corresponding skill in your skill library")
     }
 
@@ -444,6 +444,7 @@ private struct ChipView: View {
     @State private var editText: String = ""
     @State private var originalValue: String = ""
     @State private var showingSuggestions: Bool = false
+    @State private var isHovering: Bool = false
     @FocusState private var isFieldFocused: Bool
     @Environment(\.modelContext) private var modelContext
 
@@ -468,37 +469,43 @@ private struct ChipView: View {
     }
 
     private var displayView: some View {
-        HStack(spacing: 5) {
+        HStack(spacing: 4) {
             if isMatched {
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 11))
+                Image(systemName: "checkmark")
+                    .font(.system(size: 9, weight: .bold))
                     .foregroundStyle(.green)
             }
 
             Text(node.value)
-                .font(.system(size: 12, weight: .medium))
+                .font(.system(size: 11, weight: .medium))
                 .lineLimit(1)
 
-            Button {
-                onDelete()
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 9, weight: .bold))
-                    .foregroundStyle(.secondary.opacity(0.7))
+            // Delete button - only show on hover
+            if isHovering {
+                Button {
+                    onDelete()
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .transition(.opacity.combined(with: .scale(scale: 0.8)))
             }
-            .buttonStyle(.plain)
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 5)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
         .background(
-            isMatched ? Color.green.opacity(0.15) : Color(.controlBackgroundColor),
+            isMatched ? Color.green.opacity(0.12) : Color(.controlBackgroundColor).opacity(0.8),
             in: Capsule()
         )
         .overlay(
             Capsule()
-                .strokeBorder(isMatched ? Color.green.opacity(0.4) : Color(.separatorColor), lineWidth: 1)
+                .strokeBorder(isMatched ? Color.green.opacity(0.35) : Color(.separatorColor).opacity(0.6), lineWidth: 1)
         )
         .contentShape(Capsule())
+        .onHover { isHovering = $0 }
+        .animation(.easeInOut(duration: 0.15), value: isHovering)
         .onTapGesture {
             originalValue = node.value
             editText = node.value
@@ -514,8 +521,8 @@ private struct ChipView: View {
             HStack(spacing: 4) {
                 TextField("", text: $editText)
                     .textFieldStyle(.plain)
-                    .font(.system(size: 12, weight: .medium))
-                    .frame(minWidth: 60, maxWidth: 150)
+                    .font(.system(size: 11, weight: .medium))
+                    .frame(minWidth: 60, maxWidth: 140)
                     .focused($isFieldFocused)
                     .onChange(of: editText) { _, newValue in
                         showingSuggestions = !newValue.isEmpty && !autocompleteSuggestions.isEmpty
@@ -535,15 +542,15 @@ private struct ChipView: View {
                     commitEdit()
                 } label: {
                     Image(systemName: "checkmark")
-                        .font(.system(size: 10, weight: .bold))
+                        .font(.system(size: 9, weight: .bold))
                         .foregroundStyle(.green)
                 }
                 .buttonStyle(.plain)
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
             .background(Color(.controlBackgroundColor), in: Capsule())
-            .overlay(Capsule().strokeBorder(Color.accentColor, lineWidth: 1.5))
+            .overlay(Capsule().strokeBorder(Color.accentColor.opacity(0.6), lineWidth: 1))
 
             // Autocomplete dropdown
             if showingSuggestions && !autocompleteSuggestions.isEmpty {
@@ -556,13 +563,13 @@ private struct ChipView: View {
                         } label: {
                             Text(skill.canonical)
                                 .font(.system(size: 11))
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 5)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
-                        .background(Color(.controlBackgroundColor).opacity(0.8))
+                        .background(Color(.controlBackgroundColor).opacity(0.6))
 
                         if skill.id != autocompleteSuggestions.last?.id {
                             Divider()
@@ -571,7 +578,7 @@ private struct ChipView: View {
                 }
                 .background(Color(.windowBackgroundColor))
                 .clipShape(RoundedRectangle(cornerRadius: 6))
-                .shadow(color: .black.opacity(0.12), radius: 3, y: 2)
+                .shadow(color: .black.opacity(0.1), radius: 2, y: 1)
             }
         }
     }
