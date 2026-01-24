@@ -100,7 +100,7 @@ actor ParallelLLMExecutor {
     ) async -> TaskExecutionResult {
         await waitForSlot()
         defer {
-            Task { await self.releaseSlot() }
+            Task { self.releaseSlot() }
         }
 
         do {

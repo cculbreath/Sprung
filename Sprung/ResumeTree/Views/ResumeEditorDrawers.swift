@@ -47,21 +47,26 @@ struct ResumeAIDrawer: View {
                         .font(.subheadline.weight(.medium))
                         .foregroundStyle(.primary)
 
-                    // Revnode count badge
-                    if revnodeCount > 0 {
-                        HStack(spacing: 3) {
-                            Image(systemName: "sparkles")
-                                .font(.system(size: 9))
-                            Text("\(revnodeCount)")
-                                .font(.caption2.weight(.medium))
-                        }
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(Capsule().fill(Color.orange))
-                    }
-
                     Spacer()
+
+                    // Revnode count (right aligned with label)
+                    if revnodeCount > 0 {
+                        HStack(spacing: 4) {
+                            Text("Review Items:")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            HStack(spacing: 3) {
+                                Image(systemName: "sparkles")
+                                    .font(.system(size: 9))
+                                Text("\(revnodeCount)")
+                                    .font(.caption2.weight(.medium))
+                            }
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Capsule().fill(Color.orange))
+                        }
+                    }
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
@@ -70,29 +75,34 @@ struct ResumeAIDrawer: View {
             .buttonStyle(.plain)
 
             if isExpanded {
-                VStack(spacing: 12) {
-                    // AI action buttons row
-                    HStack(spacing: 12) {
+                VStack(spacing: 10) {
+                    // AI action buttons row (compact size)
+                    HStack(spacing: 8) {
                         ResumeCustomizeButton(selectedTab: $selectedTab)
+                            .controlSize(.small)
                         ClarifyingQuestionsButton(
                             selectedTab: $selectedTab,
                             clarifyingQuestions: $clarifyingQuestions,
                             sheets: $sheets
                         )
+                        .controlSize(.small)
                         Button {
                             sheets.showResumeReview = true
                         } label: {
                             Label("Optimize", systemImage: "character.magnify")
-                                .font(.system(size: 14, weight: .light))
+                                .font(.system(size: 12))
                         }
+                        .controlSize(.small)
                         .buttonStyle(.automatic)
                         .help("AI Resume Review")
                         .disabled(jobAppStore.selectedApp?.selectedRes == nil)
+
+                        Spacer()
                     }
 
                     Divider()
 
-                    // Footer row with phase assignments and create resume
+                    // Footer row with phase assignments
                     HStack {
                         Button(action: { showPhaseAssignments.toggle() }) {
                             HStack(spacing: 4) {
@@ -110,19 +120,10 @@ struct ResumeAIDrawer: View {
                         }
 
                         Spacer()
-
-                        Button {
-                            showCreateResumeSheet = true
-                        } label: {
-                            Label("Create Resume", systemImage: "doc.badge.plus")
-                                .font(.system(size: 14, weight: .light))
-                        }
-                        .buttonStyle(.automatic)
-                        .help("Create a new resume for this job application")
                     }
                 }
                 .padding(.horizontal, 12)
-                .padding(.bottom, 12)
+                .padding(.bottom, 10)
             }
         }
         .glassEffect(.regular, in: .rect(cornerRadius: 0))
@@ -155,7 +156,7 @@ struct ResumeStylingDrawer: View {
                         .foregroundStyle(.secondary)
                         .frame(width: 12)
 
-                    Text("Styling & Template")
+                    Text("Styling")
                         .font(.subheadline.weight(.medium))
                         .foregroundStyle(.primary)
 

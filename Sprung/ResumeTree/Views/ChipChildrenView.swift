@@ -258,8 +258,8 @@ struct ChipChildrenView: View {
                         .foregroundStyle(.green)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
-                        .background(Color.green.opacity(0.1), in: Capsule())
-                        .overlay(Capsule().strokeBorder(Color.green.opacity(0.3), lineWidth: 1))
+                        .background(Color.green.opacity(0.12), in: Capsule())
+                        .overlay(Capsule().strokeBorder(Color.green.opacity(0.4), lineWidth: 1))
                     }
                     .buttonStyle(.plain)
                 }
@@ -293,8 +293,8 @@ struct ChipChildrenView: View {
                         .foregroundStyle(.orange)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
-                        .background(Color.orange.opacity(0.1), in: Capsule())
-                        .overlay(Capsule().strokeBorder(Color.orange.opacity(0.3), lineWidth: 1))
+                        .background(Color.orange.opacity(0.12), in: Capsule())
+                        .overlay(Capsule().strokeBorder(Color.orange.opacity(0.4), lineWidth: 1))
                     }
                     .buttonStyle(.plain)
                     .help(rec.reason)

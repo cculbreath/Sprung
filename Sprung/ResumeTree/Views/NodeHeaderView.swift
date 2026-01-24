@@ -292,7 +292,7 @@ struct NodeHeaderView: View {
             if let parent = node.parent,
                parent.bundledAttributes?.isEmpty == false,
                parent.enumeratedAttributes?.isEmpty == false {
-                return .purple.opacity(0.15)  // Mixed mode: purple background
+                return .purple.opacity(0.075)  // Mixed mode: purple background (reduced opacity)
             }
             return .clear  // Single mode: outline only
         }
@@ -306,7 +306,7 @@ struct NodeHeaderView: View {
 
         // Collection nodes with mixed mode get purple background
         if isCollectionNode && hasMixedModes {
-            return .purple.opacity(0.15)
+            return .purple.opacity(0.075)  // Reduced opacity
         }
         // Collection nodes with single mode get no background (icon only)
         if isCollectionNode && (node.bundledAttributes?.isEmpty == false || node.enumeratedAttributes?.isEmpty == false) {
@@ -321,7 +321,7 @@ struct NodeHeaderView: View {
 
         let mode = displayMode
         guard mode != .off else { return .clear }
-        return mode.color.opacity(0.15)
+        return mode.color.opacity(0.075)  // Reduced opacity
     }
 
     /// Whether this is an array attribute marked with [] suffix (each item separate)
@@ -927,8 +927,8 @@ enum AIReviewMode {
 
     var icon: String {
         switch self {
-        case .bundle: return "square.stack.3d.up.fill"
-        case .iterate: return "list.bullet"
+        case .bundle: return "square.on.square.squareshape.controlhandles"
+        case .iterate: return "flowchart"
         case .solo: return "sparkles"  // Use sparkles for solo - consistent with SparkleButton
         case .containsSolo: return "sparkles"  // Not shown, but needed for completeness
         case .included: return "sparkles"

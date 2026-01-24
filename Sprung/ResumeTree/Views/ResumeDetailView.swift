@@ -182,30 +182,27 @@ struct ResumeDetailView: View {
 
     // MARK: - Section Content Views
 
-    /// Render the content of a section (its children without the disclosure triangle)
+    /// Render the content of a section as scrollable cards (always expanded, no disclosure triangles)
     @ViewBuilder
     private func sectionContentView(_ sectionNode: TreeNode) -> some View {
-        // For sections with children (like work, skills), show children directly
+        // For sections with children (like work, skills), show children as cards
         if !sectionNode.orderedChildren.isEmpty {
-            ForEach(sectionNode.orderedChildren, id: \.id) { childNode in
-                if childNode.orderedChildren.isEmpty {
-                    // Leaf entry - show as reorderable row
-                    ReorderableLeafRow(
-                        node: childNode,
-                        siblings: sectionNode.orderedChildren,
-                        depthOffset: 1
-                    )
-                    .padding(.vertical, 4)
-                } else {
-                    // Container entry - show with its own expansion control
-                    NodeWithChildrenView(node: childNode, depthOffset: 1)
+            LazyVStack(spacing: 8) {
+                ForEach(sectionNode.orderedChildren, id: \.id) { childNode in
+                    if childNode.orderedChildren.isEmpty {
+                        // Leaf entry - show as card with single value
+                        LeafEntryCardView(node: childNode, siblings: sectionNode.orderedChildren)
+                    } else {
+                        // Container entry - show as card with all fields visible
+                        ResumeEntryCardView(node: childNode, depthOffset: 1)
+                    }
                 }
-                Divider()
             }
+            .padding(.horizontal, 4)
         } else {
-            // Section is a leaf (like summary) - show editor directly
-            NodeLeafView(node: sectionNode)
-                .padding(.horizontal, 10)
+            // Section is a leaf (like summary) - show editor directly in a card
+            LeafSectionCardView(node: sectionNode)
+                .padding(.horizontal, 8)
         }
     }
 
@@ -213,88 +210,90 @@ struct ResumeDetailView: View {
     @ViewBuilder
     private var templateSectionContent: some View {
         if let templateNode = vm.rootNode?.orderedChildren.first(where: { $0.name == "template" }) {
-            ForEach(templateNode.orderedChildren, id: \.id) { childNode in
-                if childNode.orderedChildren.isEmpty {
-                    ReorderableLeafRow(
-                        node: childNode,
-                        siblings: templateNode.orderedChildren,
-                        depthOffset: 1
-                    )
-                    .padding(.vertical, 4)
-                } else {
-                    NodeWithChildrenView(node: childNode, depthOffset: 1)
+            LazyVStack(spacing: 8) {
+                ForEach(templateNode.orderedChildren, id: \.id) { childNode in
+                    if childNode.orderedChildren.isEmpty {
+                        LeafEntryCardView(node: childNode, siblings: templateNode.orderedChildren)
+                    } else {
+                        ResumeEntryCardView(node: childNode, depthOffset: 1)
+                    }
                 }
-                Divider()
             }
+            .padding(.horizontal, 4)
         }
     }
 }
 
-// MARK: - Root-Level Leaf Disclosure
+// MARK: - Leaf Entry Card
 
-private struct RootLeafDisclosureView: View {
+/// Card view for a single leaf entry (e.g., a job title string)
+private struct LeafEntryCardView: View {
     let node: TreeNode
-    /// Depth offset to subtract when calculating indentation (for flattened container children)
-    var depthOffset: Int = 0
+    let siblings: [TreeNode]
     @Environment(ResumeDetailVM.self) private var vm: ResumeDetailVM
 
-    private var expansionBinding: Binding<Bool> {
-        Binding(
-            get: { vm.isExpanded(node) },
-            set: { _ in vm.toggleExpansion(for: node) }
-        )
-    }
-
-    private var effectiveDepth: Int {
-        max(0, node.depth - depthOffset)
-    }
-
-    /// Whether this node should show an AI indicator (solo mode for leaf nodes)
-    private var showAIIndicator: Bool {
+    private var hasAIConfig: Bool {
         node.status == .aiToReplace
     }
 
-    /// Background color for solo mode nodes
-    private var rowBackgroundColor: Color {
-        guard showAIIndicator else { return .clear }
-        return .orange.opacity(0.15)
+    var body: some View {
+        DraggableNodeWrapper(node: node, siblings: siblings) {
+            HStack(spacing: 12) {
+                NodeLeafView(node: node)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                if hasAIConfig {
+                    AIModeIndicator(mode: .solo, pathPattern: nil, isPerEntry: false)
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .background(hasAIConfig ? Color.orange.opacity(0.05) : Color(.windowBackgroundColor).opacity(0.5))
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(hasAIConfig ? Color.orange.opacity(0.3) : Color.primary.opacity(0.1), lineWidth: 1)
+            )
+            .shadow(color: .black.opacity(0.05), radius: 2, x: 0, y: 1)
+        }
+        .padding(.horizontal, 4)
+    }
+}
+
+// MARK: - Leaf Section Card
+
+/// Card view for a section that is itself a leaf (like summary)
+private struct LeafSectionCardView: View {
+    let node: TreeNode
+    @Environment(ResumeDetailVM.self) private var vm: ResumeDetailVM
+
+    private var hasAIConfig: Bool {
+        node.status == .aiToReplace
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        VStack(alignment: .leading, spacing: 8) {
             HStack {
-                ToggleChevronView(isExpanded: expansionBinding)
-                AlignedTextRow(
-                    leadingText: node.displayLabel,
-                    trailingText: nil
-                )
-                Spacer(minLength: 8)
-
-                // AI mode indicator for solo mode nodes
-                if showAIIndicator {
-                    AIModeIndicator(
-                        mode: .solo,
-                        pathPattern: nil,
-                        isPerEntry: false
-                    )
+                Text(node.displayLabel)
+                    .font(.subheadline.weight(.semibold))
+                Spacer()
+                if hasAIConfig {
+                    AIModeIndicator(mode: .solo, pathPattern: nil, isPerEntry: false)
                 }
             }
-            .padding(.horizontal, 10)
-            .padding(.leading, CGFloat(effectiveDepth * 20))
-            .padding(.vertical, 5)
-            .background(rowBackgroundColor)
-            .cornerRadius(6)
-            .contentShape(Rectangle())
-            .onTapGesture {
-                vm.toggleExpansion(for: node)
-            }
 
-            if vm.isExpanded(node) {
-                Divider()
-                NodeLeafView(node: node)
-                    .padding(.leading, CGFloat(effectiveDepth) * 20)
-                    .padding(.vertical, 4)
-            }
+            Divider()
+
+            NodeLeafView(node: node)
         }
+        .padding(12)
+        .background(hasAIConfig ? Color.orange.opacity(0.05) : Color(.windowBackgroundColor).opacity(0.5))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(hasAIConfig ? Color.orange.opacity(0.3) : Color.primary.opacity(0.1), lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.05), radius: 2, x: 0, y: 1)
     }
 }
+

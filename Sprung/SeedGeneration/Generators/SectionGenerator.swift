@@ -45,6 +45,7 @@ struct GeneratorExecutionConfig {
 /// - Create tasks from the generation context
 /// - Execute individual tasks via LLM
 /// - Apply approved content to ExperienceDefaults
+@MainActor
 protocol SectionGenerator {
     /// The section this generator handles
     var sectionKey: ExperienceSectionKey { get }
