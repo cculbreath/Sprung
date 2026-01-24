@@ -307,87 +307,160 @@ private struct SectionAIModeButton: View {
         }
     }
 
+    /// Menu for object array collections (e.g., skills - entries with attributes)
+    /// Structure: Bundle/Iterate → Attributes → (for collections) Bundle/Iterate
     @ViewBuilder
     private var objectCollectionMenu: some View {
-        let containerName = node.name.isEmpty ? node.displayLabel : node.name
+        let hasAnyConfig = node.bundledAttributes?.isEmpty == false ||
+                           node.enumeratedAttributes?.isEmpty == false
 
-        Text("Configure AI Review for \(containerName)")
-            .font(.headline)
-
-        Divider()
-
-        ForEach(availableAttributes, id: \.self) { attr in
-            attributeSubmenu(attr)
-        }
-
-        Divider()
-
-        Button(role: .destructive) {
-            node.bundledAttributes = nil
-            node.enumeratedAttributes = nil
-        } label: {
-            Label("Clear All AI Settings", systemImage: "xmark.circle")
-        }
-    }
-
-    @ViewBuilder
-    private func attributeSubmenu(_ attr: String) -> some View {
-        let isArray = isNestedArray(attr)
-
+        // Top-level Bundle menu: skills.*.attr pattern (1 rev node for all)
         Menu {
-            Button {
-                toggleAttributeMode(attr, toMode: .bundle, isArray: isArray)
-            } label: {
-                HStack {
-                    Image(systemName: "square.on.square.squareshape.controlhandles")
-                        .foregroundColor(.purple)
-                    if isArray {
-                        Text("Bundle Together")
-                    } else {
-                        Text("Bundle")
-                    }
-                    if isAttributeBundled(attr) {
-                        Image(systemName: "checkmark")
-                    }
-                }
-            }
-
-            Button {
-                toggleAttributeMode(attr, toMode: .iterate, isArray: isArray)
-            } label: {
-                HStack {
-                    Image(systemName: "flowchart")
-                        .foregroundColor(.cyan)
-                    if isArray {
-                        Text("Each Separate")
-                    } else {
-                        Text("Iterate")
-                    }
-                    if isAttributeIterated(attr) || isAttributeIterated(attr + "[]") {
-                        Image(systemName: "checkmark")
-                    }
-                }
-            }
-
-            Button {
-                removeAttributeFromBoth(attr, isArray: isArray)
-            } label: {
-                HStack {
-                    Image(systemName: "sparkles")
-                        .foregroundColor(.gray)
-                    Text("Off")
-                    if !isAttributeBundled(attr) && !isAttributeIterated(attr) &&
-                       !isAttributeBundled(attr + "[]") && !isAttributeIterated(attr + "[]") {
-                        Image(systemName: "checkmark")
-                    }
+            ForEach(availableAttributes, id: \.self) { attr in
+                if isNestedArray(attr) {
+                    // Nested array: only Bundle option (all items combined across all entries)
+                    bundleNestedArrayButton(attr: attr)
+                } else {
+                    // Scalar attribute: toggle for bundle mode
+                    bundleScalarButton(attr: attr)
                 }
             }
         } label: {
             HStack {
-                if isAttributeBundled(attr) || isAttributeBundled(attr + "[]") {
+                Image(systemName: "square.on.square.squareshape.controlhandles")
+                    .foregroundColor(.purple)
+                Text("Bundle")
+                Text("– 1 review")
+                    .foregroundColor(.secondary)
+            }
+        }
+
+        // Top-level Iterate menu: skills[].attr pattern (N rev nodes, one per entry)
+        Menu {
+            ForEach(availableAttributes, id: \.self) { attr in
+                if isNestedArray(attr) {
+                    // Nested array: submenu with Bundle (per entry) or Iterate (each item)
+                    iterateNestedArraySubmenu(attr: attr)
+                } else {
+                    // Scalar attribute: toggle for iterate mode
+                    iterateScalarButton(attr: attr)
+                }
+            }
+        } label: {
+            HStack {
+                Image(systemName: "flowchart")
+                    .foregroundColor(.cyan)
+                Text("Iterate")
+                Text("– N reviews")
+                    .foregroundColor(.secondary)
+            }
+        }
+
+        if hasAnyConfig {
+            Divider()
+            Button(role: .destructive) {
+                node.bundledAttributes = nil
+                node.enumeratedAttributes = nil
+            } label: {
+                Label("Clear All AI Settings", systemImage: "xmark.circle")
+            }
+        }
+    }
+
+    // MARK: - Bundle Menu Items
+
+    /// Scalar attribute under Bundle menu (skills.*.name → 1 rev node for all names)
+    @ViewBuilder
+    private func bundleScalarButton(attr: String) -> some View {
+        let isActive = isAttributeBundled(attr)
+
+        Button {
+            toggleBundleAttribute(attr)
+        } label: {
+            HStack {
+                Text(attr)
+                if isActive { Image(systemName: "checkmark") }
+            }
+        }
+    }
+
+    /// Nested array under Bundle menu (skills.*.keywords → 1 rev node for all keywords)
+    @ViewBuilder
+    private func bundleNestedArrayButton(attr: String) -> some View {
+        let isActive = isAttributeBundled(attr)
+
+        Button {
+            toggleBundleAttribute(attr)
+        } label: {
+            HStack {
+                Text(attr)
+                if isActive { Image(systemName: "checkmark") }
+            }
+        }
+    }
+
+    // MARK: - Iterate Menu Items
+
+    /// Scalar attribute under Iterate menu (skills[].name → N rev nodes, one per skill)
+    @ViewBuilder
+    private func iterateScalarButton(attr: String) -> some View {
+        let isActive = isAttributeIterated(attr)
+
+        Button {
+            toggleIterateAttribute(attr)
+        } label: {
+            HStack {
+                Text(attr)
+                if isActive { Image(systemName: "checkmark") }
+            }
+        }
+    }
+
+    /// Nested array submenu under Iterate menu
+    /// skills[].keywords → N rev nodes (each skill's keywords bundled together)
+    /// skills[].keywords[] → N×M rev nodes (each skill, each keyword separate)
+    @ViewBuilder
+    private func iterateNestedArraySubmenu(attr: String) -> some View {
+        let attrWithSuffix = attr + "[]"
+        let isBundledPerEntry = isAttributeIterated(attr) && !isAttributeIterated(attrWithSuffix)
+        let isIteratedEach = isAttributeIterated(attrWithSuffix)
+
+        Menu {
+            // Bundle: skills[].keywords (N rev nodes, each skill's keywords together)
+            Button {
+                removeAttributeFromBoth(attr)
+                addToEnumeratedAttributes(attr)
+            } label: {
+                HStack {
                     Image(systemName: "square.on.square.squareshape.controlhandles")
                         .foregroundColor(.purple)
-                } else if isAttributeIterated(attr) || isAttributeIterated(attr + "[]") {
+                    Text("Bundle")
+                    Text("– N reviews")
+                        .foregroundColor(.secondary)
+                    if isBundledPerEntry { Image(systemName: "checkmark") }
+                }
+            }
+
+            // Iterate: skills[].keywords[] (N×M rev nodes, each keyword separate)
+            Button {
+                removeAttributeFromBoth(attr)
+                addToEnumeratedAttributes(attrWithSuffix)
+            } label: {
+                HStack {
+                    Image(systemName: "flowchart")
+                        .foregroundColor(.cyan)
+                    Text("Iterate")
+                    Text("– N×M reviews")
+                        .foregroundColor(.secondary)
+                    if isIteratedEach { Image(systemName: "checkmark") }
+                }
+            }
+        } label: {
+            HStack {
+                if isBundledPerEntry {
+                    Image(systemName: "square.on.square.squareshape.controlhandles")
+                        .foregroundColor(.purple)
+                } else if isIteratedEach {
                     Image(systemName: "flowchart")
                         .foregroundColor(.cyan)
                 } else {
@@ -399,30 +472,63 @@ private struct SectionAIModeButton: View {
         }
     }
 
-    private func toggleAttributeMode(_ attr: String, toMode: AIReviewMode, isArray: Bool) {
-        let attrKey = isArray && toMode == .iterate ? attr + "[]" : attr
+    // MARK: - Attribute Mode Helpers
 
-        removeAttributeFromBoth(attr, isArray: isArray)
+    private func toggleBundleAttribute(_ attr: String) {
+        if isAttributeBundled(attr) {
+            // Remove from bundled
+            removeFromBundledAttributes(attr)
+        } else {
+            // Remove from enumerated (if present) and add to bundled
+            removeFromEnumeratedAttributes(attr)
+            removeFromEnumeratedAttributes(attr + "[]")
+            addToBundledAttributes(attr)
+        }
+    }
 
-        if toMode == .bundle {
-            var bundled = node.bundledAttributes ?? []
-            bundled.append(attrKey)
+    private func toggleIterateAttribute(_ attr: String) {
+        if isAttributeIterated(attr) {
+            // Remove from enumerated
+            removeFromEnumeratedAttributes(attr)
+        } else {
+            // Remove from bundled (if present) and add to enumerated
+            removeFromBundledAttributes(attr)
+            addToEnumeratedAttributes(attr)
+        }
+    }
+
+    private func removeAttributeFromBoth(_ attr: String) {
+        removeFromBundledAttributes(attr)
+        removeFromBundledAttributes(attr + "[]")
+        removeFromEnumeratedAttributes(attr)
+        removeFromEnumeratedAttributes(attr + "[]")
+    }
+
+    private func addToBundledAttributes(_ attr: String) {
+        var bundled = node.bundledAttributes ?? []
+        if !bundled.contains(attr) {
+            bundled.append(attr)
             node.bundledAttributes = bundled
-        } else if toMode == .iterate {
-            var enumerated = node.enumeratedAttributes ?? []
-            enumerated.append(attrKey)
+        }
+    }
+
+    private func removeFromBundledAttributes(_ attr: String) {
+        guard var bundled = node.bundledAttributes else { return }
+        bundled.removeAll { $0 == attr }
+        node.bundledAttributes = bundled.isEmpty ? nil : bundled
+    }
+
+    private func addToEnumeratedAttributes(_ attr: String) {
+        var enumerated = node.enumeratedAttributes ?? []
+        if !enumerated.contains(attr) {
+            enumerated.append(attr)
             node.enumeratedAttributes = enumerated
         }
     }
 
-    private func removeAttributeFromBoth(_ attr: String, isArray: Bool) {
-        if var bundled = node.bundledAttributes {
-            bundled.removeAll { $0 == attr || $0 == attr + "[]" }
-            node.bundledAttributes = bundled.isEmpty ? nil : bundled
-        }
-        if var enumerated = node.enumeratedAttributes {
-            enumerated.removeAll { $0 == attr || $0 == attr + "[]" }
-            node.enumeratedAttributes = enumerated.isEmpty ? nil : enumerated
-        }
+    private func removeFromEnumeratedAttributes(_ attr: String) {
+        guard var enumerated = node.enumeratedAttributes else { return }
+        enumerated.removeAll { $0 == attr }
+        node.enumeratedAttributes = enumerated.isEmpty ? nil : enumerated
     }
 }
