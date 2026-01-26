@@ -3,7 +3,7 @@
 //  Sprung
 //
 //  Detects AI review modes for tree nodes.
-//  Extracted from NodeHeaderView for single responsibility.
+//  Provides utility functions for determining collection relationships.
 //
 
 import Foundation
@@ -62,11 +62,11 @@ struct NodeAIReviewModeDetector {
 
     /// Current mode for this specific attribute across the collection
     /// For scalar attributes (no children):
-    /// - bundledAttributes["name"] → purple (all combined)
-    /// - enumeratedAttributes["name"] → cyan (each separate)
+    /// - bundledAttributes["name"] -> purple (all combined)
+    /// - enumeratedAttributes["name"] -> cyan (each separate)
     /// For array attributes (has children):
-    /// - *Attributes["keywords"] → purple (bundled together)
-    /// - *Attributes["keywords[]"] → cyan (each item separate)
+    /// - *Attributes["keywords"] -> purple (bundled together)
+    /// - *Attributes["keywords[]"] -> cyan (each item separate)
     static func attributeMode(for node: TreeNode) -> AIReviewMode {
         guard let grandparent = grandparentNode(of: node) else { return .off }
         let attr = attributeName(of: node)
@@ -75,28 +75,28 @@ struct NodeAIReviewModeDetector {
 
         if isArrayAttribute {
             // Array attribute: check for [] suffix to determine mode
-            // With [] suffix = each item separate (cyan)
+            // With [] suffix = each item separate (iterate)
             if grandparent.bundledAttributes?.contains(attrWithSuffix) == true ||
                grandparent.enumeratedAttributes?.contains(attrWithSuffix) == true {
-                return .iterate  // Cyan - each item is separate
+                return .iterate
             }
-            // Without [] suffix = bundled together (purple)
+            // Without [] suffix = bundled together
             if grandparent.bundledAttributes?.contains(attr) == true ||
                grandparent.enumeratedAttributes?.contains(attr) == true {
-                return .bundle  // Purple - items bundled together
+                return .bundle
             }
         } else {
-            // Scalar attribute: enumeratedAttributes = cyan, bundledAttributes = purple
+            // Scalar attribute: enumeratedAttributes = iterate, bundledAttributes = bundle
             if grandparent.enumeratedAttributes?.contains(attr) == true {
-                return .iterate  // Cyan - each entry's value separate
+                return .iterate
             }
             if grandparent.bundledAttributes?.contains(attr) == true {
-                return .bundle  // Purple - all values combined
+                return .bundle
             }
         }
 
         if node.status == .aiToReplace {
-            return .solo  // Orange - just this single node
+            return .solo
         }
         return .off
     }
@@ -170,43 +170,13 @@ struct NodeAIReviewModeDetector {
         node.parent != nil && !node.orderedChildren.isEmpty
     }
 
-    /// Whether to show the AI mode indicator (icon badge)
-    static func showAIModeIndicator(for node: TreeNode, isHoveringHeader: Bool) -> Bool {
-        // Entry nodes get outline instead of icon - never show icon
-        if isEntryUnderReviewedCollection(node) { return false }
-
-        // Containers of solo items get outline, not icon
-        if aiMode(for: node) == .containsSolo { return false }
-
-        // Always show if node has actual AI configuration
-        if node.parent != nil && (
-            node.status == .aiToReplace ||
-            node.hasAttributeReviewModes ||
-            isContainerEnumerateNode(node) ||
-            isAttributeOfCollectionEntry(node) ||
-            isChildOfReviewedContainer(node) ||
-            isContainerEnumerateChild(node)
-        ) {
-            return true
-        }
-
-        // Only show hover indicator for interactive nodes (attribute nodes that can be clicked)
-        // or collection nodes (right-click menu available)
-        if isHoveringHeader && node.parent != nil {
-            return isAIModeInteractive(node) || supportsCollectionModes(node)
-        }
-
-        return false
-    }
-
     /// The mode to display for this node
     static func displayMode(for node: TreeNode) -> AIReviewMode {
         // Container enumerate node (e.g., jobTitles with enumeratedAttributes["*"])
-        // Shows cyan iterate icon (the container itself, not children)
         if isContainerEnumerateNode(node) {
             return .iterate
         }
-        // Container enumerate children get iterate mode (cyan icon + background)
+        // Container enumerate children get iterate mode
         if isContainerEnumerateChild(node) {
             return .iterate
         }
@@ -214,9 +184,9 @@ struct NodeAIReviewModeDetector {
         if isChildOfReviewedContainer(node) {
             return .included
         }
-        // Entry under reviewed collection (e.g., Software Engineering under Skills)
+        // Entry under reviewed collection
         if isEntryUnderReviewedCollection(node) {
-            return .included  // Show included indicator (but no icon, just outline)
+            return .included
         }
         if isAttributeOfCollectionEntry(node) {
             return attributeMode(for: node)
@@ -233,81 +203,5 @@ struct NodeAIReviewModeDetector {
         guard !node.orderedChildren.isEmpty else { return false }
         return grandparent.bundledAttributes?.contains(attrWithSuffix) == true ||
                grandparent.enumeratedAttributes?.contains(attrWithSuffix) == true
-    }
-
-    /// Whether this node has any outline (for external padding)
-    static func hasAnyOutline(for node: TreeNode) -> Bool {
-        outerOutlineColor(for: node) != .clear || innerOutlineColor(for: node) != .clear
-    }
-}
-
-// MARK: - Color Helpers
-
-extension NodeAIReviewModeDetector {
-    /// Outer outline color (containsSolo - orange)
-    /// Checks aiStatusChildren directly since aiMode may return bundle/iterate first
-    static func outerOutlineColor(for node: TreeNode) -> SwiftUI.Color {
-        if node.aiStatusChildren > 0 {
-            return .orange.opacity(0.5)
-        }
-        return .clear
-    }
-
-    /// Inner outline color (entry under reviewed collection - purple/cyan)
-    static func innerOutlineColor(for node: TreeNode) -> SwiftUI.Color {
-        guard isEntryUnderReviewedCollection(node), let parent = node.parent else { return .clear }
-        let hasBundled = parent.bundledAttributes?.isEmpty == false
-        let hasEnumerated = parent.enumeratedAttributes?.isEmpty == false
-
-        // Mixed mode: cyan outline (purple shown via background)
-        if hasBundled && hasEnumerated {
-            return .cyan.opacity(0.5)
-        }
-        // Single mode: outline matches the mode
-        if hasBundled {
-            return .purple.opacity(0.5)
-        } else if hasEnumerated {
-            return .cyan.opacity(0.5)
-        }
-        return .clear
-    }
-
-    /// Background color for the entire row based on AI review mode
-    static func rowBackgroundColor(for node: TreeNode, showAIModeIndicator: Bool) -> SwiftUI.Color {
-        // Entry nodes under mixed mode collections get purple background (checked before showAIModeIndicator)
-        if isEntryUnderReviewedCollection(node) {
-            if let parent = node.parent,
-               parent.bundledAttributes?.isEmpty == false,
-               parent.enumeratedAttributes?.isEmpty == false {
-                return .purple.opacity(0.15)  // Mixed mode: purple background
-            }
-            return .clear  // Single mode: outline only
-        }
-
-        guard showAIModeIndicator else { return .clear }
-
-        // Container enumerate nodes get icon only, no background (children are the revnodes)
-        if isContainerEnumerateNode(node) {
-            return .clear
-        }
-
-        // Collection nodes with mixed mode get purple background
-        if node.isCollectionNode && hasMixedModes(node) {
-            return .purple.opacity(0.15)
-        }
-        // Collection nodes with single mode get no background (icon only)
-        if node.isCollectionNode && (node.bundledAttributes?.isEmpty == false || node.enumeratedAttributes?.isEmpty == false) {
-            return .clear
-        }
-
-        // Array attribute nodes with [] suffix get icon only, no background (children are the revnodes)
-        // e.g., highlights when work[].highlights[] is configured
-        if isAttributeOfCollectionEntry(node) && isIterateArrayAttribute(node) {
-            return .clear
-        }
-
-        let mode = displayMode(for: node)
-        guard mode != .off else { return .clear }
-        return mode.color.opacity(0.15)
     }
 }

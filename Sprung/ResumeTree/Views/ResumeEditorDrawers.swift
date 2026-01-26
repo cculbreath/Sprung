@@ -6,6 +6,7 @@
 //  Contains AI action drawer (default open) and styling drawer (default closed).
 //
 
+import AppKit
 import SwiftUI
 
 // MARK: - AI Action Drawer
@@ -124,8 +125,10 @@ struct ResumeAIDrawer: View {
                 }
                 .padding(.horizontal, 12)
                 .padding(.bottom, 10)
+                .transition(.opacity.combined(with: .move(edge: .bottom)))
             }
         }
+        .clipped()
         .glassEffect(.regular, in: .rect(cornerRadius: 0))
     }
 }
@@ -133,12 +136,26 @@ struct ResumeAIDrawer: View {
 // MARK: - Styling Drawer
 
 /// Bottom drawer containing font size and section visibility panels
+/// Resizable height persisted to AppStorage
 struct ResumeStylingDrawer: View {
     @Binding var isExpanded: Bool
     @Environment(ResumeDetailVM.self) private var vm: ResumeDetailVM
+    @AppStorage("stylingDrawerHeight") private var drawerHeight: Double = 180
+
+    private let minHeight: CGFloat = 100
+    private let maxHeight: CGFloat = 400
 
     var body: some View {
         VStack(spacing: 0) {
+            // Resize handle (only when expanded)
+            if isExpanded {
+                ResizeHandle(height: Binding(
+                    get: { drawerHeight },
+                    set: { drawerHeight = $0 }
+                ), minHeight: minHeight, maxHeight: maxHeight)
+                    .transition(.opacity)
+            }
+
             // Top separator
             Rectangle()
                 .fill(Color.primary.opacity(0.15))
@@ -169,17 +186,64 @@ struct ResumeStylingDrawer: View {
             .buttonStyle(.plain)
 
             if isExpanded {
-                VStack(alignment: .leading, spacing: 8) {
-                    if vm.hasFontSizeNodes {
-                        FontSizePanelView()
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 8) {
+                        if vm.hasFontSizeNodes {
+                            FontSizePanelView()
+                        }
+                        if vm.hasSectionVisibilityOptions {
+                            SectionVisibilityPanelView()
+                        }
                     }
-                    if vm.hasSectionVisibilityOptions {
-                        SectionVisibilityPanelView()
-                    }
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, 12)
                 }
-                .padding(.horizontal, 12)
-                .padding(.bottom, 12)
+                .frame(height: drawerHeight)
+                .transition(.opacity.combined(with: .move(edge: .bottom)))
             }
         }
+        .clipped()
+    }
+}
+
+// MARK: - Resize Handle
+
+/// Draggable handle for resizing drawer height
+private struct ResizeHandle: View {
+    @Binding var height: Double
+    let minHeight: CGFloat
+    let maxHeight: CGFloat
+
+    @State private var isDragging = false
+
+    var body: some View {
+        Rectangle()
+            .fill(Color.clear)
+            .frame(height: 8)
+            .overlay(
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(isDragging ? Color.accentColor : Color.secondary.opacity(0.4))
+                    .frame(width: 36, height: 4)
+            )
+            .contentShape(Rectangle())
+            .onHover { hovering in
+                if hovering {
+                    NSCursor.resizeUpDown.push()
+                } else {
+                    NSCursor.pop()
+                }
+            }
+            .gesture(
+                DragGesture()
+                    .onChanged { value in
+                        isDragging = true
+                        // Dragging up increases height (negative translation)
+                        let newHeight = height - value.translation.height
+                        height = min(maxHeight, max(minHeight, newHeight))
+                    }
+                    .onEnded { _ in
+                        isDragging = false
+                    }
+            )
     }
 }

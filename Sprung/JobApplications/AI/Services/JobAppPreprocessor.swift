@@ -77,9 +77,23 @@ class JobAppPreprocessor {
             required: ["skill_name", "category", "confidence", "reason", "related_user_skills", "source_card_ids"]
         )
 
+        // Note: We only ask for text snippets, not character indices.
+        // Character positions are computed programmatically after LLM response.
+        let skillEvidenceSchema = JSONSchema(
+            type: .object,
+            description: "A skill found in the job description with text evidence",
+            properties: [
+                "skill_name": JSONSchema(type: .string, description: "Normalized skill name"),
+                "category": JSONSchema(type: .string, description: "matched, recommended, or unmatched"),
+                "evidence_texts": JSONSchema(type: .array, description: "Exact text snippets from job description where this skill is mentioned", items: JSONSchema(type: .string)),
+                "matched_skill_id": JSONSchema(type: .string, description: "UUID of matched user skill if category is matched, empty string otherwise")
+            ],
+            required: ["skill_name", "category", "evidence_texts", "matched_skill_id"]
+        )
+
         return JSONSchema(
             type: .object,
-            description: "Skill matching and adjacent skill inference",
+            description: "Skill matching, inference, and text evidence extraction",
             properties: [
                 "matched_skill_ids": JSONSchema(
                     type: .array,
@@ -90,9 +104,14 @@ class JobAppPreprocessor {
                     type: .array,
                     description: "Skills the user likely has based on existing expertise",
                     items: skillRecommendationSchema
+                ),
+                "skill_evidence": JSONSchema(
+                    type: .array,
+                    description: "All skills found in job description with text locations for highlighting",
+                    items: skillEvidenceSchema
                 )
             ],
-            required: ["matched_skill_ids", "skill_recommendations"],
+            required: ["matched_skill_ids", "skill_recommendations", "skill_evidence"],
             additionalProperties: false
         )
     }()
@@ -100,6 +119,7 @@ class JobAppPreprocessor {
 
     private weak var llmFacade: LLMFacade?
     private weak var skillStore: SkillStore?
+    private weak var activityTracker: BackgroundActivityTracker?
 
     // MARK: - Concurrency Control
 
@@ -127,6 +147,11 @@ class JobAppPreprocessor {
     /// Set the skill store for skill matching during preprocessing
     func setSkillStore(_ skillStore: SkillStore) {
         self.skillStore = skillStore
+    }
+
+    /// Set the activity tracker for reporting preprocessing progress
+    func setActivityTracker(_ tracker: BackgroundActivityTracker) {
+        self.activityTracker = tracker
     }
 
     // MARK: - Public API
@@ -157,6 +182,17 @@ class JobAppPreprocessor {
         let job = pendingJobs.removeFirst()
         activeJobCount += 1
 
+        // Create operation ID for tracking
+        let operationId = UUID().uuidString
+        let operationName = "\(job.jobApp.companyName): \(job.jobApp.jobPosition)"
+
+        // Start tracking this operation
+        activityTracker?.trackOperation(
+            id: operationId,
+            type: .preprocessing,
+            name: operationName
+        )
+
         Task {
             defer {
                 Task { @MainActor in
@@ -168,14 +204,22 @@ class JobAppPreprocessor {
             do {
                 let result = try await preprocess(
                     jobDescription: job.jobApp.jobDescription,
-                    cards: job.cards
+                    cards: job.cards,
+                    operationId: operationId
                 )
 
                 job.jobApp.extractedRequirements = result.requirements
                 job.jobApp.relevantCardIds = result.relevantCardIds
                 try? job.context.save()
+
+                await MainActor.run {
+                    activityTracker?.markCompleted(operationId: operationId)
+                }
                 Logger.info("✅ [JobAppPreprocessor] Preprocessed: \(job.jobApp.jobPosition) at \(job.jobApp.companyName)", category: .ai)
             } catch {
+                await MainActor.run {
+                    activityTracker?.markFailed(operationId: operationId, error: error.localizedDescription)
+                }
                 Logger.error("❌ [JobAppPreprocessor] Failed to preprocess \(job.jobApp.jobPosition): \(error.localizedDescription)", category: .ai)
             }
         }
@@ -185,7 +229,8 @@ class JobAppPreprocessor {
 
     private func preprocess(
         jobDescription: String,
-        cards: [KnowledgeCard]
+        cards: [KnowledgeCard],
+        operationId: String
     ) async throws -> PreprocessingResult {
         guard let facade = llmFacade else {
             throw PreprocessingError.llmNotAvailable
@@ -195,6 +240,17 @@ class JobAppPreprocessor {
             throw ModelConfigurationError.modelNotConfigured(
                 settingKey: "backgroundProcessingModelId",
                 operationName: "Job Requirements Extraction"
+            )
+        }
+
+        // Phase 1: Requirements Extraction
+        await MainActor.run {
+            activityTracker?.updatePhase(operationId: operationId, phase: "Requirements Extraction")
+            activityTracker?.appendTranscript(
+                operationId: operationId,
+                entryType: .system,
+                content: "Starting requirements extraction",
+                details: "Model: \(modelId), Cards: \(cards.count)"
             )
         }
 
@@ -239,6 +295,15 @@ class JobAppPreprocessor {
         Return JSON matching the required structure.
         """
 
+        await MainActor.run {
+            activityTracker?.appendTranscript(
+                operationId: operationId,
+                entryType: .llmRequest,
+                content: "Sending requirements extraction request",
+                details: "Prompt length: \(prompt.count) chars"
+            )
+        }
+
         let response = try await facade.executeStructuredWithSchema(
             prompt: prompt,
             modelId: modelId,
@@ -249,23 +314,55 @@ class JobAppPreprocessor {
             backend: .openRouter
         )
 
+        await MainActor.run {
+            activityTracker?.appendTranscript(
+                operationId: operationId,
+                entryType: .llmResponse,
+                content: "Extracted \(response.mustHave.count) must-have, \(response.strongSignal.count) strong-signal, \(response.atsKeywords.count) ATS keywords",
+                details: "Relevant cards: \(response.relevantCardIds.count)"
+            )
+        }
+
         // Second call: Skill matching and inference (only if skill store available)
         var matchedSkillIds: [String] = []
         var skillRecommendations: [SkillRecommendation] = []
+        var skillEvidence: [JobSkillEvidence] = []
 
         if let skillStore = skillStore {
             let skills = await MainActor.run { skillStore.skills }
             if !skills.isEmpty {
+                await MainActor.run {
+                    activityTracker?.updatePhase(operationId: operationId, phase: "Skill Matching")
+                    activityTracker?.appendTranscript(
+                        operationId: operationId,
+                        entryType: .system,
+                        content: "Starting skill matching",
+                        details: "User skills: \(skills.count), ATS keywords: \(response.atsKeywords.count)"
+                    )
+                }
+
                 let skillResult = try await inferSkills(
+                    jobDescription: jobDescription,
                     atsKeywords: response.atsKeywords,
                     skills: skills,
                     cards: cards,
                     relevantCardIds: response.relevantCardIds,
                     facade: facade,
-                    modelId: modelId
+                    modelId: modelId,
+                    operationId: operationId
                 )
                 matchedSkillIds = skillResult.matchedSkillIds
                 skillRecommendations = skillResult.skillRecommendations.map { $0.toModel() }
+                skillEvidence = skillResult.skillEvidence.map { $0.toModel(jobDescription: jobDescription) }
+
+                await MainActor.run {
+                    activityTracker?.appendTranscript(
+                        operationId: operationId,
+                        entryType: .llmResponse,
+                        content: "Matched \(matchedSkillIds.count) skills, \(skillRecommendations.count) recommendations",
+                        details: nil
+                    )
+                }
             }
         }
 
@@ -279,7 +376,8 @@ class JobAppPreprocessor {
                 extractedAt: Date(),
                 extractionModel: modelId,
                 matchedSkillIds: matchedSkillIds,
-                skillRecommendations: skillRecommendations
+                skillRecommendations: skillRecommendations,
+                skillEvidence: skillEvidence
             ),
             relevantCardIds: response.relevantCardIds
         )
@@ -288,12 +386,14 @@ class JobAppPreprocessor {
     // MARK: - Skill Inference (Second LLM Call)
 
     private func inferSkills(
+        jobDescription: String,
         atsKeywords: [String],
         skills: [Skill],
         cards: [KnowledgeCard],
         relevantCardIds: [String],
         facade: LLMFacade,
-        modelId: String
+        modelId: String,
+        operationId: String
     ) async throws -> SkillMatchingResponse {
         // Build skill bank summary
         let skillSummaries = skills.map { skill -> String in
@@ -318,7 +418,10 @@ class JobAppPreprocessor {
         }.joined(separator: "\n")
 
         let prompt = """
-        Match user skills to job requirements and identify adjacent skills they likely have.
+        Match user skills to job requirements, identify adjacent skills, and extract text evidence.
+
+        JOB DESCRIPTION:
+        \(jobDescription)
 
         JOB REQUIREMENTS (ATS Keywords):
         \(atsKeywords.joined(separator: ", "))
@@ -353,8 +456,30 @@ class JobAppPreprocessor {
 
         Only suggest skills that MATCH JOB REQUIREMENTS. Don't suggest random related skills.
 
+        TASK 3 - TEXT EVIDENCE EXTRACTION:
+        For EVERY skill mentioned in the ATS keywords, find where it appears in the job description.
+        For each skill, provide:
+        - skill_name: The skill name (normalized)
+        - category: "matched" if user has it, "recommended" if in skill_recommendations, "unmatched" if neither
+        - evidence_texts: Array of EXACT text snippets copied verbatim from the job description where this skill is mentioned
+        - matched_skill_id: UUID of the user's skill if category is "matched", otherwise empty string ""
+
+        IMPORTANT for evidence_texts:
+        - Copy text EXACTLY as it appears in the job description (preserve case, spacing, punctuation)
+        - Include enough context to be meaningful (short phrases or partial sentences, not just single words)
+        - Include all distinct mentions of each skill
+
         Return JSON matching the required structure.
         """
+
+        await MainActor.run {
+            activityTracker?.appendTranscript(
+                operationId: operationId,
+                entryType: .llmRequest,
+                content: "Sending skill matching request",
+                details: "Prompt length: \(prompt.count) chars"
+            )
+        }
 
         return try await facade.executeStructuredWithSchema(
             prompt: prompt,
@@ -391,10 +516,60 @@ private struct PreprocessingResponse: Codable, Sendable {
 private struct SkillMatchingResponse: Codable, Sendable {
     let matchedSkillIds: [String]
     let skillRecommendations: [SkillRecommendationResponse]
+    let skillEvidence: [SkillEvidenceResponse]
 
     enum CodingKeys: String, CodingKey {
         case matchedSkillIds = "matched_skill_ids"
         case skillRecommendations = "skill_recommendations"
+        case skillEvidence = "skill_evidence"
+    }
+}
+
+private struct SkillEvidenceResponse: Codable, Sendable {
+    let skillName: String
+    let category: String
+    let evidenceTexts: [String]  // Exact text snippets from job description
+    let matchedSkillId: String   // Required by schema, empty string when not matched
+
+    enum CodingKeys: String, CodingKey {
+        case skillName = "skill_name"
+        case category
+        case evidenceTexts = "evidence_texts"
+        case matchedSkillId = "matched_skill_id"
+    }
+
+    /// Convert to model, computing actual character positions by searching the job description
+    func toModel(jobDescription: String) -> JobSkillEvidence {
+        // Find actual positions of each evidence text in the job description
+        let spans = evidenceTexts.flatMap { searchText -> [TextSpan] in
+            findAllOccurrences(of: searchText, in: jobDescription)
+        }
+
+        return JobSkillEvidence(
+            skillName: skillName,
+            category: JobSkillCategory(rawValue: category) ?? .unmatched,
+            evidenceSpans: spans,
+            matchedSkillId: matchedSkillId.isEmpty ? nil : matchedSkillId
+        )
+    }
+
+    /// Find all occurrences of a text snippet in the job description (case-insensitive)
+    private func findAllOccurrences(of searchText: String, in text: String) -> [TextSpan] {
+        var spans: [TextSpan] = []
+        let lowerText = text.lowercased()
+        let lowerSearch = searchText.lowercased()
+
+        var searchStart = lowerText.startIndex
+        while let range = lowerText.range(of: lowerSearch, range: searchStart..<lowerText.endIndex) {
+            let start = lowerText.distance(from: lowerText.startIndex, to: range.lowerBound)
+            let end = lowerText.distance(from: lowerText.startIndex, to: range.upperBound)
+            // Get the actual text from the original (preserving case)
+            let actualText = String(text[range])
+            spans.append(TextSpan(start: start, end: end, text: actualText))
+            searchStart = range.upperBound
+        }
+
+        return spans
     }
 }
 

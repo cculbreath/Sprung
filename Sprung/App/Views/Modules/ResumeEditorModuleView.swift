@@ -283,20 +283,20 @@ struct ResumeEditorModuleView: View {
                         HStack(spacing: 8) {
                             TemplatePicker()
                                 .frame(maxWidth: .infinity)
-                                .glassEffect(.regular, in: .rect(cornerRadius: 6))
 
                             Button("Create Resume") {
                                 createResume(for: selApp)
                             }
-                            .buttonStyle(.glassProminent)
+                            .buttonStyle(.automatic)
                         }
                     }
                     .padding(.horizontal, 12)
                     .padding(.bottom, 12)
                 }
-                .clipped()
+                .transition(.opacity.combined(with: .move(edge: .bottom)))
             }
         }
+        .clipped()
         .glassEffect(.regular, in: .rect(cornerRadius: 0))
     }
 

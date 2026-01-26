@@ -448,6 +448,11 @@ private struct ChipView: View {
     @FocusState private var isFieldFocused: Bool
     @Environment(\.modelContext) private var modelContext
 
+    /// Get the icon mode for this chip node
+    private var iconMode: AIIconMode {
+        AIIconModeResolver.detectSingleMode(for: node)
+    }
+
     private var autocompleteSuggestions: [Skill] {
         guard !editText.isEmpty else { return [] }
         let search = editText.lowercased()
@@ -480,18 +485,29 @@ private struct ChipView: View {
                 .font(.system(size: 11, weight: .medium))
                 .lineLimit(1)
 
-            // Delete button - only show on hover
-            if isHovering {
-                Button {
-                    onDelete()
+            // AI status icon (trailing)
+            if node.status != LeafStatus.disabled {
+                Menu {
+                    chipAIMenu
                 } label: {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 8, weight: .bold))
-                        .foregroundStyle(.secondary)
+                    AIIconImage(mode: iconMode, size: 11)
+                        .padding(2)
                 }
-                .buttonStyle(.plain)
-                .transition(.opacity.combined(with: .scale(scale: 0.8)))
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
+                .help(iconMode.helpText)
             }
+
+            // Delete button - use opacity to avoid reflow
+            Button {
+                onDelete()
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 8, weight: .bold))
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+            .opacity(isHovering ? 1 : 0)
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
@@ -513,6 +529,46 @@ private struct ChipView: View {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                 isFieldFocused = true
             }
+        }
+    }
+
+    // MARK: - Chip AI Menu
+
+    @ViewBuilder
+    private var chipAIMenu: some View {
+        let isSolo = node.status == .aiToReplace
+
+        Text("AI Review")
+
+        Divider()
+
+        Button {
+            toggleNodeStatus()
+        } label: {
+            HStack {
+                Image(systemName: "target")
+                    .foregroundColor(.teal)
+                Text("Solo - this field only")
+                if isSolo { Image(systemName: "checkmark") }
+            }
+        }
+
+        if isSolo {
+            Divider()
+
+            Button(role: .destructive) {
+                node.status = .saved
+            } label: {
+                Label("Disable AI Review", systemImage: "xmark.circle")
+            }
+        }
+    }
+
+    private func toggleNodeStatus() {
+        if node.status == LeafStatus.saved {
+            node.status = .aiToReplace
+        } else if node.status == LeafStatus.aiToReplace {
+            node.status = .saved
         }
     }
 

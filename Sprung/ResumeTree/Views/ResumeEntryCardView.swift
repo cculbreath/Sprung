@@ -22,19 +22,17 @@ struct ResumeEntryCardView: View {
         return Set(requirements.matchedSkillIds.compactMap { UUID(uuidString: $0) })
     }
 
-    /// Whether this entry is under a section with AI configuration
-    private var isUnderAISection: Bool {
-        guard let parent = node.parent else { return false }
-        return parent.bundledAttributes?.isEmpty == false ||
-               parent.enumeratedAttributes?.isEmpty == false
+    /// The parent (section) node
+    private var sectionNode: TreeNode? {
+        node.parent
     }
 
-    /// Border color based on AI status
-    private var borderColor: Color {
-        guard isUnderAISection else { return Color(.separatorColor).opacity(0.5) }
-        let innerColor = NodeAIReviewModeDetector.innerOutlineColor(for: node)
-        if innerColor != .clear { return innerColor.opacity(0.5) }
-        return Color(.separatorColor).opacity(0.5)
+    /// The title/name node (hidden from card content but shown as header icon)
+    private var titleNode: TreeNode? {
+        let title = node.computedTitle.lowercased()
+        return node.orderedChildren.first { child in
+            child.name.lowercased() == "name" && child.value.lowercased() == title
+        }
     }
 
     /// Children to display (filters out redundant "name" field)
@@ -61,7 +59,7 @@ struct ResumeEntryCardView: View {
             .clipShape(RoundedRectangle(cornerRadius: 8))
             .overlay(
                 RoundedRectangle(cornerRadius: 8)
-                    .stroke(borderColor, lineWidth: 1)
+                    .stroke(Color(.separatorColor).opacity(0.5), lineWidth: 1)
             )
             .shadow(color: .black.opacity(0.04), radius: 2, y: 1)
         }
@@ -74,6 +72,15 @@ struct ResumeEntryCardView: View {
     @ViewBuilder
     private var cardHeader: some View {
         HStack(spacing: 8) {
+            // AI icon for the title/name field (shown here since the name field is hidden from content)
+            if let titleNode = titleNode {
+                let mode = AIIconModeResolver.detectSingleMode(for: titleNode)
+                AIStatusIcon(
+                    mode: mode,
+                    onTap: { toggleTitleSoloMode() }
+                )
+            }
+
             Text(node.computedTitle)
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(.primary)
@@ -94,6 +101,15 @@ struct ResumeEntryCardView: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
         .background(Color(.windowBackgroundColor).opacity(0.5))
+    }
+
+    private func toggleTitleSoloMode() {
+        guard let titleNode = titleNode else { return }
+        if titleNode.status == .aiToReplace {
+            titleNode.status = .saved
+        } else {
+            titleNode.status = .aiToReplace
+        }
     }
 
     // MARK: - Card Content
@@ -133,29 +149,26 @@ struct ResumeEntryCardView: View {
     @ViewBuilder
     private func nestedContainerRow(_ child: TreeNode) -> some View {
         let containerName = child.name.isEmpty ? child.displayLabel : child.name
-        let collectionNode = node.parent  // The section (e.g., Skills)
-        let isBundled = collectionNode?.bundledAttributes?.contains(containerName) == true
-        let isIteratedBundled = collectionNode?.enumeratedAttributes?.contains(containerName) == true
-        let isIteratedEach = collectionNode?.enumeratedAttributes?.contains(containerName + "[]") == true
-        let hasAIConfig = isBundled || isIteratedBundled || isIteratedEach
+        let containerNameWithSuffix = containerName + "[]"
 
-        // Accent color for the container
-        let accentColor: Color? = {
-            if isBundled { return .purple }
-            if isIteratedBundled || isIteratedEach { return .cyan }
-            return nil
-        }()
+        // Get full icon resolution for this nested container (may be dual with arrow)
+        let iconResolution = AIIconModeResolver.resolve(for: child)
 
         VStack(alignment: .leading, spacing: 6) {
-            // Header row with optional accent bar
+            // Header row with AI icon(s)
             HStack(spacing: 6) {
-                if let color = accentColor {
-                    RoundedRectangle(cornerRadius: 1)
-                        .fill(color.opacity(0.6))
-                        .frame(width: 3, height: 14)
+                // AI status menu - click to configure AI review for this collection
+                Menu {
+                    if let section = sectionNode {
+                        nestedContainerContextMenu(section: section, containerName: containerName, containerNameWithSuffix: containerNameWithSuffix)
+                    }
+                } label: {
+                    ResolvedAIIcon(resolution: iconResolution)
                 }
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
 
-                Text(child.displayLabel)
+                Text(child.displayLabel.titleCased)
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(.secondary)
 
@@ -191,56 +204,66 @@ struct ResumeEntryCardView: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .contextMenu {
-            if let collection = collectionNode {
-                Text("AI Review: \(containerName)")
+            if let section = sectionNode {
+                nestedContainerContextMenu(section: section, containerName: containerName, containerNameWithSuffix: containerNameWithSuffix)
+            }
+        }
+    }
 
-                Divider()
+    @ViewBuilder
+    private func nestedContainerContextMenu(section: TreeNode, containerName: String, containerNameWithSuffix: String) -> some View {
+        let isBundled = section.bundledAttributes?.contains(containerName) == true
+        let isIteratedBundled = section.enumeratedAttributes?.contains(containerName) == true
+        let isIteratedEach = section.enumeratedAttributes?.contains(containerNameWithSuffix) == true
+        let hasAIConfig = isBundled || isIteratedBundled || isIteratedEach
 
-                // Bundle all (1 review for all items across all entries)
-                Button {
-                    setContainerMode(collection: collection, attr: containerName, mode: .bundle)
-                } label: {
-                    HStack {
-                        Image(systemName: "square.on.square.squareshape.controlhandles")
-                            .foregroundColor(.purple)
-                        Text("Bundle – 1 review")
-                        if isBundled { Image(systemName: "checkmark") }
-                    }
-                }
+        Text("AI Review: \(containerName)")
 
-                // Iterate bundled (N reviews, each entry's items together)
-                Button {
-                    setContainerMode(collection: collection, attr: containerName, mode: .iterate)
-                } label: {
-                    HStack {
-                        Image(systemName: "flowchart")
-                            .foregroundColor(.cyan)
-                        Text("Iterate (bundled) – N reviews")
-                        if isIteratedBundled { Image(systemName: "checkmark") }
-                    }
-                }
+        Divider()
 
-                // Iterate each (N×M reviews, each item separate)
-                Button {
-                    setContainerMode(collection: collection, attr: containerName + "[]", mode: .iterate)
-                } label: {
-                    HStack {
-                        Image(systemName: "flowchart")
-                            .foregroundColor(.cyan)
-                        Text("Iterate (each) – N×M reviews")
-                        if isIteratedEach { Image(systemName: "checkmark") }
-                    }
-                }
+        // Bundle all (1 review for all items across all entries)
+        Button {
+            setContainerMode(collection: section, attr: containerName, mode: .bundle)
+        } label: {
+            HStack {
+                Image(systemName: "circle.hexagongrid.circle")
+                    .foregroundColor(.purple)
+                Text("Bundle - 1 review")
+                if isBundled { Image(systemName: "checkmark") }
+            }
+        }
 
-                if hasAIConfig {
-                    Divider()
+        // Iterate bundled (N reviews, each entry's items together)
+        Button {
+            setContainerMode(collection: section, attr: containerName, mode: .iterate)
+        } label: {
+            HStack {
+                Image(systemName: "film.stack")
+                    .foregroundColor(.indigo)
+                Text("Iterate (bundled) - N reviews")
+                if isIteratedBundled { Image(systemName: "checkmark") }
+            }
+        }
 
-                    Button(role: .destructive) {
-                        setContainerMode(collection: collection, attr: containerName, mode: .off)
-                    } label: {
-                        Label("Disable AI Review", systemImage: "xmark.circle")
-                    }
-                }
+        // Iterate each (N×M reviews, each item separate)
+        Button {
+            setContainerMode(collection: section, attr: containerNameWithSuffix, mode: .iterate)
+        } label: {
+            HStack {
+                Image(systemName: "film.stack")
+                    .foregroundColor(.indigo)
+                Text("Iterate (each) - N×M reviews")
+                if isIteratedEach { Image(systemName: "checkmark") }
+            }
+        }
+
+        if hasAIConfig {
+            Divider()
+
+            Button(role: .destructive) {
+                setContainerMode(collection: section, attr: containerName, mode: .off)
+            } label: {
+                Label("Disable AI Review", systemImage: "xmark.circle")
             }
         }
     }
@@ -275,23 +298,13 @@ struct ResumeEntryCardView: View {
 
     private func shouldDisplayAsChips(_ node: TreeNode) -> Bool {
         if node.schemaInputKind == .chips { return true }
-        let nodeName = node.name.lowercased()
-        if nodeName == "keywords" {
-            if let grandparent = node.parent?.parent {
-                let sectionName = grandparent.name.lowercased()
-                if sectionName == "skills" || sectionName.contains("skill") {
-                    return true
-                }
-            }
-        }
+        if node.parent?.schemaInputKind == .chips { return true }
         return false
     }
 
     private func chipSourceKey(for node: TreeNode) -> String? {
         if let explicit = node.schemaSourceKey { return explicit }
-        if shouldDisplayAsChips(node) && node.name.lowercased() == "keywords" {
-            return "skillBank"
-        }
+        if let parentSource = node.parent?.schemaSourceKey { return parentSource }
         return nil
     }
 }
@@ -305,27 +318,42 @@ private struct FieldValueEditor: View {
     @State var node: TreeNode
     let showLabel: Bool
 
-    @State private var isHovering = false
     private var isEditing: Bool { vm.editingNodeID == node.id }
 
-    /// Whether this field has AI review configured
-    private var hasAIReview: Bool {
-        if node.status == .aiToReplace { return true }
-        guard let parent = node.parent, let grandparent = parent.parent else { return false }
-        let attrName = node.name.isEmpty ? node.displayLabel : node.name
-        return grandparent.bundledAttributes?.contains(attrName) == true ||
-               grandparent.enumeratedAttributes?.contains(attrName) == true
+    /// Get the icon mode for this field
+    private var iconMode: AIIconMode {
+        AIIconModeResolver.detectSingleMode(for: node)
     }
 
-    /// Left accent bar color based on AI status
-    private var accentColor: Color? {
-        guard hasAIReview else { return nil }
-        if node.status == .aiToReplace { return .orange }
-        guard let parent = node.parent, let grandparent = parent.parent else { return nil }
-        let attrName = node.name.isEmpty ? node.displayLabel : node.name
-        if grandparent.enumeratedAttributes?.contains(attrName) == true { return .cyan }
-        if grandparent.bundledAttributes?.contains(attrName) == true { return .purple }
-        return nil
+    var body: some View {
+        HStack(alignment: .top, spacing: 0) {
+            // AI status menu - click to configure AI review
+            Menu {
+                attributeAIContextMenu
+            } label: {
+                AIIconImage(mode: iconMode)
+                    .padding(4)
+            }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .help(iconMode.helpText)
+
+            // Content
+            if isEditing {
+                editingView
+            } else {
+                displayView
+            }
+        }
+        .contextMenu {
+            attributeAIContextMenu
+        }
+    }
+
+    // MARK: - AI Context Menu
+
+    private var isSolo: Bool {
+        node.status == .aiToReplace
     }
 
     /// The collection (grandparent) node for AI configuration
@@ -338,12 +366,6 @@ private struct FieldValueEditor: View {
         node.name.isEmpty ? node.displayLabel : node.name
     }
 
-    /// Whether this field can be configured for AI review
-    private var supportsAIConfig: Bool {
-        guard let collection = collectionNode else { return false }
-        return collection.parent != nil  // Has a great-grandparent (is under a collection)
-    }
-
     /// Whether this attribute is bundled
     private var isBundled: Bool {
         collectionNode?.bundledAttributes?.contains(attrName) == true
@@ -354,32 +376,16 @@ private struct FieldValueEditor: View {
         collectionNode?.enumeratedAttributes?.contains(attrName) == true
     }
 
-    var body: some View {
-        HStack(alignment: .top, spacing: 0) {
-            // AI accent bar
-            if let color = accentColor {
-                RoundedRectangle(cornerRadius: 1)
-                    .fill(color.opacity(0.6))
-                    .frame(width: 3)
-                    .padding(.trailing, 8)
-            }
-
-            // Content
-            if isEditing {
-                editingView
-            } else {
-                displayView
-            }
-        }
-        .onHover { isHovering = $0 }
-        .contextMenu {
-            if supportsAIConfig {
-                attributeAIContextMenu
-            }
-        }
+    /// Whether this field has AI review configured
+    private var hasAIReview: Bool {
+        isSolo || isBundled || isIterated
     }
 
-    // MARK: - AI Context Menu
+    /// Whether this field can be configured for AI review
+    private var supportsAIConfig: Bool {
+        guard let collection = collectionNode else { return false }
+        return collection.parent != nil
+    }
 
     @ViewBuilder
     private var attributeAIContextMenu: some View {
@@ -387,25 +393,42 @@ private struct FieldValueEditor: View {
 
         Divider()
 
+        // Solo option - always available for any field
         Button {
-            setAttributeMode(.bundle)
+            toggleSoloMode()
         } label: {
             HStack {
-                Image(systemName: "square.on.square.squareshape.controlhandles")
-                    .foregroundColor(.purple)
-                Text("Bundle – 1 review")
-                if isBundled { Image(systemName: "checkmark") }
+                Image(systemName: "target")
+                    .foregroundColor(.teal)
+                Text("Solo - this field only")
+                if isSolo { Image(systemName: "checkmark") }
             }
         }
 
-        Button {
-            setAttributeMode(.iterate)
-        } label: {
-            HStack {
-                Image(systemName: "flowchart")
-                    .foregroundColor(.cyan)
-                Text("Iterate – N reviews")
-                if isIterated { Image(systemName: "checkmark") }
+        // Bundle/Iterate options - only for fields under collections
+        if supportsAIConfig {
+            Divider()
+
+            Button {
+                setAttributeMode(.bundle)
+            } label: {
+                HStack {
+                    Image(systemName: "circle.hexagongrid.circle")
+                        .foregroundColor(.purple)
+                    Text("Bundle - 1 review")
+                    if isBundled { Image(systemName: "checkmark") }
+                }
+            }
+
+            Button {
+                setAttributeMode(.iterate)
+            } label: {
+                HStack {
+                    Image(systemName: "film.stack")
+                        .foregroundColor(.indigo)
+                    Text("Iterate - N reviews")
+                    if isIterated { Image(systemName: "checkmark") }
+                }
             }
         }
 
@@ -413,15 +436,39 @@ private struct FieldValueEditor: View {
             Divider()
 
             Button(role: .destructive) {
-                setAttributeMode(.off)
+                disableAllAIReview()
             } label: {
                 Label("Disable AI Review", systemImage: "xmark.circle")
             }
         }
     }
 
+    private func toggleSoloMode() {
+        if isSolo {
+            node.status = .saved
+        } else {
+            // Clear any collection-level settings for this attribute first
+            if let collection = collectionNode {
+                if var bundled = collection.bundledAttributes {
+                    bundled.removeAll { $0 == attrName }
+                    collection.bundledAttributes = bundled.isEmpty ? nil : bundled
+                }
+                if var enumerated = collection.enumeratedAttributes {
+                    enumerated.removeAll { $0 == attrName }
+                    collection.enumeratedAttributes = enumerated.isEmpty ? nil : enumerated
+                }
+            }
+            node.status = .aiToReplace
+        }
+    }
+
     private func setAttributeMode(_ mode: AIReviewMode) {
         guard let collection = collectionNode else { return }
+
+        // Clear solo mode if set
+        if isSolo {
+            node.status = .saved
+        }
 
         // Remove from both first
         if var bundled = collection.bundledAttributes {
@@ -445,39 +492,51 @@ private struct FieldValueEditor: View {
         }
     }
 
+    private func disableAllAIReview() {
+        // Clear solo mode
+        if isSolo {
+            node.status = .saved
+        }
+
+        // Clear collection-level settings
+        if let collection = collectionNode {
+            if var bundled = collection.bundledAttributes {
+                bundled.removeAll { $0 == attrName }
+                collection.bundledAttributes = bundled.isEmpty ? nil : bundled
+            }
+            if var enumerated = collection.enumeratedAttributes {
+                enumerated.removeAll { $0 == attrName }
+                collection.enumeratedAttributes = enumerated.isEmpty ? nil : enumerated
+            }
+        }
+    }
+
     @ViewBuilder
     private var displayView: some View {
-        VStack(alignment: .leading, spacing: 1) {
-            if showLabel && !node.name.isEmpty {
-                Text(node.name)
-                    .font(.system(size: 10))
-                    .foregroundStyle(.tertiary)
+        Button(action: { vm.startEditing(node: node) }) {
+            VStack(alignment: .leading, spacing: 1) {
+                if showLabel && !node.name.isEmpty {
+                    Text(node.name.titleCased)
+                        .font(.system(size: 10))
+                        .foregroundStyle(.tertiary)
+                }
+
+                if !node.value.isEmpty {
+                    Text(node.value)
+                        .font(.system(size: 12))
+                        .foregroundStyle(.primary)
+                } else if node.value.isEmpty && node.name.isEmpty {
+                    Text("Empty")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.tertiary)
+                        .italic()
+                }
             }
 
-            if !node.value.isEmpty {
-                Text(node.value)
-                    .font(.system(size: 12))
-                    .foregroundStyle(.primary)
-            } else if node.value.isEmpty && node.name.isEmpty {
-                Text("Empty")
-                    .font(.system(size: 12))
-                    .foregroundStyle(.tertiary)
-                    .italic()
-            }
+            Spacer(minLength: 0)
         }
-
-        Spacer(minLength: 0)
-
-        // Edit button (appears on hover)
-        if isHovering && node.status != .disabled {
-            Button(action: { vm.startEditing(node: node) }) {
-                Image(systemName: "pencil")
-                    .font(.system(size: 10))
-                    .foregroundStyle(.tertiary)
-            }
-            .buttonStyle(.plain)
-            .transition(.opacity)
-        }
+        .buttonStyle(.plain)
+        .disabled(node.status == .disabled)
     }
 
     @ViewBuilder
@@ -508,41 +567,30 @@ private struct BulletItemEditor: View {
     @Environment(ResumeDetailVM.self) private var vm: ResumeDetailVM
     @State var node: TreeNode
 
-    @State private var isHovering = false
     private var isEditing: Bool { vm.editingNodeID == node.id }
 
-    /// Whether this item has AI review configured
-    private var hasAIReview: Bool {
-        if node.status == .aiToReplace { return true }
-        guard let parent = node.parent,
-              let entry = parent.parent,
-              let collection = entry.parent else { return false }
-        let containerName = parent.name.isEmpty ? parent.displayLabel : parent.name
-        return collection.enumeratedAttributes?.contains(containerName + "[]") == true ||
-               collection.bundledAttributes?.contains(containerName + "[]") == true
+    /// Get the icon mode for this bullet item
+    private var iconMode: AIIconMode {
+        AIIconModeResolver.detectSingleMode(for: node)
     }
 
-    /// Left accent color based on AI status
-    private var accentColor: Color? {
-        guard hasAIReview else { return nil }
-        if node.status == .aiToReplace { return .orange }
-        return .cyan
+    /// Whether this item is marked as solo
+    private var isSolo: Bool {
+        node.status == .aiToReplace
     }
 
     var body: some View {
         HStack(alignment: .top, spacing: 6) {
-            // Bullet or AI accent
-            if let color = accentColor {
-                Circle()
-                    .fill(color.opacity(0.7))
-                    .frame(width: 5, height: 5)
-                    .padding(.top, 5)
-            } else {
-                Circle()
-                    .fill(Color.secondary.opacity(0.3))
-                    .frame(width: 4, height: 4)
-                    .padding(.top, 6)
+            // AI status menu - click to configure AI review
+            Menu {
+                bulletAIContextMenu
+            } label: {
+                AIIconImage(mode: iconMode)
+                    .padding(4)
             }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .help(iconMode.helpText)
 
             if isEditing {
                 EditingControls(
@@ -561,23 +609,59 @@ private struct BulletItemEditor: View {
                     clearValidation: { vm.validationError = nil }
                 )
             } else {
-                Text(node.value.isEmpty ? node.name : node.value)
-                    .font(.system(size: 12))
-                    .foregroundStyle(.primary)
+                Button(action: { vm.startEditing(node: node) }) {
+                    Text(node.value.isEmpty ? node.name : node.value)
+                        .font(.system(size: 12))
+                        .foregroundStyle(.primary)
 
-                Spacer(minLength: 0)
-
-                if isHovering && node.status != .disabled {
-                    Button(action: { vm.startEditing(node: node) }) {
-                        Image(systemName: "pencil")
-                            .font(.system(size: 10))
-                            .foregroundStyle(.tertiary)
-                    }
-                    .buttonStyle(.plain)
+                    Spacer(minLength: 0)
                 }
+                .buttonStyle(.plain)
+                .disabled(node.status == .disabled)
             }
         }
         .padding(.vertical, 2)
-        .onHover { isHovering = $0 }
+        .contextMenu {
+            bulletAIContextMenu
+        }
+    }
+
+    @ViewBuilder
+    private var bulletAIContextMenu: some View {
+        let itemLabel = node.value.isEmpty ? node.name : node.value
+        let truncatedLabel = itemLabel.count > 30 ? String(itemLabel.prefix(30)) + "..." : itemLabel
+
+        Text("AI Review: \(truncatedLabel)")
+
+        Divider()
+
+        Button {
+            toggleSoloMode()
+        } label: {
+            HStack {
+                Image(systemName: "target")
+                    .foregroundColor(.teal)
+                Text("Solo - this item only")
+                if isSolo { Image(systemName: "checkmark") }
+            }
+        }
+
+        if isSolo {
+            Divider()
+
+            Button(role: .destructive) {
+                node.status = .saved
+            } label: {
+                Label("Disable AI Review", systemImage: "xmark.circle")
+            }
+        }
+    }
+
+    private func toggleSoloMode() {
+        if isSolo {
+            node.status = .saved
+        } else {
+            node.status = .aiToReplace
+        }
     }
 }

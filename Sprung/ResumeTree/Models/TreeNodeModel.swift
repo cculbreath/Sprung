@@ -507,7 +507,7 @@ extension TreeNode {
     /// Manifest-backed nodes typically provide explicit titles, so we hide the name field
     /// unless the node lacks schema metadata.
     var allowsInlineNameEditing: Bool {
-        if parent?.name == "section-labels" { return false }
+        if parent?.name == "sectionLabels" { return false }
         if schemaTitleTemplate != nil { return false }
         if schemaInputKind != nil { return false }
         if schemaKey != nil { return false }

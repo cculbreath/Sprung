@@ -119,8 +119,8 @@
     }
   },
   "transparentKeys": [
-    "basics",
-    "custom"
+    "custom",
+    "template"
   ],
   "editorLabels": {
     "basics": "Contact Info",

@@ -35,6 +35,7 @@ final class AppDependencies {
     let searchOpsCoordinator: DiscoveryCoordinator
     let guidanceStore: InferenceGuidanceStore
     let titleSetStore: TitleSetStore
+    let backgroundActivityTracker: BackgroundActivityTracker
     // MARK: - UI State
     let dragInfo: DragInfo
     let debugSettingsStore: DebugSettingsStore
@@ -193,9 +194,14 @@ final class AppDependencies {
         searchOpsCoordinator.configureLLMService(llmFacade: llmFacade)
         self.searchOpsCoordinator = searchOpsCoordinator
 
+        // Background Activity Tracker (for monitoring LLM operations)
+        let backgroundActivityTracker = BackgroundActivityTracker()
+        self.backgroundActivityTracker = backgroundActivityTracker
+
         // Job App Preprocessor (background processing for job requirements and card selection)
         let jobAppPreprocessor = JobAppPreprocessor(llmFacade: llmFacade)
         jobAppPreprocessor.setSkillStore(skillStore)
+        jobAppPreprocessor.setActivityTracker(backgroundActivityTracker)
         jobAppStore.setPreprocessor(jobAppPreprocessor, knowledgeCardStore: knowledgeCardStore)
 
         self.appEnvironment = AppEnvironment(

@@ -19,41 +19,29 @@ struct EditingControls: View {
     @State private var isHoveringDelete: Bool = false
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .top, spacing: 12) {
-                if node.allowsDeletion {
-                    Button(action: {
-                        isEditing = false
-                        deleteNode()
-                    }) {
-                        Image(systemName: "trash")
-                            .foregroundColor(isHoveringDelete ? .red : .secondary)
-                    }
-                    .buttonStyle(PlainButtonStyle())
-                    .onHover { isHoveringDelete = $0 }
+            VStack(alignment: .leading, spacing: 8) {
+                if allowNameEditing {
+                    TextField("Name", text: $tempName)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(maxWidth: .infinity)
+                        .onChange(of: tempName) { _, _ in clearValidation() }
                 }
-                VStack(alignment: .leading, spacing: 8) {
-                    if allowNameEditing {
-                        TextField("Name", text: $tempName)
-                            .textFieldStyle(.roundedBorder)
-                            .frame(maxWidth: .infinity)
-                            .onChange(of: tempName) { _, _ in clearValidation() }
-                    }
-                    Group {
-                        valueEditor()
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    if let validationError, !validationError.isEmpty {
-                        Text(validationError)
-                            .font(.footnote)
-                            .foregroundColor(.red)
-                    } else if let helper = helperText {
-                        Text(helper)
-                            .font(.footnote)
-                            .foregroundColor(.secondary)
-                    }
+                Group {
+                    valueEditor()
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
+                if let validationError, !validationError.isEmpty {
+                    Text(validationError)
+                        .font(.footnote)
+                        .foregroundColor(.red)
+                } else if let helper = helperText {
+                    Text(helper)
+                        .font(.footnote)
+                        .foregroundColor(.secondary)
+                }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
             HStack(spacing: 16) {
                 Button(action: saveChanges) {
                     Label("Save", systemImage: "checkmark.circle.fill")
@@ -67,6 +55,20 @@ struct EditingControls: View {
                 }
                 .buttonStyle(PlainButtonStyle())
                 .onHover { isHoveringCancel = $0 }
+
+                Spacer()
+
+                if node.allowsDeletion {
+                    Button(action: {
+                        isEditing = false
+                        deleteNode()
+                    }) {
+                        Image(systemName: "trash")
+                            .foregroundColor(isHoveringDelete ? .red : .secondary)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    .onHover { isHoveringDelete = $0 }
+                }
             }
         }
     }

@@ -31,6 +31,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var titleSetStore: TitleSetStore?
     var candidateDossierStore: CandidateDossierStore?
     var jobAppStore: JobAppStore?
+    var backgroundActivityWindow: NSWindow?
+    var backgroundActivityTracker: BackgroundActivityTracker?
     func applicationDidFinishLaunching(_: Notification) {
         // Wait until the app is fully loaded before modifying the menu
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
@@ -744,6 +746,38 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             dossier: nil,
             titleSets: titleSets
         )
+    }
+
+    // MARK: - Background Activity Window
+
+    @MainActor @objc func showBackgroundActivityWindow() {
+        if let window = backgroundActivityWindow, window.isVisible {
+            window.makeKeyAndOrderFront(nil)
+            return
+        }
+
+        guard let tracker = backgroundActivityTracker else {
+            Logger.warning("Background activity tracker not configured", category: .appLifecycle)
+            return
+        }
+
+        let contentView = BackgroundActivityContent(tracker: tracker)
+        let hostingView = NSHostingView(rootView: contentView)
+
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 700, height: 450),
+            styleMask: [.titled, .closable, .miniaturizable, .resizable],
+            backing: .buffered,
+            defer: false
+        )
+        window.title = "Background Activity"
+        window.contentView = hostingView
+        window.isReleasedWhenClosed = false
+        window.center()
+        window.minSize = NSSize(width: 500, height: 300)
+
+        backgroundActivityWindow = window
+        window.makeKeyAndOrderFront(nil)
     }
 
     // MARK: - URL Scheme Handling

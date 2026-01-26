@@ -38,6 +38,40 @@ final class ResumeDetailVM {
     var hasSectionVisibilityOptions: Bool {
         !sectionVisibilityKeys.isEmpty
     }
+
+    // MARK: - Manifest-Driven Section Configuration -------------------------
+
+    /// Container keys whose children should be promoted to top level in the editor.
+    /// From manifest's `transparentKeys` property.
+    private(set) var transparentKeys: Set<String> = []
+
+    /// Keys that should appear in the editor, from manifest's `keysInEditor`.
+    /// Uses dot notation for nested paths (e.g., "custom.jobTitles").
+    private(set) var keysInEditor: [String] = []
+
+    /// Ordered list of section names from manifest.
+    private(set) var sectionOrder: [String] = []
+
+    /// Editor labels from manifest (maps keys to display labels).
+    private(set) var editorLabels: [String: String] = [:]
+
+    /// The first content section name (for default selection).
+    var firstContentSection: String? {
+        // Find first section that's not transparent (its children are promoted instead)
+        for key in sectionOrder {
+            if !transparentKeys.contains(key) {
+                return key
+            }
+        }
+        // Fallback: check keysInEditor for first non-dotted key
+        return keysInEditor.first { !$0.contains(".") }
+    }
+
+    /// Check if a section key is transparent (children promoted to top level).
+    func isTransparentContainer(_ key: String) -> Bool {
+        transparentKeys.contains(key)
+    }
+
     // MARK: - Dependencies --------------------------------------------------
     private let exportCoordinator: ResumeExportCoordinator
     init(resume: Resume, exportCoordinator: ResumeExportCoordinator) {
@@ -48,10 +82,19 @@ final class ResumeDetailVM {
             sectionVisibilityDefaults = manifest.sectionVisibilityDefaults ?? [:]
             sectionVisibilityLabels = manifest.sectionVisibilityLabels ?? [:]
             sectionVisibilityKeys = manifest.sectionVisibilityKeys()
+            // New manifest properties
+            transparentKeys = Set(manifest.transparentKeys ?? [])
+            keysInEditor = manifest.keysInEditor ?? []
+            sectionOrder = manifest.sectionOrder
+            editorLabels = manifest.editorLabels ?? [:]
         } else {
             sectionVisibilityDefaults = [:]
             sectionVisibilityLabels = [:]
             sectionVisibilityKeys = []
+            transparentKeys = []
+            keysInEditor = []
+            sectionOrder = []
+            editorLabels = [:]
         }
     }
     // MARK: - Intents -------------------------------------------------------
@@ -130,7 +173,7 @@ final class ResumeDetailVM {
             validationError = error
             return
         }
-        if node.parent?.name == "section-labels" {
+        if node.parent?.name == "sectionLabels" {
             resume.keyLabels[node.name] = tempValue
             node.value = tempValue
         } else {

@@ -74,6 +74,10 @@
     "custom",
     "styling"
   ],
+  "transparentKeys" : [
+    "custom",
+    "template"
+  ],
   "sections" : {
     "projects" : {
       "hiddenFields" : [

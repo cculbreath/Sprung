@@ -58,7 +58,12 @@ struct UnifiedToolbar: CustomizableToolbarContent {
 
             ToolbarItem(id: "templateEditor", placement: .navigation, showsByDefault: true) {
                 Button(action: {
-                    NotificationCenter.default.post(name: .showTemplateEditor, object: nil)
+                    Task { @MainActor in
+                        if !NSApp.sendAction(#selector(AppDelegate.showTemplateEditorWindow), to: nil, from: nil),
+                           let delegate = NSApplication.shared.delegate as? AppDelegate {
+                            delegate.showTemplateEditorWindow()
+                        }
+                    }
                 }, label: {
                     Label("Templates", systemImage: "compass.drawing")
                         .font(.system(size: 14, weight: .light))

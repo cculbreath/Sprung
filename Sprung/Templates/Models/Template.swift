@@ -42,4 +42,10 @@ final class Template {
         self.updatedAt = updatedAt
         self.resumes = []
     }
+
+    /// Decoded template manifest (computed from manifestData)
+    var manifest: TemplateManifest? {
+        guard let data = manifestData else { return nil }
+        return try? JSONDecoder().decode(TemplateManifest.self, from: data)
+    }
 }

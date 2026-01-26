@@ -383,6 +383,10 @@ struct TemplateManifest: Codable {
     let keysInEditor: [String]?
     let sectionVisibilityDefaults: [String: Bool]?
     let sectionVisibilityLabels: [String: String]?
+    /// Container keys whose children should be promoted to top level in the editor.
+    /// For example, `["custom", "template"]` means children of these containers
+    /// appear as top-level sections rather than nested under the container.
+    let transparentKeys: [String]?
 
     // MARK: - AI Revision Configuration
 
@@ -455,6 +459,7 @@ struct TemplateManifest: Codable {
         keysInEditor: [String]? = nil,
         sectionVisibilityDefaults: [String: Bool]? = nil,
         sectionVisibilityLabels: [String: String]? = nil,
+        transparentKeys: [String]? = nil,
         defaultAIFields: [String]? = nil,
         listContainers: [String]? = nil,
         reviewPhases: [String: [ReviewPhaseConfig]]? = nil
@@ -466,6 +471,7 @@ struct TemplateManifest: Codable {
         self.keysInEditor = keysInEditor
         self.sectionVisibilityDefaults = sectionVisibilityDefaults
         self.sectionVisibilityLabels = sectionVisibilityLabels
+        self.transparentKeys = transparentKeys
         self.defaultAIFields = defaultAIFields
         self.listContainers = listContainers
         self.reviewPhases = reviewPhases
@@ -490,6 +496,7 @@ struct TemplateManifest: Codable {
         keysInEditor = try container.decodeIfPresent([String].self, forKey: .keysInEditor)
         sectionVisibilityDefaults = try container.decodeIfPresent([String: Bool].self, forKey: .sectionVisibilityDefaults)
         sectionVisibilityLabels = try container.decodeIfPresent([String: String].self, forKey: .sectionVisibilityLabels)
+        transparentKeys = try container.decodeIfPresent([String].self, forKey: .transparentKeys)
         defaultAIFields = try container.decodeIfPresent([String].self, forKey: .defaultAIFields)
         listContainers = try container.decodeIfPresent([String].self, forKey: .listContainers)
         reviewPhases = try container.decodeIfPresent([String: [ReviewPhaseConfig]].self, forKey: .reviewPhases)
@@ -517,6 +524,7 @@ struct TemplateManifest: Codable {
         try container.encodeIfPresent(keysInEditor, forKey: .keysInEditor)
         try container.encodeIfPresent(sectionVisibilityDefaults, forKey: .sectionVisibilityDefaults)
         try container.encodeIfPresent(sectionVisibilityLabels, forKey: .sectionVisibilityLabels)
+        try container.encodeIfPresent(transparentKeys, forKey: .transparentKeys)
         try container.encodeIfPresent(defaultAIFields, forKey: .defaultAIFields)
         try container.encodeIfPresent(listContainers, forKey: .listContainers)
         try container.encodeIfPresent(reviewPhases, forKey: .reviewPhases)
@@ -602,6 +610,7 @@ struct TemplateManifest: Codable {
         case keysInEditor = "keys-in-editor"
         case sectionVisibilityDefaults = "section-visibility"
         case sectionVisibilityLabels = "section-visibility-labels"
+        case transparentKeys
         case defaultAIFields
         case listContainers
         case reviewPhases

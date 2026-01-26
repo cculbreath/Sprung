@@ -3,7 +3,7 @@
 //  Sprung
 //
 //  Section picker for navigating between resume sections.
-//  Shows AI configuration button (sparkle) for sections that support AI review.
+//  Shows AI configuration button (icon) for sections that support AI review.
 //
 
 import SwiftUI
@@ -52,102 +52,56 @@ struct ResumeSectionDropdown: View {
                 .padding(.horizontal, 8)
 
             // Navigation row
-            HStack(spacing: 8) {
-                // Previous section button
-                Button {
-                    if canGoPrevious {
-                        selectedSection = sections[currentIndex - 1].name
-                    }
-                } label: {
-                    Image(systemName: "chevron.backward.circle.fill")
-                        .font(.system(size: 18))
-                        .foregroundStyle(canGoPrevious ? .secondary : .quaternary)
-                }
-                .buttonStyle(.plain)
-                .disabled(!canGoPrevious)
-                .help("Previous section")
-
-                // Section picker
-                Menu {
-                    ForEach(sections) { section in
-                        Button {
-                            selectedSection = section.name
-                        } label: {
-                            HStack {
-                                if sectionHasAIConfig(section.node) {
-                                    let mode = detectAIMode(for: section.node)
-                                    Image(systemName: mode.icon)
-                                        .foregroundColor(mode.color)
-                                }
-
-                                Text(section.displayLabel)
-
-                                if section.name == selectedSection {
-                                    Image(systemName: "checkmark")
-                                }
-                            }
+            ZStack {
+                // Centered: nav buttons + picker
+                HStack(spacing: 8) {
+                    Button {
+                        if canGoPrevious {
+                            selectedSection = sections[currentIndex - 1].name
                         }
+                    } label: {
+                        Image(systemName: "chevron.backward.circle.fill")
+                            .font(.system(size: 18))
+                            .foregroundStyle(canGoPrevious ? .secondary : .quaternary)
                     }
-                } label: {
-                    HStack(spacing: 6) {
-                        Text(sections.first(where: { $0.name == selectedSection })?.displayLabel ?? "Select")
-                            .fontWeight(.medium)
-                        Image(systemName: "chevron.up.chevron.down")
-                            .font(.system(size: 10))
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(Color.primary.opacity(0.05))
-                    .clipShape(Capsule())
-                }
-                .menuStyle(.borderlessButton)
+                    .buttonStyle(.plain)
+                    .disabled(!canGoPrevious)
+                    .help("Previous section")
 
-                // Next section button
-                Button {
-                    if canGoNext {
-                        selectedSection = sections[currentIndex + 1].name
-                    }
-                } label: {
-                    Image(systemName: "chevron.forward.circle.fill")
-                        .font(.system(size: 18))
-                        .foregroundStyle(canGoNext ? .secondary : .quaternary)
-                }
-                .buttonStyle(.plain)
-                .disabled(!canGoNext)
-                .help("Next section")
+                    SectionPickerButton(
+                        sections: sections,
+                        selectedSection: $selectedSection
+                    )
 
-                // AI configuration button (always show for collections)
-                if let node = selectedSectionNode, sectionSupportsAIConfig(node) {
-                    SectionAIModeMenu(node: node)
+                    Button {
+                        if canGoNext {
+                            selectedSection = sections[currentIndex + 1].name
+                        }
+                    } label: {
+                        Image(systemName: "chevron.forward.circle.fill")
+                            .font(.system(size: 18))
+                            .foregroundStyle(canGoNext ? .secondary : .quaternary)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(!canGoNext)
+                    .help("Next section")
                 }
 
-                Spacer()
+                // Left-aligned: section-level AI icon
+                HStack {
+                    if let node = selectedSectionNode, sectionSupportsAIConfig(node) {
+                        SectionAIModeMenu(node: node)
+                    }
+                    Spacer()
+                }
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
         }
     }
 
-    private func sectionHasAIConfig(_ node: TreeNode) -> Bool {
-        node.bundledAttributes?.isEmpty == false ||
-        node.enumeratedAttributes?.isEmpty == false ||
-        node.aiStatusChildren > 0
-    }
-
     private func sectionSupportsAIConfig(_ node: TreeNode) -> Bool {
         node.parent != nil && !node.orderedChildren.isEmpty
-    }
-
-    private func detectAIMode(for node: TreeNode) -> AIReviewMode {
-        if node.bundledAttributes?.isEmpty == false {
-            return .bundle
-        } else if node.enumeratedAttributes?.isEmpty == false {
-            return .iterate
-        } else if node.aiStatusChildren > 0 {
-            return .containsSolo
-        }
-        return .off
     }
 }
 
@@ -156,18 +110,17 @@ struct ResumeSectionDropdown: View {
 /// Left-click menu for configuring AI review modes at section level
 private struct SectionAIModeMenu: View {
     let node: TreeNode
-    @State private var isHovering = false
 
     private var hasAIConfig: Bool {
-        node.bundledAttributes?.isEmpty == false || node.enumeratedAttributes?.isEmpty == false
+        node.bundledAttributes?.isEmpty == false ||
+        node.enumeratedAttributes?.isEmpty == false ||
+        node.hasAttributeReviewModes ||
+        node.aiStatusChildren > 0
     }
 
-    private var hasMixedModes: Bool {
-        node.bundledAttributes?.isEmpty == false && node.enumeratedAttributes?.isEmpty == false
-    }
-
-    private var aiMode: AIReviewMode {
-        NodeAIReviewModeDetector.aiMode(for: node)
+    /// Full icon resolution for this section node (may be dual for mixed modes)
+    private var iconResolution: AIIconResolution {
+        AIIconModeResolver.resolve(for: node)
     }
 
     private var availableAttributes: [String] {
@@ -200,34 +153,6 @@ private struct SectionAIModeMenu: View {
         return firstChild.orderedChildren.isEmpty
     }
 
-    /// Icon based on current configuration
-    private var displayIcon: String {
-        if !hasAIConfig {
-            return "sparkles"
-        } else if hasMixedModes {
-            return "sparkles"
-        } else if aiMode == .bundle {
-            return "square.on.square.squareshape.controlhandles"
-        } else if aiMode == .iterate {
-            return "flowchart"
-        }
-        return "sparkles"
-    }
-
-    /// Color based on current configuration
-    private var displayColor: Color {
-        if !hasAIConfig {
-            return .secondary
-        } else if hasMixedModes {
-            return .orange
-        } else if aiMode == .bundle {
-            return .purple
-        } else if aiMode == .iterate {
-            return .cyan
-        }
-        return .secondary
-    }
-
     var body: some View {
         Menu {
             if isScalarArrayCollection {
@@ -236,17 +161,10 @@ private struct SectionAIModeMenu: View {
                 objectCollectionMenu
             }
         } label: {
-            Image(systemName: displayIcon)
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(displayColor)
-                .padding(6)
-                .background(
-                    Circle()
-                        .fill(displayColor.opacity(hasAIConfig ? 0.15 : (isHovering ? 0.1 : 0)))
-                )
+            ResolvedAIIcon(resolution: iconResolution)
         }
         .menuStyle(.borderlessButton)
-        .onHover { isHovering = $0 }
+        .menuIndicator(.hidden)
         .help(hasAIConfig ? "Configure AI review" : "Enable AI review")
     }
 
@@ -263,9 +181,9 @@ private struct SectionAIModeMenu: View {
             node.enumeratedAttributes = nil
         } label: {
             HStack {
-                Image(systemName: "square.on.square.squareshape.controlhandles")
+                Image(systemName: "circle.hexagongrid.circle")
                     .foregroundColor(.purple)
-                Text("Bundle All – 1 review")
+                Text("Bundle All - 1 review")
                 if node.bundledAttributes?.contains("*") == true {
                     Image(systemName: "checkmark")
                 }
@@ -277,9 +195,9 @@ private struct SectionAIModeMenu: View {
             node.bundledAttributes = nil
         } label: {
             HStack {
-                Image(systemName: "flowchart")
-                    .foregroundColor(.cyan)
-                Text("Iterate – N reviews")
+                Image(systemName: "film.stack")
+                    .foregroundColor(.indigo)
+                Text("Iterate - N reviews")
                 if node.enumeratedAttributes?.contains("*") == true {
                     Image(systemName: "checkmark")
                 }
@@ -313,9 +231,9 @@ private struct SectionAIModeMenu: View {
             }
         } label: {
             HStack {
-                Image(systemName: "square.on.square.squareshape.controlhandles")
+                Image(systemName: "circle.hexagongrid.circle")
                     .foregroundColor(.purple)
-                Text("Bundle – 1 review")
+                Text("Bundle - 1 review")
             }
         }
 
@@ -330,9 +248,9 @@ private struct SectionAIModeMenu: View {
             }
         } label: {
             HStack {
-                Image(systemName: "flowchart")
-                    .foregroundColor(.cyan)
-                Text("Iterate – N reviews")
+                Image(systemName: "film.stack")
+                    .foregroundColor(.indigo)
+                Text("Iterate - N reviews")
             }
         }
 
@@ -403,9 +321,9 @@ private struct SectionAIModeMenu: View {
                 addToEnumeratedAttributes(attr)
             } label: {
                 HStack {
-                    Image(systemName: "square.on.square.squareshape.controlhandles")
+                    Image(systemName: "circle.hexagongrid.circle")
                         .foregroundColor(.purple)
-                    Text("Bundle – N reviews")
+                    Text("Bundle - N reviews")
                     if isBundledPerEntry { Image(systemName: "checkmark") }
                 }
             }
@@ -415,20 +333,20 @@ private struct SectionAIModeMenu: View {
                 addToEnumeratedAttributes(attrWithSuffix)
             } label: {
                 HStack {
-                    Image(systemName: "flowchart")
-                        .foregroundColor(.cyan)
-                    Text("Iterate – N×M reviews")
+                    Image(systemName: "film.stack")
+                        .foregroundColor(.indigo)
+                    Text("Iterate - N×M reviews")
                     if isIteratedEach { Image(systemName: "checkmark") }
                 }
             }
         } label: {
             HStack {
                 if isBundledPerEntry {
-                    Image(systemName: "square.on.square.squareshape.controlhandles")
+                    Image(systemName: "circle.hexagongrid.circle")
                         .foregroundColor(.purple)
                 } else if isIteratedEach {
-                    Image(systemName: "flowchart")
-                        .foregroundColor(.cyan)
+                    Image(systemName: "film.stack")
+                        .foregroundColor(.indigo)
                 } else {
                     Image(systemName: "circle")
                         .foregroundColor(.gray)
@@ -473,5 +391,108 @@ private struct SectionAIModeMenu: View {
         guard var enumerated = node.enumeratedAttributes else { return }
         enumerated.removeAll { $0 == attr }
         node.enumeratedAttributes = enumerated.isEmpty ? nil : enumerated
+    }
+}
+
+// MARK: - Section Picker Button
+
+/// Custom section picker using popover for full layout control (trailing icons)
+private struct SectionPickerButton: View {
+    let sections: [SectionInfo]
+    @Binding var selectedSection: String
+    @State private var showingPicker = false
+
+    private var selectedLabel: String {
+        sections.first(where: { $0.name == selectedSection })?.displayLabel ?? "Select"
+    }
+
+    /// The widest label text among all sections
+    private var widestLabel: String {
+        sections.max(by: { $0.displayLabel.count < $1.displayLabel.count })?.displayLabel ?? "Select"
+    }
+
+    var body: some View {
+        Button {
+            showingPicker.toggle()
+        } label: {
+            ZStack {
+                // Invisible widest label to set fixed width
+                Text(widestLabel)
+                    .fontWeight(.medium)
+                    .opacity(0)
+
+                // Visible selected label
+                Text(selectedLabel)
+                    .fontWeight(.medium)
+            }
+            .overlay(alignment: .trailing) {
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
+                    .offset(x: 16)
+            }
+            .padding(.horizontal, 12)
+            .padding(.trailing, 16) // room for chevron
+            .padding(.vertical, 6)
+            .background(Color.primary.opacity(0.05))
+            .clipShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .popover(isPresented: $showingPicker, arrowEdge: .bottom) {
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(sections) { section in
+                    Button {
+                        selectedSection = section.name
+                        showingPicker = false
+                    } label: {
+                        HStack(spacing: 8) {
+                            // Checkmark for selected
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundColor(section.name == selectedSection ? .primary : .clear)
+                                .frame(width: 14)
+
+                            Text(section.displayLabel)
+                                .font(.system(size: 13))
+
+                            Spacer(minLength: 20)
+
+                            // AI mode icon(s) (trailing)
+                            if sectionHasAIConfig(section.node) {
+                                let resolution = AIIconModeResolver.resolve(for: section.node)
+                                HStack(spacing: 3) {
+                                    sectionIconImage(resolution.primary)
+                                    if let secondary = resolution.secondary {
+                                        sectionIconImage(secondary)
+                                    }
+                                }
+                            }
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .contentShape(Rectangle())
+                        .background(section.name == selectedSection ? Color.accentColor.opacity(0.1) : Color.clear)
+                    }
+                    .buttonStyle(.plain)
+
+                    if section.id != sections.last?.id {
+                        Divider()
+                            .padding(.horizontal, 8)
+                    }
+                }
+            }
+            .padding(.vertical, 6)
+            .frame(minWidth: 180)
+        }
+    }
+
+    private func sectionHasAIConfig(_ node: TreeNode) -> Bool {
+        node.bundledAttributes?.isEmpty == false ||
+        node.enumeratedAttributes?.isEmpty == false ||
+        node.aiStatusChildren > 0
+    }
+
+    private func sectionIconImage(_ mode: AIIconMode) -> some View {
+        AIIconImage(mode: mode, size: 11)
     }
 }

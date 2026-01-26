@@ -7,6 +7,44 @@
 
 import Foundation
 
+// MARK: - Text Evidence Types
+
+/// Represents a range of text in a job description where a skill was found
+struct TextSpan: Codable, Equatable {
+    /// Start character index (0-based, relative to jobDescription)
+    let start: Int
+
+    /// End character index (exclusive)
+    let end: Int
+
+    /// The exact text at this span (for display without re-parsing)
+    let text: String
+}
+
+/// Category for job skills relative to user's skill bank
+enum JobSkillCategory: String, Codable {
+    case matched      // User explicitly has this skill
+    case recommended  // User likely has based on adjacent skills
+    case unmatched    // Skill gap - user doesn't appear to have it
+}
+
+/// A skill extracted from a job description with text evidence
+struct JobSkillEvidence: Codable, Equatable, Identifiable {
+    var id: String { skillName }
+
+    /// The skill name as extracted (normalized form)
+    let skillName: String
+
+    /// Category based on user's skill bank
+    let category: JobSkillCategory
+
+    /// All text spans where this skill was mentioned in the job description
+    let evidenceSpans: [TextSpan]
+
+    /// UUID of matched user skill (if category is .matched)
+    let matchedSkillId: String?
+}
+
 // MARK: - Skill Recommendation
 
 /// Skill suggested based on user's existing expertise matching job requirements
@@ -61,6 +99,9 @@ struct ExtractedRequirements: Codable {
     /// Skills suggested based on user's existing expertise that match job requirements
     let skillRecommendations: [SkillRecommendation]
 
+    /// All skills found in job description with text evidence for highlighting
+    let skillEvidence: [JobSkillEvidence]
+
     /// Whether extraction succeeded
     var isValid: Bool {
         !mustHave.isEmpty || !strongSignal.isEmpty
@@ -71,7 +112,7 @@ struct ExtractedRequirements: Codable {
     enum CodingKeys: String, CodingKey {
         case mustHave, strongSignal, preferred, cultural, atsKeywords
         case extractedAt, extractionModel
-        case matchedSkillIds, skillRecommendations
+        case matchedSkillIds, skillRecommendations, skillEvidence
     }
 
     init(
@@ -83,7 +124,8 @@ struct ExtractedRequirements: Codable {
         extractedAt: Date,
         extractionModel: String?,
         matchedSkillIds: [String] = [],
-        skillRecommendations: [SkillRecommendation] = []
+        skillRecommendations: [SkillRecommendation] = [],
+        skillEvidence: [JobSkillEvidence] = []
     ) {
         self.mustHave = mustHave
         self.strongSignal = strongSignal
@@ -94,6 +136,7 @@ struct ExtractedRequirements: Codable {
         self.extractionModel = extractionModel
         self.matchedSkillIds = matchedSkillIds
         self.skillRecommendations = skillRecommendations
+        self.skillEvidence = skillEvidence
     }
 
     init(from decoder: Decoder) throws {
@@ -108,5 +151,6 @@ struct ExtractedRequirements: Codable {
         // Migration-safe: default to empty arrays if fields don't exist (pre-upgrade data)
         matchedSkillIds = try container.decodeIfPresent([String].self, forKey: .matchedSkillIds) ?? []
         skillRecommendations = try container.decodeIfPresent([SkillRecommendation].self, forKey: .skillRecommendations) ?? []
+        skillEvidence = try container.decodeIfPresent([JobSkillEvidence].self, forKey: .skillEvidence) ?? []
     }
 }

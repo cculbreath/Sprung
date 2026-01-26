@@ -93,6 +93,7 @@ struct SprungApp: App {
                     appDelegate.titleSetStore = appDependencies.titleSetStore
                     appDelegate.candidateDossierStore = appDependencies.candidateDossierStore
                     appDelegate.jobAppStore = appDependencies.jobAppStore
+                    appDelegate.backgroundActivityTracker = appDependencies.backgroundActivityTracker
                 }
         }
         .modelContainer(modelContainer)
@@ -332,6 +333,10 @@ struct SprungApp: App {
         // MARK: - Window Menu
         .commands {
             CommandGroup(before: .windowArrangement) {
+                Button("Background Activity") {
+                    appDelegate.showBackgroundActivityWindow()
+                }
+                .keyboardShortcut("b", modifiers: [.command, .option])
                 Divider()
             }
         }
