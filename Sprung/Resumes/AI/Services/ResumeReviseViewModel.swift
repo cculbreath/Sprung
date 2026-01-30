@@ -175,12 +175,39 @@ class ResumeReviseViewModel {
         )
     }
 
-    /// Complete Phase 1 and start Phase 2 of the parallel workflow
-    func completePhase1AndStartPhase2(resume: Resume, coverRefStore: CoverRefStore) async throws {
-        try await workflowOrchestrator.completePhase1AndStartPhase2(
-            resume: resume,
-            coverRefStore: coverRefStore
-        )
+    /// Complete the current phase, apply approved changes, and advance to the next phase or finalize
+    func completeCurrentPhaseAndAdvance(resume: Resume, context: ModelContext) async throws {
+        try await workflowOrchestrator.completeCurrentPhaseAndAdvance(resume: resume, context: context)
+    }
+
+    /// Apply all approved parallel changes and close the workflow
+    func applyApprovedParallelChangesAndClose(resume: Resume, context: ModelContext) {
+        workflowOrchestrator.applyApprovedAndClose(resume: resume, context: context)
+    }
+
+    /// Discard all parallel changes and close the workflow
+    func discardParallelChangesAndClose() {
+        workflowOrchestrator.discardAndClose()
+    }
+
+    /// Whether there are unapplied approved changes in the parallel review queue
+    func hasUnappliedParallelApprovedChanges() -> Bool {
+        workflowOrchestrator.hasUnappliedApprovedChanges()
+    }
+
+    /// Whether Phase 2 is still pending
+    var hasPhase2Pending: Bool {
+        workflowOrchestrator.hasPhase2Pending
+    }
+
+    /// Current phase number (1 or 2) for UI display
+    var currentPhaseNumber: Int {
+        workflowOrchestrator.currentPhaseNumber
+    }
+
+    /// Total phases (1 or 2) for UI display
+    var totalPhases: Int {
+        workflowOrchestrator.totalPhases
     }
 
     // MARK: - Forwarded Tool Methods
@@ -283,5 +310,9 @@ extension ResumeReviseViewModel: PhaseReviewDelegate {
 extension ResumeReviseViewModel: RevisionWorkflowOrchestratorDelegate {
     func showParallelReviewQueue() {
         showParallelReviewQueueSheet = true
+    }
+
+    func hideParallelReviewQueue() {
+        showParallelReviewQueueSheet = false
     }
 }

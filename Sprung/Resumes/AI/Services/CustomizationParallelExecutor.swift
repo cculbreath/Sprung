@@ -249,6 +249,10 @@ actor CustomizationParallelExecutor {
     }
 
     private func releaseSlot() {
+        guard runningCount > 0 else {
+            Logger.warning("releaseSlot called with runningCount at 0", category: .ai)
+            return
+        }
         runningCount -= 1
 
         // Resume a waiting task if any

@@ -13,8 +13,6 @@ class RevisionWorkflowState {
     /// The type of workflow currently active.
     enum WorkflowKind {
         case customize
-        case clarifying
-        case parallel
     }
 
     // MARK: - Workflow State

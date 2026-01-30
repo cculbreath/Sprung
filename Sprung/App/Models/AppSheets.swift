@@ -276,7 +276,9 @@ struct AppSheetsModifier: ViewModifier {
 private struct ParallelReviewQueueSheetContent: View {
     @Bindable var resumeReviseViewModel: ResumeReviseViewModel
     let selectedResume: Resume?
+    @Environment(\.modelContext) private var modelContext
     @Environment(ReasoningStreamManager.self) private var reasoningStreamManager
+    @State private var showDiscardConfirmation = false
 
     var body: some View {
         ZStack {
@@ -284,11 +286,27 @@ private struct ParallelReviewQueueSheetContent: View {
                let reviewQueue = resumeReviseViewModel.parallelReviewQueue {
                 CustomizationReviewQueueView(
                     reviewQueue: reviewQueue,
+                    phaseNumber: resumeReviseViewModel.currentPhaseNumber,
+                    totalPhases: resumeReviseViewModel.totalPhases,
                     onComplete: {
-                        resumeReviseViewModel.showParallelReviewQueueSheet = false
+                        guard let resume = selectedResume else { return }
+                        Task {
+                            do {
+                                try await resumeReviseViewModel.completeCurrentPhaseAndAdvance(
+                                    resume: resume,
+                                    context: modelContext
+                                )
+                            } catch {
+                                Logger.error("Failed to complete phase: \(error.localizedDescription)")
+                            }
+                        }
                     },
                     onCancel: {
-                        resumeReviseViewModel.showParallelReviewQueueSheet = false
+                        if resumeReviseViewModel.hasUnappliedParallelApprovedChanges() {
+                            showDiscardConfirmation = true
+                        } else {
+                            resumeReviseViewModel.discardParallelChangesAndClose()
+                        }
                     }
                 )
                 .frame(minWidth: 900, minHeight: 600)
@@ -300,7 +318,7 @@ private struct ParallelReviewQueueSheetContent: View {
                         Text("No items to review")
                     }
                     Button("Close") {
-                        resumeReviseViewModel.showParallelReviewQueueSheet = false
+                        resumeReviseViewModel.discardParallelChangesAndClose()
                     }
                     .buttonStyle(.borderedProminent)
                 }
@@ -330,6 +348,25 @@ private struct ParallelReviewQueueSheetContent: View {
                     modelName: reasoningStreamManager.modelName
                 )
             }
+        }
+        .confirmationDialog(
+            "Cancel Review?",
+            isPresented: $showDiscardConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Apply Approved & Close") {
+                guard let resume = selectedResume else { return }
+                resumeReviseViewModel.applyApprovedParallelChangesAndClose(
+                    resume: resume,
+                    context: modelContext
+                )
+            }
+            Button("Discard All", role: .destructive) {
+                resumeReviseViewModel.discardParallelChangesAndClose()
+            }
+            Button("Continue Review", role: .cancel) { }
+        } message: {
+            Text("You have approved changes that haven't been applied yet.")
         }
     }
 }

@@ -12,6 +12,8 @@ import SwiftUI
 
 struct CustomizationReviewQueueView: View {
     @Bindable var reviewQueue: CustomizationReviewQueue
+    let phaseNumber: Int
+    let totalPhases: Int
     let onComplete: () -> Void
     let onCancel: () -> Void
 
@@ -40,8 +42,6 @@ struct CustomizationReviewQueueView: View {
                     ForEach(filteredItems) { item in
                         CustomizationReviewCard(
                             item: item,
-                            isExpanded: true,  // Always expanded
-                            onToggleExpand: { },  // No-op
                             onApprove: { reviewQueue.setAction(for: item.id, action: .approved) },
                             onReject: { feedback in
                                 if let feedback = feedback, !feedback.isEmpty {
@@ -74,6 +74,19 @@ struct CustomizationReviewQueueView: View {
         .frame(minWidth: 700, idealWidth: 850, maxWidth: 950)
         .frame(minHeight: 500, idealHeight: 650, maxHeight: 800)
         .background(Color(NSColor.windowBackgroundColor))
+        .alert(
+            "Regeneration Failed",
+            isPresented: Binding(
+                get: { reviewQueue.lastRegenerationError != nil },
+                set: { if !$0 { reviewQueue.lastRegenerationError = nil } }
+            )
+        ) {
+            Button("OK") { reviewQueue.lastRegenerationError = nil }
+        } message: {
+            if let error = reviewQueue.lastRegenerationError {
+                Text("Failed to regenerate \"\(error.displayName)\". You can try again or use a different action.")
+            }
+        }
     }
 
     // MARK: - Header View
@@ -88,10 +101,20 @@ struct CustomizationReviewQueueView: View {
                 Text("Review Customizations")
                     .font(.system(.title2, design: .rounded, weight: .semibold))
 
+                if totalPhases > 1 {
+                    Text("Phase \(phaseNumber) of \(totalPhases)")
+                        .font(.system(.caption, design: .rounded, weight: .medium))
+                        .foregroundStyle(.orange)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(.orange.opacity(0.1))
+                        .clipShape(Capsule())
+                }
+
                 Spacer()
 
                 // Item count badge
-                Text("\(reviewQueue.items.count) items")
+                Text("\(reviewQueue.activeItems.count) items")
                     .font(.system(.caption, design: .rounded, weight: .medium))
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, 10)
@@ -103,7 +126,7 @@ struct CustomizationReviewQueueView: View {
             // Progress bar
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
-                    Text("Reviewing \(reviewedCount) of \(reviewQueue.items.count) items")
+                    Text("Reviewing \(reviewedCount) of \(reviewQueue.activeItems.count) items")
                         .font(.system(.subheadline, design: .rounded))
                         .foregroundStyle(.secondary)
                     Spacer()
@@ -198,7 +221,7 @@ struct CustomizationReviewQueueView: View {
             .buttonStyle(.bordered)
             .disabled(reviewQueue.pendingItems.isEmpty)
 
-            Button("Complete Review") {
+            Button(totalPhases > 1 && phaseNumber < totalPhases ? "Complete Phase \(phaseNumber)" : "Complete Review") {
                 onComplete()
             }
             .buttonStyle(.borderedProminent)
@@ -214,17 +237,17 @@ struct CustomizationReviewQueueView: View {
         case .pending: return reviewQueue.pendingItems
         case .approved: return reviewQueue.approvedItems
         case .rejected: return reviewQueue.rejectedItems
-        case .all: return reviewQueue.items
+        case .all: return reviewQueue.activeItems
         }
     }
 
     private var reviewedCount: Int {
-        reviewQueue.items.filter { $0.hasAction }.count
+        reviewQueue.activeItems.filter { $0.hasAction }.count
     }
 
     private var progressFraction: CGFloat {
-        guard !reviewQueue.items.isEmpty else { return 0 }
-        return CGFloat(reviewedCount) / CGFloat(reviewQueue.items.count)
+        guard !reviewQueue.activeItems.isEmpty else { return 0 }
+        return CGFloat(reviewedCount) / CGFloat(reviewQueue.activeItems.count)
     }
 
     private var progressPercentage: Int {
@@ -236,7 +259,7 @@ struct CustomizationReviewQueueView: View {
         case .pending: return reviewQueue.pendingItems.count
         case .approved: return reviewQueue.approvedItems.count
         case .rejected: return reviewQueue.rejectedItems.count
-        case .all: return reviewQueue.items.count
+        case .all: return reviewQueue.activeItems.count
         }
     }
 
@@ -254,8 +277,6 @@ struct CustomizationReviewQueueView: View {
 
 struct CustomizationReviewCard: View {
     let item: CustomizationReviewItem
-    let isExpanded: Bool  // Kept for API compatibility but ignored
-    let onToggleExpand: () -> Void  // Kept for API compatibility but ignored
     let onApprove: () -> Void
     let onReject: (String?) -> Void
     let onEdit: (String) -> Void

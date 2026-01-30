@@ -14,6 +14,7 @@ import SwiftData
 @MainActor
 protocol RevisionWorkflowOrchestratorDelegate: AnyObject {
     func showParallelReviewQueue()
+    func hideParallelReviewQueue()
 }
 
 /// Service responsible for orchestrating revision workflow execution.
@@ -41,6 +42,23 @@ class RevisionWorkflowOrchestrator {
     private(set) var reviewQueue: CustomizationReviewQueue?
     private var taskBuilder: RevisionTaskBuilder?
     private var cachedPreamble: String?
+
+    /// Phase 2 nodes deferred until Phase 1 review completes
+    private var pendingPhase2Nodes: [ExportedReviewNode] = []
+    /// Resume reference for Phase 2 continuation
+    private var currentResume: Resume?
+    /// CoverRefStore reference for Phase 2 continuation
+    private var currentCoverRefStore: CoverRefStore?
+
+    /// Whether Phase 2 is still pending
+    var hasPhase2Pending: Bool {
+        !pendingPhase2Nodes.isEmpty
+    }
+
+    /// Current phase number (1 or 2) for UI display
+    private(set) var currentPhaseNumber: Int = 1
+    /// Total phases (1 or 2) for UI display
+    private(set) var totalPhases: Int = 1
 
     // MARK: - Delegate
     weak var delegate: RevisionWorkflowOrchestratorDelegate?
@@ -104,7 +122,7 @@ class RevisionWorkflowOrchestrator {
             throw RevisionWorkflowError.missingDependency("InferenceGuidanceStore")
         }
 
-        workflowState.markWorkflowStarted(.parallel)
+        workflowState.markWorkflowStarted(.customize)
         workflowState.setProcessingRevisions(true)
         workflowState.currentModelId = modelId
 
@@ -130,14 +148,29 @@ class RevisionWorkflowOrchestrator {
         // 4. Get RevNodes from phaseReviewManager.buildReviewRounds() -> (phase1, phase2)
         let (phase1Nodes, phase2Nodes) = phaseReviewManager.buildReviewRounds(for: resume)
 
-        Logger.info("🚀 Starting parallel workflow - Phase 1: \(phase1Nodes.count), Phase 2: \(phase2Nodes.count)")
+        Logger.info("Starting parallel workflow - Phase 1: \(phase1Nodes.count), Phase 2: \(phase2Nodes.count)")
 
-        // 5. Initialize CustomizationReviewQueue and wire up regeneration callback
+        // Handle empty-nodes edge case
+        if phase1Nodes.isEmpty && phase2Nodes.isEmpty {
+            workflowState.markWorkflowCompleted(reset: true)
+            return
+        }
+
+        // 5. Store Phase 2 nodes for later execution
+        pendingPhase2Nodes = phase2Nodes
+        currentResume = resume
+        currentCoverRefStore = coverRefStore
+
+        // 6. Set phase tracking
+        currentPhaseNumber = 1
+        totalPhases = (!phase1Nodes.isEmpty && !phase2Nodes.isEmpty) ? 2 : 1
+
+        // 7. Initialize CustomizationReviewQueue and wire up regeneration callback
         let queue = CustomizationReviewQueue()
         self.reviewQueue = queue
         setupParallelRegenerationCallback()
 
-        // 6. Phase 1 execution (if there are Phase 1 nodes)
+        // 8. Execute Phase 1 (or Phase 2 directly if no Phase 1 nodes)
         if !phase1Nodes.isEmpty {
             try await executeParallelPhase(
                 nodes: phase1Nodes,
@@ -146,12 +179,13 @@ class RevisionWorkflowOrchestrator {
                 context: context,
                 modelId: modelId
             )
-        }
-
-        // 7. Phase 2 execution (always runs if there are Phase 2 nodes)
-        if !phase2Nodes.isEmpty {
+        } else {
+            // No Phase 1 nodes — execute Phase 2 directly
+            currentPhaseNumber = 2
+            let captured = pendingPhase2Nodes
+            pendingPhase2Nodes = []
             try await executeParallelPhase(
-                nodes: phase2Nodes,
+                nodes: captured,
                 phase: 2,
                 resume: resume,
                 context: context,
@@ -159,8 +193,9 @@ class RevisionWorkflowOrchestrator {
             )
         }
 
-        // Show review UI via delegate
-        delegate?.showParallelReviewQueue()
+        // 9. Phase execution complete — show review UI
+        workflowState.setProcessingRevisions(false)
+        await delegate?.showParallelReviewQueue()
     }
 
     /// Execute a parallel phase with the given nodes
@@ -314,68 +349,131 @@ class RevisionWorkflowOrchestrator {
         }
     }
 
-    /// Called when Phase 1 review is complete - proceeds to Phase 2
+    /// Called when the current phase review is complete — applies approved changes and advances to the next phase or finalizes.
     /// - Parameters:
     ///   - resume: The resume being customized
-    ///   - coverRefStore: Store for writing samples and voice primer
-    func completePhase1AndStartPhase2(resume: Resume, coverRefStore: CoverRefStore) async throws {
+    ///   - context: The SwiftData model context for saving
+    func completeCurrentPhaseAndAdvance(resume: Resume, context: ModelContext) async throws {
         guard let queue = reviewQueue else {
             Logger.error("No review queue available")
             return
         }
 
-        guard let skillStore else {
-            throw RevisionWorkflowError.missingDependency("SkillStore")
-        }
-
-        guard let guidanceStore else {
-            throw RevisionWorkflowError.missingDependency("InferenceGuidanceStore")
-        }
-
-        guard let modelId = workflowState.currentModelId else {
-            throw RevisionWorkflowError.missingDependency("modelId")
-        }
-
-        // 1. Apply Phase 1 changes to tree
+        // 1. Apply approved items to the resume tree
         let approvedItems = queue.approvedItems
         for item in approvedItems {
             applyReviewItemToResume(item, resume: resume)
         }
 
-        Logger.info("✅ Applied \(approvedItems.count) Phase 1 changes to resume")
+        Logger.info("Applied \(approvedItems.count) phase \(currentPhaseNumber) changes to resume")
 
-        // 2. Re-export Phase 2 nodes (now with updated context from Phase 1 changes)
-        let (_, phase2Nodes) = phaseReviewManager.buildReviewRounds(for: resume)
-
-        if phase2Nodes.isEmpty {
-            Logger.info("📋 No Phase 2 nodes to process")
-            workflowState.setProcessingRevisions(false)
-            return
+        // 2. Save to SwiftData
+        do {
+            try context.save()
+        } catch {
+            Logger.error("Failed to save context after applying phase changes: \(error.localizedDescription)")
         }
 
-        // 3. Clear the queue of Phase 1 items
-        queue.clear()
+        // 3. Trigger export
+        exportCoordinator.debounceExport(resume: resume)
 
-        // 4. Build fresh context with Phase 1 changes applied
-        let context = CustomizationContext.build(
-            resume: resume,
-            skillStore: skillStore,
-            guidanceStore: guidanceStore,
-            knowledgeCardStore: knowledgeCardStore,
-            coverRefStore: coverRefStore,
-            applicantProfileStore: applicantProfileStore
-        )
+        // 4. Advance to Phase 2 if pending, otherwise finalize
+        if !pendingPhase2Nodes.isEmpty {
+            guard let skillStore else {
+                throw RevisionWorkflowError.missingDependency("SkillStore")
+            }
+            guard let guidanceStore else {
+                throw RevisionWorkflowError.missingDependency("InferenceGuidanceStore")
+            }
+            guard let modelId = workflowState.currentModelId else {
+                throw RevisionWorkflowError.missingDependency("modelId")
+            }
+            guard let coverRefStore = currentCoverRefStore else {
+                throw RevisionWorkflowError.missingDependency("CoverRefStore")
+            }
 
-        // 5. Execute Phase 2 in parallel
-        try await executeParallelPhase(
-            nodes: phase2Nodes,
-            phase: 2,
-            resume: resume,
-            context: context,
-            modelId: modelId
-        )
+            currentPhaseNumber = 2
+            queue.clear()
 
-        Logger.info("✅ Phase 2 execution complete")
+            let captured = pendingPhase2Nodes
+            pendingPhase2Nodes = []
+
+            // Build fresh context with Phase 1 changes applied
+            let customizationContext = CustomizationContext.build(
+                resume: resume,
+                skillStore: skillStore,
+                guidanceStore: guidanceStore,
+                knowledgeCardStore: knowledgeCardStore,
+                coverRefStore: coverRefStore,
+                applicantProfileStore: applicantProfileStore
+            )
+
+            workflowState.setProcessingRevisions(true)
+
+            try await executeParallelPhase(
+                nodes: captured,
+                phase: 2,
+                resume: resume,
+                context: customizationContext,
+                modelId: modelId
+            )
+
+            workflowState.setProcessingRevisions(false)
+            await delegate?.showParallelReviewQueue()
+        } else {
+            finalizeWorkflow()
+        }
+    }
+
+    /// Apply all approved items and close the workflow
+    func applyApprovedAndClose(resume: Resume, context: ModelContext) {
+        guard let queue = reviewQueue else { return }
+
+        let approvedItems = queue.approvedItems
+        for item in approvedItems {
+            applyReviewItemToResume(item, resume: resume)
+        }
+
+        Logger.info("Applied \(approvedItems.count) approved changes and closing workflow")
+
+        do {
+            try context.save()
+        } catch {
+            Logger.error("Failed to save context after applying approved changes: \(error.localizedDescription)")
+        }
+
+        exportCoordinator.debounceExport(resume: resume)
+        finalizeWorkflow()
+    }
+
+    /// Discard all changes and close the workflow
+    func discardAndClose() {
+        finalizeWorkflow()
+    }
+
+    /// Whether there are unapplied approved changes in the review queue
+    func hasUnappliedApprovedChanges() -> Bool {
+        reviewQueue?.hasApprovedItems ?? false
+    }
+
+    /// Clear all state and finalize the workflow
+    private func finalizeWorkflow() {
+        pendingPhase2Nodes = []
+        currentResume = nil
+        currentCoverRefStore = nil
+        currentPhaseNumber = 1
+        totalPhases = 1
+
+        reviewQueue?.clear()
+        reviewQueue = nil
+        promptCacheService = nil
+        parallelExecutor = nil
+        taskBuilder = nil
+        cachedPreamble = nil
+
+        workflowState.setProcessingRevisions(false)
+        workflowState.markWorkflowCompleted(reset: true)
+        delegate?.hideParallelReviewQueue()
     }
 
     /// Apply a review item's changes to the resume tree

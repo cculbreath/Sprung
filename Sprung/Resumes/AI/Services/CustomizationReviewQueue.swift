@@ -116,26 +116,40 @@ final class CustomizationReviewQueue {
     /// Parameters: (itemId, originalRevision, feedback) -> regenerated revision or nil
     var onRegenerationRequested: ((UUID, ProposedRevisionNode, String?) async -> ProposedRevisionNode?)?
 
+    /// Most recent regeneration error for UI display. Auto-clears after 10 seconds.
+    var lastRegenerationError: (itemId: UUID, displayName: String)?
+
     // MARK: - Computed Properties
+
+    /// IDs of items replaced by a regenerated version
+    private var supersededItemIds: Set<UUID> {
+        Set(items.compactMap { $0.previousVersionId })
+    }
+
+    /// Items not superseded by a regeneration. Primary data source for UI.
+    var activeItems: [CustomizationReviewItem] {
+        let superseded = supersededItemIds
+        return items.filter { !superseded.contains($0.id) }
+    }
 
     /// Items pending user action
     var pendingItems: [CustomizationReviewItem] {
-        items.filter { $0.userAction == nil }
+        activeItems.filter { $0.userAction == nil }
     }
 
     /// Items that have been approved
     var approvedItems: [CustomizationReviewItem] {
-        items.filter { $0.isApproved }
+        activeItems.filter { $0.isApproved }
     }
 
     /// Items that have been rejected
     var rejectedItems: [CustomizationReviewItem] {
-        items.filter { $0.isRejected }
+        activeItems.filter { $0.isRejected }
     }
 
     /// Whether there are any items in the queue
     var hasItems: Bool {
-        !items.isEmpty
+        !activeItems.isEmpty
     }
 
     /// Whether there are pending items
@@ -150,8 +164,11 @@ final class CustomizationReviewQueue {
 
     /// True when all items have been reviewed (no pending items remain)
     var allItemsReviewed: Bool {
-        !items.isEmpty && pendingItems.isEmpty
+        !activeItems.isEmpty && pendingItems.isEmpty
     }
+
+    /// Whether any items have been approved
+    var hasApprovedItems: Bool { !approvedItems.isEmpty }
 
     // MARK: - Queue Management
 
@@ -169,6 +186,7 @@ final class CustomizationReviewQueue {
     /// Set user action for an item
     func setAction(for itemId: UUID, action: CustomizationReviewAction) {
         guard let index = items.firstIndex(where: { $0.id == itemId }) else { return }
+        if lastRegenerationError?.itemId == itemId { lastRegenerationError = nil }
 
         items[index].userAction = action
 
@@ -230,11 +248,20 @@ final class CustomizationReviewQueue {
                 items[index].isRegenerating = false
             }
             Logger.error("Regeneration failed for: \(item.task.revNode.displayName)", category: .ai)
+
+            lastRegenerationError = (itemId: item.id, displayName: item.task.revNode.displayName)
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(for: .seconds(10))
+                if self?.lastRegenerationError?.itemId == item.id {
+                    self?.lastRegenerationError = nil
+                }
+            }
         }
     }
 
     /// Set edited content for an item (for scalar nodes)
     func setEditedContent(for itemId: UUID, content: String) {
+        if lastRegenerationError?.itemId == itemId { lastRegenerationError = nil }
         if let index = items.firstIndex(where: { $0.id == itemId }) {
             items[index].editedContent = content
             items[index].userAction = .edited
@@ -243,6 +270,7 @@ final class CustomizationReviewQueue {
 
     /// Set edited children for an item (for container nodes)
     func setEditedChildren(for itemId: UUID, children: [String]) {
+        if lastRegenerationError?.itemId == itemId { lastRegenerationError = nil }
         if let index = items.firstIndex(where: { $0.id == itemId }) {
             items[index].editedChildren = children
             items[index].userAction = .edited
@@ -251,7 +279,8 @@ final class CustomizationReviewQueue {
 
     /// Approve all pending items
     func approveAll() {
-        for index in items.indices where items[index].userAction == nil {
+        let superseded = supersededItemIds
+        for index in items.indices where items[index].userAction == nil && !superseded.contains(items[index].id) {
             items[index].userAction = .approved
         }
     }
@@ -264,6 +293,7 @@ final class CustomizationReviewQueue {
     /// Clear all items from the queue
     func clear() {
         items.removeAll()
+        lastRegenerationError = nil
     }
 
     /// Get item by ID
