@@ -37,7 +37,7 @@ struct TemplateEditorToolbar: CustomizableToolbarContent {
     private var experienceItem: some CustomizableToolbarContent {
         ToolbarItem(id: "experienceEditor", placement: .navigation, showsByDefault: true) {
             Button(action: onOpenExperience) {
-                Label("Experience Defaults", systemImage: "briefcase")
+                Label("Experience Defaults", systemImage: "building.columns")
             }
             .help("Open Experience Editor")
         }

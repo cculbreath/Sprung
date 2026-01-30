@@ -27,7 +27,7 @@ struct SourcesView: View {
             if coordinator.jobSourceStore.sources.isEmpty {
                 Spacer()
 
-                Image(systemName: "link.circle.fill")
+                Image(systemName: "signpost.right.and.left.circle.fill")
                     .font(.system(size: 48))
                     .foregroundStyle(.secondary)
 

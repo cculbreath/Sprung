@@ -485,17 +485,23 @@ private struct ChipView: View {
                 .font(.system(size: 11, weight: .medium))
                 .lineLimit(1)
 
-            // AI status icon (trailing)
+            // AI status icon (trailing): group members get menu, ungrouped toggle directly
             if node.status != LeafStatus.disabled {
-                Menu {
-                    chipAIMenu
-                } label: {
-                    AIIconImage(mode: iconMode, size: 11)
-                        .padding(2)
+                if isGroupMember {
+                    AIIconMenuButton(mode: iconMode, size: 11) { dismiss in
+                        PopoverMenuItem(
+                            "Exclude from group review",
+                            isChecked: node.status == .excludedFromGroup
+                        ) {
+                            node.status = node.status == .excludedFromGroup ? .saved : .excludedFromGroup
+                            dismiss()
+                        }
+                    }
+                } else {
+                    AIStatusIcon(mode: iconMode, size: 11) {
+                        node.status = node.status == .aiToReplace ? .saved : .aiToReplace
+                    }
                 }
-                .menuStyle(.borderlessButton)
-                .menuIndicator(.hidden)
-                .help(iconMode.helpText)
             }
 
             // Delete button - use opacity to avoid reflow
@@ -532,44 +538,10 @@ private struct ChipView: View {
         }
     }
 
-    // MARK: - Chip AI Menu
-
-    @ViewBuilder
-    private var chipAIMenu: some View {
-        let isSolo = node.status == .aiToReplace
-
-        Text("AI Review")
-
-        Divider()
-
-        Button {
-            toggleNodeStatus()
-        } label: {
-            HStack {
-                Image(systemName: "target")
-                    .foregroundColor(.teal)
-                Text("Solo - this field only")
-                if isSolo { Image(systemName: "checkmark") }
-            }
-        }
-
-        if isSolo {
-            Divider()
-
-            Button(role: .destructive) {
-                node.status = .saved
-            } label: {
-                Label("Disable AI Review", systemImage: "xmark.circle")
-            }
-        }
-    }
-
-    private func toggleNodeStatus() {
-        if node.status == LeafStatus.saved {
-            node.status = .aiToReplace
-        } else if node.status == LeafStatus.aiToReplace {
-            node.status = .saved
-        }
+    /// Whether this chip is a member of a group review (bundled or iterated)
+    private var isGroupMember: Bool {
+        iconMode == .bundledMember || iconMode == .iteratedMember ||
+        iconMode == .excludedBundledMember || iconMode == .excludedIteratedMember
     }
 
     private var editingView: some View {

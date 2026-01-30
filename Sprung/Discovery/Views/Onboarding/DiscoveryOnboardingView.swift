@@ -113,7 +113,7 @@ struct DiscoveryOnboardingView: View {
 
     private var welcomeStep: some View {
         VStack(spacing: 24) {
-            Image(systemName: "briefcase.fill")
+            Image(systemName: "square.stack.3d.down.forward.fill")
                 .font(.system(size: 64))
                 .foregroundStyle(.blue)
 
@@ -127,31 +127,31 @@ struct DiscoveryOnboardingView: View {
 
             VStack(alignment: .leading, spacing: 16) {
                 FeatureRow(
-                    icon: "checklist",
+                    icon: "calendar.day.timeline.leading",
                     title: "Daily Task Management",
                     description: "AI-generated tasks prioritized for maximum impact"
                 )
 
                 FeatureRow(
-                    icon: "link.circle",
+                    icon: "signpost.right.and.left",
                     title: "Smart Source Discovery",
                     description: "Find job boards and company pages tailored to your field"
                 )
 
                 FeatureRow(
-                    icon: "calendar",
+                    icon: "person.line.dotted.person.fill",
                     title: "Networking Events",
                     description: "Discover, evaluate, and prepare for networking opportunities"
                 )
 
                 FeatureRow(
-                    icon: "person.2",
+                    icon: "teletype.answer",
                     title: "Contact Management",
                     description: "Track relationships and get follow-up reminders"
                 )
 
                 FeatureRow(
-                    icon: "chart.bar",
+                    icon: "book.pages",
                     title: "Weekly Reviews",
                     description: "Reflect on progress with AI-powered insights"
                 )

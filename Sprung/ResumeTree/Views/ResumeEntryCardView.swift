@@ -6,6 +6,7 @@
 //  Professional design with clear visual hierarchy and refined styling.
 //
 
+import AppKit
 import SwiftUI
 
 /// Card view for a single resume entry (job, school, skill category, etc.)
@@ -158,15 +159,18 @@ struct ResumeEntryCardView: View {
             // Header row with AI icon(s)
             HStack(spacing: 6) {
                 // AI status menu - click to configure AI review for this collection
-                Menu {
-                    if let section = sectionNode {
-                        nestedContainerContextMenu(section: section, containerName: containerName, containerNameWithSuffix: containerNameWithSuffix)
+                if let section = sectionNode {
+                    ResolvedAIIconNativeMenuButton(resolution: iconResolution) {
+                        self.buildNestedContainerMenu(
+                            section: section,
+                            containerName: containerName,
+                            containerNameWithSuffix: containerNameWithSuffix
+                        )
                     }
-                } label: {
+                } else {
                     ResolvedAIIcon(resolution: iconResolution)
+                        .padding(4)
                 }
-                .menuStyle(.borderlessButton)
-                .menuIndicator(.hidden)
 
                 Text(child.displayLabel.titleCased)
                     .font(.system(size: 11, weight: .medium))
@@ -210,6 +214,63 @@ struct ResumeEntryCardView: View {
         }
     }
 
+    /// Build native NSMenu for nested container AI configuration.
+    /// Structure: Bundle▶ → [leaf], Iterate▶ → [leaf], Disable
+    private func buildNestedContainerMenu(section: TreeNode, containerName: String, containerNameWithSuffix: String) -> NSMenu {
+        let menu = NSMenu()
+
+        let isBundled = section.bundledAttributes?.contains(containerName) == true
+        let isIteratedBundled = section.enumeratedAttributes?.contains(containerName) == true
+        let isIteratedEach = section.enumeratedAttributes?.contains(containerNameWithSuffix) == true
+        let hasConfig = isBundled || isIteratedBundled || isIteratedEach
+        let leaf = nestedLeafLabel(for: containerName)
+
+        // Children's collection mode (independent of which list stores the attribute)
+        // "Bundle" = children grouped together: attr without [] in either list
+        // "Iterate" = children handled individually: attr with [] suffix
+        let childrenBundled = isBundled || isIteratedBundled
+        let childrenIterated = isIteratedEach
+
+        // Bundle ▶ → leaf item
+        let bundleItem = NSMenuItem(title: "Bundle", action: nil, keyEquivalent: "")
+        bundleItem.state = childrenBundled ? .on : .off
+        let bundleSub = NSMenu()
+        bundleSub.addItem(ActionMenuItem(leaf, checked: childrenBundled) {
+            setContainerMode(collection: section, attr: containerName, mode: .bundle)
+        })
+        bundleItem.submenu = bundleSub
+        menu.addItem(bundleItem)
+
+        // Iterate ▶ → leaf item
+        let iterateItem = NSMenuItem(title: "Iterate", action: nil, keyEquivalent: "")
+        iterateItem.state = childrenIterated ? .on : .off
+        let iterateSub = NSMenu()
+        iterateSub.addItem(ActionMenuItem(leaf, checked: childrenIterated) {
+            setContainerMode(collection: section, attr: containerNameWithSuffix, mode: .iterate)
+        })
+        iterateItem.submenu = iterateSub
+        menu.addItem(iterateItem)
+
+        if hasConfig {
+            menu.addItem(.separator())
+            menu.addItem(ActionMenuItem("Disable AI Review") {
+                setContainerMode(collection: section, attr: containerName, mode: .off)
+            })
+        }
+
+        return menu
+    }
+
+    /// Simple singularization for leaf display labels (keywords → Keyword)
+    private func nestedLeafLabel(for attr: String) -> String {
+        let name = attr.titleCased
+        if name.hasSuffix("s") && !name.hasSuffix("ss") {
+            return String(name.dropLast())
+        }
+        return name
+    }
+
+    /// Context menu content for nested container (right-click) - uses native Menu format
     @ViewBuilder
     private func nestedContainerContextMenu(section: TreeNode, containerName: String, containerNameWithSuffix: String) -> some View {
         let isBundled = section.bundledAttributes?.contains(containerName) == true
@@ -327,16 +388,19 @@ private struct FieldValueEditor: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 0) {
-            // AI status menu - click to configure AI review
-            Menu {
-                attributeAIContextMenu
-            } label: {
-                AIIconImage(mode: iconMode)
-                    .padding(4)
+            // AI status: group members get menu, ungrouped toggle directly
+            if isGroupMember {
+                AIIconMenuButton(mode: iconMode) { dismiss in
+                    PopoverMenuItem("Exclude from group review", isChecked: isExcluded) {
+                        toggleExcludeFromGroup()
+                        dismiss()
+                    }
+                }
+            } else {
+                AIStatusIcon(mode: iconMode) {
+                    toggleSoloMode()
+                }
             }
-            .menuStyle(.borderlessButton)
-            .menuIndicator(.hidden)
-            .help(iconMode.helpText)
 
             // Content
             if isEditing {
@@ -350,164 +414,66 @@ private struct FieldValueEditor: View {
         }
     }
 
-    // MARK: - AI Context Menu
+    // MARK: - AI Menu (Member - Simple Toggles)
 
     private var isSolo: Bool {
         node.status == .aiToReplace
     }
 
-    /// The collection (grandparent) node for AI configuration
-    private var collectionNode: TreeNode? {
-        node.parent?.parent
+    private var isExcluded: Bool {
+        node.status == .excludedFromGroup
     }
 
-    /// Attribute name for AI configuration
-    private var attrName: String {
-        node.name.isEmpty ? node.displayLabel : node.name
-    }
-
-    /// Whether this attribute is bundled
-    private var isBundled: Bool {
-        collectionNode?.bundledAttributes?.contains(attrName) == true
-    }
-
-    /// Whether this attribute is iterated
-    private var isIterated: Bool {
-        collectionNode?.enumeratedAttributes?.contains(attrName) == true
-    }
-
-    /// Whether this field has AI review configured
-    private var hasAIReview: Bool {
-        isSolo || isBundled || isIterated
-    }
-
-    /// Whether this field can be configured for AI review
-    private var supportsAIConfig: Bool {
-        guard let collection = collectionNode else { return false }
-        return collection.parent != nil
-    }
-
-    @ViewBuilder
-    private var attributeAIContextMenu: some View {
-        Text("AI Review: \(attrName)")
-
-        Divider()
-
-        // Solo option - always available for any field
-        Button {
-            toggleSoloMode()
-        } label: {
-            HStack {
-                Image(systemName: "target")
-                    .foregroundColor(.teal)
-                Text("Solo - this field only")
-                if isSolo { Image(systemName: "checkmark") }
-            }
-        }
-
-        // Bundle/Iterate options - only for fields under collections
-        if supportsAIConfig {
-            Divider()
-
-            Button {
-                setAttributeMode(.bundle)
-            } label: {
-                HStack {
-                    Image(systemName: "circle.hexagongrid.circle")
-                        .foregroundColor(.purple)
-                    Text("Bundle - 1 review")
-                    if isBundled { Image(systemName: "checkmark") }
-                }
-            }
-
-            Button {
-                setAttributeMode(.iterate)
-            } label: {
-                HStack {
-                    Image(systemName: "film.stack")
-                        .foregroundColor(.indigo)
-                    Text("Iterate - N reviews")
-                    if isIterated { Image(systemName: "checkmark") }
-                }
-            }
-        }
-
-        if hasAIReview {
-            Divider()
-
-            Button(role: .destructive) {
-                disableAllAIReview()
-            } label: {
-                Label("Disable AI Review", systemImage: "xmark.circle")
-            }
-        }
+    /// Whether this field is a member of a group review (bundled or iterated)
+    private var isGroupMember: Bool {
+        iconMode == .bundledMember || iconMode == .iteratedMember ||
+        iconMode == .excludedBundledMember || iconMode == .excludedIteratedMember
     }
 
     private func toggleSoloMode() {
-        if isSolo {
+        node.status = node.status == .aiToReplace ? .saved : .aiToReplace
+    }
+
+    /// Context menu content for AI configuration (right-click) - uses native Menu format
+    /// Member menus are simple toggles only
+    @ViewBuilder
+    private var attributeAIContextMenu: some View {
+        if isGroupMember {
+            Button {
+                toggleExcludeFromGroup()
+            } label: {
+                HStack {
+                    Text("Exclude from group review")
+                    if isExcluded { Image(systemName: "checkmark") }
+                }
+            }
+        } else if isSolo {
+            Button {
+                node.status = .saved
+            } label: {
+                HStack {
+                    Image(systemName: "sparkles")
+                    Text("Disable solo review")
+                }
+            }
+        } else {
+            Button {
+                node.status = .aiToReplace
+            } label: {
+                HStack {
+                    Image(systemName: "target")
+                        .foregroundColor(.teal)
+                    Text("Enable solo review")
+                }
+            }
+        }
+    }
+
+    private func toggleExcludeFromGroup() {
+        if node.status == .excludedFromGroup {
             node.status = .saved
         } else {
-            // Clear any collection-level settings for this attribute first
-            if let collection = collectionNode {
-                if var bundled = collection.bundledAttributes {
-                    bundled.removeAll { $0 == attrName }
-                    collection.bundledAttributes = bundled.isEmpty ? nil : bundled
-                }
-                if var enumerated = collection.enumeratedAttributes {
-                    enumerated.removeAll { $0 == attrName }
-                    collection.enumeratedAttributes = enumerated.isEmpty ? nil : enumerated
-                }
-            }
-            node.status = .aiToReplace
-        }
-    }
-
-    private func setAttributeMode(_ mode: AIReviewMode) {
-        guard let collection = collectionNode else { return }
-
-        // Clear solo mode if set
-        if isSolo {
-            node.status = .saved
-        }
-
-        // Remove from both first
-        if var bundled = collection.bundledAttributes {
-            bundled.removeAll { $0 == attrName }
-            collection.bundledAttributes = bundled.isEmpty ? nil : bundled
-        }
-        if var enumerated = collection.enumeratedAttributes {
-            enumerated.removeAll { $0 == attrName }
-            collection.enumeratedAttributes = enumerated.isEmpty ? nil : enumerated
-        }
-
-        // Add to appropriate list
-        if mode == .bundle {
-            var bundled = collection.bundledAttributes ?? []
-            bundled.append(attrName)
-            collection.bundledAttributes = bundled
-        } else if mode == .iterate {
-            var enumerated = collection.enumeratedAttributes ?? []
-            enumerated.append(attrName)
-            collection.enumeratedAttributes = enumerated
-        }
-    }
-
-    private func disableAllAIReview() {
-        // Clear solo mode
-        if isSolo {
-            node.status = .saved
-        }
-
-        // Clear collection-level settings
-        if let collection = collectionNode {
-            if var bundled = collection.bundledAttributes {
-                bundled.removeAll { $0 == attrName }
-                collection.bundledAttributes = bundled.isEmpty ? nil : bundled
-            }
-            if var enumerated = collection.enumeratedAttributes {
-                enumerated.removeAll { $0 == attrName }
-                collection.enumeratedAttributes = enumerated.isEmpty ? nil : enumerated
-            }
+            node.status = .excludedFromGroup
         }
     }
 
@@ -579,18 +545,31 @@ private struct BulletItemEditor: View {
         node.status == .aiToReplace
     }
 
+    private var isExcluded: Bool {
+        node.status == .excludedFromGroup
+    }
+
+    /// Whether this bullet is a member of a group review (bundled or iterated)
+    private var isGroupMember: Bool {
+        iconMode == .bundledMember || iconMode == .iteratedMember ||
+        iconMode == .excludedBundledMember || iconMode == .excludedIteratedMember
+    }
+
     var body: some View {
         HStack(alignment: .top, spacing: 6) {
-            // AI status menu - click to configure AI review
-            Menu {
-                bulletAIContextMenu
-            } label: {
-                AIIconImage(mode: iconMode)
-                    .padding(4)
+            // AI status: group members get menu, ungrouped toggle directly
+            if isGroupMember {
+                AIIconMenuButton(mode: iconMode) { dismiss in
+                    PopoverMenuItem("Exclude from group review", isChecked: isExcluded) {
+                        toggleExcludeFromGroup()
+                        dismiss()
+                    }
+                }
+            } else {
+                AIStatusIcon(mode: iconMode) {
+                    toggleSoloMode()
+                }
             }
-            .menuStyle(.borderlessButton)
-            .menuIndicator(.hidden)
-            .help(iconMode.helpText)
 
             if isEditing {
                 EditingControls(
@@ -626,42 +605,50 @@ private struct BulletItemEditor: View {
         }
     }
 
+    private func toggleSoloMode() {
+        node.status = node.status == .aiToReplace ? .saved : .aiToReplace
+    }
+
+    /// Context menu content for bullet item AI configuration (right-click)
+    /// Member menus are simple toggles only
     @ViewBuilder
     private var bulletAIContextMenu: some View {
-        let itemLabel = node.value.isEmpty ? node.name : node.value
-        let truncatedLabel = itemLabel.count > 30 ? String(itemLabel.prefix(30)) + "..." : itemLabel
-
-        Text("AI Review: \(truncatedLabel)")
-
-        Divider()
-
-        Button {
-            toggleSoloMode()
-        } label: {
-            HStack {
-                Image(systemName: "target")
-                    .foregroundColor(.teal)
-                Text("Solo - this item only")
-                if isSolo { Image(systemName: "checkmark") }
+        if isGroupMember {
+            Button {
+                toggleExcludeFromGroup()
+            } label: {
+                HStack {
+                    Text("Exclude from group review")
+                    if isExcluded { Image(systemName: "checkmark") }
+                }
             }
-        }
-
-        if isSolo {
-            Divider()
-
-            Button(role: .destructive) {
+        } else if isSolo {
+            Button {
                 node.status = .saved
             } label: {
-                Label("Disable AI Review", systemImage: "xmark.circle")
+                HStack {
+                    Image(systemName: "sparkles")
+                    Text("Disable solo review")
+                }
+            }
+        } else {
+            Button {
+                node.status = .aiToReplace
+            } label: {
+                HStack {
+                    Image(systemName: "target")
+                        .foregroundColor(.teal)
+                    Text("Enable solo review")
+                }
             }
         }
     }
 
-    private func toggleSoloMode() {
-        if isSolo {
+    private func toggleExcludeFromGroup() {
+        if node.status == .excludedFromGroup {
             node.status = .saved
         } else {
-            node.status = .aiToReplace
+            node.status = .excludedFromGroup
         }
     }
 }

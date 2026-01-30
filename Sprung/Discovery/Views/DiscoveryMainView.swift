@@ -20,12 +20,12 @@ enum DiscoverySection: String, CaseIterable, Identifiable {
 
     var icon: String {
         switch self {
-        case .daily: return "checklist"
-        case .pipeline: return "rectangle.split.3x1"
-        case .sources: return "link.circle"
-        case .events: return "calendar"
-        case .contacts: return "person.2"
-        case .weeklyReview: return "chart.bar.doc.horizontal"
+        case .daily: return "calendar.day.timeline.leading"
+        case .pipeline: return "square.stack.3d.down.forward"
+        case .sources: return "signpost.right.and.left"
+        case .events: return "person.line.dotted.person.fill"
+        case .contacts: return "teletype.answer"
+        case .weeklyReview: return "book.pages"
         }
     }
 

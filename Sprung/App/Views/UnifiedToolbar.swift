@@ -104,7 +104,7 @@ struct UnifiedToolbar: CustomizableToolbarContent {
                 Button(action: {
                     sheets.showCreateResume = true
                 }, label: {
-                    Label("Create Resume", systemImage: "doc.badge.plus")
+                    Label("Create Resume", image: "custom.resume.new")
                         .font(.system(size: 14, weight: .light))
                 })
                 .buttonStyle(.automatic)
@@ -196,7 +196,7 @@ struct UnifiedToolbar: CustomizableToolbarContent {
             }
 
             ToolbarItem(id: "experienceEditor", placement: .primaryAction, showsByDefault: false) {
-                Button("Experience", systemImage: "briefcase") {
+                Button("Experience", systemImage: "building.columns") {
                     Task { @MainActor in
                         if !NSApp.sendAction(#selector(AppDelegate.showExperienceEditorWindow), to: nil, from: nil),
                            let delegate = NSApplication.shared.delegate as? AppDelegate {

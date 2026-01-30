@@ -62,7 +62,9 @@ struct TemplateManifestOverrides: Codable {
     var editorLabels: [String: String]?
     var defaultAIFields: [String]?
     var listContainers: [String]?
+    var transparentKeys: [String]?
     var reviewPhases: [String: [TemplateManifest.ReviewPhaseConfig]]?
+    var editorPanels: [String: String]?
 
     /// Initialize with type-safe StandardSection array
     init(
@@ -76,7 +78,9 @@ struct TemplateManifestOverrides: Codable {
         editorLabels: [String: String]? = nil,
         defaultAIFields: [String]? = nil,
         listContainers: [String]? = nil,
-        reviewPhases: [String: [TemplateManifest.ReviewPhaseConfig]]? = nil
+        transparentKeys: [String]? = nil,
+        reviewPhases: [String: [TemplateManifest.ReviewPhaseConfig]]? = nil,
+        editorPanels: [String: String]? = nil
     ) {
         self.sectionOrder = sectionOrder?.map(\.rawValue)
         self.styling = styling
@@ -88,7 +92,9 @@ struct TemplateManifestOverrides: Codable {
         self.editorLabels = editorLabels
         self.defaultAIFields = defaultAIFields
         self.listContainers = listContainers
+        self.transparentKeys = transparentKeys
         self.reviewPhases = reviewPhases
+        self.editorPanels = editorPanels
     }
     enum CodingKeys: String, CodingKey {
         case sectionOrder
@@ -101,7 +107,9 @@ struct TemplateManifestOverrides: Codable {
         case editorLabels
         case defaultAIFields
         case listContainers
+        case transparentKeys
         case reviewPhases
+        case editorPanels
     }
 }
 enum TemplateManifestDefaults {
@@ -194,7 +202,7 @@ enum TemplateManifestDefaults {
         }
         do {
             let overrides = try JSONDecoder().decode(TemplateManifestOverrides.self, from: data)
-            Logger.info("🎯 [TemplateManifestDefaults] Decoded overrides for '\(template.slug)': defaultAIFields=\(overrides.defaultAIFields?.description ?? "nil"), listContainers=\(overrides.listContainers?.description ?? "nil"), reviewPhases=\(overrides.reviewPhases?.keys.joined(separator: ",") ?? "nil")")
+            Logger.info("🎯 [TemplateManifestDefaults] Decoded overrides for '\(template.slug)': defaultAIFields=\(overrides.defaultAIFields?.description ?? "nil"), listContainers=\(overrides.listContainers?.description ?? "nil"), reviewPhases=\(overrides.reviewPhases?.keys.joined(separator: ",") ?? "nil"), editorPanels=\(overrides.editorPanels?.description ?? "nil")")
             return apply(overrides: overrides, to: base, slug: template.slug)
         } catch {
             Logger.warning("TemplateManifestDefaults: Unable to decode manifest overrides for slug \(template.slug): \(error); falling back to defaults.")
@@ -225,7 +233,9 @@ enum TemplateManifestDefaults {
         let editorLabels = overrides.editorLabels ?? base.editorLabels
         let defaultAIFields = overrides.defaultAIFields ?? base.defaultAIFields
         let listContainers = overrides.listContainers ?? base.listContainers
+        let transparentKeys = overrides.transparentKeys ?? base.transparentKeys
         let reviewPhases = overrides.reviewPhases ?? base.reviewPhases
+        let editorPanels = overrides.editorPanels ?? base.editorPanels
 
         Logger.debug("🎯 [TemplateManifestDefaults.apply] Building manifest with defaultAIFields=\(defaultAIFields?.description ?? "nil")")
 
@@ -238,9 +248,11 @@ enum TemplateManifestDefaults {
             keysInEditor: keysInEditor,
             sectionVisibilityDefaults: sectionVisibilityDefaults,
             sectionVisibilityLabels: sectionVisibilityLabels,
+            transparentKeys: transparentKeys,
             defaultAIFields: defaultAIFields,
             listContainers: listContainers,
-            reviewPhases: reviewPhases
+            reviewPhases: reviewPhases,
+            editorPanels: editorPanels
         )
     }
     // MARK: - Base Manifest Construction

@@ -19,8 +19,11 @@
     "projects[].description",
     "skills.*.name",
     "skills[].keywords",
-    "custom.jobTitles[]"
+    "custom.jobTitles"
   ],
+  "editorPanels" : {
+    "custom.jobTitles" : "jobTitlesPanel"
+  },
   "editorLabels" : {
     "basics" : "Contact Info",
     "custom.jobTitles" : "Job Titles",
@@ -67,12 +70,13 @@
     "work" : "Work Experience"
   },
   "sectionOrder" : [
+    "custom.jobTitles",
+    "custom.objective",
+    "skills",
+    "education",
     "work",
     "projects",
-    "education",
-    "skills",
-    "custom",
-    "styling"
+    "custom.moreInfo"
   ],
   "transparentKeys" : [
     "custom",

@@ -4,6 +4,7 @@ import SwiftData
 enum LeafStatus: String, Codable, Hashable {
     case isEditing
     case aiToReplace
+    case excludedFromGroup
     case disabled = "leafDisabled"
     case saved = "leafValueSaved"
     case isNotLeaf = "nodeIsNotLeaf"
@@ -124,24 +125,25 @@ enum LeafStatus: String, Codable, Hashable {
 
     /// Total revnode count for this subtree
     /// Counts: solo nodes, bundle attributes (1 each), iterate attributes (N each), container enumerate children
+    /// Skips children with `.excludedFromGroup` status
     var revnodeCount: Int {
         var count = 0
 
-        // Container enumerate: each child is a revnode
+        // Container enumerate: each child is a revnode (skip excluded)
         if enumeratedAttributes?.contains("*") == true {
-            count += orderedChildren.count
+            count += orderedChildren.filter { $0.status != .excludedFromGroup }.count
         }
         // Bundle attributes: 1 revnode per attribute, or M for nested arrays with [] suffix
         else if let bundled = bundledAttributes, !bundled.isEmpty {
             for attr in bundled {
                 if attr.hasSuffix("[]") {
-                    // Nested array bundle with [] (e.g., "keywords[]"): count all children across entries
+                    // Nested array bundle with [] (e.g., "keywords[]"): count all children across entries (skip excluded)
                     let baseAttr = String(attr.dropLast(2))
                     for entry in orderedChildren {
                         if let attrNode = entry.orderedChildren.first(where: {
                             ($0.name.isEmpty ? $0.displayLabel : $0.name) == baseAttr
                         }) {
-                            count += attrNode.orderedChildren.count
+                            count += attrNode.orderedChildren.filter { $0.status != .excludedFromGroup }.count
                         }
                     }
                 } else {
@@ -157,13 +159,13 @@ enum LeafStatus: String, Codable, Hashable {
             let iterateAttrs = enumerated.filter { $0 != "*" }
             for attr in iterateAttrs {
                 if attr.hasSuffix("[]") {
-                    // Nested array iterate (e.g., "keywords[]"): count actual children in each entry
+                    // Nested array iterate (e.g., "keywords[]"): count actual children in each entry (skip excluded)
                     let baseAttr = String(attr.dropLast(2))
                     for entry in orderedChildren {
                         if let attrNode = entry.orderedChildren.first(where: {
                             ($0.name.isEmpty ? $0.displayLabel : $0.name) == baseAttr
                         }) {
-                            count += attrNode.orderedChildren.count  // Each child is a revnode
+                            count += attrNode.orderedChildren.filter { $0.status != .excludedFromGroup }.count
                         }
                     }
                 } else {
@@ -672,7 +674,9 @@ extension TreeNode {
         // Handle wildcards
         if component == "*" {
             // Enumerate all object children (children with display names that have sub-fields)
+            // Skip children excluded from group review
             for (index, child) in node.orderedChildren.enumerated() {
+                guard child.status != .excludedFromGroup else { continue }
                 // Build identifier: prefer name, then value, then index
                 let identifier = !child.name.isEmpty ? child.name :
                                  !child.value.isEmpty ? child.value :
@@ -688,7 +692,9 @@ extension TreeNode {
             }
         } else if component == "[]" {
             // Enumerate all array item children (leaf values)
+            // Skip children excluded from group review
             for (index, child) in node.orderedChildren.enumerated() {
+                guard child.status != .excludedFromGroup else { continue }
                 // Build identifier: prefer name, then value, then index
                 let identifier = !child.name.isEmpty ? child.name :
                                  !child.value.isEmpty ? child.value :

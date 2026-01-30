@@ -13,7 +13,7 @@ struct ContactsView: View {
 
     var body: some View {
         VStack(spacing: 20) {
-            Image(systemName: "person.2.circle.fill")
+            Image(systemName: "teletype.answer.circle.fill")
                 .font(.system(size: 48))
                 .foregroundStyle(.secondary)
 

@@ -25,15 +25,15 @@ enum AppModule: String, CaseIterable, Identifiable, Codable {
     /// SF Symbol name for the module
     var icon: String {
         switch self {
-        case .pipeline: return "rectangle.split.3x1"
-        case .resumeEditor: return "doc.text.magnifyingglass"
-        case .dailyTasks: return "checklist"
-        case .sources: return "link.circle"
-        case .events: return "calendar"
-        case .contacts: return "person.2"
-        case .weeklyReview: return "chart.bar.doc.horizontal"
+        case .pipeline: return "square.stack.3d.down.forward"
+        case .resumeEditor: return "pencil.and.list.clipboard"
+        case .dailyTasks: return "calendar.day.timeline.leading"
+        case .sources: return "signpost.right.and.left"
+        case .events: return "person.line.dotted.person.fill"
+        case .contacts: return "teletype.answer"
+        case .weeklyReview: return "book.pages"
         case .references: return "brain.head.profile"
-        case .experience: return "briefcase"
+        case .experience: return "building.columns"
         case .profile: return "person.text.rectangle"
         }
     }

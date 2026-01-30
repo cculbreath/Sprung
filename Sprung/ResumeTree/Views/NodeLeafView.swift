@@ -31,17 +31,23 @@ struct NodeLeafView: View {
                 }
                 .buttonStyle(.plain)
             } else {
-                // AI status menu for all non-disabled nodes
+                // AI status: group members get menu, ungrouped toggle directly
                 if node.status != LeafStatus.disabled {
-                    Menu {
-                        nodeAIMenu
-                    } label: {
-                        AIIconImage(mode: iconMode)
-                            .padding(4)
+                    if isGroupMember {
+                        AIIconMenuButton(mode: iconMode) { dismiss in
+                            PopoverMenuItem(
+                                "Exclude from group review",
+                                isChecked: node.status == .excludedFromGroup
+                            ) {
+                                toggleExcludeFromGroup()
+                                dismiss()
+                            }
+                        }
+                    } else {
+                        AIStatusIcon(mode: iconMode) {
+                            toggleSoloMode()
+                        }
                     }
-                    .menuStyle(.borderlessButton)
-                    .menuIndicator(.hidden)
-                    .help(iconMode.helpText)
                 }
                 if node.status == LeafStatus.disabled {
                     Image(systemName: "lock.fill")
@@ -104,42 +110,23 @@ struct NodeLeafView: View {
 
     // MARK: - AI Menu
 
-    @ViewBuilder
-    private var nodeAIMenu: some View {
-        let isSolo = node.status == .aiToReplace
-
-        Text("AI Review")
-
-        Divider()
-
-        Button {
-            toggleNodeStatus()
-        } label: {
-            HStack {
-                Image(systemName: "target")
-                    .foregroundColor(.teal)
-                Text("Solo - this field only")
-                if isSolo { Image(systemName: "checkmark") }
-            }
-        }
-
-        if isSolo {
-            Divider()
-
-            Button(role: .destructive) {
-                node.status = .saved
-            } label: {
-                Label("Disable AI Review", systemImage: "xmark.circle")
-            }
-        }
+    /// Whether this leaf is a member of a group review (bundled or iterated)
+    private var isGroupMember: Bool {
+        iconMode == .bundledMember || iconMode == .iteratedMember ||
+        iconMode == .excludedBundledMember || iconMode == .excludedIteratedMember
     }
 
     // MARK: - Actions
-    private func toggleNodeStatus() {
-        if node.status == LeafStatus.saved {
-            node.status = .aiToReplace
-        } else if node.status == LeafStatus.aiToReplace {
+
+    private func toggleSoloMode() {
+        node.status = node.status == .aiToReplace ? .saved : .aiToReplace
+    }
+
+    private func toggleExcludeFromGroup() {
+        if node.status == .excludedFromGroup {
             node.status = .saved
+        } else {
+            node.status = .excludedFromGroup
         }
     }
 
@@ -164,7 +151,7 @@ private struct SectionLabelRow: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
-                Text(node.label)
+                Text(node.value)
                     .foregroundStyle(.primary)
             }
             .frame(maxWidth: .infinity, alignment: .leading)

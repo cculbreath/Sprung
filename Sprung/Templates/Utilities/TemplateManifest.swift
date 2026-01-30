@@ -422,6 +422,11 @@ struct TemplateManifest: Codable {
     /// ```
     let reviewPhases: [String: [ReviewPhaseConfig]]?
 
+    /// Maps section names to bespoke editor panel views, bypassing generic tree-node rendering.
+    /// Key is dot-notation section name (e.g., "custom.jobTitles"), value is panel identifier
+    /// (e.g., "jobTitlesPanel").
+    let editorPanels: [String: String]?
+
     /// Configuration for a single review phase
     struct ReviewPhaseConfig: Codable {
         /// Phase number (1-indexed, executed in order)
@@ -462,7 +467,8 @@ struct TemplateManifest: Codable {
         transparentKeys: [String]? = nil,
         defaultAIFields: [String]? = nil,
         listContainers: [String]? = nil,
-        reviewPhases: [String: [ReviewPhaseConfig]]? = nil
+        reviewPhases: [String: [ReviewPhaseConfig]]? = nil,
+        editorPanels: [String: String]? = nil
     ) {
         self.slug = slug
         self.schemaVersion = schemaVersion
@@ -475,6 +481,7 @@ struct TemplateManifest: Codable {
         self.defaultAIFields = defaultAIFields
         self.listContainers = listContainers
         self.reviewPhases = reviewPhases
+        self.editorPanels = editorPanels
         var normalized: [String: Section] = [:]
         var synthesized: Set<String> = []
         for (key, var section) in sections {
@@ -500,6 +507,7 @@ struct TemplateManifest: Codable {
         defaultAIFields = try container.decodeIfPresent([String].self, forKey: .defaultAIFields)
         listContainers = try container.decodeIfPresent([String].self, forKey: .listContainers)
         reviewPhases = try container.decodeIfPresent([String: [ReviewPhaseConfig]].self, forKey: .reviewPhases)
+        editorPanels = try container.decodeIfPresent([String: String].self, forKey: .editorPanels)
         let decodedSections = try container.decode([String: Section].self, forKey: .sections)
         var normalized: [String: Section] = [:]
         var synthesized: Set<String> = []
@@ -528,6 +536,7 @@ struct TemplateManifest: Codable {
         try container.encodeIfPresent(defaultAIFields, forKey: .defaultAIFields)
         try container.encodeIfPresent(listContainers, forKey: .listContainers)
         try container.encodeIfPresent(reviewPhases, forKey: .reviewPhases)
+        try container.encodeIfPresent(editorPanels, forKey: .editorPanels)
         try container.encode(sections, forKey: .sections)
     }
     func section(for key: String) -> Section? {
@@ -614,6 +623,7 @@ struct TemplateManifest: Codable {
         case defaultAIFields
         case listContainers
         case reviewPhases
+        case editorPanels
     }
 }
 // MARK: - Encoding helpers

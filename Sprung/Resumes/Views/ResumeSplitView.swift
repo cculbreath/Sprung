@@ -38,8 +38,11 @@ struct ResumeSplitView: View {
     // MARK: - Resume Editor Content
 
     private func resumeEditorContent(selApp: JobApp, selRes: Resume) -> some View {
-        mainEditorContent(selApp: selApp, selRes: selRes)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        VStack(spacing: 0) {
+            ResumeBannerView(jobApp: selApp)
+            mainEditorContent(selApp: selApp, selRes: selRes)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private let minPdfPreviewWidth: CGFloat = 260
@@ -104,35 +107,19 @@ struct ResumeSplitView: View {
     // MARK: - Empty States
 
     private func noResumeState(selApp: JobApp) -> some View {
-        VStack(spacing: 20) {
-            Text("No Resume Available")
-                .font(.title)
-                .fontWeight(.bold)
+        VStack(spacing: 0) {
+            ResumeBannerView(jobApp: selApp)
 
-            Text("Create a resume to customize it for this job application.")
-                .multilineTextAlignment(.center)
-                .padding(.horizontal)
+            VStack(spacing: 20) {
+                Text("No Resume Available")
+                    .font(.title)
+                    .fontWeight(.bold)
 
-            Button("Create Resume") {
-                showCreateResumeSheet = true
+                Text("Create a resume to customize it for this job application.")
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal)
             }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .sheet(isPresented: $showCreateResumeSheet) {
-            CreateResumeView(
-                onCreateResume: { template, sources in
-                    if resStore.create(
-                        jobApp: selApp,
-                        sources: sources,
-                        template: template
-                    ) != nil {
-                        refresh.toggle()
-                    }
-                }
-            )
-            .padding()
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 

@@ -55,6 +55,9 @@ final class ResumeDetailVM {
     /// Editor labels from manifest (maps keys to display labels).
     private(set) var editorLabels: [String: String] = [:]
 
+    /// Maps section names to bespoke editor panel view identifiers.
+    private(set) var editorPanels: [String: String] = [:]
+
     /// The first content section name (for default selection).
     var firstContentSection: String? {
         // Find first section that's not transparent (its children are promoted instead)
@@ -72,6 +75,13 @@ final class ResumeDetailVM {
         transparentKeys.contains(key)
     }
 
+    /// Look up a bespoke editor panel for a section name.
+    /// Handles promoted child format (e.g., "custom_jobTitles") by converting to dot notation.
+    func editorPanel(for sectionName: String) -> String? {
+        let dotName = sectionName.replacingOccurrences(of: "_", with: ".")
+        return editorPanels[dotName] ?? editorPanels[sectionName]
+    }
+
     // MARK: - Dependencies --------------------------------------------------
     private let exportCoordinator: ResumeExportCoordinator
     init(resume: Resume, exportCoordinator: ResumeExportCoordinator) {
@@ -87,6 +97,7 @@ final class ResumeDetailVM {
             keysInEditor = manifest.keysInEditor ?? []
             sectionOrder = manifest.sectionOrder
             editorLabels = manifest.editorLabels ?? [:]
+            editorPanels = manifest.editorPanels ?? [:]
         } else {
             sectionVisibilityDefaults = [:]
             sectionVisibilityLabels = [:]
@@ -95,6 +106,7 @@ final class ResumeDetailVM {
             keysInEditor = []
             sectionOrder = []
             editorLabels = [:]
+            editorPanels = [:]
         }
     }
     // MARK: - Intents -------------------------------------------------------

@@ -6,6 +6,7 @@
 //  Shows AI configuration button (icon) for sections that support AI review.
 //
 
+import AppKit
 import SwiftUI
 
 /// Information about a resume section for the dropdown
@@ -107,7 +108,7 @@ struct ResumeSectionDropdown: View {
 
 // MARK: - Section AI Mode Menu
 
-/// Left-click menu for configuring AI review modes at section level
+/// Left-click menu using native NSMenu for proper fly-out submenus
 private struct SectionAIModeMenu: View {
     let node: TreeNode
 
@@ -118,7 +119,6 @@ private struct SectionAIModeMenu: View {
         node.aiStatusChildren > 0
     }
 
-    /// Full icon resolution for this section node (may be dual for mixed modes)
     private var iconResolution: AIIconResolution {
         AIIconModeResolver.resolve(for: node)
     }
@@ -153,207 +153,270 @@ private struct SectionAIModeMenu: View {
         return firstChild.orderedChildren.isEmpty
     }
 
+    private var hasBundleAttrs: Bool {
+        node.bundledAttributes?.isEmpty == false
+    }
+
+    private var hasIterateAttrs: Bool {
+        node.enumeratedAttributes?.isEmpty == false
+    }
+
+    private var isBundleActive: Bool {
+        node.bundledAttributes?.contains("*") == true
+    }
+
+    private var isIterateActive: Bool {
+        node.enumeratedAttributes?.contains("*") == true
+    }
+
+    private enum CheckedMode {
+        case bundle, iterate
+    }
+
     var body: some View {
-        Menu {
-            if isScalarArrayCollection {
-                scalarCollectionMenu
-            } else {
-                objectCollectionMenu
+        if iconResolution.isDual {
+            HStack(spacing: 2) {
+                AIIconNativeMenuButton(mode: iconResolution.primary, showDropIndicator: true) {
+                    self.buildConfiguredMenu(checkedMode: .bundle)
+                }
+                if let secondary = iconResolution.secondary {
+                    AIIconNativeMenuButton(mode: secondary, showDropIndicator: true) {
+                        self.buildConfiguredMenu(checkedMode: .iterate)
+                    }
+                }
             }
-        } label: {
-            ResolvedAIIcon(resolution: iconResolution)
+        } else {
+            AIIconNativeMenuButton(mode: iconResolution.primary, showDropIndicator: true) {
+                if self.isScalarArrayCollection {
+                    return self.buildScalarMenu()
+                } else if self.hasAIConfig {
+                    let mode: CheckedMode = self.hasBundleAttrs ? .bundle : .iterate
+                    return self.buildConfiguredMenu(checkedMode: mode)
+                } else {
+                    return self.buildUnsetMenu()
+                }
+            }
         }
-        .menuStyle(.borderlessButton)
-        .menuIndicator(.hidden)
-        .help(hasAIConfig ? "Configure AI review" : "Enable AI review")
     }
 
-    // MARK: - Scalar Collection Menu
+    // MARK: - NSMenu Builders
 
-    @ViewBuilder
-    private var scalarCollectionMenu: some View {
-        Text("AI Review: \(node.displayLabel)")
-
-        Divider()
-
-        Button {
-            node.bundledAttributes = ["*"]
-            node.enumeratedAttributes = nil
-        } label: {
-            HStack {
-                Image(systemName: "circle.hexagongrid.circle")
-                    .foregroundColor(.purple)
-                Text("Bundle All - 1 review")
-                if node.bundledAttributes?.contains("*") == true {
-                    Image(systemName: "checkmark")
-                }
-            }
-        }
-
-        Button {
-            node.enumeratedAttributes = ["*"]
-            node.bundledAttributes = nil
-        } label: {
-            HStack {
-                Image(systemName: "film.stack")
-                    .foregroundColor(.indigo)
-                Text("Iterate - N reviews")
-                if node.enumeratedAttributes?.contains("*") == true {
-                    Image(systemName: "checkmark")
-                }
-            }
-        }
+    private func buildScalarMenu() -> NSMenu {
+        let menu = NSMenu()
 
         if hasAIConfig {
-            Divider()
-
-            Button(role: .destructive) {
+            menu.addItem(ActionMenuItem("Bundle All - 1 review", checked: isBundleActive) {
+                node.bundledAttributes = ["*"]
+                node.enumeratedAttributes = nil
+            })
+            menu.addItem(ActionMenuItem("Iterate - N reviews", checked: isIterateActive) {
+                node.enumeratedAttributes = ["*"]
+                node.bundledAttributes = nil
+            })
+            menu.addItem(.separator())
+            menu.addItem(ActionMenuItem("Clear AI Review") {
                 node.bundledAttributes = nil
                 node.enumeratedAttributes = nil
-            } label: {
-                Label("Disable AI Review", systemImage: "xmark.circle")
-            }
-        }
-    }
-
-    // MARK: - Object Collection Menu
-
-    @ViewBuilder
-    private var objectCollectionMenu: some View {
-        Text("AI Review: \(node.displayLabel)")
-
-        Divider()
-
-        // Bundle menu
-        Menu {
-            ForEach(availableAttributes, id: \.self) { attr in
-                bundleAttributeButton(attr: attr)
-            }
-        } label: {
-            HStack {
-                Image(systemName: "circle.hexagongrid.circle")
-                    .foregroundColor(.purple)
-                Text("Bundle - 1 review")
-            }
-        }
-
-        // Iterate menu
-        Menu {
-            ForEach(availableAttributes, id: \.self) { attr in
-                if isNestedArray(attr) {
-                    iterateNestedArraySubmenu(attr: attr)
-                } else {
-                    iterateScalarButton(attr: attr)
-                }
-            }
-        } label: {
-            HStack {
-                Image(systemName: "film.stack")
-                    .foregroundColor(.indigo)
-                Text("Iterate - N reviews")
-            }
-        }
-
-        if hasAIConfig {
-            Divider()
-
-            Button(role: .destructive) {
-                node.bundledAttributes = nil
+            })
+        } else {
+            menu.addItem(ActionMenuItem("Create Bundle") {
+                node.bundledAttributes = ["*"]
                 node.enumeratedAttributes = nil
-            } label: {
-                Label("Clear All AI Settings", systemImage: "xmark.circle")
-            }
+            })
+            menu.addItem(ActionMenuItem("Create Iterate") {
+                node.enumeratedAttributes = ["*"]
+                node.bundledAttributes = nil
+            })
         }
+
+        return menu
     }
 
-    // MARK: - Bundle Menu Items
+    /// Full menu for configured object collections.
+    /// Structure: Bundle▶, Iterate▶, separator, Create▶, separator, Clear [mode]
+    private func buildConfiguredMenu(checkedMode: CheckedMode) -> NSMenu {
+        let menu = NSMenu()
 
-    @ViewBuilder
-    private func bundleAttributeButton(attr: String) -> some View {
-        let isActive = isAttributeBundled(attr)
+        // Bundle ▶ → attribute submenu
+        let bundleItem = NSMenuItem(title: "Bundle", action: nil, keyEquivalent: "")
+        bundleItem.state = checkedMode == .bundle ? .on : .off
+        bundleItem.submenu = buildBundleAttributeSubmenu(parentChecked: checkedMode == .bundle)
+        menu.addItem(bundleItem)
 
-        Button {
-            if isActive {
-                removeFromBundledAttributes(attr)
+        // Iterate ▶ → attribute submenu
+        let iterateItem = NSMenuItem(title: "Iterate", action: nil, keyEquivalent: "")
+        iterateItem.state = checkedMode == .iterate ? .on : .off
+        iterateItem.submenu = buildIterateAttributeSubmenu(parentChecked: checkedMode == .iterate)
+        menu.addItem(iterateItem)
+
+        menu.addItem(.separator())
+
+        // Create ▶ → Bundle▶ / Iterate▶ sub-submenus
+        let createItem = NSMenuItem(title: "Create", action: nil, keyEquivalent: "")
+        createItem.submenu = buildCreateSubmenu()
+        menu.addItem(createItem)
+
+        menu.addItem(.separator())
+
+        // Clear [mode]
+        if checkedMode == .bundle {
+            menu.addItem(ActionMenuItem("Clear Bundle") {
+                node.bundledAttributes = nil
+            })
+        } else {
+            menu.addItem(ActionMenuItem("Clear Iterate") {
+                node.enumeratedAttributes = nil
+            })
+        }
+
+        return menu
+    }
+
+    /// Menu for unset object collections: Create Bundle▶ / Create Iterate▶
+    private func buildUnsetMenu() -> NSMenu {
+        let menu = NSMenu()
+
+        let createBundleItem = NSMenuItem(title: "Create Bundle", action: nil, keyEquivalent: "")
+        createBundleItem.submenu = buildBundleAttributeSubmenu(parentChecked: false)
+        menu.addItem(createBundleItem)
+
+        let createIterateItem = NSMenuItem(title: "Create Iterate", action: nil, keyEquivalent: "")
+        createIterateItem.submenu = buildIterateAttributeSubmenu(parentChecked: false)
+        menu.addItem(createIterateItem)
+
+        return menu
+    }
+
+    // MARK: - Attribute Submenus
+
+    /// Bundle attribute submenu: each attribute toggles in/out of bundledAttributes.
+    /// Nested arrays get a sub-submenu with the leaf label.
+    /// Checkmarks only shown when `parentChecked` is true (this mode is active).
+    private func buildBundleAttributeSubmenu(parentChecked: Bool) -> NSMenu {
+        let sub = NSMenu()
+
+        for attr in availableAttributes {
+            if isNestedArray(attr) {
+                let isActive = isAttributeBundled(attr)
+                let showCheck = parentChecked && isActive
+                let item = NSMenuItem(title: attr, action: nil, keyEquivalent: "")
+                item.state = showCheck ? .on : .off
+
+                let nested = NSMenu()
+                nested.addItem(ActionMenuItem(leafLabel(for: attr), checked: showCheck) {
+                    if isActive {
+                        removeFromBundledAttributes(attr)
+                    } else {
+                        removeFromEnumeratedAttributes(attr)
+                        removeFromEnumeratedAttributes(attr + "[]")
+                        addToBundledAttributes(attr)
+                    }
+                })
+                item.submenu = nested
+                sub.addItem(item)
             } else {
-                removeFromEnumeratedAttributes(attr)
-                removeFromEnumeratedAttributes(attr + "[]")
-                addToBundledAttributes(attr)
-            }
-        } label: {
-            HStack {
-                Text(attr)
-                if isActive { Image(systemName: "checkmark") }
+                let isActive = isAttributeBundled(attr)
+                let showCheck = parentChecked && isActive
+                sub.addItem(ActionMenuItem(attr, checked: showCheck) {
+                    if isActive {
+                        removeFromBundledAttributes(attr)
+                    } else {
+                        removeFromEnumeratedAttributes(attr)
+                        removeFromEnumeratedAttributes(attr + "[]")
+                        addToBundledAttributes(attr)
+                    }
+                })
             }
         }
+
+        return sub
     }
 
-    // MARK: - Iterate Menu Items
+    /// Iterate attribute submenu: scalar attributes toggle directly.
+    /// Nested arrays get a sub-submenu with Bundle▶/Iterate▶ options.
+    /// Checkmarks only shown when `parentChecked` is true (this mode is active).
+    private func buildIterateAttributeSubmenu(parentChecked: Bool) -> NSMenu {
+        let sub = NSMenu()
 
-    @ViewBuilder
-    private func iterateScalarButton(attr: String) -> some View {
-        let isActive = isAttributeIterated(attr)
+        for attr in availableAttributes {
+            if isNestedArray(attr) {
+                let attrWithSuffix = attr + "[]"
+                let isBundledPerEntry = isAttributeIterated(attr) && !isAttributeIterated(attrWithSuffix)
+                let isIteratedEach = isAttributeIterated(attrWithSuffix)
+                let isActive = isBundledPerEntry || isIteratedEach
+                let showCheck = parentChecked && isActive
+                let leaf = leafLabel(for: attr)
 
-        Button {
-            if isActive {
-                removeFromEnumeratedAttributes(attr)
+                let item = NSMenuItem(title: attr, action: nil, keyEquivalent: "")
+                item.state = showCheck ? .on : .off
+
+                let nested = NSMenu()
+
+                // Bundle ▶ → leaf
+                let showBundleCheck = showCheck && isBundledPerEntry
+                let bundleNested = NSMenuItem(title: "Bundle", action: nil, keyEquivalent: "")
+                bundleNested.state = showBundleCheck ? .on : .off
+                let bundleLeafMenu = NSMenu()
+                bundleLeafMenu.addItem(ActionMenuItem(leaf, checked: showBundleCheck) {
+                    removeAttributeFromBoth(attr)
+                    addToEnumeratedAttributes(attr)
+                })
+                bundleNested.submenu = bundleLeafMenu
+                nested.addItem(bundleNested)
+
+                // Iterate ▶ → leaf
+                let showIterateCheck = showCheck && isIteratedEach
+                let iterateNested = NSMenuItem(title: "Iterate", action: nil, keyEquivalent: "")
+                iterateNested.state = showIterateCheck ? .on : .off
+                let iterateLeafMenu = NSMenu()
+                iterateLeafMenu.addItem(ActionMenuItem(leaf, checked: showIterateCheck) {
+                    removeAttributeFromBoth(attr)
+                    addToEnumeratedAttributes(attrWithSuffix)
+                })
+                iterateNested.submenu = iterateLeafMenu
+                nested.addItem(iterateNested)
+
+                item.submenu = nested
+                sub.addItem(item)
             } else {
-                removeFromBundledAttributes(attr)
-                addToEnumeratedAttributes(attr)
-            }
-        } label: {
-            HStack {
-                Text(attr)
-                if isActive { Image(systemName: "checkmark") }
+                let isActive = isAttributeIterated(attr)
+                let showCheck = parentChecked && isActive
+                sub.addItem(ActionMenuItem(attr, checked: showCheck) {
+                    if isActive {
+                        removeFromEnumeratedAttributes(attr)
+                    } else {
+                        removeFromBundledAttributes(attr)
+                        addToEnumeratedAttributes(attr)
+                    }
+                })
             }
         }
+
+        return sub
     }
 
-    @ViewBuilder
-    private func iterateNestedArraySubmenu(attr: String) -> some View {
-        let attrWithSuffix = attr + "[]"
-        let isBundledPerEntry = isAttributeIterated(attr) && !isAttributeIterated(attrWithSuffix)
-        let isIteratedEach = isAttributeIterated(attrWithSuffix)
+    /// Create submenu with Bundle▶ and Iterate▶ sub-submenus
+    private func buildCreateSubmenu() -> NSMenu {
+        let menu = NSMenu()
 
-        Menu {
-            Button {
-                removeAttributeFromBoth(attr)
-                addToEnumeratedAttributes(attr)
-            } label: {
-                HStack {
-                    Image(systemName: "circle.hexagongrid.circle")
-                        .foregroundColor(.purple)
-                    Text("Bundle - N reviews")
-                    if isBundledPerEntry { Image(systemName: "checkmark") }
-                }
-            }
+        let bundleItem = NSMenuItem(title: "Bundle", action: nil, keyEquivalent: "")
+        bundleItem.submenu = buildBundleAttributeSubmenu(parentChecked: false)
+        menu.addItem(bundleItem)
 
-            Button {
-                removeAttributeFromBoth(attr)
-                addToEnumeratedAttributes(attrWithSuffix)
-            } label: {
-                HStack {
-                    Image(systemName: "film.stack")
-                        .foregroundColor(.indigo)
-                    Text("Iterate - N×M reviews")
-                    if isIteratedEach { Image(systemName: "checkmark") }
-                }
-            }
-        } label: {
-            HStack {
-                if isBundledPerEntry {
-                    Image(systemName: "circle.hexagongrid.circle")
-                        .foregroundColor(.purple)
-                } else if isIteratedEach {
-                    Image(systemName: "film.stack")
-                        .foregroundColor(.indigo)
-                } else {
-                    Image(systemName: "circle")
-                        .foregroundColor(.gray)
-                }
-                Text(attr)
-            }
+        let iterateItem = NSMenuItem(title: "Iterate", action: nil, keyEquivalent: "")
+        iterateItem.submenu = buildIterateAttributeSubmenu(parentChecked: false)
+        menu.addItem(iterateItem)
+
+        return menu
+    }
+
+    /// Simple singularization for leaf display labels (keywords → Keyword)
+    private func leafLabel(for attr: String) -> String {
+        let name = attr.titleCased
+        if name.hasSuffix("s") && !name.hasSuffix("ss") {
+            return String(name.dropLast())
         }
+        return name
     }
 
     // MARK: - Helpers

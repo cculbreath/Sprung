@@ -83,6 +83,7 @@ struct ResumeDetailView: View {
                     }
                     .padding(.top, 8)
                 }
+                .id(selectedSection)
 
                 Spacer(minLength: 0)
 
@@ -181,8 +182,10 @@ struct ResumeDetailView: View {
     /// Render the content of a section as scrollable cards (always expanded, no disclosure triangles)
     @ViewBuilder
     private func sectionContentView(_ sectionNode: TreeNode) -> some View {
-        // For sections with children (like work, skills), show children as cards
-        if !sectionNode.orderedChildren.isEmpty {
+        // Check for bespoke editor panel first
+        if let panel = vm.editorPanel(for: selectedSection) {
+            editorPanelView(panel, sectionNode: sectionNode)
+        } else if !sectionNode.orderedChildren.isEmpty {
             // Check for single-entry section with matching name (avoid redundant labels)
             if isSingleEntrySection(sectionNode) {
                 // Show single entry's content directly without card header
@@ -206,6 +209,32 @@ struct ResumeDetailView: View {
             // Section is a leaf (like summary) - show editor directly in a card
             LeafSectionCardView(node: sectionNode)
                 .padding(.horizontal, 8)
+        }
+    }
+
+    /// Route a named editor panel to its concrete view.
+    @ViewBuilder
+    private func editorPanelView(_ panelName: String, sectionNode: TreeNode) -> some View {
+        switch panelName {
+        case "jobTitlesPanel":
+            JobTitlesPanelView(sectionNode: sectionNode, sheets: $sheets)
+        default:
+            // Unknown panel — fall back to generic rendering
+            if !sectionNode.orderedChildren.isEmpty {
+                LazyVStack(spacing: 8) {
+                    ForEach(sectionNode.orderedChildren, id: \.id) { childNode in
+                        if childNode.orderedChildren.isEmpty {
+                            LeafEntryCardView(node: childNode, siblings: sectionNode.orderedChildren)
+                        } else {
+                            ResumeEntryCardView(node: childNode, depthOffset: 1)
+                        }
+                    }
+                }
+                .padding(.horizontal, 4)
+            } else {
+                LeafSectionCardView(node: sectionNode)
+                    .padding(.horizontal, 8)
+            }
         }
     }
 
@@ -251,44 +280,23 @@ struct ResumeDetailView: View {
 private struct LeafEntryCardView: View {
     let node: TreeNode
     let siblings: [TreeNode]
-    @Environment(ResumeDetailVM.self) private var vm: ResumeDetailVM
-
-    /// Get the icon mode for this leaf entry
-    private var iconMode: AIIconMode {
-        AIIconModeResolver.detectSingleMode(for: node)
-    }
 
     var body: some View {
         DraggableNodeWrapper(node: node, siblings: siblings) {
-            HStack(spacing: 12) {
-                // AI status icon
-                AIStatusIcon(
-                    mode: iconMode,
-                    onTap: { toggleSoloMode() }
+            // NodeLeafView already shows the AI status icon - don't duplicate
+            NodeLeafView(node: node)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+                .background(Color(.windowBackgroundColor).opacity(0.5))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(Color.primary.opacity(0.1), lineWidth: 1)
                 )
-
-                NodeLeafView(node: node)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-            .background(Color(.windowBackgroundColor).opacity(0.5))
-            .clipShape(RoundedRectangle(cornerRadius: 8))
-            .overlay(
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(Color.primary.opacity(0.1), lineWidth: 1)
-            )
-            .shadow(color: .black.opacity(0.05), radius: 2, x: 0, y: 1)
+                .shadow(color: .black.opacity(0.05), radius: 2, x: 0, y: 1)
         }
         .padding(.horizontal, 4)
-    }
-
-    private func toggleSoloMode() {
-        if node.status == .aiToReplace {
-            node.status = .saved
-        } else {
-            node.status = .aiToReplace
-        }
     }
 }
 
@@ -297,29 +305,15 @@ private struct LeafEntryCardView: View {
 /// Card view for a section that is itself a leaf (like summary)
 private struct LeafSectionCardView: View {
     let node: TreeNode
-    @Environment(ResumeDetailVM.self) private var vm: ResumeDetailVM
-
-    /// Get the icon mode for this leaf section
-    private var iconMode: AIIconMode {
-        AIIconModeResolver.detectSingleMode(for: node)
-    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text(node.displayLabel)
-                    .font(.subheadline.weight(.semibold))
-                Spacer()
-
-                // AI status icon
-                AIStatusIcon(
-                    mode: iconMode,
-                    onTap: { toggleSoloMode() }
-                )
-            }
+            Text(node.displayLabel)
+                .font(.subheadline.weight(.semibold))
 
             Divider()
 
+            // NodeLeafView shows both the AI icon and the editable content
             NodeLeafView(node: node)
         }
         .padding(12)
@@ -330,14 +324,6 @@ private struct LeafSectionCardView: View {
                 .stroke(Color.primary.opacity(0.1), lineWidth: 1)
         )
         .shadow(color: .black.opacity(0.05), radius: 2, x: 0, y: 1)
-    }
-
-    private func toggleSoloMode() {
-        if node.status == .aiToReplace {
-            node.status = .saved
-        } else {
-            node.status = .aiToReplace
-        }
     }
 }
 
@@ -357,24 +343,12 @@ private struct SingleEntrySectionView: View {
         entryNode?.status == .aiToReplace
     }
 
-    /// Get content nodes, filtering out redundant name fields
+    /// Get content nodes - show all children, let NodeLeafView handle display
     private var contentNodes: [TreeNode] {
         guard let entry = entryNode else { return [] }
-
-        // If entry has only one child that's a leaf, just show it
-        if entry.orderedChildren.count == 1,
-           let onlyField = entry.orderedChildren.first,
-           onlyField.orderedChildren.isEmpty {
-            return [onlyField]
-        }
-
-        // Otherwise filter out redundant name fields
-        let sectionLabel = sectionNode.displayLabel.lowercased()
-        return entry.orderedChildren.filter { child in
-            let childName = child.name.lowercased()
-            // Keep if it doesn't match section name
-            return !sectionLabel.contains(childName) && !childName.contains(sectionLabel)
-        }
+        // Return all children - no filtering needed
+        // NodeLeafView handles showing name/value appropriately
+        return entry.orderedChildren
     }
 
     var body: some View {

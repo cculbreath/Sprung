@@ -26,54 +26,27 @@ struct ResumeAIDrawer: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Top separator
-            Rectangle()
-                .fill(Color.primary.opacity(0.2))
-                .frame(height: 1)
-                .shadow(color: .black.opacity(0.2), radius: 2, x: 0, y: -1)
-
-            // Disclosure header
-            Button {
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    isExpanded.toggle()
-                }
-            } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(.secondary)
-                        .frame(width: 12)
-
-                    Text("AI Actions")
-                        .font(.subheadline.weight(.medium))
-                        .foregroundStyle(.primary)
-
-                    Spacer()
-
-                    // Revnode count (right aligned with label)
-                    if revnodeCount > 0 {
-                        HStack(spacing: 4) {
-                            Text("Review Items:")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                            HStack(spacing: 3) {
-                                Image(systemName: "sparkles")
-                                    .font(.system(size: 9))
-                                Text("\(revnodeCount)")
-                                    .font(.caption2.weight(.medium))
-                            }
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(Capsule().fill(Color.orange))
+            DrawerSectionHeader(
+                title: "AI Actions",
+                isExpanded: $isExpanded,
+                trailingContent: revnodeCount > 0 ? AnyView(
+                    HStack(spacing: 4) {
+                        Text("Review Items:")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        HStack(spacing: 3) {
+                            Image(systemName: "sparkles")
+                                .font(.system(size: 9))
+                            Text("\(revnodeCount)")
+                                .font(.caption2.weight(.medium))
                         }
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Capsule().fill(Color.orange))
                     }
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
+                ) : nil
+            )
 
             if isExpanded {
                 VStack(spacing: 10) {
@@ -124,7 +97,7 @@ struct ResumeAIDrawer: View {
                     }
                 }
                 .padding(.horizontal, 12)
-                .padding(.bottom, 10)
+                .padding(.vertical, 8)
                 .transition(.opacity.combined(with: .move(edge: .bottom)))
             }
         }
@@ -156,34 +129,7 @@ struct ResumeStylingDrawer: View {
                     .transition(.opacity)
             }
 
-            // Top separator
-            Rectangle()
-                .fill(Color.primary.opacity(0.15))
-                .frame(height: 1)
-
-            // Disclosure header
-            Button {
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    isExpanded.toggle()
-                }
-            } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(.secondary)
-                        .frame(width: 12)
-
-                    Text("Styling")
-                        .font(.subheadline.weight(.medium))
-                        .foregroundStyle(.primary)
-
-                    Spacer()
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
+            DrawerSectionHeader(title: "Styling", isExpanded: $isExpanded)
 
             if isExpanded {
                 ScrollView {
@@ -196,13 +142,75 @@ struct ResumeStylingDrawer: View {
                         }
                     }
                     .padding(.horizontal, 12)
-                    .padding(.bottom, 12)
+                    .padding(.vertical, 8)
                 }
                 .frame(height: drawerHeight)
                 .transition(.opacity.combined(with: .move(edge: .bottom)))
             }
         }
         .clipped()
+        .glassEffect(.regular, in: .rect(cornerRadius: 0))
+    }
+}
+
+// MARK: - Drawer Section Header
+
+/// Shared header component for collapsible drawer sections.
+/// Apple-style treatment: uppercase, tracked, subtle background tint.
+struct DrawerSectionHeader: View {
+    let title: String
+    @Binding var isExpanded: Bool
+    var badge: AnyView? = nil
+    var trailingContent: AnyView? = nil
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Top separator
+            Rectangle()
+                .fill(Color(.separatorColor))
+                .frame(height: 1)
+
+            // Disclosure header
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    isExpanded.toggle()
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(.tertiary)
+                        .frame(width: 12)
+
+                    Text(title.uppercased())
+                        .font(.system(size: 11, weight: .semibold))
+                        .tracking(0.5)
+                        .foregroundStyle(.secondary)
+
+                    if let badge {
+                        badge
+                    }
+
+                    Spacer()
+
+                    if let trailingContent {
+                        trailingContent
+                    }
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(Color.primary.opacity(0.06))
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            // Bottom separator (visible when expanded to distinguish header from content)
+            if isExpanded {
+                Rectangle()
+                    .fill(Color(.separatorColor))
+                    .frame(height: 1)
+            }
+        }
     }
 }
 
