@@ -230,8 +230,7 @@ class RevisionWorkflowOrchestrator {
             applicantProfile: context.applicantProfile,
             knowledgeCards: context.knowledgeCards,
             skills: context.skills,
-            writingSamples: context.writingSamples,
-            voicePrimer: context.voicePrimer,
+            writersVoice: context.writersVoice,
             dossier: context.dossier,
             titleSets: titleSetRecords,
             jobApp: resume.jobApp ?? JobApp()

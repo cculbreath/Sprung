@@ -86,6 +86,7 @@ class ResumeReviseViewModel {
         exportCoordinator: ResumeExportCoordinator,
         applicantProfileStore: ApplicantProfileStore,
         knowledgeCardStore: KnowledgeCardStore,
+        coverRefStore: CoverRefStore,
         guidanceStore: InferenceGuidanceStore? = nil,
         skillStore: SkillStore? = nil,
         titleSetStore: TitleSetStore? = nil,
@@ -114,7 +115,8 @@ class ResumeReviseViewModel {
             applicantProfileStore: applicantProfileStore,
             knowledgeCardStore: knowledgeCardStore,
             toolRunner: self.toolRunner,
-            guidanceStore: guidanceStore
+            guidanceStore: guidanceStore,
+            coverRefStore: coverRefStore
         )
 
         self.workflowOrchestrator = RevisionWorkflowOrchestrator(

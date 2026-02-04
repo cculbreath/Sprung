@@ -46,11 +46,8 @@ struct CustomizationContext {
     /// Title sets for professional identity guidance
     let titleSets: [TitleSet]
 
-    /// Writing samples for voice matching
-    let writingSamples: [CoverRef]
-
-    /// Voice primer if available (extracted voice characteristics)
-    let voicePrimer: CoverRef?
+    /// Pre-built voice context string from CoverRefStore.writersVoice
+    let writersVoice: String
 
     /// Strategic insights from job analysis
     let dossier: JSON?
@@ -62,30 +59,6 @@ struct CustomizationContext {
     var clarifyingQA: [(question: ClarifyingQuestion, answer: QuestionAnswer)]?
 
     // MARK: - Computed Properties
-
-    /// Returns voice guidance content suitable for prompts.
-    ///
-    /// Prioritizes voice primer content if available, otherwise returns
-    /// a summary of writing samples.
-    var voiceGuidance: String? {
-        // Prefer voice primer if available
-        if let primer = voicePrimer {
-            return primer.content
-        }
-
-        // Fall back to writing samples summary
-        guard !writingSamples.isEmpty else { return nil }
-
-        let sampleSummaries = writingSamples.prefix(3).map { sample in
-            "### \(sample.name)\n\(sample.content.prefix(500))..."
-        }
-
-        return """
-        ## Writing Samples
-
-        \(sampleSummaries.joined(separator: "\n\n"))
-        """
-    }
 
     /// Returns an array of canonical skill names from the skill bank.
     var skillBankList: [String] {
@@ -132,11 +105,6 @@ struct CustomizationContext {
         // Get approved knowledge cards
         let knowledgeCards = knowledgeCardStore.approvedCards
 
-        // Get writing samples and voice primer from cover refs
-        let allRefs = coverRefStore.storedCoverRefs
-        let writingSamples = allRefs.filter { $0.type == .writingSample }
-        let voicePrimer = allRefs.first { $0.type == .voicePrimer }
-
         // Get applicant profile
         let profile = applicantProfileStore.currentProfile()
         let profileDraft = ApplicantProfileDraft(profile: profile)
@@ -150,8 +118,7 @@ struct CustomizationContext {
             knowledgeCards: knowledgeCards,
             skills: approvedSkills,
             titleSets: titleSets,
-            writingSamples: writingSamples,
-            voicePrimer: voicePrimer,
+            writersVoice: coverRefStore.writersVoice,
             dossier: nil,  // Strategic insights can be populated separately if available
             jobDescription: jobDescription,
             clarifyingQA: nil

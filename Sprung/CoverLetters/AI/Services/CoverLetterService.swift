@@ -16,15 +16,18 @@ final class CoverLetterService {
     private let llmFacade: LLMFacade
     private let exportCoordinator: ResumeExportCoordinator
     private let applicantProfileStore: ApplicantProfileStore
+    private let coverRefStore: CoverRefStore
     // MARK: - Initialization
     init(
         llmFacade: LLMFacade,
         exportCoordinator: ResumeExportCoordinator,
-        applicantProfileStore: ApplicantProfileStore
+        applicantProfileStore: ApplicantProfileStore,
+        coverRefStore: CoverRefStore
     ) {
         self.llmFacade = llmFacade
         self.exportCoordinator = exportCoordinator
         self.applicantProfileStore = applicantProfileStore
+        self.coverRefStore = coverRefStore
     }
     // MARK: - Cover Letter Generation
     /// Generate a new cover letter from the toolbar (handles creation and management)
@@ -101,6 +104,7 @@ final class CoverLetterService {
             jobApp: jobApp,
             exportCoordinator: exportCoordinator,
             applicantProfile: applicantProfileStore.currentProfile(),
+            writersVoice: coverRefStore.writersVoice,
             saveDebugPrompt: UserDefaults.standard.bool(forKey: "saveDebugPrompts")
         )
         // Build system and user prompts
@@ -165,6 +169,7 @@ final class CoverLetterService {
             jobApp: jobApp,
             exportCoordinator: exportCoordinator,
             applicantProfile: applicantProfileStore.currentProfile(),
+            writersVoice: coverRefStore.writersVoice,
             saveDebugPrompt: UserDefaults.standard.bool(forKey: "saveDebugPrompts")
         )
         // Build user message for revision

@@ -8,6 +8,11 @@ struct KnowledgeCardsBrowserTab: View {
     let onCardDeleted: (KnowledgeCard) -> Void
     let onCardAdded: (KnowledgeCard) -> Void
     let llmFacade: LLMFacade?
+    var onNavigateToWritingSamples: (() -> Void)?
+
+    @Environment(ArtifactRecordStore.self) private var artifactRecordStore
+    @Environment(SkillStore.self) private var skillStore
+    @Environment(CoverRefStore.self) private var coverRefStore
 
     @State private var selectedFilter: CardTypeFilter = .all
     @State private var searchText = ""
@@ -16,6 +21,8 @@ struct KnowledgeCardsBrowserTab: View {
     @State private var cardToDelete: KnowledgeCard?
     @State private var showAddSheet = false
     @State private var showIngestionSheet = false
+    @State private var showVoicePrompt = false
+    @State private var pipelineCoordinator: StandaloneKCCoordinator?
 
     enum CardTypeFilter: String, CaseIterable {
         case all = "All"
@@ -60,26 +67,48 @@ struct KnowledgeCardsBrowserTab: View {
         return result
     }
 
+    /// Cards that haven't been enriched with structured facts yet
+    private var unEnrichedCards: [KnowledgeCard] {
+        cards.filter { $0.factsJSON == nil && !$0.narrative.isEmpty }
+    }
+
     var body: some View {
-        CoverflowBrowser(
-            items: .init(
-                get: { filteredCards },
-                set: { _ in }  // Read-only binding for filtered view
-            ),
-            cardWidth: 520,
-            cardHeight: 500,
-            accentColor: .purple
-        ) { card, isTopCard in
-            // Card content
-            KnowledgeCardView(
-                card: card,
-                isTopCard: isTopCard,
-                onEdit: { editingCard = card },
-                onDelete: { cardToDelete = card; showDeleteConfirmation = true }
-            )
-        } filterContent: { currentIndex in
-            // Filter bar
-            filterBar(currentIndex: currentIndex)
+        ZStack {
+            CoverflowBrowser(
+                items: .init(
+                    get: { filteredCards },
+                    set: { _ in }  // Read-only binding for filtered view
+                ),
+                cardWidth: 520,
+                cardHeight: 500,
+                accentColor: .purple
+            ) { card, isTopCard in
+                // Card content
+                KnowledgeCardView(
+                    card: card,
+                    isTopCard: isTopCard,
+                    onEdit: { editingCard = card },
+                    onDelete: { cardToDelete = card; showDeleteConfirmation = true }
+                )
+            } filterContent: { currentIndex in
+                // Filter bar
+                filterBar(currentIndex: currentIndex)
+            }
+
+            // Pipeline progress overlay
+            if let coordinator = pipelineCoordinator, coordinator.status.isProcessing {
+                pipelineProgressOverlay(coordinator.status)
+            }
+        }
+        .onAppear {
+            if pipelineCoordinator == nil {
+                pipelineCoordinator = StandaloneKCCoordinator(
+                    llmFacade: llmFacade,
+                    knowledgeCardStore: knowledgeCardStore,
+                    artifactRecordStore: artifactRecordStore,
+                    skillStore: skillStore
+                )
+            }
         }
         .sheet(item: $editingCard) { card in
             KnowledgeCardEditSheet(
@@ -113,9 +142,22 @@ struct KnowledgeCardsBrowserTab: View {
         } message: { card in
             Text("Delete \"\(card.title)\"? This cannot be undone.")
         }
+        .alert("Writing Voice", isPresented: $showVoicePrompt) {
+            Button("Go to Writing Samples") {
+                onNavigateToWritingSamples?()
+            }
+            Button("Continue with Default Voice") {
+                startEnrichment(includeWritingSamples: false)
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Enrichment produces better output when calibrated to your writing voice. Upload writing samples first?")
+        }
         .onChange(of: selectedFilter) { _, _ in }  // Index reset handled by CoverflowBrowser
         .onChange(of: searchText) { _, _ in }
     }
+
+    // MARK: - Filter Bar
 
     private func filterBar(currentIndex: Binding<Int>) -> some View {
         HStack(spacing: 8) {
@@ -147,13 +189,19 @@ struct KnowledgeCardsBrowserTab: View {
 
             Spacer()
 
+            // Pipeline operation buttons
+            pipelineButtons
+
+            Divider()
+                .frame(height: 20)
+
             Button(action: { showIngestionSheet = true }) {
                 Label("Ingest", systemImage: "tray.and.arrow.down")
                     .font(.caption)
                     .foregroundStyle(.orange)
             }
             .buttonStyle(.plain)
-            .help("Ingest document to create knowledge cards")
+            .help("Ingest documents or git repos to create knowledge cards")
 
             Button(action: { showAddSheet = true }) {
                 Label("New", systemImage: "plus.circle.fill")
@@ -166,6 +214,105 @@ struct KnowledgeCardsBrowserTab: View {
         .padding(.vertical, 8)
         .background(Color(nsColor: .controlBackgroundColor).opacity(0.5))
     }
+
+    // MARK: - Pipeline Buttons
+
+    @ViewBuilder
+    private var pipelineButtons: some View {
+        let isProcessing = pipelineCoordinator?.status.isProcessing == true
+        let enrichCount = unEnrichedCards.count
+
+        Button(action: runEnrichment) {
+            HStack(spacing: 4) {
+                Image(systemName: "sparkles")
+                Text("Enrich")
+                if enrichCount > 0 {
+                    Text("\(enrichCount)")
+                        .font(.caption2.weight(.semibold))
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 1)
+                        .background(Capsule().fill(Color.blue.opacity(0.2)))
+                }
+            }
+            .font(.caption)
+            .foregroundStyle(.blue)
+        }
+        .buttonStyle(.plain)
+        .disabled(enrichCount == 0 || isProcessing)
+        .help("Extract structured facts and generate prose summaries for \(enrichCount) card\(enrichCount == 1 ? "" : "s")")
+
+        Button(action: runMerge) {
+            HStack(spacing: 4) {
+                Image(systemName: "arrow.triangle.merge")
+                Text("Merge")
+            }
+            .font(.caption)
+            .foregroundStyle(.green)
+        }
+        .buttonStyle(.plain)
+        .disabled(cards.count < 2 || isProcessing)
+        .help("Merge similar cards using AI-powered deduplication")
+    }
+
+    // MARK: - Pipeline Actions
+
+    private var hasWritingSamples: Bool {
+        coverRefStore.storedCoverRefs.contains { $0.type == .writingSample }
+    }
+
+    private func runEnrichment() {
+        // Check if writing samples exist; if not, prompt the user
+        if hasWritingSamples {
+            startEnrichment(includeWritingSamples: true)
+        } else {
+            showVoicePrompt = true
+        }
+    }
+
+    private func startEnrichment(includeWritingSamples: Bool) {
+        guard let coordinator = pipelineCoordinator else { return }
+        let cardsToEnrich = unEnrichedCards
+        let voice = coverRefStore.writersVoice
+        let samples: String? = includeWritingSamples && !voice.isEmpty
+            ? voice
+            : nil
+
+        Task {
+            do {
+                let count = try await coordinator.enrichCards(cardsToEnrich, writingSamples: samples)
+                Logger.info("Pipeline: Enriched \(count) cards", category: .ai)
+            } catch {
+                Logger.error("Pipeline: Enrichment failed - \(error.localizedDescription)", category: .ai)
+            }
+        }
+    }
+
+    private func runMerge() {
+        guard let coordinator = pipelineCoordinator else { return }
+        let allCards = Array(cards)
+
+        Task {
+            do {
+                let (merged, remaining) = try await coordinator.mergeCards(allCards)
+                Logger.info("Pipeline: Merged \(merged) cards, \(remaining) remaining", category: .ai)
+            } catch {
+                Logger.error("Pipeline: Merge failed - \(error.localizedDescription)", category: .ai)
+            }
+        }
+    }
+
+    // MARK: - Progress Overlay
+
+    private func pipelineProgressOverlay(_ status: StandaloneKCCoordinator.Status) -> some View {
+        AnimatedThinkingText(statusMessage: status.displayText)
+            .padding(24)
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
+            .shadow(radius: 10)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Color.black.opacity(0.1))
+    }
+
+    // MARK: - Filter Chips
 
     private func filterChip(_ filter: CardTypeFilter) -> some View {
         let isSelected = selectedFilter == filter

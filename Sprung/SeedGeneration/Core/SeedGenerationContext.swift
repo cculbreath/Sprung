@@ -25,11 +25,8 @@ struct SeedGenerationContext {
     /// Skills from the skill bank
     let skills: [Skill]
 
-    /// Writing samples for voice/style guidance
-    let writingSamples: [CoverRef]
-
-    /// Voice primer for style guidance (if available)
-    let voicePrimer: CoverRef?
+    /// Pre-built voice context string from CoverRefStore.writersVoice
+    let writersVoice: String
 
     /// Candidate dossier with strategic insights (if available)
     let dossier: JSON?
@@ -187,22 +184,6 @@ struct SeedGenerationContext {
         }
     }
 
-    // MARK: - Voice/Style Guidance
-
-    /// Get voice primer content for LLM context
-    var voiceGuidance: String? {
-        if let primer = voicePrimer {
-            return primer.content
-        }
-        // Fall back to writing samples summary
-        if !writingSamples.isEmpty {
-            return writingSamples
-                .map { "Sample: \($0.name)\n\($0.content.prefix(500))..." }
-                .joined(separator: "\n\n")
-        }
-        return nil
-    }
-
     // MARK: - Private Helpers
 
     private func datesOverlap(
@@ -246,8 +227,7 @@ extension SeedGenerationContext {
         from artifacts: OnboardingArtifacts,
         knowledgeCards: [KnowledgeCard],
         skills: [Skill],
-        writingSamples: [CoverRef],
-        voicePrimer: CoverRef?,
+        writersVoice: String,
         dossier: JSON?,
         titleSets: [TitleSetRecord]
     ) -> SeedGenerationContext {
@@ -269,8 +249,7 @@ extension SeedGenerationContext {
             sectionConfig: sectionConfig,
             knowledgeCards: knowledgeCards,
             skills: skills,
-            writingSamples: writingSamples.filter { $0.type == .writingSample },
-            voicePrimer: voicePrimer,
+            writersVoice: writersVoice,
             dossier: dossier,
             titleSets: titleSets
         )
@@ -282,8 +261,7 @@ extension SeedGenerationContext {
         applicantProfile: ApplicantProfileDraft,
         knowledgeCards: [KnowledgeCard],
         skills: [Skill],
-        writingSamples: [CoverRef],
-        voicePrimer: CoverRef?,
+        writersVoice: String,
         dossier: JSON?,
         titleSets: [TitleSetRecord]
     ) -> SeedGenerationContext {
@@ -316,8 +294,7 @@ extension SeedGenerationContext {
             sectionConfig: sectionConfig,
             knowledgeCards: knowledgeCards,
             skills: skills,
-            writingSamples: writingSamples.filter { $0.type == .writingSample },
-            voicePrimer: voicePrimer,
+            writersVoice: writersVoice,
             dossier: dossier,
             titleSets: titleSets
         )

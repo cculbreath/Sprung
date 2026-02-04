@@ -36,6 +36,7 @@ class MultiModelCoverLetterService {
     private var modelContext: ModelContext?
     private var exportCoordinator: ResumeExportCoordinator?
     private var applicantProfileStore: ApplicantProfileStore?
+    private var coverRefStore: CoverRefStore?
     // MARK: - Initialization
     init() {}
     func configure(
@@ -45,7 +46,8 @@ class MultiModelCoverLetterService {
         enabledLLMStore: EnabledLLMStore,
         llmFacade: LLMFacade,
         exportCoordinator: ResumeExportCoordinator,
-        applicantProfileStore: ApplicantProfileStore
+        applicantProfileStore: ApplicantProfileStore,
+        coverRefStore: CoverRefStore
     ) {
         self.appState = appState
         self.jobAppStore = jobAppStore
@@ -55,6 +57,7 @@ class MultiModelCoverLetterService {
         self.llmFacade = llmFacade
         self.exportCoordinator = exportCoordinator
         self.applicantProfileStore = applicantProfileStore
+        self.coverRefStore = coverRefStore
         summaryGenerator.configure(llmFacade: llmFacade)
     }
     // MARK: - Public Methods
@@ -203,7 +206,6 @@ class MultiModelCoverLetterService {
             await setError("No job application selected")
             return nil
         }
-        _ = coverLetter.writingSamplesString
         guard let resume = jobApp.selectedRes else {
             await setError("No resume selected for this job application")
             return nil
@@ -222,6 +224,7 @@ class MultiModelCoverLetterService {
             jobApp: jobApp,
             exportCoordinator: exportCoordinator,
             applicantProfile: applicantProfileStore.currentProfile(),
+            writersVoice: coverRefStore?.writersVoice ?? "",
             saveDebugPrompt: UserDefaults.standard.bool(forKey: "saveDebugPrompts")
         )
         return (jobApp, query, jobApp.coverLetters)

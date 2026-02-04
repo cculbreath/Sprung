@@ -7,18 +7,21 @@ class BatchCoverLetterGenerator {
     private let coverLetterService: CoverLetterService
     private let exportCoordinator: ResumeExportCoordinator
     private let applicantProfileStore: ApplicantProfileStore
+    private let coverRefStore: CoverRefStore
     init(
         coverLetterStore: CoverLetterStore,
         llmFacade: LLMFacade,
         coverLetterService: CoverLetterService,
         exportCoordinator: ResumeExportCoordinator,
-        applicantProfileStore: ApplicantProfileStore
+        applicantProfileStore: ApplicantProfileStore,
+        coverRefStore: CoverRefStore
     ) {
         self.coverLetterStore = coverLetterStore
         self.llmFacade = llmFacade
         self.coverLetterService = coverLetterService
         self.exportCoordinator = exportCoordinator
         self.applicantProfileStore = applicantProfileStore
+        self.coverRefStore = coverRefStore
     }
     private func executeText(_ prompt: String, modelId: String) async throws -> String {
         return try await llmFacade.executeText(prompt: prompt, modelId: modelId, temperature: nil)
@@ -281,6 +284,7 @@ class BatchCoverLetterGenerator {
                 jobApp: jobApp,
                 exportCoordinator: exportCoordinator,
                 applicantProfile: applicantProfile,
+                writersVoice: coverRefStore.writersVoice,
                 saveDebugPrompt: UserDefaults.standard.bool(forKey: "saveDebugPrompts")
             )
             let userMessage = await query.revisionPrompt(
@@ -312,6 +316,7 @@ class BatchCoverLetterGenerator {
                 jobApp: jobApp,
                 exportCoordinator: exportCoordinator,
                 applicantProfile: applicantProfile,
+                writersVoice: coverRefStore.writersVoice,
                 saveDebugPrompt: UserDefaults.standard.bool(forKey: "saveDebugPrompts")
             )
             let systemPrompt = query.systemPrompt(for: model)

@@ -14,6 +14,7 @@ struct BatchCoverLetterView: View {
     @Environment(AppEnvironment.self) private var appEnvironment: AppEnvironment
     @Environment(OpenRouterService.self) private var openRouterService: OpenRouterService
     @Environment(ApplicantProfileStore.self) private var applicantProfileStore: ApplicantProfileStore
+    @Environment(CoverRefStore.self) private var coverRefStore: CoverRefStore
     // Live SwiftData query to automatically refresh on model changes
     @Query(sort: \CoverRef.name) private var allCoverRefs: [CoverRef]
     @State private var mode: BatchMode = .generate
@@ -328,7 +329,8 @@ struct BatchCoverLetterView: View {
                 llmFacade: llmFacade,
                 coverLetterService: coverLetterService,
                 exportCoordinator: appEnvironment.resumeExportCoordinator,
-                applicantProfileStore: applicantProfileStore
+                applicantProfileStore: applicantProfileStore,
+                coverRefStore: coverRefStore
             )
             do {
                 if mode == .generate {

@@ -23,11 +23,8 @@ struct CustomizationPromptContext {
     /// Skills from the skill bank
     let skills: [Skill]
 
-    /// Writing samples for voice/style guidance
-    let writingSamples: [CoverRef]
-
-    /// Voice primer for style guidance (if available)
-    let voicePrimer: CoverRef?
+    /// Pre-built voice context string from CoverRefStore.writersVoice
+    let writersVoice: String
 
     /// Candidate dossier with strategic insights (if available)
     let dossier: JSON?
@@ -80,8 +77,8 @@ final class CustomizationPromptCacheService {
         sections.append(buildProfileSection(context.applicantProfile))
 
         // 3. Voice and style guidelines
-        if !context.writingSamples.isEmpty || context.voicePrimer != nil {
-            sections.append(buildVoiceSection(context.writingSamples, voicePrimer: context.voicePrimer))
+        if !context.writersVoice.isEmpty {
+            sections.append(context.writersVoice)
         }
 
         // 4. Knowledge card summaries
@@ -293,79 +290,6 @@ final class CustomizationPromptCacheService {
 
         if !profile.summary.isEmpty {
             lines.append("\n**Professional Summary:**\n\(profile.summary)")
-        }
-
-        return lines.joined(separator: "\n")
-    }
-
-    private func buildVoiceSection(_ writingSamples: [CoverRef], voicePrimer: CoverRef?) -> String {
-        var lines = ["## Voice & Style Reference"]
-
-        // Include structured voice primer analysis if available
-        if let primer = voicePrimer, let analysis = primer.voicePrimer {
-            lines.append("""
-
-                ### Analyzed Voice Characteristics
-
-                The following voice profile was extracted from the candidate's writing samples.
-                Generated content MUST match these characteristics.
-                """)
-
-            if let tone = analysis["tone"]["description"].string, !tone.isEmpty {
-                lines.append("**Tone:** \(tone)")
-            }
-            if let structure = analysis["structure"]["description"].string, !structure.isEmpty {
-                lines.append("**Sentence Structure:** \(structure)")
-            }
-            if let vocab = analysis["vocabulary"]["description"].string, !vocab.isEmpty {
-                lines.append("**Vocabulary:** \(vocab)")
-            }
-            if let rhetoric = analysis["rhetoric"]["description"].string, !rhetoric.isEmpty {
-                lines.append("**Rhetoric Style:** \(rhetoric)")
-            }
-
-            let strengths = analysis["markers"]["strengths"].arrayValue.compactMap { $0.string }
-            if !strengths.isEmpty {
-                lines.append("**Writing Strengths:** \(strengths.joined(separator: ", "))")
-            }
-
-            let quirks = analysis["markers"]["quirks"].arrayValue.compactMap { $0.string }
-            if !quirks.isEmpty {
-                lines.append("**Distinctive Traits:** \(quirks.joined(separator: ", "))")
-            }
-
-            let recommendations = analysis["markers"]["recommendations"].arrayValue.compactMap { $0.string }
-            if !recommendations.isEmpty {
-                lines.append("**Style Notes:** \(recommendations.joined(separator: "; "))")
-            }
-        }
-
-        // Include actual writing sample text for voice matching
-        if !writingSamples.isEmpty {
-            lines.append("""
-
-                ### Writing Samples (Full Text)
-
-                The following are actual writing samples from this candidate.
-                Study these carefully and match their:
-                - Vocabulary choices and technical terminology
-                - Sentence length and structure patterns
-                - Level of formality
-                - How they describe technical work
-                - How they frame achievements (narrative vs. metric-focused)
-                """)
-
-            for (index, sample) in writingSamples.prefix(3).enumerated() {
-                lines.append("")
-                lines.append("#### Sample \(index + 1): \(sample.name)")
-                lines.append("")
-                lines.append(sample.content)
-            }
-
-            if writingSamples.count > 3 {
-                lines.append("")
-                lines.append("*(\(writingSamples.count - 3) additional samples available but omitted for context length)*")
-            }
         }
 
         return lines.joined(separator: "\n")
@@ -609,7 +533,7 @@ final class CustomizationPromptCacheService {
         hasher.combine(context.applicantProfile.email)
         hasher.combine(context.knowledgeCards.count)
         hasher.combine(context.skills.count)
-        hasher.combine(context.writingSamples.count)
+        hasher.combine(context.writersVoice)
         hasher.combine(context.titleSets.count)
         hasher.combine(context.jobApp.id)
         hasher.combine(clarifyingQA.count)

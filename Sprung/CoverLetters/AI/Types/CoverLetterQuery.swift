@@ -159,9 +159,7 @@ struct BestCoverLetterResponse: Codable {
             return bgrefs.map { $0.title + ":\n" + $0.narrative + "\n\n" }.joined()
         }
     }
-    var writingSamples: String {
-        return coverLetter.writingSamplesString
-    }
+    let writersVoice: String
     private func truncateContext(_ string: String, maxBytes: Int) -> String {
         var count = 0
         var index = string.startIndex
@@ -189,11 +187,13 @@ struct BestCoverLetterResponse: Codable {
         jobApp: JobApp,
         exportCoordinator: ResumeExportCoordinator,
         applicantProfile: ApplicantProfile,
+        writersVoice: String,
         saveDebugPrompt: Bool = false
     ) {
         self.coverLetter = coverLetter
         self.resume = resume
         self.jobApp = jobApp
+        self.writersVoice = writersVoice
         self.saveDebugPrompt = saveDebugPrompt
         self.exportCoordinator = exportCoordinator
         applicant = Applicant(profile: applicantProfile)
@@ -231,7 +231,7 @@ struct BestCoverLetterResponse: Codable {
         \(backgroundDocs)
         """ : "")
         WRITING STYLE REFERENCE:
-        \(writingSamples)
+        \(writersVoice)
         INSTRUCTIONS:
         - Write a personalized cover letter that aligns with the job requirements
         - Reflect the candidate's authentic voice based on the writing samples
@@ -271,6 +271,7 @@ struct BestCoverLetterResponse: Codable {
                 resume: resume,
                 mode: .rewrite,
                 applicant: applicant,
+                writersVoice: writersVoice,
                 customFeedbackString: feedback
             )
         }
@@ -296,7 +297,7 @@ struct BestCoverLetterResponse: Codable {
         - Company: \(jobApp.companyName)
         - Job Description: \(jobApp.jobDescription)
         Writing Samples (Candidate's Style):
-        \(writingSamples)
+        \(writersVoice)
         Cover Letters to Evaluate:
         """
         for letter in coverLetters {

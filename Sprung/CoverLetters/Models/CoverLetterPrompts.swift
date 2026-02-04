@@ -29,6 +29,7 @@ enum CoverLetterPrompts {
         resume: Resume,
         mode: CoverAiMode,
         applicant: Applicant,
+        writersVoice: String,
         customFeedbackString: String? = ""
     ) -> String {
         let app = coverLetter.jobApp
@@ -75,7 +76,7 @@ enum CoverLetterPrompts {
             \(applicant.name) has also included writing samples from cover letters they wrote for earlier applications that they are particularly satisfied with. \
             These samples demonstrate \(applicant.name)'s preferred writing style and voice that should be emulated:
             **WRITING SAMPLES TO EMULATE:**
-            \(coverLetter.writingSamplesString)
+            \(writersVoice)
             """
             if coverLetter.includeResumeRefs {
                 prompt += """
@@ -105,7 +106,7 @@ enum CoverLetterPrompts {
                     \(applicant.name) has also included writing samples from cover letters they wrote for earlier applications that they are particularly satisfied with. \
                     These samples demonstrate \(applicant.name)'s preferred writing style and voice that should be emulated:
                     **WRITING SAMPLES TO EMULATE:**
-                    \(coverLetter.writingSamplesString)
+                    \(writersVoice)
                     **REVISION INSTRUCTIONS:**
                     \(coverLetter.editorPrompt.rawValue)
                     **COVER LETTER INITIAL DRAFT:**

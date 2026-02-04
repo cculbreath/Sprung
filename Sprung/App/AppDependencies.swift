@@ -154,7 +154,8 @@ final class AppDependencies {
         let coverLetterService = CoverLetterService(
             llmFacade: llmFacade,
             exportCoordinator: resumeExportCoordinator,
-            applicantProfileStore: applicantProfileStore
+            applicantProfileStore: applicantProfileStore,
+            coverRefStore: coverRefStore
         )
         let resumeReviseViewModel = ResumeReviseViewModel(
             llmFacade: llmFacade,
@@ -163,6 +164,7 @@ final class AppDependencies {
             exportCoordinator: resumeExportCoordinator,
             applicantProfileStore: applicantProfileStore,
             knowledgeCardStore: knowledgeCardStore,
+            coverRefStore: coverRefStore,
             guidanceStore: guidanceStore,
             skillStore: skillStore,
             titleSetStore: titleSetStore

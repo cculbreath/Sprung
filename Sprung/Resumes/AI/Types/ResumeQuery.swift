@@ -382,7 +382,7 @@ import SwiftUI
     ///   - fieldPath: The field path pattern (e.g., "skills.*.name")
     ///   - nodes: The exported nodes to review
     ///   - isBundled: Whether all nodes are bundled into one review
-    ///   - coverRefs: Cover letter references for writing sample extraction (optional)
+    ///   - writersVoice: Pre-built voice context string (empty to skip)
     /// - Returns: The prompt string for the LLM
     @MainActor
     func phaseReviewPrompt(
@@ -391,7 +391,7 @@ import SwiftUI
         fieldPath: String,
         nodes: [ExportedReviewNode],
         isBundled: Bool,
-        coverRefs: [CoverRef] = []
+        writersVoice: String = ""
     ) async -> String {
         try? await exportCoordinator.ensureFreshRenderedText(for: res)
 
@@ -414,9 +414,9 @@ import SwiftUI
         // Check if we have preprocessed data for v2 template
         let hasPreprocessedData = res.jobApp?.hasPreprocessingComplete ?? false
 
-        if hasPreprocessedData && !coverRefs.isEmpty {
+        if hasPreprocessedData && !writersVoice.isEmpty {
             // Use v2 template with structured requirements and voice context
-            let voiceContext = coverRefs.voiceContextForPrompt(maxSamples: 2)
+            let voiceContext = writersVoice
             let extractedRequirements = res.jobApp?.extractedRequirements
             let formattedRequirements = formatRequirementsForPrompt(
                 extractedRequirements,
@@ -468,6 +468,11 @@ import SwiftUI
             "section": section,
             "isBundled": String(isBundled)
         ])
+
+        // Inject voice context if available
+        if !writersVoice.isEmpty {
+            prompt += "\n\n" + writersVoice
+        }
 
         // Inject inference guidance if available
         prompt = injectGuidance(into: prompt, for: section, fieldPath: fieldPath)

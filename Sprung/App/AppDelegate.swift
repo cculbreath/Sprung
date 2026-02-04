@@ -729,24 +729,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Get knowledge cards from onboarding
         let knowledgeCards = coordinator.getKnowledgeCardStore().onboardingCards
 
-        // Get writing samples from CoverRefStore (filter by type)
-        let allCoverRefs = coverRefStore?.storedCoverRefs ?? []
-        let writingSamples = allCoverRefs.filter { $0.type == .writingSample }
-        let voicePrimer = allCoverRefs.first { $0.type == .voicePrimer }
-
         // Get title sets from library for LLM selection
         let titleSets = titleSetStore?.allTitleSets ?? []
-
-        // Dossier is not used in current SGM implementation
-        // Future: Could get from CandidateDossierStore if needed
 
         return SeedGenerationContext.build(
             from: defaults,
             applicantProfile: applicantProfile,
             knowledgeCards: knowledgeCards,
             skills: skillStore.skills,
-            writingSamples: writingSamples,
-            voicePrimer: voicePrimer,
+            writersVoice: coverRefStore?.writersVoice ?? "",
             dossier: nil,
             titleSets: titleSets
         )

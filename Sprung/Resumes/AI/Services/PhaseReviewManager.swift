@@ -122,6 +122,7 @@ class PhaseReviewManager {
     private let knowledgeCardStore: KnowledgeCardStore
     private let toolRunner: ToolConversationRunner
     private let guidanceStore: InferenceGuidanceStore?
+    private let coverRefStore: CoverRefStore
     weak var delegate: PhaseReviewDelegate?
 
     // MARK: - Phase Review State
@@ -141,7 +142,8 @@ class PhaseReviewManager {
         applicantProfileStore: ApplicantProfileStore,
         knowledgeCardStore: KnowledgeCardStore,
         toolRunner: ToolConversationRunner,
-        guidanceStore: InferenceGuidanceStore? = nil
+        guidanceStore: InferenceGuidanceStore? = nil,
+        coverRefStore: CoverRefStore
     ) {
         self.llm = llm
         self.openRouterService = openRouterService
@@ -152,6 +154,7 @@ class PhaseReviewManager {
         self.knowledgeCardStore = knowledgeCardStore
         self.toolRunner = toolRunner
         self.guidanceStore = guidanceStore
+        self.coverRefStore = coverRefStore
     }
 
     // MARK: - Tool Response Parsing
@@ -443,7 +446,8 @@ class PhaseReviewManager {
                 phaseNumber: roundNumber,
                 fieldPath: "*",
                 nodes: nodes,
-                isBundled: isBundledReview
+                isBundled: isBundledReview,
+                writersVoice: coverRefStore.writersVoice
             )
 
             let model = openRouterService.findModel(id: modelId)
@@ -655,7 +659,8 @@ class PhaseReviewManager {
                 phaseNumber: nextPhase.phase,
                 fieldPath: nextPhase.field,
                 nodes: exportedNodes,
-                isBundled: nextPhase.bundle
+                isBundled: nextPhase.bundle,
+                writersVoice: coverRefStore.writersVoice
             )
 
             let model = openRouterService.findModel(id: modelId)

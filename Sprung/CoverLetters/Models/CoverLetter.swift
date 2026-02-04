@@ -173,10 +173,6 @@ class CoverLetter: Identifiable, Hashable {
         return enabledRefs.filter { $0.type == CoverRefType.backgroundFact }
             .map { $0.content }.joined(separator: "\n\n")
     }
-    var writingSamplesString: String {
-        return enabledRefs.filter { $0.type == CoverRefType.writingSample }
-            .map { $0.content }.joined(separator: "\n\n")
-    }
     /// 1-based index of this cover letter within its job application (ordered by creation date)
     /// This remains dynamic and is used for assigning the *initial* "Option X" label.
     var sequenceNumber: Int {
