@@ -18,6 +18,11 @@ test_*
 .ignore
 .gitignore
 .geminiignore
+.compile
+.arch-spec.md
+.gourceignore
+.gourceinclude
+.swiftlint.yml
 plans.md
 
 # Private assets and notes (relocated outside the repo)
