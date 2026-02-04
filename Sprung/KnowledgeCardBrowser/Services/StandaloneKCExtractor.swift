@@ -15,11 +15,20 @@ class StandaloneKCExtractor {
     // MARK: - Dependencies
 
     private var extractionService: DocumentExtractionService?
+    private weak var llmFacade: LLMFacade?
     private weak var artifactRecordStore: ArtifactRecordStore?
+
+    // MARK: - Pre-analyzed Results (from GitAnalysisAgent)
+
+    /// Knowledge cards produced directly by GitAnalysisAgent, bypassing the analyzer step.
+    private(set) var gitAnalyzedCards: [KnowledgeCard] = []
+    /// Skills produced directly by GitAnalysisAgent.
+    private(set) var gitAnalyzedSkills: [Skill] = []
 
     // MARK: - Initialization
 
     init(llmFacade: LLMFacade?, artifactRecordStore: ArtifactRecordStore?) {
+        self.llmFacade = llmFacade
         self.artifactRecordStore = artifactRecordStore
         self.extractionService = DocumentExtractionService(llmFacade: llmFacade, eventBus: nil)
     }
@@ -37,6 +46,10 @@ class StandaloneKCExtractor {
     ) async throws -> [JSON] {
         var artifacts: [JSON] = []
         let total = sources.count
+
+        // Reset pre-analyzed results from previous runs
+        gitAnalyzedCards = []
+        gitAnalyzedSkills = []
 
         for (index, url) in sources.enumerated() {
             let filename = url.lastPathComponent
@@ -170,110 +183,68 @@ class StandaloneKCExtractor {
     }
 
     private func extractGitRepository(_ url: URL) async throws -> JSON {
-        // For git repos, we do a simpler analysis without the full GitIngestionKernel
-        // to avoid heavy dependencies. We extract basic repo info and file structure.
+        guard let facade = llmFacade else {
+            throw StandaloneKCError.llmNotConfigured
+        }
+
         let repoName = url.lastPathComponent
 
-        // Get basic git info
-        let gitInfo = try await gatherGitInfo(url)
+        // Validate model is configured
+        guard let modelId = UserDefaults.standard.string(forKey: "onboardingGitIngestModelId"),
+              !modelId.isEmpty else {
+            throw ModelConfigurationError.modelNotConfigured(
+                settingKey: "onboardingGitIngestModelId",
+                operationName: "Git Repository Analysis"
+            )
+        }
+
+        Logger.info("StandaloneKCExtractor: Running GitAnalysisAgent on \(repoName) with model \(modelId)", category: .ai)
+
+        // Run the full GitAnalysisAgent
+        let agent = GitAnalysisAgent(
+            repoPath: url,
+            modelId: modelId,
+            facade: facade
+        )
+        let result = try await agent.run()
+
+        // Accumulate pre-analyzed cards and skills (these bypass the analyzer)
+        gitAnalyzedCards.append(contentsOf: result.narrativeCards)
+        gitAnalyzedSkills.append(contentsOf: result.skills)
+
+        Logger.info("StandaloneKCExtractor: GitAnalysisAgent produced \(result.narrativeCards.count) cards, \(result.skills.count) skills from \(repoName)", category: .ai)
+
+        // Build a summary artifact JSON for persistence/archiving
+        let cardSummaries = result.narrativeCards.map { $0.title }.joined(separator: ", ")
+        let skillNames = result.skills.map { $0.canonical }.joined(separator: ", ")
+
+        let fullText = """
+        # Git Repository Analysis: \(repoName)
+
+        ## Knowledge Cards (\(result.narrativeCards.count))
+        \(cardSummaries)
+
+        ## Skills (\(result.skills.count))
+        \(skillNames)
+
+        Analyzed at: \(result.analyzedAt.formatted())
+        """
 
         var artifactJSON = JSON()
         artifactJSON["id"].string = UUID().uuidString
         artifactJSON["filename"].string = repoName
         artifactJSON["content_type"].string = "application/x-git"
         artifactJSON["source_type"].string = "git_repository"
-        artifactJSON["extracted_text"].string = gitInfo.fullText
-        artifactJSON["summary"].string = gitInfo.summary
+        artifactJSON["extracted_text"].string = fullText
+        artifactJSON["summary"].string = "Git repository \(repoName): \(result.narrativeCards.count) knowledge cards, \(result.skills.count) skills"
         artifactJSON["brief_description"].string = "Git repository: \(repoName)"
-
-        // Add summary metadata
         artifactJSON["summary_metadata"]["document_type"].string = "git_repository"
-        artifactJSON["summary_metadata"]["technologies"].arrayObject = gitInfo.technologies
 
-        // Persist to SwiftData as standalone artifact (session = nil, immediately archived)
+        // Persist to SwiftData as standalone artifact
         let artifactId = persistArtifactToSwiftData(artifactJSON)
-        artifactJSON["id"].string = artifactId  // Use the SwiftData ID
+        artifactJSON["id"].string = artifactId
 
         return artifactJSON
-    }
-
-    private struct GitInfo {
-        let summary: String
-        let fullText: String
-        let technologies: [String]
-    }
-
-    private func gatherGitInfo(_ repoURL: URL) async throws -> GitInfo {
-        let repoPath = repoURL.path
-        let repoName = repoURL.lastPathComponent
-
-        // Run git commands to gather info
-        let commitCount = try? await runGitCommand("git -C \"\(repoPath)\" rev-list --count HEAD")
-        let firstCommitDate = try? await runGitCommand("git -C \"\(repoPath)\" log --reverse --format=%cd --date=short | head -1")
-        let lastCommitDate = try? await runGitCommand("git -C \"\(repoPath)\" log -1 --format=%cd --date=short")
-
-        // Get file types (extensions)
-        let fileTypes = try? await runGitCommand("git -C \"\(repoPath)\" ls-files | sed 's/.*\\.//' | sort | uniq -c | sort -rn | head -10")
-
-        // Get recent commits
-        let recentCommits = try? await runGitCommand("git -C \"\(repoPath)\" log --oneline -20")
-
-        // Detect technologies from file extensions
-        var technologies: [String] = []
-        if let types = fileTypes {
-            if types.contains("swift") { technologies.append("Swift") }
-            if types.contains("py") { technologies.append("Python") }
-            if types.contains("js") || types.contains("ts") { technologies.append("JavaScript/TypeScript") }
-            if types.contains("go") { technologies.append("Go") }
-            if types.contains("rs") { technologies.append("Rust") }
-            if types.contains("java") { technologies.append("Java") }
-            if types.contains("kt") { technologies.append("Kotlin") }
-        }
-
-        let summary = """
-        Repository: \(repoName)
-        Commits: \(commitCount?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "unknown")
-        Period: \(firstCommitDate?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "?") to \(lastCommitDate?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "?")
-        Technologies: \(technologies.joined(separator: ", "))
-        """
-
-        let fullText = """
-        # Git Repository: \(repoName)
-
-        ## Overview
-        - Total commits: \(commitCount?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "unknown")
-        - First commit: \(firstCommitDate?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "unknown")
-        - Last commit: \(lastCommitDate?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "unknown")
-        - Primary technologies: \(technologies.joined(separator: ", "))
-
-        ## File Type Distribution
-        \(fileTypes ?? "Unable to determine")
-
-        ## Recent Commits
-        \(recentCommits ?? "Unable to retrieve")
-        """
-
-        return GitInfo(
-            summary: summary,
-            fullText: fullText,
-            technologies: technologies
-        )
-    }
-
-    private func runGitCommand(_ command: String) async throws -> String {
-        let process = Process()
-        let pipe = Pipe()
-
-        process.executableURL = URL(fileURLWithPath: "/bin/sh")
-        process.arguments = ["-c", command]
-        process.standardOutput = pipe
-        process.standardError = pipe
-
-        try process.run()
-        process.waitUntilExit()
-
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        return String(data: data, encoding: .utf8) ?? ""
     }
 
     // MARK: - Private: Helpers

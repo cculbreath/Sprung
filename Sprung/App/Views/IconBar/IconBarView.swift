@@ -19,12 +19,19 @@ struct IconBarView: View {
             // Module icons
             ScrollView {
                 VStack(spacing: 2) {
-                    ForEach(AppModule.allCases) { module in
-                        IconBarItem(
-                            module: module,
-                            isSelected: navigation.selectedModule == module,
-                            isExpanded: navigation.isIconBarExpanded
-                        )
+                    ForEach(Array(AppModule.iconBarSections.enumerated()), id: \.offset) { sectionIndex, section in
+                        if sectionIndex > 0 {
+                            Divider()
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                        }
+                        ForEach(section) { module in
+                            IconBarItem(
+                                module: module,
+                                isSelected: navigation.selectedModule == module,
+                                isExpanded: navigation.isIconBarExpanded
+                            )
+                        }
                     }
                 }
                 .padding(.vertical, 8)

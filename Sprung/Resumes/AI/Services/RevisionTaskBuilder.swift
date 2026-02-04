@@ -82,9 +82,9 @@ final class RevisionTaskBuilder {
     ) -> String {
         switch nodeType {
         case .skills:
-            return generateSkillsPrompt(for: revNode)
+            return generateSkillsPrompt(for: revNode, skills: skills)
         case .skillKeywords:
-            return generateSkillKeywordsPrompt(for: revNode)
+            return generateSkillKeywordsPrompt(for: revNode, skills: skills)
         case .titles:
             return generateTitlesPrompt(for: revNode, titleSets: titleSets)
         case .generic:
@@ -93,16 +93,22 @@ final class RevisionTaskBuilder {
     }
 
     /// Generate prompt for skills section revision.
-    private func generateSkillsPrompt(for revNode: ExportedReviewNode) -> String {
-        """
+    private func generateSkillsPrompt(for revNode: ExportedReviewNode, skills: [Skill]) -> String {
+        let skillBank = formatSkillBank(skills)
+
+        return """
         Re-select skills from the Skill Bank for each category to better match this job posting.
 
         CRITICAL CONSTRAINTS:
         - PRESERVE the existing category names exactly as shown below
         - DO NOT rename, merge, or reorganize categories
         - ONLY change which skills appear under each category
-        - Select skills from the Skill Bank that are most relevant to the job requirements
-        - Do NOT invent skills - only select from the Skill Bank provided in the preamble
+        - Select skills ONLY from the Skill Bank below - do NOT invent skills
+        - Prefer higher-proficiency skills (expert > proficient > familiar) when multiple skills match the job
+
+        ## Available Skills from Skill Bank
+
+        \(skillBank)
 
         Current skills on resume (preserve these category names):
         \(revNode.value)
@@ -127,14 +133,45 @@ final class RevisionTaskBuilder {
     }
 
     /// Generate prompt for skill keywords revision.
-    private func generateSkillKeywordsPrompt(for revNode: ExportedReviewNode) -> String {
-        // Extract category name from display name or path
+    private func generateSkillKeywordsPrompt(for revNode: ExportedReviewNode, skills: [Skill]) -> String {
         let categoryName = extractCategoryName(from: revNode)
+        let matchedCategory = matchCategory(from: revNode, skills: skills)
+
+        // Build primary skills list (matching category)
+        let primarySkills: [Skill]
+        let otherSkills: [Skill]
+        if let category = matchedCategory {
+            primarySkills = skills.filter { $0.category == category }
+                .sorted { ($0.proficiency.sortOrder, $0.canonical) < ($1.proficiency.sortOrder, $1.canonical) }
+            otherSkills = skills.filter { $0.category != category }
+        } else {
+            primarySkills = []
+            otherSkills = skills
+        }
+
+        var skillReference = ""
+        if !primarySkills.isEmpty {
+            let lines = primarySkills.map { "- \($0.canonical) (\($0.proficiency.rawValue))" }
+            skillReference += """
+            ## Skills in "\(categoryName)" Category
+            \(lines.joined(separator: "\n"))
+            """
+        }
+
+        if !otherSkills.isEmpty {
+            let otherNames = otherSkills
+                .sorted { ($0.proficiency.sortOrder, $0.canonical) < ($1.proficiency.sortOrder, $1.canonical) }
+                .map { $0.canonical }
+            skillReference += "\n\n## Other Available Skills (secondary reference)\n\(otherNames.joined(separator: ", "))"
+        }
 
         return """
         Re-select skills from the Skill Bank for the "\(categoryName)" category.
         Choose skills that best match the job requirements.
-        ONLY use skills from the Skill Bank - do not invent new skills.
+        ONLY use skills from the Skill Bank below - do NOT invent new skills.
+        Prefer higher-proficiency skills (expert > proficient > familiar) when multiple skills match.
+
+        \(skillReference)
 
         Current skills: \(revNode.value)
 
@@ -154,6 +191,25 @@ final class RevisionTaskBuilder {
 
     /// Generate prompt for titles revision.
     private func generateTitlesPrompt(for revNode: ExportedReviewNode, titleSets: [TitleSet]) -> String {
+        if titleSets.isEmpty {
+            return """
+            No title sets are available in the Title Set Library. Propose original job titles that best position the applicant for this specific job based on the job description and the applicant's background.
+
+            Current titles: \(revNode.value)
+
+            Return a JSON object with this structure:
+            {
+              "id": "\(revNode.id)",
+              "oldValue": "\(escapeForJSON(revNode.value))",
+              "newValue": "{{proposed titles as period-separated string}}",
+              "valueChanged": true,
+              "why": "explanation of why these titles were chosen",
+              "treePath": "\(revNode.path)",
+              "nodeType": "scalar"
+            }
+            """
+        }
+
         // Build title set reference
         let titleSetReference = titleSets.enumerated().map { index, set in
             let emphasis = set.emphasis.displayName
@@ -164,7 +220,7 @@ final class RevisionTaskBuilder {
         return """
         Select the best title set from the Title Set Library for this job application.
 
-        Available sets are provided in the preamble. Evaluate which set best positions the applicant for this specific job based on:
+        Evaluate which set best positions the applicant for this specific job based on:
         - Job requirements and keywords
         - Title set emphasis alignment
         - Suggested use cases
@@ -233,6 +289,34 @@ final class RevisionTaskBuilder {
         }
 
         return "Skills"
+    }
+
+    /// Format the full skill bank grouped by category with proficiency levels.
+    private func formatSkillBank(_ skills: [Skill]) -> String {
+        let grouped = Dictionary(grouping: skills) { $0.category }
+        var sections: [String] = []
+
+        for category in SkillCategory.allCases {
+            guard let categorySkills = grouped[category], !categorySkills.isEmpty else { continue }
+            let sorted = categorySkills.sorted {
+                ($0.proficiency.sortOrder, $0.canonical) < ($1.proficiency.sortOrder, $1.canonical)
+            }
+            var lines = ["### \(category.rawValue)"]
+            for skill in sorted {
+                lines.append("- \(skill.canonical) (\(skill.proficiency.rawValue))")
+            }
+            sections.append(lines.joined(separator: "\n"))
+        }
+
+        return sections.joined(separator: "\n\n")
+    }
+
+    /// Match a review node's category name to a SkillCategory.
+    private func matchCategory(from revNode: ExportedReviewNode, skills: [Skill]) -> SkillCategory? {
+        let name = extractCategoryName(from: revNode).lowercased()
+        return SkillCategory.allCases.first {
+            name.contains($0.rawValue.lowercased()) || $0.rawValue.lowercased().contains(name)
+        }
     }
 
     /// Escape string for inclusion in JSON template.

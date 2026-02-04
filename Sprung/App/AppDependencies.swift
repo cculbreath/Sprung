@@ -29,6 +29,7 @@ final class AppDependencies {
     let applicantProfileStore: ApplicantProfileStore
     let onboardingSessionStore: OnboardingSessionStore
     let candidateDossierStore: CandidateDossierStore
+    let artifactRecordStore: ArtifactRecordStore
     let onboardingCoordinator: OnboardingInterviewCoordinator
     let reasoningStreamManager: ReasoningStreamManager
     let resumeReviseViewModel: ResumeReviseViewModel
@@ -66,6 +67,7 @@ final class AppDependencies {
         self.applicantProfileStore = applicantProfileStore
         self.onboardingSessionStore = OnboardingSessionStore(context: modelContext)
         self.candidateDossierStore = CandidateDossierStore(context: modelContext)
+        self.artifactRecordStore = ArtifactRecordStore(context: modelContext)
         let guidanceStore = InferenceGuidanceStore(context: modelContext)
         self.guidanceStore = guidanceStore
         self.titleSetStore = TitleSetStore(context: modelContext)

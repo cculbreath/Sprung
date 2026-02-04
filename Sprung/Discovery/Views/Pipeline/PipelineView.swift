@@ -26,56 +26,72 @@ struct PipelineView: View {
     }
 
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(alignment: .top, spacing: 16) {
-                ForEach(Statuses.pipelineStatuses, id: \.self) { status in
-                    PipelineStatusColumn(
-                        status: status,
-                        leads: coordinator.jobAppStore.jobApps(forStatus: status),
-                        onAdvance: { lead in advanceLead(lead) },
-                        onReject: { lead in rejectLead(lead) },
-                        onSelect: { lead in selectLead(lead) }
-                    )
+        VStack(spacing: 0) {
+            // Module header
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Application Pipeline")
+                        .font(.headline)
+                    Text("Kanban board for job applications")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
                 }
-            }
-            .padding()
-        }
-        .navigationTitle("Application Pipeline")
-        .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                Button {
-                    showingAddLead = true
-                } label: {
-                    Image(systemName: "plus")
-                }
-            }
 
-            ToolbarItem(placement: .primaryAction) {
-                Button {
-                    Task { await chooseBestJobs() }
-                } label: {
-                    if isChoosing {
-                        ProgressView()
-                            .controlSize(.small)
-                    } else {
-                        Label("Choose Best", systemImage: "trophy")
+                Spacer()
+
+                HStack(spacing: 8) {
+                    Menu {
+                        ForEach(Statuses.pipelineStatuses, id: \.self) { status in
+                            let count = coordinator.jobAppStore.jobApps(forStatus: status).count
+                            Text("\(status.displayName): \(count)")
+                        }
+                    } label: {
+                        Label("Summary", systemImage: "chart.bar")
+                    }
+
+                    Button {
+                        Task { await chooseBestJobs() }
+                    } label: {
+                        if isChoosing {
+                            ProgressView()
+                                .controlSize(.small)
+                        } else {
+                            Label("Choose Best", systemImage: "trophy")
+                        }
+                    }
+                    .disabled(identifiedCount < 1 || isChoosing)
+                    .help("Select best \(min(5, identifiedCount)) jobs from \(identifiedCount) identified")
+
+                    Button {
+                        showingAddLead = true
+                    } label: {
+                        Label("Add Lead", systemImage: "plus")
                     }
                 }
-                .disabled(identifiedCount < 1 || isChoosing)
-                .help("Select best \(min(5, identifiedCount)) jobs from \(identifiedCount) identified")
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(Color(.windowBackgroundColor))
+            .overlay(alignment: .bottom) {
+                Divider()
             }
 
-            ToolbarItem(placement: .secondaryAction) {
-                Menu {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(alignment: .top, spacing: 16) {
                     ForEach(Statuses.pipelineStatuses, id: \.self) { status in
-                        let count = coordinator.jobAppStore.jobApps(forStatus: status).count
-                        Text("\(status.displayName): \(count)")
+                        PipelineStatusColumn(
+                            status: status,
+                            leads: coordinator.jobAppStore.jobApps(forStatus: status),
+                            onAdvance: { lead in advanceLead(lead) },
+                            onReject: { lead in rejectLead(lead) },
+                            onSelect: { lead in selectLead(lead) }
+                        )
                     }
-                } label: {
-                    Label("Summary", systemImage: "chart.bar")
                 }
+                .padding()
             }
         }
+        .navigationTitle("")
         .sheet(isPresented: $showingAddLead) {
             AddLeadView(coordinator: coordinator)
         }

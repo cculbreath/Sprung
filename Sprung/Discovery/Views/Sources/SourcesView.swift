@@ -106,53 +106,7 @@ struct SourcesView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .navigationTitle("Job Sources")
-        .toolbarBackgroundVisibility(.visible, for: .windowToolbar)
-        .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                HStack(spacing: 8) {
-                    // Status message when active
-                    if isDiscovering {
-                        HStack(spacing: 6) {
-                            ProgressView()
-                                .controlSize(.small)
-                            Text(coordinator.sourcesDiscovery.status.message)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
-                        }
-
-                        Button {
-                            coordinator.cancelSourcesDiscovery()
-                        } label: {
-                            Image(systemName: "xmark.circle")
-                        }
-                        .help("Cancel discovery")
-                    }
-
-                    Button {
-                        openAllDueSources()
-                    } label: {
-                        Image(systemName: "safari")
-                    }
-                    .help("Open all due sources in browser tabs")
-                    .disabled(coordinator.jobSourceStore.dueSources.isEmpty)
-
-                    Button {
-                        showingAddSheet = true
-                    } label: {
-                        Image(systemName: "plus")
-                    }
-
-                    Button {
-                        coordinator.startSourcesDiscovery()
-                    } label: {
-                        Image(systemName: "sparkles")
-                    }
-                    .disabled(isDiscovering)
-                }
-            }
-        }
+        .navigationTitle("")
         .sheet(isPresented: $showingAddSheet) {
             AddSourceSheet(store: coordinator.jobSourceStore)
         }

@@ -13,19 +13,10 @@ struct DailyTasksModuleView: View {
     @State private var triggerTaskGeneration: Bool = false
 
     var body: some View {
-        VStack(spacing: 0) {
-            // Module header
-            ModuleHeader(
-                title: "Daily Tasks",
-                subtitle: "AI-generated tasks prioritized for maximum impact"
-            )
-
-            // Existing DailyView
-            DailyView(
-                coordinator: coordinator,
-                triggerTaskGeneration: $triggerTaskGeneration
-            )
-        }
+        DailyView(
+            coordinator: coordinator,
+            triggerTaskGeneration: $triggerTaskGeneration
+        )
         .onReceive(NotificationCenter.default.publisher(for: .discoveryTriggerTaskGeneration)) { _ in
             triggerTaskGeneration = true
         }

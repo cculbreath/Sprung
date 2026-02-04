@@ -77,7 +77,6 @@ class StandaloneKCCoordinator {
     // MARK: - Published State
 
     var status: Status = .idle
-    var generatedCard: KnowledgeCard?
     var errorMessage: String?
 
     // MARK: - Dependencies
@@ -103,84 +102,7 @@ class StandaloneKCCoordinator {
         self.analyzer = StandaloneKCAnalyzer(llmFacade: llmFacade, knowledgeCardStore: knowledgeCardStore)
     }
 
-    // MARK: - Public API: Single Card Generation
-
-    /// Generate a knowledge card from URLs and/or pre-loaded archived artifacts.
-    /// - Parameters:
-    ///   - sources: URLs to extract content from
-    ///   - existingArtifactIds: IDs of already-extracted artifacts to include
-    ///   - deduplicateNarratives: Whether to run LLM-powered deduplication on narrative cards
-    func generateCardWithExisting(from sources: [URL], existingArtifactIds: Set<String>, deduplicateNarratives: Bool = false) async throws {
-        guard !sources.isEmpty || !existingArtifactIds.isEmpty else {
-            throw StandaloneKCError.noSources
-        }
-
-        guard llmFacade != nil else {
-            throw StandaloneKCError.llmNotConfigured
-        }
-
-        status = .idle
-        errorMessage = nil
-        generatedCard = nil
-
-        do {
-            // Phase 1: Load existing artifacts
-            var allArtifacts: [JSON] = []
-            var allArtifactIds = existingArtifactIds
-            if !existingArtifactIds.isEmpty {
-                let existing = extractor.loadArchivedArtifacts(existingArtifactIds)
-                allArtifacts.append(contentsOf: existing)
-            }
-
-            // Phase 2: Extract new sources (persisted to SwiftData)
-            if !sources.isEmpty {
-                let newArtifacts = try await extractor.extractAllSources(sources) { [weak self] current, total, filename in
-                    self?.status = .extracting(current: current, total: total, filename: filename)
-                }
-                allArtifacts.append(contentsOf: newArtifacts)
-                // Add new artifact IDs
-                for artifact in newArtifacts {
-                    if let id = artifact["id"].string {
-                        allArtifactIds.insert(id)
-                    }
-                }
-            }
-
-            guard !allArtifacts.isEmpty else {
-                throw StandaloneKCError.noArtifactsExtracted
-            }
-
-            // Track artifact IDs for export
-            currentArtifactIds = allArtifactIds
-
-            // Phase 3: Analyze artifacts (with optional deduplication)
-            status = .analyzing
-            let analysisResult = try await analyzer.analyzeArtifacts(allArtifacts, deduplicateNarratives: deduplicateNarratives)
-
-            guard let firstCard = analysisResult.narrativeCards.first else {
-                throw StandaloneKCError.noArtifactsExtracted
-            }
-
-            // Phase 4: Persist knowledge card directly
-            status = .generatingCard(current: 1, total: 1)
-            firstCard.isFromOnboarding = false
-            knowledgeCardStore?.add(firstCard)
-
-            self.generatedCard = firstCard
-            status = .completed(created: 1, enhanced: 0)
-
-            Logger.info("✅ StandaloneKCCoordinator: Knowledge card created - \(firstCard.title)", category: .ai)
-
-        } catch {
-            let message = error.localizedDescription
-            status = .failed(message)
-            errorMessage = message
-            Logger.error("❌ StandaloneKCCoordinator: Failed - \(message)", category: .ai)
-            throw error
-        }
-    }
-
-    // MARK: - Public API: Multi-Card Analysis & Generation
+    // MARK: - Public API: Analysis & Generation
 
     /// Analyze documents to produce card proposals for user review.
     /// - Parameters:
@@ -221,25 +143,37 @@ class StandaloneKCCoordinator {
             }
         }
 
-        guard !allArtifacts.isEmpty else {
-            throw StandaloneKCError.noArtifactsExtracted
-        }
-
         // Track artifact IDs for later export
         currentArtifactIds = allArtifactIds
 
-        // Phase 3: Analyze artifacts (with optional deduplication)
-        status = .analyzing
-        let analysisResult = try await analyzer.analyzeArtifacts(allArtifacts, deduplicateNarratives: deduplicateNarratives)
+        // Collect pre-analyzed git results (GitAnalysisAgent produces cards directly)
+        let gitCards = extractor.gitAnalyzedCards
 
-        // Phase 4: Match against existing
-        let (newCards, enhancements) = analyzer.matchAgainstExisting(analysisResult)
+        // Phase 3: Analyze non-git artifacts (with optional deduplication)
+        var allNewCards: [KnowledgeCard] = gitCards
+        var skillBank = SkillBank(skills: extractor.gitAnalyzedSkills, generatedAt: Date(), sourceDocumentIds: [])
+        let nonGitArtifacts = allArtifacts.filter { $0["source_type"].string != "git_repository" }
+        if !nonGitArtifacts.isEmpty {
+            status = .analyzing
+            let analysisResult = try await analyzer.analyzeArtifacts(nonGitArtifacts, deduplicateNarratives: deduplicateNarratives)
+            allNewCards.append(contentsOf: analysisResult.narrativeCards)
+            // Merge skill banks from git analysis and document analysis
+            let mergedSkills = skillBank.skills + analysisResult.skillBank.skills
+            skillBank = SkillBank(skills: mergedSkills, generatedAt: Date(), sourceDocumentIds: analysisResult.skillBank.sourceDocumentIds)
+        }
+
+        guard !allNewCards.isEmpty || !allArtifacts.isEmpty else {
+            throw StandaloneKCError.noArtifactsExtracted
+        }
+
+        // Phase 4: Match against existing (for git cards and analyzer cards)
+        let (newCards, enhancements) = analyzer.matchCardsAgainstExisting(allNewCards)
 
         status = .idle
         Logger.info("📊 StandaloneKCCoordinator: Analysis complete - \(newCards.count) new, \(enhancements.count) enhancements", category: .ai)
 
         return AnalysisResult(
-            skillBank: analysisResult.skillBank,
+            skillBank: skillBank,
             newCards: newCards,
             enhancements: enhancements,
             artifacts: allArtifacts

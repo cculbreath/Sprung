@@ -58,7 +58,7 @@ struct ContactsView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .navigationTitle("Contacts")
+        .navigationTitle("")
     }
 }
 

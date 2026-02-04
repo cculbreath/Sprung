@@ -118,7 +118,7 @@ struct KnowledgeCardsBrowserTab: View {
     }
 
     private func filterBar(currentIndex: Binding<Int>) -> some View {
-        VStack(spacing: 10) {
+        HStack(spacing: 8) {
             HStack {
                 Image(systemName: "magnifyingglass")
                     .foregroundStyle(.secondary)
@@ -131,37 +131,39 @@ struct KnowledgeCardsBrowserTab: View {
                     }
                     .buttonStyle(.plain)
                 }
-
-                // Ingest button
-                Button(action: { showIngestionSheet = true }) {
-                    Image(systemName: "arrow.down.doc")
-                        .font(.title3)
-                        .foregroundStyle(.orange)
-                }
-                .buttonStyle(.plain)
-                .help("Ingest document to create knowledge cards")
-
-                Button(action: { showAddSheet = true }) {
-                    Image(systemName: "plus.circle.fill")
-                        .font(.title3)
-                        .foregroundStyle(.purple)
-                }
-                .buttonStyle(.plain)
             }
             .padding(8)
             .background(Color(nsColor: .controlBackgroundColor))
             .clipShape(RoundedRectangle(cornerRadius: 8))
+            .frame(maxWidth: 280)
 
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 6) {
+                HStack(spacing: 5) {
                     ForEach(CardTypeFilter.allCases, id: \.self) { filter in
                         filterChip(filter)
                     }
                 }
             }
+
+            Spacer()
+
+            Button(action: { showIngestionSheet = true }) {
+                Label("Ingest", systemImage: "tray.and.arrow.down")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+            }
+            .buttonStyle(.plain)
+            .help("Ingest document to create knowledge cards")
+
+            Button(action: { showAddSheet = true }) {
+                Label("New", systemImage: "plus.circle.fill")
+                    .font(.caption)
+                    .foregroundStyle(.purple)
+            }
+            .buttonStyle(.plain)
         }
         .padding(.horizontal, 20)
-        .padding(.vertical, 12)
+        .padding(.vertical, 8)
         .background(Color(nsColor: .controlBackgroundColor).opacity(0.5))
     }
 

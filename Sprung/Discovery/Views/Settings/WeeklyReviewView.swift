@@ -49,7 +49,7 @@ struct WeeklyReviewView: View {
             .padding()
         }
         .scrollEdgeEffect()
-        .navigationTitle("Weekly Review")
+        .navigationTitle("")
         .alert("Review Saved", isPresented: $showSaveConfirmation) {
             Button("OK", role: .cancel) {}
         } message: {

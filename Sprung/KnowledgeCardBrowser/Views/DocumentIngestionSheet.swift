@@ -82,8 +82,9 @@ struct DocumentIngestionSheet: View {
                                 enhancements: selectedEnhancements,
                                 artifacts: result.artifacts
                             )
-                            if created > 0, let card = coordinator.generatedCard {
-                                onCardGenerated?(card)
+                            // Notify caller of first created card (for UI refresh)
+                            if created > 0, let first = selectedNew.first {
+                                onCardGenerated?(first)
                             }
                             showAnalysisSheet = false
                             try? await Task.sleep(for: .seconds(1))
@@ -344,22 +345,12 @@ struct DocumentIngestionSheet: View {
             }
             .keyboardShortcut(.cancelAction)
 
-            // Analyze button for multi-card workflow
             Button("Analyze") {
                 analyzeDocuments()
-            }
-            .buttonStyle(.bordered)
-            .disabled(!hasAnySources || coordinator?.status.isProcessing == true)
-            .help("Analyze documents and review proposed cards before generating")
-
-            // Quick generate button for single card (legacy behavior)
-            Button("Quick Generate") {
-                generateCard()
             }
             .buttonStyle(.borderedProminent)
             .disabled(!hasAnySources || coordinator?.status.isProcessing == true)
             .keyboardShortcut(.defaultAction)
-            .help("Generate a single card without review")
         }
         .padding()
     }
@@ -420,31 +411,6 @@ struct DocumentIngestionSheet: View {
 
     private func removeSource(_ url: URL) {
         sources.removeAll { $0.absoluteString == url.absoluteString }
-    }
-
-    private func generateCard() {
-        guard let coordinator = coordinator else { return }
-
-        Task {
-            do {
-                // Generate card with both new sources and existing artifact IDs
-                try await coordinator.generateCardWithExisting(
-                    from: sources,
-                    existingArtifactIds: addedArchivedArtifactIds,
-                    deduplicateNarratives: deduplicateNarratives
-                )
-
-                if let card = coordinator.generatedCard {
-                    onCardGenerated?(card)
-                }
-
-                // Dismiss after short delay to show success
-                try? await Task.sleep(for: .seconds(1))
-                dismiss()
-            } catch {
-                // Error is displayed in status section
-            }
-        }
     }
 
     private func analyzeDocuments() {

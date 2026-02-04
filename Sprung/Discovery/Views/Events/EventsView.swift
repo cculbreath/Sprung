@@ -23,11 +23,12 @@ enum EventsViewMode: String, CaseIterable {
 struct EventsView: View {
     let coordinator: DiscoveryCoordinator
     @Binding var triggerEventDiscovery: Bool
-    @State private var viewMode: EventsViewMode = .list
+    @Binding var viewMode: EventsViewMode
 
-    init(coordinator: DiscoveryCoordinator, triggerEventDiscovery: Binding<Bool> = .constant(false)) {
+    init(coordinator: DiscoveryCoordinator, triggerEventDiscovery: Binding<Bool> = .constant(false), viewMode: Binding<EventsViewMode> = .constant(.list)) {
         self.coordinator = coordinator
         self._triggerEventDiscovery = triggerEventDiscovery
+        self._viewMode = viewMode
     }
 
     var body: some View {
@@ -46,31 +47,7 @@ struct EventsView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .navigationTitle("Events")
-        .toolbar {
-            ToolbarItem(placement: .principal) {
-                if !coordinator.eventStore.allEvents.isEmpty {
-                    Picker("View Mode", selection: $viewMode) {
-                        ForEach(EventsViewMode.allCases, id: \.self) { mode in
-                            Label(mode.rawValue, systemImage: mode.icon)
-                                .tag(mode)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .frame(width: 180)
-                }
-            }
-
-            ToolbarItem(placement: .primaryAction) {
-                if !coordinator.eventsDiscovery.isActive && !coordinator.eventStore.allEvents.isEmpty {
-                    Button {
-                        coordinator.startEventDiscovery()
-                    } label: {
-                        Label("Discover More", systemImage: "magnifyingglass")
-                    }
-                }
-            }
-        }
+        .navigationTitle("")
         .onChange(of: triggerEventDiscovery) { _, newValue in
             if newValue {
                 triggerEventDiscovery = false

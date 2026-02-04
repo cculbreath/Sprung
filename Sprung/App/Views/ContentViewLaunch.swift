@@ -55,6 +55,7 @@ struct ContentViewLaunch: View {
             .environment(deps.moduleNavigation)
             .environment(deps.focusState)
             .environment(deps.windowCoordinator)
+            .environment(deps.artifactRecordStore)
             .environment(deps.searchOpsCoordinator)
     }
     private func restoreLatestBackup() {

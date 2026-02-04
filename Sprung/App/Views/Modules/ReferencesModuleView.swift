@@ -50,7 +50,7 @@ struct ReferencesModuleView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Module header with pill picker
+            // Fixed-height module header with pill picker
             VStack(spacing: 12) {
                 HStack {
                     Image(systemName: selectedTab.icon)
@@ -85,11 +85,13 @@ struct ReferencesModuleView: View {
                 .padding(.bottom, 8)
             }
             .background(Color(.windowBackgroundColor))
+            .fixedSize(horizontal: false, vertical: true)
 
             Divider()
 
-            // Tab content
+            // Tab content fills remaining space
             tabContent
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 

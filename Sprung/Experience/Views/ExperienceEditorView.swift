@@ -100,25 +100,17 @@ struct ExperienceEditorView: View {
 
     // MARK: - Header
     private var header: some View {
-        HStack(spacing: 16) {
-            Button(action: {
-                withAnimation(.spring(response: 0.4, dampingFraction: 0.82)) {
-                    showSectionBrowser.toggle()
-                }
-            }, label: {
-                Label(showSectionBrowser ? "Hide Sections" : "Enable Sections", systemImage: "slider.horizontal.3")
-            })
-            .buttonStyle(.bordered)
-            Button {
-                showImportSheet = true
-            } label: {
-                Label("Import…", systemImage: "square.and.arrow.down")
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Experience")
+                    .font(.headline)
+                Text("Manage your work history, education, and skills defaults")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
             }
-            .buttonStyle(.bordered)
-            .disabled(isLoading || appEnvironment.launchState.isReadOnly)
-            .help("Import values from an existing resume into Experience Defaults")
+
             if case .saved = saveState {
-                Text("✅ Changes saved")
+                Text("Changes saved")
                     .foregroundStyle(.green)
                     .font(.callout)
             } else if case .error(let message) = saveState {
@@ -126,24 +118,46 @@ struct ExperienceEditorView: View {
                     .foregroundStyle(.red)
                     .font(.callout)
             }
+
             Spacer()
-            Button("Cancel") {
-                cancelAndClose()
-            }
-            .disabled(isLoading || hasChanges == false)
-            Button("Save") {
-                Task {
-                    let didSave = await saveDraft()
-                    if didSave {
-                        dismiss()
+
+            HStack(spacing: 8) {
+                Button {
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.82)) {
+                        showSectionBrowser.toggle()
+                    }
+                } label: {
+                    Label(showSectionBrowser ? "Hide Sections" : "Enable Sections", systemImage: "slider.horizontal.3")
+                }
+
+                Button {
+                    showImportSheet = true
+                } label: {
+                    Label("Import…", systemImage: "square.and.arrow.down")
+                }
+                .disabled(isLoading || appEnvironment.launchState.isReadOnly)
+                .help("Import values from an existing resume into Experience Defaults")
+
+                Button("Cancel") {
+                    cancelAndClose()
+                }
+                .disabled(isLoading || hasChanges == false)
+
+                Button("Save") {
+                    Task {
+                        let didSave = await saveDraft()
+                        if didSave {
+                            dismiss()
+                        }
                     }
                 }
+                .buttonStyle(.borderedProminent)
+                .disabled(isLoading || hasChanges == false || saveState == .saving)
             }
-            .buttonStyle(.borderedProminent)
-            .disabled(isLoading || hasChanges == false || saveState == .saving)
         }
-        .padding(.horizontal, 20)
+        .padding(.horizontal, 16)
         .padding(.vertical, 12)
+        .background(Color(.windowBackgroundColor))
     }
     // MARK: - Content
     private var content: some View {

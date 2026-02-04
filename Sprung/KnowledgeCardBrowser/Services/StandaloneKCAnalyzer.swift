@@ -159,6 +159,26 @@ class StandaloneKCAnalyzer {
         return (newCards, enhancements)
     }
 
+    /// Match a flat array of cards against existing knowledge cards.
+    /// Used when cards are pre-analyzed (e.g. from GitAnalysisAgent) and don't come from AnalysisResult.
+    func matchCardsAgainstExisting(
+        _ cards: [KnowledgeCard]
+    ) -> (newCards: [KnowledgeCard], enhancements: [(proposal: KnowledgeCard, existing: KnowledgeCard)]) {
+        let existingCards = knowledgeCardStore?.knowledgeCards ?? []
+        var newCards: [KnowledgeCard] = []
+        var enhancements: [(proposal: KnowledgeCard, existing: KnowledgeCard)] = []
+
+        for card in cards {
+            if let match = findMatchingKnowledgeCard(card, in: existingCards) {
+                enhancements.append((card, match))
+            } else {
+                newCards.append(card)
+            }
+        }
+
+        return (newCards, enhancements)
+    }
+
     /// Extract metadata from artifacts for single-card generation.
     /// - Parameter artifacts: Extracted artifact JSON objects
     /// - Returns: Card metadata

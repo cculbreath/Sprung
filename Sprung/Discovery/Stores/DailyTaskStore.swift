@@ -26,7 +26,7 @@ final class DailyTaskStore: SwiftDataStore {
 
     var allTasks: [DailyTask] {
         _ = changeCounter  // Establish observation dependency
-        return (try? modelContext.fetch(
+        xreturn (try? modelContext.fetch(
             FetchDescriptor<DailyTask>(sortBy: [SortDescriptor(\.priority, order: .reverse)])
         )) ?? []
     }

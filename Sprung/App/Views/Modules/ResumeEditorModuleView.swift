@@ -133,7 +133,9 @@ struct ResumeEditorModuleView: View {
             updateMyLetter()
             hasVisitedResumeTab = false
 
-            if let job = focusState.focusedJob, jobAppStore.selectedApp == nil {
+            // If another module (e.g. Pipeline) set a specific job via focusState,
+            // override the restored selection with it
+            if let job = focusState.focusedJob, job.id != jobAppStore.selectedApp?.id {
                 jobAppStore.selectedApp = job
             }
         }

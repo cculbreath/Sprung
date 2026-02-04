@@ -2,52 +2,49 @@
 //  ResumeBannerView.swift
 //  Sprung
 //
-//  Banner with resume selector, template picker, and Create Resume button.
+//  Banner with resume selector and action buttons.
 //
 
 import SwiftUI
 
 struct ResumeBannerView: View {
-    @Environment(AppEnvironment.self) private var appEnvironment
     @Environment(ResStore.self) private var resStore
 
     @Bindable var jobApp: JobApp
 
-    @State private var selectedTemplateId: UUID?
     @State private var showCreateResumeSheet = false
+    @State private var showDeleteConfirmation = false
 
     var body: some View {
-        ViewThatFits(in: .horizontal) {
-            singleLineLayout
-            twoLineLayout
+        HStack(spacing: 6) {
+            Text("\(jobApp.companyName): \(jobApp.jobPosition)")
+                .font(.system(size: 10))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+            Spacer()
+            createResumeButton
+            resumePicker
         }
         .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .glassEffect(.regular, in: .rect(cornerRadius: 0))
-        .onAppear {
-            if selectedTemplateId == nil {
-                selectedTemplateId = appEnvironment.templateStore.templates().first?.id
-            }
+        .padding(.vertical, 6)
+        .background {
+            // Base layer: match window/toolbar background so macOS 26
+            // icon-only toolbar mode doesn't show a mismatched color
+            Color(.windowBackgroundColor)
         }
-    }
-
-    // MARK: - Layouts
-
-    private var singleLineLayout: some View {
-        HStack(spacing: 12) {
-            resumePicker
-            templatePicker
-            createResumeButton
+        .background {
+            // Visual layer: the actual banner tint
+            Color(red: 237/255, green: 241/255, blue: 242/255)
         }
-    }
-
-    private var twoLineLayout: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            resumePicker
-            HStack(spacing: 12) {
-                templatePicker
-                createResumeButton
-            }
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(Color(red: 205/255, green: 205/255, blue: 206/255))
+                .frame(height: 1)
+        }
+        .overlay(alignment: .top) {
+            Rectangle()
+                .fill(Color(red: 205/255, green: 205/255, blue: 206/255))
+                .frame(height: 1)
         }
     }
 
@@ -55,10 +52,6 @@ struct ResumeBannerView: View {
 
     private var resumePicker: some View {
         HStack(spacing: 6) {
-            Text("Résumé")
-                .font(.subheadline.weight(.medium))
-                .foregroundStyle(.secondary)
-
             Picker("", selection: $jobApp.selectedRes) {
                 if jobApp.resumes.isEmpty {
                     Text("None").tag(Resume?.none)
@@ -70,30 +63,57 @@ struct ResumeBannerView: View {
             }
             .labelsHidden()
             .fixedSize()
-        }
-    }
 
-    private var templatePicker: some View {
-        HStack(spacing: 6) {
-            Text("Template")
-                .font(.subheadline.weight(.medium))
-                .foregroundStyle(.secondary)
+            if jobApp.selectedRes != nil {
+                Button {
+                    if let resume = jobApp.selectedRes {
+                        let dup = resStore.duplicate(resume)
+                        if let dup { jobApp.selectedRes = dup }
+                    }
+                } label: {
+                    Image(systemName: "document.on.document")
+                }
+                .buttonStyle(.borderless)
+                .help("Duplicate resume")
 
-            Picker("", selection: $selectedTemplateId) {
-                ForEach(appEnvironment.templateStore.templates()) { template in
-                    Text(template.name).tag(Optional(template.id))
+                Button {
+                    showDeleteConfirmation = true
+                } label: {
+                    Image(systemName: "trash")
+                }
+                .buttonStyle(.borderless)
+                .help("Delete resume")
+                .alert("Delete Resume?", isPresented: $showDeleteConfirmation) {
+                    Button("Delete", role: .destructive) {
+                        guard let resume = jobApp.selectedRes else { return }
+                        // Update selection and remove from array immediately so the
+                        // selectedRes getter fallback doesn't return the deleted resume
+                        let nextResume = jobApp.resumes.first(where: { $0.id != resume.id })
+                        jobApp.selectedRes = nextResume
+                        if let index = jobApp.resumes.firstIndex(of: resume) {
+                            jobApp.resumes.remove(at: index)
+                        }
+                        // Defer model deletion to let SwiftUI update first
+                        DispatchQueue.main.async {
+                            resStore.deleteRes(resume)
+                        }
+                    }
+                    Button("Cancel", role: .cancel) {}
+                } message: {
+                    Text("This resume will be permanently deleted.")
                 }
             }
-            .labelsHidden()
-            .fixedSize()
         }
     }
 
     private var createResumeButton: some View {
-        Button("Create Resume") {
+        Button {
             showCreateResumeSheet = true
+        } label: {
+            Image("custom.resume.new")
         }
-        .buttonStyle(.bordered)
+        .buttonStyle(.borderless)
+        .help("Create resume")
         .sheet(isPresented: $showCreateResumeSheet) {
             CreateResumeView(
                 onCreateResume: { template, sources in

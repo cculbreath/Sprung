@@ -92,7 +92,7 @@ struct WritingSamplesBrowserTab: View {
     }
 
     private func filterBar(currentIndex: Binding<Int>) -> some View {
-        VStack(spacing: 10) {
+        HStack(spacing: 8) {
             HStack {
                 Image(systemName: "magnifyingglass")
                     .foregroundStyle(.secondary)
@@ -105,42 +105,44 @@ struct WritingSamplesBrowserTab: View {
                     }
                     .buttonStyle(.plain)
                 }
-
-                // Add menu
-                Menu {
-                    Button(action: {
-                        newCardType = .backgroundFact
-                        showAddSheet = true
-                    }) {
-                        Label("Background Fact", systemImage: "info.circle")
-                    }
-                    Button(action: {
-                        newCardType = .writingSample
-                        showAddSheet = true
-                    }) {
-                        Label("Writing Sample", systemImage: "doc.text")
-                    }
-                } label: {
-                    Image(systemName: "plus.circle.fill")
-                        .font(.title3)
-                        .foregroundStyle(.blue)
-                }
-                .menuStyle(.borderlessButton)
             }
             .padding(8)
             .background(Color(nsColor: .controlBackgroundColor))
             .clipShape(RoundedRectangle(cornerRadius: 8))
+            .frame(maxWidth: 280)
 
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 6) {
+                HStack(spacing: 5) {
                     ForEach(SampleTypeFilter.allCases, id: \.self) { filter in
                         filterChip(filter)
                     }
                 }
             }
+
+            Spacer()
+
+            Menu {
+                Button(action: {
+                    newCardType = .backgroundFact
+                    showAddSheet = true
+                }) {
+                    Label("Background Fact", systemImage: "info.circle")
+                }
+                Button(action: {
+                    newCardType = .writingSample
+                    showAddSheet = true
+                }) {
+                    Label("Writing Sample", systemImage: "doc.text")
+                }
+            } label: {
+                Image(systemName: "plus.circle.fill")
+                    .font(.title3)
+                    .foregroundStyle(.blue)
+            }
+            .menuStyle(.borderlessButton)
         }
         .padding(.horizontal, 20)
-        .padding(.vertical, 12)
+        .padding(.vertical, 8)
         .background(Color(nsColor: .controlBackgroundColor).opacity(0.5))
     }
 

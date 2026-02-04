@@ -27,61 +27,19 @@ struct DailyView: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                // Header with date and time
-                headerSection
-
-                // Coaching section (always visible)
-                CoachingSectionView(coordinator: coordinator)
-
-                // Time spent today
-                timeSection
-
-                // Events needing debrief
-                if !coordinator.eventStore.needsDebrief.isEmpty {
-                    debriefSection
+        VStack(spacing: 0) {
+            // Toolbar header
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Daily Tasks")
+                        .font(.headline)
+                    Text("AI-generated tasks prioritized for maximum impact")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
                 }
 
-                // Today's networking events
-                if !summary.eventsToday.isEmpty {
-                    todaysEventsSection
-                }
+                Spacer()
 
-                // Networking tasks (high priority)
-                if hasNetworkingTasks {
-                    networkingTasksSection
-                }
-
-                // Follow-up tasks
-                if hasFollowUpTasks {
-                    followUpTasksSection
-                }
-
-                // Application tasks
-                if hasApplicationTasks {
-                    applicationTasksSection
-                }
-
-                // Gather tasks
-                if hasGatherTasks {
-                    gatherTasksSection
-                }
-
-                // Contacts needing attention
-                if !summary.contactsNeedingAttention.isEmpty {
-                    contactsSection
-                }
-
-                // Weekly progress
-                weeklyProgressSection
-            }
-            .padding()
-        }
-        .scrollEdgeEffect()
-        .navigationTitle("Today")
-        .toolbar {
-            ToolbarItem(placement: .primaryAction) {
                 Button {
                     Task { await refreshTasks() }
                 } label: {
@@ -89,12 +47,72 @@ struct DailyView: View {
                         ProgressView()
                             .scaleEffect(0.8)
                     } else {
-                        Image(systemName: "arrow.clockwise")
+                        Label("Refresh", systemImage: "arrow.clockwise")
                     }
                 }
                 .disabled(isRefreshing)
             }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(Color(.windowBackgroundColor))
+            .overlay(alignment: .bottom) {
+                Divider()
+            }
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    // Header with date and time
+                    headerSection
+
+                    // Coaching section (always visible)
+                    CoachingSectionView(coordinator: coordinator)
+
+                    // Time spent today
+                    timeSection
+
+                    // Events needing debrief
+                    if !coordinator.eventStore.needsDebrief.isEmpty {
+                        debriefSection
+                    }
+
+                    // Today's networking events
+                    if !summary.eventsToday.isEmpty {
+                        todaysEventsSection
+                    }
+
+                    // Networking tasks (high priority)
+                    if hasNetworkingTasks {
+                        networkingTasksSection
+                    }
+
+                    // Follow-up tasks
+                    if hasFollowUpTasks {
+                        followUpTasksSection
+                    }
+
+                    // Application tasks
+                    if hasApplicationTasks {
+                        applicationTasksSection
+                    }
+
+                    // Gather tasks
+                    if hasGatherTasks {
+                        gatherTasksSection
+                    }
+
+                    // Contacts needing attention
+                    if !summary.contactsNeedingAttention.isEmpty {
+                        contactsSection
+                    }
+
+                    // Weekly progress
+                    weeklyProgressSection
+                }
+                .padding()
+            }
+            .scrollEdgeEffect()
         }
+        .navigationTitle("")
         .onChange(of: triggerTaskGeneration) { _, newValue in
             if newValue {
                 triggerTaskGeneration = false

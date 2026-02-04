@@ -20,7 +20,7 @@ struct ModuleHeader: View {
                     .font(.headline)
 
                 Text(subtitle)
-                    .font(.caption)
+                    .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
 

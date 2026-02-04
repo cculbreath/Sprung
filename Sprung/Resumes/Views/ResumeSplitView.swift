@@ -38,33 +38,27 @@ struct ResumeSplitView: View {
     // MARK: - Resume Editor Content
 
     private func resumeEditorContent(selApp: JobApp, selRes: Resume) -> some View {
-        VStack(spacing: 0) {
-            ResumeBannerView(jobApp: selApp)
-            mainEditorContent(selApp: selApp, selRes: selRes)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-
-    private let minPdfPreviewWidth: CGFloat = 260
-    private let maxPdfPreviewWidth: CGFloat = 800
-
-    private func mainEditorContent(selApp: JobApp, selRes: Resume) -> some View {
         HStack(spacing: 0) {
-            ResumeDetailView(
-                resume: selRes,
-                tab: $tab,
-                isWide: $isWide,
-                sheets: $sheets,
-                clarifyingQuestions: $clarifyingQuestions,
-                showCreateResumeSheet: $showCreateResumeSheet,
-                exportCoordinator: appEnvironment.resumeExportCoordinator
-            )
+            // Editor column: banner + detail
+            VStack(spacing: 0) {
+                ResumeBannerView(jobApp: selApp)
+                    .frame(height: 32)
+                ResumeDetailView(
+                    resume: selRes,
+                    tab: $tab,
+                    isWide: $isWide,
+                    sheets: $sheets,
+                    clarifyingQuestions: $clarifyingQuestions,
+                    showCreateResumeSheet: $showCreateResumeSheet,
+                    exportCoordinator: appEnvironment.resumeExportCoordinator
+                )
+                .id(selRes.id)
+            }
             .frame(
                 minWidth: isWide ? 300 : 220,
                 maxWidth: .infinity,
                 maxHeight: .infinity
             )
-            .id(selRes.id)
 
             ResumePreviewChevronBar(pdfPreviewVisible: $pdfPreviewVisible)
 
@@ -73,6 +67,7 @@ struct ResumeSplitView: View {
                     .transition(.move(edge: .trailing).combined(with: .opacity))
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .animation(.easeInOut(duration: 0.2), value: pdfPreviewVisible)
         .sheet(isPresented: $showCreateResumeSheet) {
             CreateResumeView(
@@ -89,6 +84,9 @@ struct ResumeSplitView: View {
             .padding()
         }
     }
+
+    private let minPdfPreviewWidth: CGFloat = 260
+    private let maxPdfPreviewWidth: CGFloat = 800
 
     @ViewBuilder
     private func pdfPreviewSection(resume: Resume) -> some View {
@@ -109,6 +107,7 @@ struct ResumeSplitView: View {
     private func noResumeState(selApp: JobApp) -> some View {
         VStack(spacing: 0) {
             ResumeBannerView(jobApp: selApp)
+                .frame(height: 32)
 
             VStack(spacing: 20) {
                 Text("No Resume Available")

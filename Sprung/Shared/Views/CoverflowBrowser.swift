@@ -37,17 +37,47 @@ struct CoverflowBrowser<Item: Identifiable, CardContent: View, FilterContent: Vi
 
     var body: some View {
         VStack(spacing: 0) {
-            // Filter bar (provided by caller)
+            // Filter bar (provided by caller) + progress dots
             filterContent($currentIndex)
+
+            if !items.isEmpty {
+                progressIndicator
+            }
 
             if items.isEmpty {
                 emptyState
             } else {
-                // Coverflow carousel
-                carousel
+                // Carousel with chevron nav on sides
+                GeometryReader { geo in
+                    let availableHeight = geo.size.height
+                    let availableWidth = geo.size.width - 96 // minus chevron widths
+                    let scaleH = min(1.0, availableHeight / (cardHeight + 40))
+                    let scaleW = min(1.0, availableWidth / cardWidth)
+                    let scaleFactor = min(scaleH, scaleW)
 
-                // Navigation controls
-                navigationControls
+                    HStack(spacing: 0) {
+                        Button(action: navigatePrevious) {
+                            Image(systemName: "chevron.left.circle.fill")
+                                .font(.system(size: 32))
+                                .foregroundStyle(currentIndex > 0 ? accentColor : Color.secondary.opacity(0.3))
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(currentIndex == 0)
+                        .frame(width: 48)
+
+                        carousel(scaleFactor: scaleFactor)
+
+                        Button(action: navigateNext) {
+                            Image(systemName: "chevron.right.circle.fill")
+                                .font(.system(size: 32))
+                                .foregroundStyle(currentIndex < items.count - 1 ? accentColor : Color.secondary.opacity(0.3))
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(currentIndex >= items.count - 1)
+                        .frame(width: 48)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
             }
         }
         .onKeyPress(.leftArrow) { navigatePrevious(); return .handled }
@@ -62,16 +92,18 @@ struct CoverflowBrowser<Item: Identifiable, CardContent: View, FilterContent: Vi
 
     // MARK: - Carousel
 
-    private var carousel: some View {
-        ZStack {
+    private func carousel(scaleFactor: CGFloat) -> some View {
+        let effectiveOffset = visibleCardOffset * scaleFactor
+
+        return ZStack {
             ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
                 let offset = index - currentIndex
                 if abs(offset) <= 3 {
-                    cardView(item: item, index: index, offset: offset)
+                    cardView(item: item, index: index, offset: offset, scaleFactor: scaleFactor, effectiveOffset: effectiveOffset)
                 }
             }
         }
-        .frame(height: cardHeight + 40)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .contentShape(Rectangle())
         .gesture(
             DragGesture(minimumDistance: 30)
@@ -82,12 +114,12 @@ struct CoverflowBrowser<Item: Identifiable, CardContent: View, FilterContent: Vi
         )
     }
 
-    private func cardView(item: Item, index: Int, offset: Int) -> some View {
+    private func cardView(item: Item, index: Int, offset: Int, scaleFactor: CGFloat, effectiveOffset: CGFloat) -> some View {
         let isSelected = offset == 0
         let clampedOffset = max(-3, min(3, offset))
-        let xOffset = CGFloat(clampedOffset) * visibleCardOffset
+        let xOffset = CGFloat(clampedOffset) * effectiveOffset
         let rotation = Double(clampedOffset) * -35
-        let scale = isSelected ? 1.0 : 0.75
+        let scale = (isSelected ? 1.0 : 0.75) * scaleFactor
         let opacity = isSelected ? 1.0 : max(0.3, 1.0 - Double(abs(clampedOffset)) * 0.25)
         let zIndex = isSelected ? 100.0 : 50.0 - Double(abs(offset)) * 10.0
 
@@ -112,47 +144,29 @@ struct CoverflowBrowser<Item: Identifiable, CardContent: View, FilterContent: Vi
             .animation(.spring(response: 0.4, dampingFraction: 0.8), value: currentIndex)
     }
 
-    // MARK: - Navigation
+    // MARK: - Progress Indicator
 
-    private var navigationControls: some View {
-        HStack(spacing: 20) {
-            Button(action: navigatePrevious) {
-                Image(systemName: "chevron.left.circle.fill")
-                    .font(.system(size: 32))
-                    .foregroundStyle(currentIndex > 0 ? accentColor : Color.secondary.opacity(0.3))
-            }
-            .buttonStyle(.plain)
-            .disabled(currentIndex == 0)
+    private var progressIndicator: some View {
+        HStack(spacing: 8) {
+            Text("\(currentIndex + 1) of \(items.count)")
+                .font(.caption.weight(.medium).monospacedDigit())
+                .foregroundStyle(.secondary)
 
-            VStack(spacing: 4) {
-                Text("\(currentIndex + 1) of \(items.count)")
-                    .font(.subheadline.weight(.medium).monospacedDigit())
-
-                // Dot indicators
-                HStack(spacing: 6) {
-                    ForEach(0..<min(7, items.count), id: \.self) { i in
-                        let actualIndex = dotIndex(for: i)
-                        Circle()
-                            .fill(actualIndex == currentIndex ? accentColor : Color.secondary.opacity(0.3))
-                            .frame(width: actualIndex == currentIndex ? 10 : 6, height: actualIndex == currentIndex ? 10 : 6)
-                            .onTapGesture {
-                                withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                                    currentIndex = actualIndex
-                                }
+            HStack(spacing: 5) {
+                ForEach(0..<min(7, items.count), id: \.self) { i in
+                    let actualIndex = dotIndex(for: i)
+                    Circle()
+                        .fill(actualIndex == currentIndex ? accentColor : Color.secondary.opacity(0.3))
+                        .frame(width: actualIndex == currentIndex ? 8 : 5, height: actualIndex == currentIndex ? 8 : 5)
+                        .onTapGesture {
+                            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                                currentIndex = actualIndex
                             }
-                    }
+                        }
                 }
             }
-
-            Button(action: navigateNext) {
-                Image(systemName: "chevron.right.circle.fill")
-                    .font(.system(size: 32))
-                    .foregroundStyle(currentIndex < items.count - 1 ? accentColor : Color.secondary.opacity(0.3))
-            }
-            .buttonStyle(.plain)
-            .disabled(currentIndex >= items.count - 1)
         }
-        .padding(.vertical, 12)
+        .padding(.vertical, 6)
     }
 
     private func dotIndex(for displayIndex: Int) -> Int {

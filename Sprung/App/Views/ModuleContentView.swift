@@ -47,5 +47,16 @@ struct ModuleContentView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .id(module) // Force view recreation on module change
+        .toolbar(id: "sprungMainToolbar") {
+            if !module.hasCustomToolbar {
+                // Same customizable toolbar ID as Resume Editor ensures macOS
+                // preserves toolbar configuration across module switches.
+                // A hidden Label forces iconAndLabel height allocation.
+                ToolbarItem(id: "moduleReserve", placement: .navigation, showsByDefault: true) {
+                    Label("Sprung", systemImage: "diamond")
+                        .hidden()
+                }
+            }
+        }
     }
 }

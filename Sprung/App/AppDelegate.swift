@@ -34,9 +34,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var backgroundActivityWindow: NSWindow?
     var backgroundActivityTracker: BackgroundActivityTracker?
     func applicationDidFinishLaunching(_: Notification) {
-        // Wait until the app is fully loaded before modifying the menu
+        // Wait until the app is fully loaded before modifying the menu and toolbar
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
             self.setupAppMenu()
+            // Ensure toolbar displays icons and labels
+            if let toolbar = NSApp.mainWindow?.toolbar {
+                toolbar.displayMode = .iconAndLabel
+            }
         }
         // We no longer add a separate Profile main menu to avoid duplication
 

@@ -9,16 +9,16 @@ import SwiftUI
 
 /// Application modules accessible via icon bar
 enum AppModule: String, CaseIterable, Identifiable, Codable {
-    case pipeline = "pipeline"
     case resumeEditor = "resumeEditor"
-    case dailyTasks = "dailyTasks"
+    case pipeline = "pipeline"
     case sources = "sources"
+    case dailyTasks = "dailyTasks"
+    case weeklyReview = "weeklyReview"
     case events = "events"
     case contacts = "contacts"
-    case weeklyReview = "weeklyReview"
-    case references = "references"
-    case experience = "experience"
     case profile = "profile"
+    case experience = "experience"
+    case references = "references"
 
     var id: String { rawValue }
 
@@ -27,11 +27,11 @@ enum AppModule: String, CaseIterable, Identifiable, Codable {
         switch self {
         case .pipeline: return "square.stack.3d.down.forward"
         case .resumeEditor: return "pencil.and.list.clipboard"
-        case .dailyTasks: return "calendar.day.timeline.leading"
+        case .dailyTasks: return "figure.mind.and.body"
         case .sources: return "signpost.right.and.left"
         case .events: return "person.line.dotted.person.fill"
         case .contacts: return "teletype.answer"
-        case .weeklyReview: return "book.pages"
+        case .weeklyReview: return "calendar.day.timeline.left"
         case .references: return "brain.head.profile"
         case .experience: return "building.columns"
         case .profile: return "person.text.rectangle"
@@ -73,17 +73,27 @@ enum AppModule: String, CaseIterable, Identifiable, Codable {
     /// Keyboard shortcut number (1-9, 0)
     var shortcutNumber: String {
         switch self {
-        case .pipeline: return "1"
-        case .resumeEditor: return "2"
-        case .dailyTasks: return "3"
-        case .sources: return "4"
-        case .events: return "5"
-        case .contacts: return "6"
-        case .weeklyReview: return "7"
-        case .references: return "8"
+        case .resumeEditor: return "1"
+        case .pipeline: return "2"
+        case .sources: return "3"
+        case .dailyTasks: return "4"
+        case .weeklyReview: return "5"
+        case .events: return "6"
+        case .contacts: return "7"
+        case .profile: return "8"
         case .experience: return "9"
-        case .profile: return "0"
+        case .references: return "0"
         }
+    }
+
+    /// Icon bar sections separated by dividers
+    static var iconBarSections: [[AppModule]] {
+        [
+            [.dailyTasks, .weeklyReview],
+            [.resumeEditor, .pipeline, .sources],
+            [.events, .contacts],
+            [.profile, .experience, .references],
+        ]
     }
 
     /// Whether this module requires a focused job to function
@@ -96,6 +106,14 @@ enum AppModule: String, CaseIterable, Identifiable, Codable {
 
     /// Whether to show the job picker in the toolbar
     var showsJobPicker: Bool {
+        switch self {
+        case .resumeEditor: return true
+        default: return false
+        }
+    }
+
+    /// Whether this module provides its own toolbar items
+    var hasCustomToolbar: Bool {
         switch self {
         case .resumeEditor: return true
         default: return false
