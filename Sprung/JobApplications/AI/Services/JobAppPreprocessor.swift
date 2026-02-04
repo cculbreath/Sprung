@@ -448,7 +448,7 @@ class JobAppPreprocessor {
 
         For each suggested skill:
         - skill_name: The job requirement skill they likely have
-        - category: Appropriate SkillCategory (Programming Languages, Frameworks & Libraries, Tools & Platforms, Hardware & Electronics, Fabrication & Manufacturing, Scientific & Analysis, Leadership & Communication, Domain Expertise)
+        - category: Appropriate SkillCategory (Programming Languages, Frameworks & Libraries, Tools & Platforms, Hardware & Electronics, Fabrication & Manufacturing, Scientific & Analysis, Methodologies & Processes, Writing & Communication, Research Methods, Regulatory & Compliance, Leadership & Management, Domain Expertise)
         - confidence: "high" if multiple signals, "medium" if single strong signal, "low" if plausible inference
         - reason: Brief explanation of why this is inferred
         - related_user_skills: User's existing skill names that suggest this capability

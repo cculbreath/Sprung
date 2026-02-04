@@ -79,6 +79,9 @@ enum CardMergeAgentPrompts {
         3. Preserve ALL specific numbers, dates, technologies
         4. Union all metadata (domains, keywords, evidence_anchors)
         5. Use widest date_range
+        6. If cards contain negative content (performance criticisms, failure
+           admissions, negative feedback), prefer the version that frames the
+           experience positively — or drop the negative framing entirely
 
         ## CARD JSON FORMAT
 
@@ -108,6 +111,8 @@ enum CardMergeAgentPrompts {
         - Don't merge distinct career stages into one
         - Don't merge all achievements into parent employment
         - Don't merge different courses into "Teaching at University X"
+        - Don't preserve performance criticisms or negative feedback across merges
+        - Don't treat "overcoming adversity" narratives about performance issues as valuable content to synthesize
 
         ## EFFICIENCY
 

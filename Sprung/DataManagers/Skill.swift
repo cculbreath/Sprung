@@ -19,8 +19,21 @@ enum SkillCategory: String, Codable, CaseIterable {
     case hardware = "Hardware & Electronics"
     case fabrication = "Fabrication & Manufacturing"
     case scientific = "Scientific & Analysis"
-    case soft = "Leadership & Communication"
+    case methodologies = "Methodologies & Processes"
+    case writing = "Writing & Communication"
+    case research = "Research Methods"
+    case regulatory = "Regulatory & Compliance"
+    case leadership = "Leadership & Management"
     case domain = "Domain Expertise"
+
+    /// Legacy: old data stored as "Leadership & Communication". Decodes correctly;
+    /// Skill.category computed property remaps to .leadership.
+    case soft = "Leadership & Communication"
+
+    /// Categories shown in UI — excludes legacy `.soft`
+    static var displayCases: [SkillCategory] {
+        allCases.filter { $0 != .soft }
+    }
 
     var icon: String {
         switch self {
@@ -30,7 +43,11 @@ enum SkillCategory: String, Codable, CaseIterable {
         case .hardware: return "cpu"
         case .fabrication: return "hammer"
         case .scientific: return "flask"
-        case .soft: return "person.2"
+        case .methodologies: return "flowchart"
+        case .writing: return "text.document"
+        case .research: return "magnifyingglass"
+        case .regulatory: return "checkmark.shield"
+        case .leadership, .soft: return "person.2"
         case .domain: return "building.2"
         }
     }
@@ -223,10 +240,11 @@ class Skill: Identifiable, Codable {
 
     // MARK: - Computed Properties
 
-    /// Category as enum
+    /// Category as enum. Remaps legacy `.soft` to `.leadership`.
     var category: SkillCategory {
         get {
-            SkillCategory(rawValue: categoryRaw) ?? .domain
+            let raw = SkillCategory(rawValue: categoryRaw) ?? .domain
+            return raw == .soft ? .leadership : raw
         }
         set {
             categoryRaw = newValue.rawValue

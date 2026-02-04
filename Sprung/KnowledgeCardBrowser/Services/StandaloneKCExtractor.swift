@@ -164,10 +164,29 @@ class StandaloneKCExtractor {
             artifactJSON["metadata"]["title"].string = title
         }
 
-        // Generate a summary for metadata extraction
-        let summary = generateLocalSummary(from: artifact.extractedContent, filename: artifact.filename)
-        artifactJSON["summary"].string = summary
-        artifactJSON["brief_description"].string = String(artifact.extractedContent.prefix(200))
+        // Generate LLM-powered summary (fall back to local if unavailable)
+        var summaryText: String
+        var briefDescription: String
+        if let facade = llmFacade {
+            do {
+                let docSummary = try await facade.generateDocumentSummary(
+                    content: artifact.extractedContent,
+                    filename: artifact.filename
+                )
+                summaryText = docSummary.summary
+                briefDescription = docSummary.briefDescription
+                Logger.info("StandaloneKCExtractor: LLM summary generated for \(artifact.filename)", category: .ai)
+            } catch {
+                Logger.warning("StandaloneKCExtractor: LLM summary failed, using local: \(error.localizedDescription)", category: .ai)
+                summaryText = generateLocalSummary(from: artifact.extractedContent, filename: artifact.filename)
+                briefDescription = String(artifact.extractedContent.prefix(200))
+            }
+        } else {
+            summaryText = generateLocalSummary(from: artifact.extractedContent, filename: artifact.filename)
+            briefDescription = String(artifact.extractedContent.prefix(200))
+        }
+        artifactJSON["summary"].string = summaryText
+        artifactJSON["brief_description"].string = briefDescription
 
         // Persist to SwiftData as standalone artifact (session = nil, immediately archived)
         let artifactId = persistArtifactToSwiftData(artifactJSON)
@@ -246,6 +265,20 @@ class StandaloneKCExtractor {
         artifactJSON["summary"].string = "Git repository \(repoName): \(result.narrativeCards.count) knowledge cards, \(result.skills.count) skills"
         artifactJSON["brief_description"].string = "Git repository: \(repoName)"
         artifactJSON["summary_metadata"]["document_type"].string = "git_repository"
+
+        // Encode skills and narrative cards for artifact persistence
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        if !result.skills.isEmpty,
+           let skillsData = try? encoder.encode(result.skills),
+           let skillsString = String(data: skillsData, encoding: .utf8) {
+            artifactJSON["skills"].string = skillsString
+        }
+        if !result.narrativeCards.isEmpty,
+           let cardsData = try? encoder.encode(result.narrativeCards),
+           let cardsString = String(data: cardsData, encoding: .utf8) {
+            artifactJSON["narrative_cards"].string = cardsString
+        }
 
         // Persist to SwiftData as standalone artifact
         let artifactId = persistArtifactToSwiftData(artifactJSON)
@@ -326,6 +359,10 @@ class StandaloneKCExtractor {
             metadataJSONString = nil
         }
 
+        // Extract skills and narrative cards JSON if present
+        let skillsJSON = artifactJSON["skills"].string
+        let narrativeCardsJSON = artifactJSON["narrative_cards"].string
+
         // Persist as standalone artifact (session = nil, archived)
         let record = store.addStandaloneArtifact(
             sourceType: sourceType,
@@ -337,6 +374,8 @@ class StandaloneKCExtractor {
             summary: summary,
             briefDescription: briefDescription,
             title: title,
+            skillsJSON: skillsJSON,
+            narrativeCardsJSON: narrativeCardsJSON,
             metadataJSON: metadataJSONString
         )
 

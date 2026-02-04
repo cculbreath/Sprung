@@ -175,6 +175,9 @@ class BackgroundMergeAgent {
         4. Union all metadata (domains, scale, keywords, evidence_anchors)
         5. Use the widest dateRange that covers all cards
         6. Keep the most descriptive title
+        7. If any source card contains negative content (performance criticisms,
+           failure admissions, negative feedback), drop that content — it has
+           no value in resume generation
 
         ## SOURCE CARDS
 

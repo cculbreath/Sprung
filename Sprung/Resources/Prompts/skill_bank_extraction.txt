@@ -13,10 +13,13 @@ Extract a comprehensive skill inventory with evidence.
 
 ## Task
 
-Extract ALL skills demonstrated in this document. Be exhaustive.
+Extract a COMPREHENSIVE skill inventory from this document. This is a BANK of
+all possible skills to draw from at resume time — completeness matters more
+than selectivity. When in doubt, INCLUDE the skill at a lower proficiency level.
 
 ### What Counts as a Skill
 
+**Explicitly demonstrated:**
 - Programming languages (Python, Swift, C++)
 - Frameworks and libraries (React, FastAPI, PyTorch)
 - Tools and platforms (Git, Docker, AWS, SolidWorks)
@@ -24,14 +27,37 @@ Extract ALL skills demonstrated in this document. Be exhaustive.
 - Fabrication (CNC machining, 3D printing, soldering, welding)
 - Scientific methods (spectroscopy, microscopy, statistical analysis)
 - Domain expertise (liquid crystals, embedded systems, machine learning)
+- Methodologies and processes (Agile, experimental design, peer review, design thinking)
+- Writing and communication (technical writing, grant writing, public speaking, peer-reviewed publication)
+- Research methods (literature review, experimental design, data collection, statistical analysis)
+- Regulatory/compliance (ITAR, ISO, FDA, OSHA, IRB)
 - Soft skills only if DEMONSTRATED (led team of 5, mentored interns)
+
+**Implied by context — extract these too:**
+- If someone writes a SolidWorks design doc, they also have: 3D CAD, parametric modeling,
+  engineering drawings, BOM management
+- If someone publishes a paper, they also have: academic writing, peer review process,
+  literature review, citation management
+- If someone manages a lab, they also have: safety protocols, equipment maintenance,
+  inventory management, student supervision
+- If someone uses Arduino, they also have: embedded C/C++, serial communication,
+  digital/analog I/O, circuit prototyping
+
+Extract both the explicit skill AND its reasonable implied skills. Mark implied
+skills as "supporting" or "mention" evidence strength.
 
 ### Evidence Requirements
 
-Every skill must have evidence from this document:
-- **location**: Where in document (page, section, commit)
-- **context**: Brief description of how skill was used (10-30 words)
-- **strength**: primary (deep use), supporting (significant), mention (referenced)
+Every skill should reference this document, but keep evidence LIGHTWEIGHT to
+maximize the number of skills extracted:
+- **location**: Where in document (page, section, or general area)
+- **context**: Brief note on how skill appears (5-20 words is fine)
+- **strength**: primary (deep use), supporting (significant), mention (referenced or implied)
+
+DO NOT skip a skill because you can't write a detailed evidence entry.
+A brief mention is valid evidence. The downstream system uses proficiency level
+and evidence strength to rank skills — light evidence at "mention" strength is
+far more useful than omitting the skill entirely.
 
 ### ATS Variants
 
@@ -43,9 +69,9 @@ Include common variations employers might search for:
 ### Proficiency Signals
 
 Determine proficiency from evidence:
-- **expert**: Years of use, teaching others, deep customization
+- **expert**: Years of use, teaching others, deep customization, published work using it
 - **proficient**: Regular use, independent work, solid results
-- **familiar**: Some exposure, would need ramp-up
+- **familiar**: Some exposure, mentioned in context, implied by adjacent work
 
 ### Categories
 
@@ -56,12 +82,17 @@ Assign each skill to ONE category:
 - Hardware & Electronics
 - Fabrication & Manufacturing
 - Scientific & Analysis
-- Leadership & Communication
+- Methodologies & Processes
+- Writing & Communication
+- Research Methods
+- Regulatory & Compliance
+- Leadership & Management
 - Domain Expertise
 
 ### Quality Checklist
 
-- Every skill has at least one evidence entry
+- Exhaustiveness: Could someone reading the source document identify skills you missed?
+- Implied skills: Did you extract skills implied by the tools, roles, and activities described?
 - ATS variants cover common job listing phrasings
 - Proficiency matches demonstrated depth
 - Categories are appropriate

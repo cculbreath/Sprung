@@ -993,16 +993,7 @@ struct SkillsBankBrowser: View {
     }
 
     private func iconFor(_ category: SkillCategory) -> String {
-        switch category {
-        case .languages: return "chevron.left.forwardslash.chevron.right"
-        case .frameworks: return "square.stack.3d.up"
-        case .tools: return "wrench.and.screwdriver"
-        case .hardware: return "cpu"
-        case .fabrication: return "hammer"
-        case .scientific: return "flask"
-        case .soft: return "person.2"
-        case .domain: return "building.2"
-        }
+        category.icon
     }
 
     private func colorFor(_ category: SkillCategory) -> Color {
@@ -1013,7 +1004,11 @@ struct SkillsBankBrowser: View {
         case .hardware: return .red
         case .fabrication: return .brown
         case .scientific: return .green
-        case .soft: return .teal
+        case .methodologies: return .cyan
+        case .writing: return .mint
+        case .research: return .pink
+        case .regulatory: return .gray
+        case .leadership, .soft: return .teal
         case .domain: return .indigo
         }
     }

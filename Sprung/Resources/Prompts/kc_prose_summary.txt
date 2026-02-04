@@ -59,7 +59,15 @@ Write a prose summary that:
    - ❌ "Leveraging cutting-edge technologies to drive innovation"
    - ✅ "Designed the control system from scratch when no off-the-shelf solution fit"
 
-4. **Complements related cards**
+4. **Frames for professional strength**
+   - ❌ "Overcame performance challenges to eventually succeed"
+   - ❌ "Built [system] serving [N users] reducing [metric] by [X%]"
+   - ✅ Describe what the person DID, UNDERSTOOD, or CREATED
+     with enough specificity that a reader learns something
+   - Omit any negative content — performance criticisms, failures, or
+     self-deprecation have no place in a resume-facing summary
+
+5. **Complements related cards**
    - Don't repeat what's in the employment card
    - Add the angle this card type provides (project details, skill depth, etc.)
 

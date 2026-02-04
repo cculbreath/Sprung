@@ -74,6 +74,27 @@ struct AnalysisConfirmationView: View {
                                 }
                             }
                         }
+
+                        if !result.skillBank.skills.isEmpty {
+                            Section("Skills to Add (\(result.skillBank.skills.count))") {
+                                let grouped = result.skillBank.groupedByCategory()
+                                ForEach(SkillCategory.allCases, id: \.self) { category in
+                                    if let skills = grouped[category], !skills.isEmpty {
+                                        HStack {
+                                            Image(systemName: category.icon)
+                                                .foregroundStyle(.secondary)
+                                                .frame(width: 20)
+                                            Text(category.rawValue)
+                                                .font(.subheadline)
+                                            Spacer()
+                                            Text("\(skills.count)")
+                                                .font(.subheadline)
+                                                .foregroundStyle(.secondary)
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
 
@@ -123,7 +144,9 @@ struct AnalysisConfirmationView: View {
 
     private var footerView: some View {
         HStack {
-            Text("\(selectedCount) selected")
+            let skillCount = result.skillBank.skills.count
+            let skillText = skillCount > 0 ? " + \(skillCount) skills" : ""
+            Text("\(selectedCount) selected\(skillText)")
                 .font(.caption)
                 .foregroundStyle(.secondary)
 

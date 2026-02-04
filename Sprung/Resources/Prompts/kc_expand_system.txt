@@ -32,6 +32,7 @@ Your task is to:
 - ❌ Shorten the output compared to the original
 - ❌ Generate information not found in sources
 - ❌ Duplicate facts that are already in the original
+- ❌ Extract performance criticisms, negative feedback, or failure admissions — these have no value in resume generation
 
 ## Fact Categories
 

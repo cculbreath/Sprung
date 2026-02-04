@@ -25,18 +25,21 @@ Do NOT create skill-type cards here.
 
 Write 500-2000 words per card capturing:
 
-1. **WHY**: What problem was being solved? What motivated the work?
-2. **JOURNEY**: How did understanding evolve? What was tried?
-3. **LESSONS**: What worked? What didn't? What would be done differently?
+1. **CONTEXT**: What was the situation, and what was the applicant's role?
+2. **APPROACH**: What did they do, and what reasoning drove their decisions?
+3. **SIGNIFICANCE**: What was accomplished, discovered, or advanced?
 4. **VOICE**: Use the author's own words and phrasing
-5. **THINKING**: Design decisions, tradeoffs, insights
+5. **DEPTH**: Design decisions, technical tradeoffs, domain insights
 
 ### Good vs Bad
 
 **GOOD** (captures thinking):
-> "The construction was motivated by earlier hand-rotation experiments that suffered from irregularities. It was clear a custom tool would reduce mechanical noise. I spent several weeks on fabrication—over 50 parts machined from raw materials. The design has been successful mechanically, with vibrational noise at ±60nm. But I learned lessons: I failed to include gaskets, and waterproofing under pressure is hard. Research is fluid—the best experiments can be readily extended and reconfigured."
+> "The construction was motivated by earlier hand-rotation experiments that suffered from irregularities — a custom tool would reduce mechanical noise substantially. I spent several weeks on fabrication, over 50 parts machined from raw materials. The design achieved vibrational noise at ±60nm. The process deepened my understanding of precision mechanical design, particularly the interplay between thermal stability and environmental sealing under pressure."
 
-**BAD** (ATS bullets):
+**BAD** (LinkedIn slop):
+> "Designed and built precision mechanical system achieving ±60nm stability, leveraging SolidWorks and CNC machining to deliver research-grade instrumentation."
+
+**ALSO BAD** (ATS keyword dump):
 > "Designed precision mechanical system. Achieved ±60nm stability. Used SolidWorks and CNC machining."
 
 ## Extractable Metadata
@@ -53,11 +56,38 @@ Note: Individual skills go in Skill Bank, not here.
 - Page numbers or section references
 - 1-2 verbatim excerpts capturing voice (20-50 words each)
 
+## Content Selection: Applicant Advocacy
+
+Knowledge cards replace source documents during resume generation.
+They must present the applicant in the strongest honest light.
+
+**INCLUDE:**
+- Technical depth and domain reasoning
+- What was built, discovered, designed, or taught
+- Evidence of expertise — not claims, but specifics
+- Growth in responsibility, scope, or sophistication of work
+- Recognition from peers, institutions, or the field
+
+**EXCLUDE from narratives:**
+- Performance criticisms, negative feedback, or disciplinary matters
+- Interpersonal conflicts or management disputes
+- Self-deprecating content or admissions of failure
+- Content that a hiring manager would perceive as a red flag
+
+**REFRAME (redirect the substance, drop the negative frame):**
+- "Failed to include gaskets" → "Developed practical expertise in
+  environmental sealing requirements for pressurized systems"
+- "Received poor evaluation" → (omit entirely; focus on the work itself)
+
+The goal is HONEST but STRATEGIC — like what a skilled career coach
+would help someone say. Not inflated, not dishonest, but deliberately
+focused on what demonstrates capability.
+
 ## Output Quality
 
 For each card:
 - Narrative should be rich, detailed, and capture the person's voice
-- WHY/JOURNEY/LESSONS structure should be clear
+- CONTEXT/APPROACH/SIGNIFICANCE structure should be clear
 - Include specific details, numbers, and outcomes from the document
 - Preserve the author's own phrasing and perspective
 - Evidence anchors should point to specific locations

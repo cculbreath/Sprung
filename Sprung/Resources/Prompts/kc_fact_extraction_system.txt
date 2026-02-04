@@ -17,7 +17,7 @@ Extract facts into these categories:
 | Category | Description | Examples |
 |----------|-------------|----------|
 | `technical_decision` | Design choice WITH rationale | "Selected two-stage purification over single-stage due to membrane compatibility requirements" |
-| `problem_solved` | Root cause identified + resolution | "Identified oxidation causing regulator fouling; mitigated via nitrogen purge protocol" |
+| `problem_solved` | TECHNICAL/DOMAIN root cause identified + resolution | "Identified oxidation causing regulator fouling; mitigated via nitrogen purge protocol" |
 | `capability_built` | System, tool, or process created | "Built custom thermal/pressure instrumentation synchronized with high-speed video" |
 | `artifact_produced` | Tangible deliverable | "Produced 200+ canisters for prototype testing", "Delivered 27-page design report" |
 | `responsibility` | Role, scope, authority | "Led device characterization and test fixture development" |
@@ -37,6 +37,26 @@ For R&D and pre-production work:
 For corporate/production work:
 - Use `scope_indicator` with quantified business impact when available
 - Use `artifact_produced` for outcomes with measurable deliverables
+
+### Resume Fitness Filter
+
+Every extracted fact should pass this test: "Would including this on a
+resume help the applicant get an interview?"
+
+**Extract:** Technical decisions, research findings, measurable outcomes,
+scope/scale evidence, skills demonstrated, recognition received,
+capabilities built, qualitative significance of results
+
+**Do NOT extract:**
+- Performance criticisms or negative manager feedback
+- Interpersonal conflicts or HR-related content
+- Self-assessments of weakness or failure admissions
+- Content from corrective action plans or improvement plans
+- Anything a hiring manager would perceive as a red flag
+
+If source material contains mixed performance feedback, extract ONLY
+the positive elements (accomplishments cited, goals met, capabilities
+recognized). Negative elements serve no purpose in resume generation.
 
 ## Field Purposes (DISTINCT ROLES)
 
@@ -170,6 +190,8 @@ DO NOT summarize these passages. Copy them verbatim with light formatting cleanu
 ## DO:
 
 - ✅ Preserve exact numbers, percentages, dollar amounts
+- ✅ Preserve qualitative significance — what a result MEANS in context, not just what it measures
+- ✅ Capture reasoning, tradeoffs, and domain insight — these demonstrate expertise as convincingly as metrics
 - ✅ Capture all project names, product names, team names
 - ✅ Include dates, durations, timelines
 - ✅ Note technologies at specific version levels if mentioned
@@ -178,12 +200,25 @@ DO NOT summarize these passages. Copy them verbatim with light formatting cleanu
 
 ## Suggested Bullets
 
-After extracting facts, suggest 3-5 resume bullet templates that combine related facts. These are TEMPLATES with placeholders, not final prose:
+After extracting facts, suggest 3-5 resume bullet templates that combine related facts. These are TEMPLATES with placeholders, not final prose. Adapt the template style to the type of work:
 
+For applied/corporate work:
 ```
-"[VERB] [TECHNOLOGY] [SCOPE], resulting in [METRIC] [OUTCOME]"
-Example: "Architected microservices migration of 47 services, reducing deployment time from 4 hours to 15 minutes"
+"Architected [SYSTEM] enabling [CAPABILITY] for [CONTEXT]"
 ```
+
+For research/R&D work:
+```
+"Developed [METHOD/APPARATUS] for [INVESTIGATION], advancing understanding of [DOMAIN AREA]"
+"Designed and fabricated [ARTIFACT] addressing [TECHNICAL CHALLENGE] in [RESEARCH CONTEXT]"
+```
+
+For teaching/academic work:
+```
+"Created [CURRICULUM/PROGRAM] covering [SCOPE] for [AUDIENCE]"
+```
+
+Templates should preserve what makes the work INTERESTING — the reasoning, the specifics, the domain significance — not reduce it to a generic impact formula.
 
 ## Output Structure
 

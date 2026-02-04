@@ -21,6 +21,37 @@ Instead, use a hybrid approach designed to preserve resume-relevant details whil
 - Preserve all specific numbers, dates, names, project titles, technologies, and metrics even when compressing.
 - Include short verbatim excerpts for major narrative sections only when they contain unique achievements or the author's personal voice that would matter in job applications.
 
+### Content Priority for Resume Context
+
+This extraction supports resume and cover letter generation. Prioritize accordingly:
+
+**ALWAYS preserve verbatim:**
+- Accomplishments, deliverables, and positive outcomes
+- Metrics, awards, recognitions, and promotions
+- Technical contributions, project descriptions, and research findings
+- Positive performance feedback and endorsements
+
+**Compress to brief factual mention (1-2 sentences max):**
+- Performance improvement plans, corrective actions, or disciplinary notes
+- Negative feedback, critiques, or areas-for-improvement sections
+- Interpersonal conflicts or complaints
+- Any content that a hiring manager would view unfavorably
+
+The downstream system uses this extraction as source-of-truth for resume generation.
+Content that could harm the applicant's candidacy should be acknowledged for
+completeness but not amplified through verbatim preservation.
+
+### Special Handling by Document Type
+
+**Performance Reviews / Annual Evaluations:**
+- Preserve verbatim: accomplishments section, goals achieved, positive ratings, recognition, promotions
+- Compress to one-line mention: areas for improvement, development plans, corrective actions, negative ratings
+- Do NOT preserve verbatim: specific criticisms, manager quotes about weaknesses, or improvement plan details
+
+**Mixed Professional Portfolios (large documents):**
+- Prioritize: project descriptions, technical reports, published work, awards, and positive correspondence
+- De-prioritize: administrative correspondence, HR documents, routine communications
+
 Output format: Provide a thorough, structured transcription in markdown.
 
 Content handling rules:

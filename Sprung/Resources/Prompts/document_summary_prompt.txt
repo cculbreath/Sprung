@@ -9,7 +9,7 @@ Output as JSON with this exact structure:
 {
   "document_type": "resume|performance_review|project_doc|job_description|letter_of_recommendation|certificate|transcript|portfolio|other",
   "brief_description": "10-word max one-liner describing document content (e.g., 'Resume covering 5 years at tech startups')",
-  "summary": "~500 word narrative summary covering: what the document contains, key information relevant to job applications, notable details that stand out",
+  "summary": "~500 word narrative summary covering: what the document contains, the applicant's key accomplishments and capabilities, and evidence of expertise that would strengthen a job application",
   "time_period": "YYYY-YYYY" or null if not applicable,
   "companies": ["Company A", "Company B"],
   "roles": ["Role 1", "Role 2"],
@@ -41,6 +41,13 @@ SUMMARY GUIDELINES:
 - Note leadership scope (team sizes, budget responsibility, geographic span)
 - Identify key technical skills and domain expertise
 - Preserve important quotes or specific phrases that capture accomplishments
+
+APPLICANT ADVOCACY:
+- This summary gates what enters the knowledge card pipeline
+- Focus on content that HELPS the applicant get hired
+- For performance reviews: emphasize positive ratings, accomplishments cited, and goals achieved. Mention areas-for-improvement only as brief context (e.g., "document also contains development goals") — do NOT detail the criticisms
+- For mixed documents: weight the summary toward achievements and capabilities
+- Ask yourself: "Would a hiring manager view this positively?" If not, compress or omit it
 
 RELEVANCE HINTS:
 - Identify which knowledge card types this document could inform:

@@ -17,6 +17,7 @@ struct DocumentIngestionSheet: View {
     @Environment(KnowledgeCardStore.self) private var knowledgeCardStore
     @Environment(LLMFacade.self) private var llmFacade
     @Environment(ArtifactRecordStore.self) private var artifactRecordStore
+    @Environment(SkillStore.self) private var skillStore
 
     // MARK: - State
 
@@ -52,7 +53,8 @@ struct DocumentIngestionSheet: View {
             coordinator = StandaloneKCCoordinator(
                 llmFacade: llmFacade,
                 knowledgeCardStore: knowledgeCardStore,
-                artifactRecordStore: artifactRecordStore
+                artifactRecordStore: artifactRecordStore,
+                skillStore: skillStore
             )
         }
         .sheet(isPresented: $showExistingArtifactsPicker) {
@@ -77,10 +79,11 @@ struct DocumentIngestionSheet: View {
                     result: result,
                     onConfirm: { selectedNew, selectedEnhancements in
                         Task {
-                            let (created, _) = try await coordinator.generateSelected(
+                            let (created, _, _) = try await coordinator.generateSelected(
                                 newCards: selectedNew,
                                 enhancements: selectedEnhancements,
-                                artifacts: result.artifacts
+                                artifacts: result.artifacts,
+                                skillBank: result.skillBank
                             )
                             // Notify caller of first created card (for UI refresh)
                             if created > 0, let first = selectedNew.first {

@@ -55,7 +55,9 @@ enum SkillBankPrompts {
                             "type": "string",
                             "enum": ["Programming Languages", "Frameworks & Libraries", "Tools & Platforms",
                                     "Hardware & Electronics", "Fabrication & Manufacturing",
-                                    "Scientific & Analysis", "Leadership & Communication", "Domain Expertise"],
+                                    "Scientific & Analysis", "Methodologies & Processes",
+                                    "Writing & Communication", "Research Methods",
+                                    "Regulatory & Compliance", "Leadership & Management", "Domain Expertise"],
                             "description": "Category for organizing skills"
                         ],
                         "proficiency": [

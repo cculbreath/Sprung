@@ -27,14 +27,21 @@ class StandaloneKCCoordinator {
         case analyzingGit(turn: Int, maxTurns: Int, action: String)
         case analyzing
         case generatingCard(current: Int, total: Int)
+        case persistingSkills(count: Int)
+        case processingSkills(String)
+        case enriching(current: Int, total: Int, cardTitle: String)
+        case merging
         case completed(created: Int, enhanced: Int)
+        case completedEnrichment(count: Int)
+        case completedMerge(before: Int, after: Int)
         case failed(String)
 
         var isProcessing: Bool {
             switch self {
-            case .idle, .completed, .failed:
+            case .idle, .completed, .completedEnrichment, .completedMerge, .failed:
                 return false
-            case .extracting, .analyzingGit, .analyzing, .generatingCard:
+            case .extracting, .analyzingGit, .analyzing, .generatingCard,
+                 .persistingSkills, .processingSkills, .enriching, .merging:
                 return true
             }
         }
@@ -57,6 +64,14 @@ class StandaloneKCCoordinator {
                 return "Analyzing documents..."
             case .generatingCard(let current, let total):
                 return "Generating card (\(current)/\(total))..."
+            case .persistingSkills(let count):
+                return "Adding \(count) skills..."
+            case .processingSkills(let detail):
+                return "Processing skills: \(detail)"
+            case .enriching(let current, let total, let cardTitle):
+                return "Enriching (\(current)/\(total)): \(cardTitle)"
+            case .merging:
+                return "Merging similar cards..."
             case .completed(let created, let enhanced):
                 if created > 0 && enhanced > 0 {
                     return "Created \(created) cards, enhanced \(enhanced)"
@@ -67,6 +82,11 @@ class StandaloneKCCoordinator {
                 } else {
                     return "Completed"
                 }
+            case .completedEnrichment(let count):
+                return "Enriched \(count) card\(count == 1 ? "" : "s")"
+            case .completedMerge(let before, let after):
+                let merged = before - after
+                return "Merged \(merged) card\(merged == 1 ? "" : "s") (\(before) → \(after))"
             case .failed(let error):
                 return "Failed: \(error)"
             }
@@ -95,16 +115,18 @@ class StandaloneKCCoordinator {
     private weak var llmFacade: LLMFacade?
     private weak var knowledgeCardStore: KnowledgeCardStore?
     private weak var artifactRecordStore: ArtifactRecordStore?
+    private weak var skillStore: SkillStore?
 
     /// Tracks artifact IDs created during current operation (for export)
     private var currentArtifactIds: Set<String> = []
 
     // MARK: - Initialization
 
-    init(llmFacade: LLMFacade?, knowledgeCardStore: KnowledgeCardStore?, artifactRecordStore: ArtifactRecordStore?) {
+    init(llmFacade: LLMFacade?, knowledgeCardStore: KnowledgeCardStore?, artifactRecordStore: ArtifactRecordStore?, skillStore: SkillStore? = nil) {
         self.llmFacade = llmFacade
         self.knowledgeCardStore = knowledgeCardStore
         self.artifactRecordStore = artifactRecordStore
+        self.skillStore = skillStore
 
         // Initialize sub-modules
         self.extractor = StandaloneKCExtractor(llmFacade: llmFacade, artifactRecordStore: artifactRecordStore)
@@ -175,6 +197,13 @@ class StandaloneKCCoordinator {
             // Merge skill banks from git analysis and document analysis
             let mergedSkills = skillBank.skills + analysisResult.skillBank.skills
             skillBank = SkillBank(skills: mergedSkills, generatedAt: Date(), sourceDocumentIds: analysisResult.skillBank.sourceDocumentIds)
+
+            // Write back extracted skills/cards to artifact records for reuse
+            writeBackAnalysisResults(
+                skills: analysisResult.skillBank.skills,
+                narrativeCards: analysisResult.narrativeCards,
+                artifacts: nonGitArtifacts
+            )
         }
 
         guard !allNewCards.isEmpty || !allArtifacts.isEmpty else {
@@ -195,12 +224,13 @@ class StandaloneKCCoordinator {
         )
     }
 
-    /// Generate selected cards and apply enhancements.
+    /// Generate selected cards, apply enhancements, and persist skills.
     func generateSelected(
         newCards: [KnowledgeCard],
         enhancements: [(proposal: KnowledgeCard, existing: KnowledgeCard)],
-        artifacts: [JSON]
-    ) async throws -> (created: Int, enhanced: Int) {
+        artifacts: [JSON],
+        skillBank: SkillBank
+    ) async throws -> (created: Int, enhanced: Int, skillsAdded: Int) {
         guard llmFacade != nil else {
             throw StandaloneKCError.llmNotConfigured
         }
@@ -216,7 +246,7 @@ class StandaloneKCCoordinator {
             card.isFromOnboarding = false
             knowledgeCardStore?.add(card)
             createdCount += 1
-            Logger.info("✅ StandaloneKCCoordinator: Created card - \(card.title)", category: .ai)
+            Logger.info("StandaloneKCCoordinator: Created card - \(card.title)", category: .ai)
         }
 
         // Enhance existing cards
@@ -225,11 +255,198 @@ class StandaloneKCCoordinator {
 
             analyzer.enhanceKnowledgeCard(existingCard, with: proposal)
             enhancedCount += 1
-            Logger.info("✅ StandaloneKCCoordinator: Enhanced card - \(existingCard.title)", category: .ai)
+            Logger.info("StandaloneKCCoordinator: Enhanced card - \(existingCard.title)", category: .ai)
+        }
+
+        // Persist skills to SkillStore (directly approved, not pending)
+        var skillsAdded = 0
+        if !skillBank.skills.isEmpty, let skillStore = skillStore {
+            status = .persistingSkills(count: skillBank.skills.count)
+
+            let newSkills = skillBank.skills.map { skill -> Skill in
+                Skill(
+                    canonical: skill.canonical,
+                    atsVariants: skill.atsVariants,
+                    category: skill.category,
+                    proficiency: skill.proficiency,
+                    evidence: skill.evidence,
+                    relatedSkills: skill.relatedSkills,
+                    lastUsed: skill.lastUsed,
+                    isFromOnboarding: false,
+                    isPending: false
+                )
+            }
+
+            skillStore.addAll(newSkills)
+            skillsAdded = newSkills.count
+            Logger.info("StandaloneKCCoordinator: Persisted \(skillsAdded) skills", category: .ai)
+
+            // Run deduplication + ATS expansion on all skills in store
+            if let llmFacade = llmFacade {
+                status = .processingSkills("Deduplicating...")
+                let skillsService = SkillsProcessingService(
+                    skillStore: skillStore,
+                    facade: llmFacade
+                )
+                do {
+                    let results = try await skillsService.processAllSkills()
+                    for result in results {
+                        Logger.info("StandaloneKCCoordinator: \(result.operation) - \(result.details)", category: .ai)
+                    }
+                } catch is ModelConfigurationError {
+                    Logger.warning("StandaloneKCCoordinator: Skills processing skipped - model not configured", category: .ai)
+                } catch {
+                    Logger.warning("StandaloneKCCoordinator: Skills processing failed: \(error.localizedDescription)", category: .ai)
+                }
+            }
         }
 
         status = .completed(created: createdCount, enhanced: enhancedCount)
-        return (created: createdCount, enhanced: enhancedCount)
+        return (created: createdCount, enhanced: enhancedCount, skillsAdded: skillsAdded)
+    }
+
+    // MARK: - Public API: Enrichment
+
+    /// Enrich cards with structured fact extraction and prose summaries.
+    /// - Parameters:
+    ///   - cards: Cards to enrich (typically those where factsJSON is nil)
+    ///   - writingSamples: Optional formatted raw writing sample excerpts for voice matching
+    /// - Returns: Number of cards enriched
+    func enrichCards(_ cards: [KnowledgeCard], writingSamples: String? = nil) async throws -> Int {
+        guard let facade = llmFacade else {
+            throw StandaloneKCError.llmNotConfigured
+        }
+
+        let enrichmentService = CardEnrichmentService(llmFacade: facade)
+        let allCards = knowledgeCardStore?.knowledgeCards ?? []
+        var enrichedCount = 0
+
+        for (index, card) in cards.enumerated() {
+            status = .enriching(current: index + 1, total: cards.count, cardTitle: card.title)
+
+            // Find source text from artifact records
+            let sourceText = findSourceText(for: card)
+
+            // Other cards for prose summary context (exclude current)
+            let relatedCards = allCards.filter { $0.id != card.id }
+
+            do {
+                try await enrichmentService.enrichCard(card, sourceText: sourceText, relatedCards: relatedCards, writingSamples: writingSamples)
+                knowledgeCardStore?.update(card)
+                enrichedCount += 1
+                Logger.info("StandaloneKCCoordinator: Enriched card - \(card.title)", category: .ai)
+            } catch {
+                Logger.warning("StandaloneKCCoordinator: Failed to enrich \(card.title): \(error.localizedDescription)", category: .ai)
+            }
+        }
+
+        status = .completedEnrichment(count: enrichedCount)
+        return enrichedCount
+    }
+
+    // MARK: - Public API: Merge
+
+    /// Merge similar cards using the CardMergeAgent.
+    /// - Parameter cards: Cards to evaluate for merging
+    /// - Returns: Tuple of (merged count, remaining count)
+    func mergeCards(_ cards: [KnowledgeCard]) async throws -> (merged: Int, remaining: Int) {
+        guard let facade = llmFacade else {
+            throw StandaloneKCError.llmNotConfigured
+        }
+        guard cards.count > 1 else {
+            return (merged: 0, remaining: cards.count)
+        }
+
+        status = .merging
+
+        let dedupService = NarrativeDeduplicationService(llmFacade: facade)
+        let result = try await dedupService.deduplicateCards(cards)
+
+        let beforeCount = cards.count
+        let afterCount = result.cards.count
+
+        if afterCount < beforeCount, let store = knowledgeCardStore {
+            // Remove old cards that were merged
+            let resultIds = Set(result.cards.map { $0.id })
+            let removedCards = cards.filter { !resultIds.contains($0.id) }
+            for card in removedCards {
+                store.delete(card)
+            }
+            // Add new merged cards
+            let newCards = result.cards.filter { merged in
+                !cards.contains(where: { $0.id == merged.id })
+            }
+            for card in newCards {
+                card.isFromOnboarding = false
+                store.add(card)
+            }
+        }
+
+        Logger.info("StandaloneKCCoordinator: Merge complete - \(beforeCount) → \(afterCount) cards", category: .ai)
+        status = .completedMerge(before: beforeCount, after: afterCount)
+        return (merged: beforeCount - afterCount, remaining: afterCount)
+    }
+
+    // MARK: - Private Helpers
+
+    /// Write back extracted skills and narrative cards to artifact records for future reuse.
+    private func writeBackAnalysisResults(
+        skills: [Skill],
+        narrativeCards: [KnowledgeCard],
+        artifacts: [JSON]
+    ) {
+        guard let store = artifactRecordStore else { return }
+
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+
+        let skillsJSON: String? = {
+            guard !skills.isEmpty,
+                  let data = try? encoder.encode(skills) else { return nil }
+            return String(data: data, encoding: .utf8)
+        }()
+
+        let cardsJSON: String? = {
+            guard !narrativeCards.isEmpty,
+                  let data = try? encoder.encode(narrativeCards) else { return nil }
+            return String(data: data, encoding: .utf8)
+        }()
+
+        for artifact in artifacts {
+            guard let idString = artifact["id"].string,
+                  let record = store.artifact(byIdString: idString) else { continue }
+
+            if let skillsJSON, record.skillsJSON == nil {
+                store.updateSkills(record, skillsJSON: skillsJSON)
+            }
+            if let cardsJSON, record.narrativeCardsJSON == nil {
+                store.updateNarrativeCards(record, narrativeCardsJSON: cardsJSON)
+            }
+        }
+
+        Logger.info("StandaloneKCCoordinator: Wrote back analysis results to \(artifacts.count) artifact records", category: .ai)
+    }
+
+    /// Find source document text for a card by searching artifact records.
+    private func findSourceText(for card: KnowledgeCard) -> String {
+        guard let store = artifactRecordStore else { return card.narrative }
+
+        // Try matching by evidence anchor document IDs
+        for anchor in card.evidenceAnchors {
+            if let artifact = store.artifact(byIdString: anchor.documentId),
+               !artifact.extractedContent.isEmpty {
+                return artifact.extractedContent
+            }
+        }
+
+        // Fall back to searching all artifacts for content overlap
+        let allArtifacts = store.allArtifacts
+        if let match = allArtifacts.first(where: { !$0.extractedContent.isEmpty && $0.extractedContent.count > 500 }) {
+            return match.extractedContent
+        }
+
+        // Last resort: use the card's own narrative as source
+        return card.narrative
     }
 }
 

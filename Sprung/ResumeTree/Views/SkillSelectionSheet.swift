@@ -48,7 +48,7 @@ struct SkillSelectionSheet: View {
                 // Category picker
                 Picker("Category", selection: $selectedCategory) {
                     Text("All").tag(nil as SkillCategory?)
-                    ForEach(SkillCategory.allCases, id: \.self) { category in
+                    ForEach(SkillCategory.displayCases, id: \.self) { category in
                         Text(category.rawValue).tag(category as SkillCategory?)
                     }
                 }

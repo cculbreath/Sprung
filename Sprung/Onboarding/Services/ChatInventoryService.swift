@@ -142,14 +142,22 @@ actor ChatInventoryService {
 
     private func buildSkillsExtractionPrompt(transcript: String) -> String {
         """
-        You are extracting skills from an interview conversation. The user has been \
-        discussing their career, achievements, skills, and experience.
+        You are extracting a COMPREHENSIVE skill inventory from an interview conversation. \
+        The user has been discussing their career, achievements, skills, and experience.
 
-        Review the conversation below and extract any skills that the user mentions. Focus on:
-        - Technical skills and technologies mentioned
-        - Soft skills demonstrated through examples
+        This is a BANK of all possible skills — completeness matters more than selectivity. \
+        When in doubt, INCLUDE the skill at a lower proficiency level.
+
+        Review the conversation below and extract ALL skills, including:
+        - Technical skills and technologies mentioned explicitly
+        - Skills IMPLIED by the work described (e.g., if they managed a team, extract \
+          "team management", "performance reviews", "hiring", "mentoring")
         - Domain knowledge and expertise areas
         - Tools, frameworks, and methodologies
+        - Soft skills demonstrated through concrete examples
+        - Research methods, writing skills, regulatory knowledge if applicable
+        - Adjacent skills implied by primary ones (e.g., "Python" implies "pip", \
+          "virtual environments", "debugging")
 
         For each skill, assess:
         - The proficiency level based on how they discuss it (expert, advanced, intermediate, beginner)
@@ -157,7 +165,7 @@ actor ChatInventoryService {
         - Evidence strength (strong, moderate, weak) based on specificity of claims
 
         IMPORTANT:
-        - Only include skills explicitly stated or clearly demonstrated by the user
+        - Extract both explicit AND implied skills
         - Use "chat" as the source document ID
         - If no clear skills are mentioned, return an empty array
 
@@ -183,15 +191,17 @@ actor ChatInventoryService {
         - Educational experiences if discussed in depth
 
         For each card, capture:
-        - The WHY: Context and motivation for this experience
-        - The JOURNEY: What happened, challenges faced, actions taken
-        - The LESSONS: Outcomes, learnings, and growth
+        - The CONTEXT: What was the situation and the applicant's role?
+        - The APPROACH: What did they do and what reasoning drove their decisions?
+        - The SIGNIFICANCE: What was accomplished, discovered, or advanced?
 
         IMPORTANT:
         - Only create cards for experiences with enough detail for a meaningful narrative
         - Use "chat" as the source document ID
         - Set evidence strength to "moderate" since chat is supplemental to documents
         - If no substantial career narratives are shared, return an empty array
+        - Focus on accomplishments, expertise, and what was built/discovered — omit
+          negative content like performance criticisms, failures, or self-deprecation
 
         CONVERSATION TRANSCRIPT:
         ---
@@ -253,9 +263,9 @@ actor ChatInventoryService {
                 "title": JSONSchema(type: .string),
                 "organization": JSONSchema(type: .string),
                 "timePeriod": JSONSchema(type: .string),
-                "whySection": JSONSchema(type: .string, description: "Context and motivation"),
-                "journeySection": JSONSchema(type: .string, description: "What happened, challenges, actions"),
-                "lessonsSection": JSONSchema(type: .string, description: "Outcomes and learnings"),
+                "whySection": JSONSchema(type: .string, description: "Context: the situation and the applicant's role"),
+                "journeySection": JSONSchema(type: .string, description: "Approach: what they did and what reasoning drove decisions"),
+                "lessonsSection": JSONSchema(type: .string, description: "Significance: what was accomplished, discovered, or advanced"),
                 "technologies": JSONSchema(type: .array, items: JSONSchema(type: .string)),
                 "evidence": JSONSchema(type: .array, items: evidenceAnchorSchema),
                 "extractableMetadata": JSONSchema(

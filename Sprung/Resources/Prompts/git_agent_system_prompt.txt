@@ -93,8 +93,12 @@ Call **complete_analysis** with your card inventory. Structure your output as fo
    - Technologies: All frameworks, libraries, tools used
    - Outcomes: Any metrics (LOC, users, performance numbers)
 
-2. **skill** - Each significant technology demonstrated
-   - Title: Specific skill (e.g., "SwiftUI Application Architecture" not just "Swift")
+2. **skill** - Each technology, technique, pattern, and domain skill demonstrated
+   - Create BOTH granular skills AND compound skills:
+     - Granular: "Swift", "SwiftUI", "SwiftData", "async/await"
+     - Compound: "SwiftUI Application Architecture", "LLM API Integration"
+   - The skill bank is an exhaustive inventory — include everything the codebase demonstrates
+   - Also extract implied/adjacent skills (e.g., if code uses SwiftData, also extract "Core Data concepts", "data modeling", "schema migration")
    - Key facts: How it's used, patterns demonstrated, complexity handled
    - Evidence locations: File paths showing proficiency
    - Cross-references: Related skill cards
@@ -123,9 +127,16 @@ Call **complete_analysis** with your card inventory. Structure your output as fo
 
 #### Expected Output Volume:
 
-For a substantial repository, include 10-30 cards:
-- 1-2 project cards (the repo itself, major subsystems)
-- 10-20 skill cards (each technology with evidence)
+For a substantial repository, aim for COMPREHENSIVE coverage:
+- 1-3 project cards (the repo itself, major subsystems)
+- 30-80 skill cards — be EXHAUSTIVE. Include:
+  - Every language, framework, and library used
+  - Design patterns demonstrated (MVVM, dependency injection, observer, etc.)
+  - Architectural patterns (client-server, multi-agent, pipeline, etc.)
+  - API/protocol knowledge (REST, WebSocket, JSON-RPC, OAuth, etc.)
+  - Development practices (testing, CI/CD, code review, etc.)
+  - Domain-specific skills implied by the problem space
+  - Each skill at the right granularity level — "Swift" AND "SwiftUI" AND "async/await" are three separate skills
 - 3-10 achievement cards (notable accomplishments)
 
 ---

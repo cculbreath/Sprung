@@ -118,7 +118,8 @@ struct ReferencesModuleView: View {
                 onCardUpdated: { card in knowledgeCardStore.update(card) },
                 onCardDeleted: { card in knowledgeCardStore.delete(card) },
                 onCardAdded: { card in knowledgeCardStore.add(card) },
-                llmFacade: llmFacade
+                llmFacade: llmFacade,
+                onNavigateToWritingSamples: { selectedTab = .writing }
             )
 
         case .writing:
