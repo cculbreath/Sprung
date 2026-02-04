@@ -299,42 +299,61 @@ final class CustomizationPromptCacheService {
         var lines = ["## Knowledge Cards (Evidence Base)"]
 
         lines.append("""
-            The following knowledge cards contain verified evidence about the candidate's
-            experiences, achievements, and skills. Use these as the factual foundation
-            for generated content.
+            The following knowledge cards contain verified evidence about the candidate's \
+            experiences, achievements, and skills. Use these as the factual foundation \
+            for generated content. For verbatim source excerpts and evidence anchors, \
+            use the read_knowledge_cards tool with the card ID.
             """)
 
-        for card in cards.prefix(20) { // Limit to prevent token overflow
+        for card in cards {
             lines.append("")
-            lines.append("### \(card.title)")
+
+            // Header with ID for tool reference
+            let typeLabel = card.cardType?.displayName ?? "General"
+            let header = "### [\(card.id.uuidString)] \(card.title)"
+            lines.append(header)
+
+            var meta: [String] = ["**Type:** \(typeLabel)"]
             if let org = card.organization, !org.isEmpty {
-                lines.append("**Organization:** \(org)")
+                meta.append("**Organization:** \(org)")
             }
             if let dateRange = card.dateRange, !dateRange.isEmpty {
-                lines.append("**Period:** \(dateRange)")
+                meta.append("**Period:** \(dateRange)")
+            }
+            if let quality = card.evidenceQuality, !quality.isEmpty {
+                meta.append("**Evidence:** \(quality)")
+            }
+            lines.append(meta.joined(separator: " | "))
+
+            // Full narrative
+            if !card.narrative.isEmpty {
+                lines.append("\n**Narrative:**")
+                lines.append(card.narrative)
             }
 
-            // Include facts
+            // All facts with category and confidence
             let kcFacts = card.facts
             if !kcFacts.isEmpty {
-                lines.append("**Key Facts:**")
-                for fact in kcFacts.prefix(5) {
-                    lines.append("- \(fact.statement)")
+                lines.append("\n**Facts:**")
+                for fact in kcFacts {
+                    lines.append("- [\(fact.category)] \(fact.statement) (\(fact.confidence ?? ""))")
                 }
             }
 
-            // Include suggested bullets if available
+            // All suggested bullets
             let bullets = card.suggestedBullets
             if !bullets.isEmpty {
-                lines.append("**Highlights:**")
-                for bullet in bullets.prefix(3) {
+                lines.append("\n**Resume Bullets:**")
+                for bullet in bullets {
                     lines.append("- \(bullet)")
                 }
             }
-        }
 
-        if cards.count > 20 {
-            lines.append("\n*... and \(cards.count - 20) more knowledge cards*")
+            // Technologies
+            let techs = card.technologies
+            if !techs.isEmpty {
+                lines.append("\n**Technologies:** \(techs.joined(separator: ", "))")
+            }
         }
 
         return lines.joined(separator: "\n")

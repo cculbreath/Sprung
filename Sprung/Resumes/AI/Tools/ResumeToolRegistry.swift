@@ -110,9 +110,13 @@ enum ResumeToolResult {
 class ResumeToolRegistry {
     private var tools: [any ResumeTool] = []
 
-    init() {
+    init(knowledgeCardStore: KnowledgeCardStore? = nil) {
         // Register default tools
         registerTool(QueryUserExperienceLevelTool())
+
+        if let store = knowledgeCardStore {
+            registerTool(ReadKnowledgeCardsTool(knowledgeCardStore: store))
+        }
     }
 
     /// Register a tool with the registry

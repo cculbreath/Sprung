@@ -2,13 +2,13 @@
 //  CardEnrichmentService.swift
 //  Sprung
 //
-//  Enriches KnowledgeCards with structured fact extraction and prose summaries.
-//  Fact extraction uses Gemini structured output; prose summary uses OpenRouter text generation.
+//  Enriches KnowledgeCards with structured fact extraction.
+//  Fact extraction uses Gemini structured output.
 //
 
 import Foundation
 
-/// Service that enriches knowledge cards with structured facts and polished prose.
+/// Service that enriches knowledge cards with structured facts.
 actor CardEnrichmentService {
     private let llmFacade: LLMFacade
 
@@ -18,23 +18,15 @@ actor CardEnrichmentService {
 
     // MARK: - Public API
 
-    /// Enrich a single card with fact extraction + prose summary.
+    /// Enrich a single card with structured fact extraction.
     /// - Parameters:
     ///   - card: The card to enrich (must have narrative content)
     ///   - sourceText: Source document text for evidence extraction
-    ///   - relatedCards: Other cards to avoid repetition in prose summary
-    ///   - writingSamples: Optional formatted raw writing sample excerpts for voice matching
     func enrichCard(
         _ card: KnowledgeCard,
-        sourceText: String,
-        relatedCards: [KnowledgeCard],
-        writingSamples: String? = nil
+        sourceText: String
     ) async throws {
-        // Step 1: Extract structured facts
         try await extractFacts(for: card, sourceText: sourceText)
-
-        // Step 2: Generate prose summary using extracted facts
-        try await generateProseSummary(for: card, relatedCards: relatedCards, writingSamples: writingSamples)
     }
 
     // MARK: - Fact Extraction
@@ -78,49 +70,6 @@ actor CardEnrichmentService {
         }
 
         Logger.info("CardEnrichmentService: Extracted \(result.facts.count) facts, \(result.suggestedBullets.count) bullets for \(card.title)", category: .ai)
-    }
-
-    // MARK: - Prose Summary
-
-    private func generateProseSummary(for card: KnowledgeCard, relatedCards: [KnowledgeCard], writingSamples: String? = nil) async throws {
-        let modelId = try getModelId(key: "onboardingCardMergeModelId", operation: "Prose Summary")
-
-        // Read card data on MainActor
-        let promptData = await MainActor.run {
-            ProseSummaryInput(
-                cardType: card.cardType?.displayName ?? "General",
-                title: card.title,
-                organization: card.organization ?? "Not specified",
-                timePeriod: card.dateRange ?? "Not specified",
-                facts: card.facts,
-                technologies: card.technologies,
-                outcomes: card.outcomesJSON.flatMap { json in
-                    guard let data = json.data(using: .utf8) else { return nil }
-                    return try? JSONDecoder().decode([String].self, from: data)
-                } ?? [],
-                verbatimExcerpts: card.verbatimExcerpts,
-                relatedCardTitles: relatedCards.map { $0.title },
-                writingSamples: writingSamples
-            )
-        }
-
-        let prompt = buildProseSummaryPrompt(input: promptData)
-
-        let narrative = try await llmFacade.executeText(
-            prompt: prompt,
-            modelId: modelId,
-            temperature: 0.4,
-            backend: .openRouter
-        )
-
-        let trimmed = narrative.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
-
-        await MainActor.run {
-            card.narrative = trimmed
-        }
-
-        Logger.info("CardEnrichmentService: Generated prose summary for \(card.title) (\(trimmed.count) chars)", category: .ai)
     }
 
     // MARK: - Helpers
@@ -217,85 +166,6 @@ actor CardEnrichmentService {
 
         Extract facts now.
         """
-    }
-
-    private struct ProseSummaryInput {
-        let cardType: String
-        let title: String
-        let organization: String
-        let timePeriod: String
-        let facts: [KnowledgeCardFact]
-        let technologies: [String]
-        let outcomes: [String]
-        let verbatimExcerpts: [VerbatimExcerpt]
-        let relatedCardTitles: [String]
-        let writingSamples: String?
-    }
-
-    private func buildProseSummaryPrompt(input: ProseSummaryInput) -> String {
-        let keyFacts = input.facts.isEmpty
-            ? "No structured facts available"
-            : input.facts.map { "- [\($0.category)] \($0.statement)" }.joined(separator: "\n")
-
-        let technologies = input.technologies.isEmpty
-            ? "Not specified"
-            : input.technologies.joined(separator: ", ")
-
-        let outcomes = input.outcomes.isEmpty
-            ? "Not specified"
-            : input.outcomes.map { "- \($0)" }.joined(separator: "\n")
-
-        let excerpts = input.verbatimExcerpts.isEmpty
-            ? "None available"
-            : input.verbatimExcerpts.map { "[\($0.context)]: \($0.text.prefix(500))" }.joined(separator: "\n\n")
-
-        let relatedSummaries = input.relatedCardTitles.isEmpty
-            ? "None"
-            : input.relatedCardTitles.map { "- \($0)" }.joined(separator: "\n")
-
-        // Build voice-related replacements from raw writing samples
-        let voiceAnalysis: String
-        let voiceMarkers: String
-        let toneProfile: String
-
-        if let samples = input.writingSamples, samples != "(No writing samples available)" {
-            voiceAnalysis = """
-            The following are full excerpts from the applicant's own writing. \
-            These demonstrate their authentic voice — match this tone, vocabulary, \
-            level of technical specificity, and framing approach:
-
-            \(samples)
-            """
-
-            voiceMarkers = """
-            CRITICAL: The prose summary must read as if the applicant wrote it themselves. \
-            Absorb the rhythm, word choices, and rhetorical patterns from the writing \
-            samples above. Do not use generic corporate language or phrases not present \
-            in the samples.
-            """
-
-            toneProfile = "Match the applicant's authentic voice as demonstrated in writing samples"
-        } else {
-            voiceAnalysis = "Not available — write in a professional, technically specific tone that focuses on evidence over claims."
-            voiceMarkers = "Use specific technical language appropriate to the domain. Avoid generic corporate language."
-            toneProfile = "Professional, evidence-driven, authentic"
-        }
-
-        let template = PromptLibrary.kcProseSummary
-        return PromptLibrary.substitute(template: template, replacements: [
-            "CARD_TYPE": input.cardType,
-            "TITLE": input.title,
-            "ORGANIZATION": input.organization,
-            "TIME_PERIOD": input.timePeriod,
-            "KEY_FACTS": keyFacts,
-            "TECHNOLOGIES": technologies,
-            "OUTCOMES": outcomes,
-            "VERBATIM_EXCERPTS": excerpts,
-            "VOICE_PRIMER_ANALYSIS": voiceAnalysis,
-            "VOICE_MARKERS": voiceMarkers,
-            "TONE_PROFILE": toneProfile,
-            "RELATED_CARD_SUMMARIES": relatedSummaries
-        ])
     }
 
     // MARK: - JSON Schema for Gemini Structured Output

@@ -101,9 +101,10 @@ class ResumeReviseViewModel {
         )
 
         // Initialize specialized services
+        let registry = toolRegistry ?? ResumeToolRegistry(knowledgeCardStore: knowledgeCardStore)
         self.toolRunner = ToolConversationRunner(
             llm: llmFacade,
-            toolRegistry: toolRegistry
+            toolRegistry: registry
         )
 
         self.phaseReviewManager = PhaseReviewManager(

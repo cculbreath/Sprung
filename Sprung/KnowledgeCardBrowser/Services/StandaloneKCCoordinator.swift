@@ -307,18 +307,15 @@ class StandaloneKCCoordinator {
 
     // MARK: - Public API: Enrichment
 
-    /// Enrich cards with structured fact extraction and prose summaries.
-    /// - Parameters:
-    ///   - cards: Cards to enrich (typically those where factsJSON is nil)
-    ///   - writingSamples: Optional formatted raw writing sample excerpts for voice matching
+    /// Enrich cards with structured fact extraction.
+    /// - Parameter cards: Cards to enrich (typically those where factsJSON is nil)
     /// - Returns: Number of cards enriched
-    func enrichCards(_ cards: [KnowledgeCard], writingSamples: String? = nil) async throws -> Int {
+    func enrichCards(_ cards: [KnowledgeCard]) async throws -> Int {
         guard let facade = llmFacade else {
             throw StandaloneKCError.llmNotConfigured
         }
 
         let enrichmentService = CardEnrichmentService(llmFacade: facade)
-        let allCards = knowledgeCardStore?.knowledgeCards ?? []
         var enrichedCount = 0
 
         for (index, card) in cards.enumerated() {
@@ -327,11 +324,8 @@ class StandaloneKCCoordinator {
             // Find source text from artifact records
             let sourceText = findSourceText(for: card)
 
-            // Other cards for prose summary context (exclude current)
-            let relatedCards = allCards.filter { $0.id != card.id }
-
             do {
-                try await enrichmentService.enrichCard(card, sourceText: sourceText, relatedCards: relatedCards, writingSamples: writingSamples)
+                try await enrichmentService.enrichCard(card, sourceText: sourceText)
                 knowledgeCardStore?.update(card)
                 enrichedCount += 1
                 Logger.info("StandaloneKCCoordinator: Enriched card - \(card.title)", category: .ai)

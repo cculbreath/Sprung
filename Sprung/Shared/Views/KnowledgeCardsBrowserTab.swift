@@ -8,11 +8,9 @@ struct KnowledgeCardsBrowserTab: View {
     let onCardDeleted: (KnowledgeCard) -> Void
     let onCardAdded: (KnowledgeCard) -> Void
     let llmFacade: LLMFacade?
-    var onNavigateToWritingSamples: (() -> Void)?
 
     @Environment(ArtifactRecordStore.self) private var artifactRecordStore
     @Environment(SkillStore.self) private var skillStore
-    @Environment(CoverRefStore.self) private var coverRefStore
 
     @State private var selectedFilter: CardTypeFilter = .all
     @State private var searchText = ""
@@ -21,7 +19,6 @@ struct KnowledgeCardsBrowserTab: View {
     @State private var cardToDelete: KnowledgeCard?
     @State private var showAddSheet = false
     @State private var showIngestionSheet = false
-    @State private var showVoicePrompt = false
     @State private var pipelineCoordinator: StandaloneKCCoordinator?
 
     enum CardTypeFilter: String, CaseIterable {
@@ -142,17 +139,6 @@ struct KnowledgeCardsBrowserTab: View {
         } message: { card in
             Text("Delete \"\(card.title)\"? This cannot be undone.")
         }
-        .alert("Writing Voice", isPresented: $showVoicePrompt) {
-            Button("Go to Writing Samples") {
-                onNavigateToWritingSamples?()
-            }
-            Button("Continue with Default Voice") {
-                startEnrichment(includeWritingSamples: false)
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("Enrichment produces better output when calibrated to your writing voice. Upload writing samples first?")
-        }
         .onChange(of: selectedFilter) { _, _ in }  // Index reset handled by CoverflowBrowser
         .onChange(of: searchText) { _, _ in }
     }
@@ -209,6 +195,7 @@ struct KnowledgeCardsBrowserTab: View {
                     .foregroundStyle(.purple)
             }
             .buttonStyle(.plain)
+            .help("Manually create a new knowledge card")
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 8)
@@ -239,7 +226,7 @@ struct KnowledgeCardsBrowserTab: View {
         }
         .buttonStyle(.plain)
         .disabled(enrichCount == 0 || isProcessing)
-        .help("Extract structured facts and generate prose summaries for \(enrichCount) card\(enrichCount == 1 ? "" : "s")")
+        .help("Extract structured facts for \(enrichCount) card\(enrichCount == 1 ? "" : "s")")
 
         Button(action: runMerge) {
             HStack(spacing: 4) {
@@ -256,30 +243,13 @@ struct KnowledgeCardsBrowserTab: View {
 
     // MARK: - Pipeline Actions
 
-    private var hasWritingSamples: Bool {
-        coverRefStore.storedCoverRefs.contains { $0.type == .writingSample }
-    }
-
     private func runEnrichment() {
-        // Check if writing samples exist; if not, prompt the user
-        if hasWritingSamples {
-            startEnrichment(includeWritingSamples: true)
-        } else {
-            showVoicePrompt = true
-        }
-    }
-
-    private func startEnrichment(includeWritingSamples: Bool) {
         guard let coordinator = pipelineCoordinator else { return }
         let cardsToEnrich = unEnrichedCards
-        let voice = coverRefStore.writersVoice
-        let samples: String? = includeWritingSamples && !voice.isEmpty
-            ? voice
-            : nil
 
         Task {
             do {
-                let count = try await coordinator.enrichCards(cardsToEnrich, writingSamples: samples)
+                let count = try await coordinator.enrichCards(cardsToEnrich)
                 Logger.info("Pipeline: Enriched \(count) cards", category: .ai)
             } catch {
                 Logger.error("Pipeline: Enrichment failed - \(error.localizedDescription)", category: .ai)

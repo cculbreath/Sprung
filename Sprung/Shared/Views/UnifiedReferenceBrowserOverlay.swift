@@ -198,8 +198,7 @@ struct UnifiedReferenceBrowserOverlay: View {
                 onCardUpdated: onKnowledgeCardUpdated,
                 onCardDeleted: onKnowledgeCardDeleted,
                 onCardAdded: onKnowledgeCardAdded,
-                llmFacade: llmFacade,
-                onNavigateToWritingSamples: { selectedTab = .writing }
+                llmFacade: llmFacade
             )
         case .writing:
             WritingSamplesBrowserTab(
