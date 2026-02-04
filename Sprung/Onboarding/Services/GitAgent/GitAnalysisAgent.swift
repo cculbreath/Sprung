@@ -87,6 +87,9 @@ class GitAnalysisAgent {
     private(set) var progress: [String] = []
     private(set) var turnCount: Int = 0
 
+    /// External callback for turn-by-turn progress updates (turn, maxTurns, action)
+    var onTurnUpdate: (@Sendable (Int, Int, String) async -> Void)?
+
     // Limits
     private let maxTurns = 50
     private let timeoutSeconds: TimeInterval = 600  // 10 minutes
@@ -662,6 +665,8 @@ class GitAnalysisAgent {
         currentAction = message
         progress.append("[\(Date().formatted(date: .omitted, time: .standard))] \(message)")
         Logger.info("🤖 GitAgent: \(message)", category: .ai)
+        // Notify external listener (e.g. DocumentIngestionSheet status)
+        await onTurnUpdate?(turnCount, maxTurns, message)
         // Update agent-specific status message in tracker (shown in BackgroundAgentStatusBar)
         // Note: We only emit extractionStateChanged if there's no tracker, to avoid duplicate status displays
         if let agentId = agentId {

@@ -24,6 +24,7 @@ class StandaloneKCCoordinator {
     enum Status: Equatable {
         case idle
         case extracting(current: Int, total: Int, filename: String)
+        case analyzingGit(turn: Int, maxTurns: Int, action: String)
         case analyzing
         case generatingCard(current: Int, total: Int)
         case completed(created: Int, enhanced: Int)
@@ -33,7 +34,7 @@ class StandaloneKCCoordinator {
             switch self {
             case .idle, .completed, .failed:
                 return false
-            case .extracting, .analyzing, .generatingCard:
+            case .extracting, .analyzingGit, .analyzing, .generatingCard:
                 return true
             }
         }
@@ -44,6 +45,14 @@ class StandaloneKCCoordinator {
                 return "Ready"
             case .extracting(let current, let total, let filename):
                 return "Extracting (\(current)/\(total)): \(filename)"
+            case .analyzingGit(let turn, let maxTurns, let action):
+                // Strip redundant "(Turn N) " prefix from agent's action string
+                let cleanAction = action.replacingOccurrences(
+                    of: #"^\(Turn \d+\) "#,
+                    with: "",
+                    options: .regularExpression
+                )
+                return "Git analysis (\(turn)/\(maxTurns)): \(cleanAction)"
             case .analyzing:
                 return "Analyzing documents..."
             case .generatingCard(let current, let total):
@@ -131,9 +140,15 @@ class StandaloneKCCoordinator {
 
         // Phase 2: Extract new sources (persisted to SwiftData)
         if !sources.isEmpty {
-            let newArtifacts = try await extractor.extractAllSources(sources) { [weak self] current, total, filename in
-                self?.status = .extracting(current: current, total: total, filename: filename)
-            }
+            let newArtifacts = try await extractor.extractAllSources(
+                sources,
+                onProgress: { [weak self] current, total, filename in
+                    self?.status = .extracting(current: current, total: total, filename: filename)
+                },
+                onGitProgress: { [weak self] turn, maxTurns, action in
+                    self?.status = .analyzingGit(turn: turn, maxTurns: maxTurns, action: action)
+                }
+            )
             allArtifacts.append(contentsOf: newArtifacts)
             // Track new artifact IDs
             for artifact in newArtifacts {

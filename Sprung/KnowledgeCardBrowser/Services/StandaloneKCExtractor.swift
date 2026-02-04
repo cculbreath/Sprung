@@ -39,10 +39,12 @@ class StandaloneKCExtractor {
     /// - Parameters:
     ///   - sources: URLs to documents or git repositories
     ///   - onProgress: Progress callback (current, total, filename)
+    ///   - onGitProgress: Git agent turn progress callback (turn, maxTurns, action)
     /// - Returns: Array of artifact JSON objects with their IDs
     func extractAllSources(
         _ sources: [URL],
-        onProgress: @escaping (Int, Int, String) -> Void
+        onProgress: @escaping (Int, Int, String) -> Void,
+        onGitProgress: @escaping (Int, Int, String) -> Void
     ) async throws -> [JSON] {
         var artifacts: [JSON] = []
         let total = sources.count
@@ -57,7 +59,7 @@ class StandaloneKCExtractor {
 
             do {
                 if isGitRepository(url) {
-                    let artifact = try await extractGitRepository(url)
+                    let artifact = try await extractGitRepository(url, onGitProgress: onGitProgress)
                     artifacts.append(artifact)
                 } else {
                     let artifact = try await extractDocument(url)
@@ -182,7 +184,7 @@ class StandaloneKCExtractor {
         return FileManager.default.fileExists(atPath: gitDir.path, isDirectory: &isDirectory) && isDirectory.boolValue
     }
 
-    private func extractGitRepository(_ url: URL) async throws -> JSON {
+    private func extractGitRepository(_ url: URL, onGitProgress: @escaping (Int, Int, String) -> Void) async throws -> JSON {
         guard let facade = llmFacade else {
             throw StandaloneKCError.llmNotConfigured
         }
@@ -200,12 +202,17 @@ class StandaloneKCExtractor {
 
         Logger.info("StandaloneKCExtractor: Running GitAnalysisAgent on \(repoName) with model \(modelId)", category: .ai)
 
-        // Run the full GitAnalysisAgent
+        // Run the full GitAnalysisAgent with turn progress reporting
         let agent = GitAnalysisAgent(
             repoPath: url,
             modelId: modelId,
             facade: facade
         )
+        agent.onTurnUpdate = { @Sendable turn, maxTurns, action in
+            await MainActor.run {
+                onGitProgress(turn, maxTurns, action)
+            }
+        }
         let result = try await agent.run()
 
         // Accumulate pre-analyzed cards and skills (these bypass the analyzer)
