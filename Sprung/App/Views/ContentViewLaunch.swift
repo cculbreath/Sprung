@@ -57,6 +57,7 @@ struct ContentViewLaunch: View {
             .environment(deps.windowCoordinator)
             .environment(deps.artifactRecordStore)
             .environment(deps.searchOpsCoordinator)
+            .environment(deps.targetingPlanService)
     }
     private func restoreLatestBackup() {
         guard !isRestoring else { return }
