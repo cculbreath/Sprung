@@ -3,7 +3,7 @@
 //  Sprung
 //
 //  Review queue for resume customization workflow.
-//  Adapted from SGM's ReviewQueue for the resume customization context.
+//  Supports compound groups where related fields are reviewed together.
 //
 
 import Foundation
@@ -42,6 +42,8 @@ struct CustomizationReviewItem: Identifiable, Equatable {
     var isRegenerating: Bool
     /// ID of the original item if this is a regeneration
     let previousVersionId: UUID?
+    /// Compound group ID (non-nil if this item belongs to a compound group)
+    let compoundGroupId: String?
 
     init(
         id: UUID = UUID(),
@@ -53,7 +55,8 @@ struct CustomizationReviewItem: Identifiable, Equatable {
         addedAt: Date = Date(),
         regenerationCount: Int = 0,
         isRegenerating: Bool = false,
-        previousVersionId: UUID? = nil
+        previousVersionId: UUID? = nil,
+        compoundGroupId: String? = nil
     ) {
         self.id = id
         self.task = task
@@ -65,6 +68,7 @@ struct CustomizationReviewItem: Identifiable, Equatable {
         self.regenerationCount = regenerationCount
         self.isRegenerating = isRegenerating
         self.previousVersionId = previousVersionId
+        self.compoundGroupId = compoundGroupId
     }
 
     /// Whether this item has been acted upon
@@ -101,6 +105,30 @@ struct CustomizationReviewItem: Identifiable, Equatable {
             return false
         }
     }
+
+    /// Whether this item belongs to a compound group
+    var isCompoundMember: Bool {
+        compoundGroupId != nil
+    }
+}
+
+// MARK: - Compound Group
+
+/// Represents a visual group of compound review items
+struct CompoundReviewGroup: Identifiable {
+    let id: String  // The compound group ID
+    let displayName: String
+    var items: [CustomizationReviewItem]
+
+    /// Whether any item in the group is regenerating
+    var isRegenerating: Bool {
+        items.contains { $0.isRegenerating }
+    }
+
+    /// Count of fields in this group
+    var fieldCount: Int {
+        items.count
+    }
 }
 
 // MARK: - Review Queue
@@ -115,6 +143,10 @@ final class CustomizationReviewQueue {
     /// Callback for when an item needs regeneration
     /// Parameters: (itemId, originalRevision, feedback) -> regenerated revision or nil
     var onRegenerationRequested: ((UUID, ProposedRevisionNode, String?) async -> ProposedRevisionNode?)?
+
+    /// Callback for compound group regeneration
+    /// Parameters: (compoundGroupId, feedback) -> array of regenerated revisions or nil
+    var onCompoundRegenerationRequested: ((String, String?) async -> [ProposedRevisionNode]?)?
 
     /// Most recent regeneration error for UI display. Auto-clears after 10 seconds.
     var lastRegenerationError: (itemId: UUID, displayName: String)?
@@ -170,6 +202,57 @@ final class CustomizationReviewQueue {
     /// Whether any items have been approved
     var hasApprovedItems: Bool { !approvedItems.isEmpty }
 
+    // MARK: - Compound Group Support
+
+    /// Get active items grouped by compound group ID.
+    /// Non-compound items are returned as single-item groups.
+    var groupedActiveItems: [CompoundReviewGroup] {
+        var groups: [String: [CustomizationReviewItem]] = [:]
+        var groupOrder: [String] = []
+        var ungroupedItems: [CustomizationReviewItem] = []
+
+        for item in activeItems {
+            if let groupId = item.compoundGroupId {
+                if groups[groupId] == nil {
+                    groupOrder.append(groupId)
+                }
+                groups[groupId, default: []].append(item)
+            } else {
+                ungroupedItems.append(item)
+            }
+        }
+
+        var result: [CompoundReviewGroup] = []
+
+        // Add compound groups in order
+        for groupId in groupOrder {
+            if let groupItems = groups[groupId] {
+                let displayName = groupItems.first?.task.revNode.displayName ?? groupId
+                result.append(CompoundReviewGroup(
+                    id: groupId,
+                    displayName: displayName,
+                    items: groupItems
+                ))
+            }
+        }
+
+        // Add ungrouped items as single-item groups
+        for item in ungroupedItems {
+            result.append(CompoundReviewGroup(
+                id: item.id.uuidString,
+                displayName: item.task.revNode.displayName,
+                items: [item]
+            ))
+        }
+
+        return result
+    }
+
+    /// Get all items belonging to a compound group
+    func itemsInCompoundGroup(_ groupId: String) -> [CustomizationReviewItem] {
+        activeItems.filter { $0.compoundGroupId == groupId }
+    }
+
     // MARK: - Queue Management
 
     /// Add a new item to the queue
@@ -183,6 +266,42 @@ final class CustomizationReviewQueue {
         items.append(item)
     }
 
+    /// Add compound task results to the queue as a group
+    func addCompoundGroup(
+        compoundTask: RevisionTask,
+        revisions: [ProposedRevisionNode],
+        originalNodes: [ExportedReviewNode]
+    ) {
+        let groupId = compoundTask.revNode.id  // "compound-<parent path>"
+
+        for (index, revision) in revisions.enumerated() {
+            // Build a task for each individual field
+            let originalNode: ExportedReviewNode
+            if index < originalNodes.count {
+                originalNode = originalNodes[index]
+            } else {
+                // Fallback: use the compound node itself
+                originalNode = compoundTask.revNode
+            }
+
+            let fieldTask = RevisionTask(
+                revNode: originalNode,
+                taskPrompt: compoundTask.taskPrompt,
+                nodeType: .generic,
+                phase: compoundTask.phase
+            )
+
+            let item = CustomizationReviewItem(
+                task: fieldTask,
+                revision: revision,
+                compoundGroupId: groupId
+            )
+            items.append(item)
+        }
+
+        Logger.info("Added compound group '\(groupId)' with \(revisions.count) items", category: .ai)
+    }
+
     /// Set user action for an item
     func setAction(for itemId: UUID, action: CustomizationReviewAction) {
         guard let index = items.firstIndex(where: { $0.id == itemId }) else { return }
@@ -190,7 +309,7 @@ final class CustomizationReviewQueue {
 
         items[index].userAction = action
 
-        // If rejected, trigger regeneration
+        // If rejected, check if this is a compound group member
         switch action {
         case .rejected, .rejectedWithComment:
             let feedback: String? = {
@@ -200,18 +319,99 @@ final class CustomizationReviewQueue {
                 return nil
             }()
 
-            // Mark as regenerating
-            items[index].isRegenerating = true
-
-            // Trigger regeneration asynchronously
             let item = items[index]
-            Task { [weak self] in
-                guard let self else { return }
-                await self.triggerRegeneration(for: item, feedback: feedback)
+
+            if let groupId = item.compoundGroupId {
+                // Compound group member: mark all group members as regenerating and trigger group regeneration
+                markCompoundGroupRegenerating(groupId: groupId)
+                Task { [weak self] in
+                    guard let self else { return }
+                    await self.triggerCompoundRegeneration(groupId: groupId, feedback: feedback)
+                }
+            } else {
+                // Standard item: regenerate individually
+                items[index].isRegenerating = true
+                Task { [weak self] in
+                    guard let self else { return }
+                    await self.triggerRegeneration(for: item, feedback: feedback)
+                }
             }
 
         default:
+            // For compound group members, auto-approve the action (approve, edit, useOriginal)
+            // for the individual item only -- no cascading
             break
+        }
+    }
+
+    /// Mark all items in a compound group as regenerating
+    private func markCompoundGroupRegenerating(groupId: String) {
+        for index in items.indices {
+            if items[index].compoundGroupId == groupId {
+                items[index].isRegenerating = true
+                items[index].userAction = .rejected  // Mark all as rejected for regeneration
+            }
+        }
+    }
+
+    /// Trigger regeneration for a compound group
+    private func triggerCompoundRegeneration(groupId: String, feedback: String?) async {
+        guard let onCompoundRegenerationRequested else {
+            Logger.warning("CustomizationReviewQueue: No compound regeneration callback configured", category: .ai)
+            clearCompoundRegenerating(groupId: groupId)
+            return
+        }
+
+        Logger.info("Triggering compound regeneration for group: \(groupId)", category: .ai)
+
+        if let newRevisions = await onCompoundRegenerationRequested(groupId, feedback) {
+            // Get current group items
+            let groupItems = items.filter { $0.compoundGroupId == groupId && !supersededItemIds.contains($0.id) }
+
+            // Create new items for each regenerated revision
+            for (index, newRevision) in newRevisions.enumerated() {
+                guard index < groupItems.count else { break }
+                let oldItem = groupItems[index]
+
+                let newItem = CustomizationReviewItem(
+                    task: oldItem.task,
+                    revision: newRevision,
+                    regenerationCount: oldItem.regenerationCount + 1,
+                    previousVersionId: oldItem.id,
+                    compoundGroupId: groupId
+                )
+
+                // Mark original as no longer regenerating
+                if let oldIndex = items.firstIndex(where: { $0.id == oldItem.id }) {
+                    items[oldIndex].isRegenerating = false
+                }
+
+                items.append(newItem)
+            }
+
+            Logger.info("Compound regeneration complete for group: \(groupId)", category: .ai)
+        } else {
+            clearCompoundRegenerating(groupId: groupId)
+            Logger.error("Compound regeneration failed for group: \(groupId)", category: .ai)
+
+            if let firstItem = items.first(where: { $0.compoundGroupId == groupId }) {
+                lastRegenerationError = (itemId: firstItem.id, displayName: groupId)
+                Task { @MainActor [weak self] in
+                    try? await Task.sleep(for: .seconds(10))
+                    if self?.lastRegenerationError?.itemId == firstItem.id {
+                        self?.lastRegenerationError = nil
+                    }
+                }
+            }
+        }
+    }
+
+    /// Clear regenerating state for all items in a compound group
+    private func clearCompoundRegenerating(groupId: String) {
+        for index in items.indices {
+            if items[index].compoundGroupId == groupId {
+                items[index].isRegenerating = false
+            }
         }
     }
 
@@ -231,7 +431,8 @@ final class CustomizationReviewQueue {
                 task: item.task,
                 revision: newRevision,
                 regenerationCount: item.regenerationCount + 1,
-                previousVersionId: item.id
+                previousVersionId: item.id,
+                compoundGroupId: item.compoundGroupId
             )
 
             // Update original item to no longer be regenerating

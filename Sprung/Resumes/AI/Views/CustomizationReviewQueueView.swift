@@ -36,30 +36,40 @@ struct CustomizationReviewQueueView: View {
             // Filter tabs
             filterTabs
 
-            // Scrollable list of review cards - compact spacing
+            // Scrollable list of review cards with compound grouping
             ScrollView {
                 LazyVStack(spacing: 8) {
-                    ForEach(filteredItems) { item in
-                        CustomizationReviewCard(
-                            item: item,
-                            onApprove: { reviewQueue.setAction(for: item.id, action: .approved) },
-                            onReject: { feedback in
-                                if let feedback = feedback, !feedback.isEmpty {
-                                    reviewQueue.setAction(for: item.id, action: .rejectedWithComment(feedback))
-                                } else {
-                                    reviewQueue.setAction(for: item.id, action: .rejected)
+                    ForEach(filteredGroups) { group in
+                        if group.items.count > 1 {
+                            // Compound group: shared container with group header
+                            CompoundGroupView(
+                                group: group,
+                                reviewQueue: reviewQueue
+                            )
+                        } else if let item = group.items.first {
+                            // Single item (non-compound)
+                            CustomizationReviewCard(
+                                item: item,
+                                isCompoundMember: false,
+                                onApprove: { reviewQueue.setAction(for: item.id, action: .approved) },
+                                onReject: { feedback in
+                                    if let feedback = feedback, !feedback.isEmpty {
+                                        reviewQueue.setAction(for: item.id, action: .rejectedWithComment(feedback))
+                                    } else {
+                                        reviewQueue.setAction(for: item.id, action: .rejected)
+                                    }
+                                },
+                                onEdit: { content in
+                                    reviewQueue.setEditedContent(for: item.id, content: content)
+                                },
+                                onEditArray: { children in
+                                    reviewQueue.setEditedChildren(for: item.id, children: children)
+                                },
+                                onUseOriginal: {
+                                    reviewQueue.setAction(for: item.id, action: .useOriginal)
                                 }
-                            },
-                            onEdit: { content in
-                                reviewQueue.setEditedContent(for: item.id, content: content)
-                            },
-                            onEditArray: { children in
-                                reviewQueue.setEditedChildren(for: item.id, children: children)
-                            },
-                            onUseOriginal: {
-                                reviewQueue.setAction(for: item.id, action: .useOriginal)
-                            }
-                        )
+                            )
+                        }
                     }
                 }
                 .padding(.horizontal, 12)
@@ -232,6 +242,32 @@ struct CustomizationReviewQueueView: View {
 
     // MARK: - Computed Properties
 
+    /// Filtered groups based on the current filter selection.
+    /// Groups that contain at least one item matching the filter are included.
+    private var filteredGroups: [CompoundReviewGroup] {
+        let allGroups = reviewQueue.groupedActiveItems
+
+        switch filter {
+        case .all:
+            return allGroups
+        case .pending:
+            return allGroups.compactMap { group in
+                let filtered = group.items.filter { $0.userAction == nil }
+                return filtered.isEmpty ? nil : CompoundReviewGroup(id: group.id, displayName: group.displayName, items: filtered)
+            }
+        case .approved:
+            return allGroups.compactMap { group in
+                let filtered = group.items.filter { $0.isApproved }
+                return filtered.isEmpty ? nil : CompoundReviewGroup(id: group.id, displayName: group.displayName, items: filtered)
+            }
+        case .rejected:
+            return allGroups.compactMap { group in
+                let filtered = group.items.filter { $0.isRejected }
+                return filtered.isEmpty ? nil : CompoundReviewGroup(id: group.id, displayName: group.displayName, items: filtered)
+            }
+        }
+    }
+
     private var filteredItems: [CustomizationReviewItem] {
         switch filter {
         case .pending: return reviewQueue.pendingItems
@@ -273,10 +309,95 @@ struct CustomizationReviewQueueView: View {
     }
 }
 
+// MARK: - Compound Group View
+
+/// Visual container for a compound group of related review items.
+struct CompoundGroupView: View {
+    let group: CompoundReviewGroup
+    @Bindable var reviewQueue: CustomizationReviewQueue
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            // Group header
+            HStack(spacing: 6) {
+                Image(systemName: "rectangle.3.group")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.indigo)
+
+                Text(group.displayName)
+                    .font(.system(.caption, design: .rounded, weight: .semibold))
+                    .foregroundStyle(.indigo)
+
+                Text("\(group.fieldCount) fields")
+                    .font(.system(.caption2, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(.indigo.opacity(0.1))
+                    .clipShape(Capsule())
+
+                Spacer()
+
+                if group.isRegenerating {
+                    HStack(spacing: 4) {
+                        ProgressView()
+                            .scaleEffect(0.5)
+                        Text("Regenerating group...")
+                            .font(.system(.caption2, design: .rounded))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+            .padding(.horizontal, 10)
+            .padding(.top, 8)
+
+            // Note about compound regeneration
+            Text("Rejecting any field regenerates the entire group to maintain coherence.")
+                .font(.system(.caption2, design: .rounded))
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 10)
+
+            // Individual items
+            ForEach(group.items) { item in
+                CustomizationReviewCard(
+                    item: item,
+                    isCompoundMember: true,
+                    onApprove: { reviewQueue.setAction(for: item.id, action: .approved) },
+                    onReject: { feedback in
+                        if let feedback = feedback, !feedback.isEmpty {
+                            reviewQueue.setAction(for: item.id, action: .rejectedWithComment(feedback))
+                        } else {
+                            reviewQueue.setAction(for: item.id, action: .rejected)
+                        }
+                    },
+                    onEdit: { content in
+                        reviewQueue.setEditedContent(for: item.id, content: content)
+                    },
+                    onEditArray: { children in
+                        reviewQueue.setEditedChildren(for: item.id, children: children)
+                    },
+                    onUseOriginal: {
+                        reviewQueue.setAction(for: item.id, action: .useOriginal)
+                    }
+                )
+                .padding(.horizontal, 6)
+            }
+        }
+        .padding(.bottom, 8)
+        .background(.indigo.opacity(0.03))
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(.indigo.opacity(0.2), lineWidth: 1)
+        )
+    }
+}
+
 // MARK: - Review Card View
 
 struct CustomizationReviewCard: View {
     let item: CustomizationReviewItem
+    var isCompoundMember: Bool = false
     let onApprove: () -> Void
     let onReject: (String?) -> Void
     let onEdit: (String) -> Void

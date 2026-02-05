@@ -3,6 +3,7 @@
 //  Sprung
 //
 //  Builds RevisionTasks from ExportedReviewNodes with node-type-specific prompts.
+//  Supports compound tasks for related fields and targeting plan integration.
 //
 
 import Foundation
@@ -13,6 +14,8 @@ final class RevisionTaskBuilder {
     // MARK: - Public API
 
     /// Build revision tasks from exported review nodes with node-type-specific prompts.
+    /// Groups related fields into compound tasks where possible to reduce LLM calls
+    /// and improve cross-field coherence.
     /// - Parameters:
     ///   - revNodes: The nodes to build tasks for
     ///   - resume: The resume being customized
@@ -20,6 +23,9 @@ final class RevisionTaskBuilder {
     ///   - skills: Available skills from the Skill Bank
     ///   - titleSets: Available title sets from the library
     ///   - phase: The current phase number
+    ///   - targetingPlan: Optional strategic targeting plan for guidance injection
+    ///   - phase1Decisions: Optional Phase 1 decisions context for Phase 2 tasks
+    ///   - knowledgeCards: Knowledge cards for suggested bullet extraction
     /// - Returns: Array of revision tasks with appropriate prompts
     func buildTasks(
         from revNodes: [ExportedReviewNode],
@@ -27,24 +33,128 @@ final class RevisionTaskBuilder {
         jobDescription: String,
         skills: [Skill],
         titleSets: [TitleSet],
-        phase: Int
+        phase: Int,
+        targetingPlan: TargetingPlan? = nil,
+        phase1Decisions: String? = nil,
+        knowledgeCards: [KnowledgeCard] = []
     ) -> [RevisionTask] {
-        revNodes.map { revNode in
-            let nodeType = detectNodeType(for: revNode)
-            let taskPrompt = generatePrompt(
-                for: revNode,
-                nodeType: nodeType,
-                skills: skills,
-                titleSets: titleSets
-            )
+        // Separate specialized nodes from compound-eligible nodes
+        var specializedTasks: [RevisionTask] = []
+        var compoundCandidates: [ExportedReviewNode] = []
 
-            return RevisionTask(
-                revNode: revNode,
-                taskPrompt: taskPrompt,
-                nodeType: nodeType,
-                phase: phase
-            )
+        for revNode in revNodes {
+            let nodeType = detectNodeType(for: revNode)
+            if nodeType != .generic {
+                // Specialized nodes (skills, keywords, titles) get their own tasks
+                let taskPrompt = generatePrompt(
+                    for: revNode,
+                    nodeType: nodeType,
+                    skills: skills,
+                    titleSets: titleSets,
+                    targetingPlan: targetingPlan,
+                    phase1Decisions: phase1Decisions,
+                    knowledgeCards: knowledgeCards
+                )
+                specializedTasks.append(RevisionTask(
+                    revNode: revNode,
+                    taskPrompt: taskPrompt,
+                    nodeType: nodeType,
+                    phase: phase
+                ))
+            } else {
+                compoundCandidates.append(revNode)
+            }
         }
+
+        // Group compound candidates by parent path
+        let compoundGroups = buildCompoundGroups(from: compoundCandidates)
+
+        var compoundTasks: [RevisionTask] = []
+        for group in compoundGroups {
+            if group.count > 1 {
+                // Multiple fields share a parent -- create a compound task
+                let compoundPrompt = generateCompoundPrompt(
+                    for: group,
+                    targetingPlan: targetingPlan,
+                    phase1Decisions: phase1Decisions,
+                    knowledgeCards: knowledgeCards
+                )
+                // Use a synthetic compound node that references all group members
+                let compoundNode = buildCompoundNode(from: group)
+                compoundTasks.append(RevisionTask(
+                    revNode: compoundNode,
+                    taskPrompt: compoundPrompt,
+                    nodeType: .compound,
+                    phase: phase
+                ))
+            } else if let single = group.first {
+                // Single field in group -- build a standard task
+                let taskPrompt = generatePrompt(
+                    for: single,
+                    nodeType: .generic,
+                    skills: skills,
+                    titleSets: titleSets,
+                    targetingPlan: targetingPlan,
+                    phase1Decisions: phase1Decisions,
+                    knowledgeCards: knowledgeCards
+                )
+                compoundTasks.append(RevisionTask(
+                    revNode: single,
+                    taskPrompt: taskPrompt,
+                    nodeType: .generic,
+                    phase: phase
+                ))
+            }
+        }
+
+        return specializedTasks + compoundTasks
+    }
+
+    // MARK: - Compound Grouping
+
+    /// Extract the parent path from a node path (e.g., "work.0.highlights" -> "work.0")
+    private func parentPath(for path: String) -> String {
+        let components = path.split(separator: ".")
+        if components.count > 1 {
+            return components.dropLast().joined(separator: ".")
+        }
+        return path
+    }
+
+    /// Group nodes by their parent path. Nodes sharing the same parent
+    /// (e.g., work.0.position, work.0.description, work.0.highlights) are grouped together.
+    private func buildCompoundGroups(from nodes: [ExportedReviewNode]) -> [[ExportedReviewNode]] {
+        var groups: [String: [ExportedReviewNode]] = [:]
+        var groupOrder: [String] = []
+
+        for node in nodes {
+            let parent = parentPath(for: node.path)
+            if groups[parent] == nil {
+                groupOrder.append(parent)
+            }
+            groups[parent, default: []].append(node)
+        }
+
+        return groupOrder.compactMap { groups[$0] }
+    }
+
+    /// Build a synthetic ExportedReviewNode representing a compound group.
+    private func buildCompoundNode(from group: [ExportedReviewNode]) -> ExportedReviewNode {
+        let paths = group.map { $0.path }
+        let parent = parentPath(for: group[0].path)
+        let displayNames = group.map { $0.displayName }
+        let allValues = group.map { "\($0.displayName): \($0.value)" }
+
+        return ExportedReviewNode(
+            id: "compound-\(parent)",
+            path: parent,
+            displayName: displayNames.joined(separator: " + "),
+            value: allValues.joined(separator: "\n---\n"),
+            childValues: paths,
+            childCount: group.count,
+            isBundled: false,
+            sourceNodeIds: group.map { $0.id }
+        )
     }
 
     // MARK: - Node Type Detection
@@ -53,12 +163,12 @@ final class RevisionTaskBuilder {
     private func detectNodeType(for revNode: ExportedReviewNode) -> RevisionNodeType {
         let pathLower = revNode.path.lowercased()
 
-        // Skills section bundled → whole skills section
+        // Skills section bundled -> whole skills section
         if pathLower.contains("skills") && revNode.isBundled {
             return .skills
         }
 
-        // Skills path ending with keywords → skill keywords
+        // Skills path ending with keywords -> skill keywords
         if pathLower.contains("skills") && pathLower.hasSuffix("keywords") {
             return .skillKeywords
         }
@@ -79,38 +189,321 @@ final class RevisionTaskBuilder {
         nodeType: RevisionNodeType,
         skills: [Skill],
         titleSets: [TitleSet],
-        targetingPlanSection: String? = nil
+        targetingPlan: TargetingPlan? = nil,
+        phase1Decisions: String? = nil,
+        knowledgeCards: [KnowledgeCard] = []
     ) -> String {
+        let targetingSection = buildTargetingSection(for: revNode, plan: targetingPlan)
+        let phase1Section = phase1DecisionsSection(phase1Decisions)
+
         switch nodeType {
         case .skills:
-            return generateSkillsPrompt(for: revNode, skills: skills)
+            return generateSkillsPrompt(for: revNode, skills: skills) + phase1Section
         case .skillKeywords:
-            return generateSkillKeywordsPrompt(for: revNode, skills: skills)
+            return generateSkillKeywordsPrompt(for: revNode, skills: skills) + phase1Section
         case .titles:
-            return generateTitlesPrompt(for: revNode, titleSets: titleSets)
+            return generateTitlesPrompt(for: revNode, titleSets: titleSets) + phase1Section
         case .generic:
-            return routeGenericPrompt(for: revNode, targetingPlanSection: targetingPlanSection)
+            return routeGenericPrompt(
+                for: revNode,
+                targetingPlanSection: targetingSection,
+                phase1Decisions: phase1Decisions,
+                knowledgeCards: knowledgeCards,
+                targetingPlan: targetingPlan
+            )
+        case .compound:
+            // Should not reach here -- compound is built via generateCompoundPrompt
+            return ""
         }
     }
 
-    /// Route generic nodes to field-specific prompt builders based on the field path.
-    private func routeGenericPrompt(for revNode: ExportedReviewNode, targetingPlanSection: String?) -> String {
+    /// Build the targeting plan section for a specific node.
+    private func buildTargetingSection(for revNode: ExportedReviewNode, plan: TargetingPlan?) -> String? {
+        guard let plan else { return nil }
+
+        var sections: [String] = []
         let pathLower = revNode.path.lowercased()
 
+        // Include narrative arc and emphasis themes for all nodes
+        if !plan.narrativeArc.isEmpty {
+            sections.append("**Narrative Arc:** \(plan.narrativeArc)")
+        }
+        if !plan.emphasisThemes.isEmpty {
+            sections.append("**Emphasis Themes:** \(plan.emphasisThemes.joined(separator: "; "))")
+        }
+
+        // Work entry guidance for work-related paths
+        if pathLower.contains("work") {
+            // Try to match by entry index from path (e.g., "work.0.highlights" -> index 0)
+            for guidance in plan.workEntryGuidance {
+                let entryId = guidance.entryIdentifier.lowercased()
+                // Match if path contains a work index and guidance matches
+                if pathLower.contains("work") {
+                    sections.append("""
+                    **Work Entry: \(guidance.entryIdentifier)**
+                    Lead with: \(guidance.leadAngle)
+                    Emphasize: \(guidance.emphasis.joined(separator: "; "))
+                    De-emphasize: \(guidance.deEmphasis.joined(separator: "; "))
+                    """)
+                    break
+                }
+            }
+        }
+
+        // Narrative/summary nodes get narrative arc and emphasis themes prominently
+        if pathLower.contains("objective") || pathLower.contains("summary") {
+            if !plan.prioritizedSkills.isEmpty {
+                sections.append("**Prioritized Skills:** \(plan.prioritizedSkills.prefix(5).joined(separator: ", "))")
+            }
+            if !plan.identifiedGaps.isEmpty {
+                sections.append("**Gaps to Address Through Framing:** \(plan.identifiedGaps.joined(separator: "; "))")
+            }
+        }
+
+        // Description nodes get lateral connections
+        if pathLower.contains("description") {
+            let connections = plan.lateralConnections
+            if !connections.isEmpty {
+                let connectionText = connections.prefix(3).map {
+                    "\($0.sourceCardTitle) -> \($0.targetRequirement): \($0.reasoning)"
+                }.joined(separator: "\n")
+                sections.append("**Lateral Connections:**\n\(connectionText)")
+            }
+        }
+
+        if sections.isEmpty { return nil }
+        return sections.joined(separator: "\n\n")
+    }
+
+    /// Build the Phase 1 decisions section for Phase 2 prompts.
+    private func phase1DecisionsSection(_ decisions: String?) -> String {
+        guard let decisions, !decisions.isEmpty else { return "" }
+        return "\n\n## Approved Decisions from Phase 1\n\n\(decisions)\n\nThese decisions have been approved. Your content should align with and reference these skill categories and title framing."
+    }
+
+    /// Route generic nodes to field-specific prompt builders based on the field path.
+    private func routeGenericPrompt(
+        for revNode: ExportedReviewNode,
+        targetingPlanSection: String?,
+        phase1Decisions: String? = nil,
+        knowledgeCards: [KnowledgeCard] = [],
+        targetingPlan: TargetingPlan? = nil
+    ) -> String {
+        let pathLower = revNode.path.lowercased()
+        let phase1Section = phase1DecisionsSection(phase1Decisions)
+
         if pathLower.contains("highlights") {
-            return generateHighlightsPrompt(for: revNode, targetingPlanSection: targetingPlanSection)
+            let bulletSection = suggestedBulletsSection(
+                for: revNode,
+                knowledgeCards: knowledgeCards,
+                targetingPlan: targetingPlan
+            )
+            return generateHighlightsPrompt(
+                for: revNode,
+                targetingPlanSection: targetingPlanSection,
+                suggestedBullets: bulletSection
+            ) + phase1Section
         }
 
         // Match objective or summary at the section level (custom.objective, custom.summary, basics.summary)
         if pathLower.contains("objective") || pathLower.contains("summary") {
-            return generateNarrativePrompt(for: revNode, targetingPlanSection: targetingPlanSection)
+            return generateNarrativePrompt(for: revNode, targetingPlanSection: targetingPlanSection) + phase1Section
         }
 
         if pathLower.contains("description") {
-            return generateDescriptionPrompt(for: revNode, targetingPlanSection: targetingPlanSection)
+            return generateDescriptionPrompt(for: revNode, targetingPlanSection: targetingPlanSection) + phase1Section
         }
 
-        return generateDefaultGenericPrompt(for: revNode, targetingPlanSection: targetingPlanSection)
+        return generateDefaultGenericPrompt(for: revNode, targetingPlanSection: targetingPlanSection) + phase1Section
+    }
+
+    // MARK: - Suggested Bullets
+
+    /// Extract suggested bullets from knowledge cards matching this work entry
+    /// via the targeting plan's KC section mapping.
+    private func suggestedBulletsSection(
+        for revNode: ExportedReviewNode,
+        knowledgeCards: [KnowledgeCard],
+        targetingPlan: TargetingPlan?
+    ) -> String? {
+        guard let plan = targetingPlan else { return nil }
+
+        // Find supporting card IDs for this work entry via work entry guidance
+        var supportingCardIds: [String] = []
+        for guidance in plan.workEntryGuidance {
+            supportingCardIds.append(contentsOf: guidance.supportingCardIds)
+        }
+
+        // Also check KC section mappings for "work" section
+        let workMappings = plan.cardMappings(forSection: "work")
+        supportingCardIds.append(contentsOf: workMappings.map { $0.cardId })
+
+        // Deduplicate
+        let uniqueIds = Set(supportingCardIds)
+        guard !uniqueIds.isEmpty else { return nil }
+
+        // Extract suggested bullets from matching KCs
+        var allBullets: [String] = []
+        for card in knowledgeCards {
+            if uniqueIds.contains(card.id.uuidString) {
+                let bullets = card.suggestedBullets
+                if !bullets.isEmpty {
+                    allBullets.append(contentsOf: bullets)
+                }
+            }
+        }
+
+        guard !allBullets.isEmpty else { return nil }
+
+        let bulletList = allBullets.prefix(8).map { "- \($0)" }.joined(separator: "\n")
+        return """
+        ## Pre-Extracted Bullet Templates
+
+        The following bullet templates were extracted from source documents.
+        Use these as starting points -- adapt the [BRACKETED_PLACEHOLDERS]
+        for this specific job application. You may restructure or combine them,
+        but prefer adapting existing templates over generating from scratch.
+
+        \(bulletList)
+        """
+    }
+
+    // MARK: - Compound Prompt Generation
+
+    /// Generate a compound prompt for a group of related fields.
+    private func generateCompoundPrompt(
+        for group: [ExportedReviewNode],
+        targetingPlan: TargetingPlan?,
+        phase1Decisions: String?,
+        knowledgeCards: [KnowledgeCard]
+    ) -> String {
+        let parent = parentPath(for: group[0].path)
+        let phase1Section = phase1DecisionsSection(phase1Decisions)
+
+        // Build targeting guidance for this entry
+        var targetingSection = ""
+        if let plan = targetingPlan {
+            // Find matching work entry guidance
+            for guidance in plan.workEntryGuidance {
+                targetingSection += """
+
+                **Work Entry: \(guidance.entryIdentifier)**
+                Lead with: \(guidance.leadAngle)
+                Emphasize: \(guidance.emphasis.joined(separator: "; "))
+                De-emphasize: \(guidance.deEmphasis.joined(separator: "; "))
+
+                """
+                break
+            }
+
+            if !plan.narrativeArc.isEmpty {
+                targetingSection += "\n**Narrative Arc:** \(plan.narrativeArc)"
+            }
+            if !plan.emphasisThemes.isEmpty {
+                targetingSection += "\n**Emphasis Themes:** \(plan.emphasisThemes.joined(separator: "; "))"
+            }
+        }
+
+        // Build suggested bullets section for highlight fields in this group
+        var bulletSection = ""
+        let hasHighlights = group.contains { $0.path.lowercased().contains("highlights") }
+        if hasHighlights, let plan = targetingPlan {
+            var supportingCardIds: [String] = []
+            for guidance in plan.workEntryGuidance {
+                supportingCardIds.append(contentsOf: guidance.supportingCardIds)
+            }
+            let workMappings = plan.cardMappings(forSection: "work")
+            supportingCardIds.append(contentsOf: workMappings.map { $0.cardId })
+            let uniqueIds = Set(supportingCardIds)
+
+            var allBullets: [String] = []
+            for card in knowledgeCards {
+                if uniqueIds.contains(card.id.uuidString) {
+                    let bullets = card.suggestedBullets
+                    if !bullets.isEmpty {
+                        allBullets.append(contentsOf: bullets)
+                    }
+                }
+            }
+
+            if !allBullets.isEmpty {
+                let bulletList = allBullets.prefix(8).map { "- \($0)" }.joined(separator: "\n")
+                bulletSection = """
+
+                ## Pre-Extracted Bullet Templates
+
+                The following bullet templates were extracted from source documents.
+                Use these as starting points for highlights -- adapt the [BRACKETED_PLACEHOLDERS]
+                for this specific job application.
+
+                \(bulletList)
+                """
+            }
+        }
+
+        // Build the fields list
+        var fieldsList: [String] = []
+        for (index, node) in group.enumerated() {
+            let fieldName = node.path.split(separator: ".").last.map(String.init) ?? node.displayName
+            fieldsList.append("\(index + 1). **\(fieldName)** (path: \(node.path), id: \(node.id))")
+            fieldsList.append("   Current value: \(node.value)")
+        }
+
+        let nodeIds = group.map { "\"\($0.id)\"" }.joined(separator: ", ")
+        let fieldPaths = group.map { "\"\($0.path)\"" }.joined(separator: ", ")
+
+        return """
+        ## Task: Revise Related Fields as a Coherent Unit
+
+        Revise the following fields for this entry (\(parent)) as a coherent unit.
+        The description should set up what the highlights demonstrate.
+        Highlights should not repeat the description.
+        Position title should align with the targeting plan's framing.
+
+        ## Fields to Revise
+
+        \(fieldsList.joined(separator: "\n"))
+        \(targetingSection.isEmpty ? "" : "\n## Strategic Guidance\n\n\(targetingSection)")
+        \(bulletSection)
+
+        ## Requirements
+
+        1. **Ground every claim in Knowledge Card evidence** -- do not fabricate facts, metrics, or capabilities
+        2. **Match the candidate's authentic voice** -- study writing samples in the preamble
+        3. **Ensure cross-field coherence** -- description sets up highlights; title aligns with framing
+        4. **Vary sentence structure across highlights** -- do NOT start every bullet with an action verb
+
+        ## FORBIDDEN
+
+        - Fabricated metrics, percentages, or numbers not in Knowledge Cards
+        - Generic resume phrases: "spearheaded", "leveraged", "drove results", "proven track record"
+        - Vague impact claims: "significantly improved", "enhanced capabilities"
+        - Repeating the same information across description and highlights
+
+        ## Output Format
+
+        Return a JSON object with this structure:
+        {
+          "compoundFields": [
+            {
+              "id": "<node id>",
+              "path": "<node path>",
+              "oldValue": "<current value>",
+              "newValue": "<revised value>",
+              "valueChanged": true,
+              "why": "<explanation>",
+              "nodeType": "scalar" or "list",
+              "newValueArray": ["item1", "item2"] // only for list nodes
+            }
+          ]
+        }
+
+        Node IDs in order: [\(nodeIds)]
+        Node paths in order: [\(fieldPaths)]
+
+        If no changes are needed for a field, set "valueChanged" to false and copy the current value.
+        \(phase1Section)
+        """
     }
 
     /// Generate prompt for skills section revision.
@@ -302,8 +695,14 @@ final class RevisionTaskBuilder {
     /// Generate prompt for work highlights (bullet points).
     /// Adapted from WorkHighlightsGenerator with evidence-based constraints, forbidden patterns,
     /// and structural guidance.
-    private func generateHighlightsPrompt(for revNode: ExportedReviewNode, targetingPlanSection: String?) -> String {
-        """
+    private func generateHighlightsPrompt(
+        for revNode: ExportedReviewNode,
+        targetingPlanSection: String?,
+        suggestedBullets: String? = nil
+    ) -> String {
+        let bulletReference = suggestedBullets.map { "\n\n\($0)" } ?? ""
+
+        return """
         ## Task: Revise Work Highlights
 
         Revise the resume bullet points for this position to better target the job posting.
@@ -315,6 +714,7 @@ final class RevisionTaskBuilder {
         **Current highlights:**
         \(revNode.value)
         \(strategicGuidanceSection(targetingPlanSection))
+        \(bulletReference)
 
         ## Requirements
 
@@ -489,6 +889,55 @@ final class RevisionTaskBuilder {
 
         \(jsonResponseBlock(for: revNode))
         """
+    }
+
+    // MARK: - Phase 1 Decisions Builder
+
+    /// Build a Phase 1 decisions context string from approved review items.
+    /// Called after Phase 1 review is complete, before Phase 2 execution.
+    static func buildPhase1DecisionsContext(from approvedItems: [CustomizationReviewItem]) -> String {
+        var sections: [String] = []
+
+        // Extract skill categories and keywords
+        var skillDecisions: [String] = []
+        var titleDecisions: [String] = []
+        var otherDecisions: [String] = []
+
+        for item in approvedItems {
+            let finalValue: String
+            if let edited = item.editedContent {
+                finalValue = edited
+            } else if let editedChildren = item.editedChildren, !editedChildren.isEmpty {
+                finalValue = editedChildren.joined(separator: ", ")
+            } else if let newArray = item.revision.newValueArray, !newArray.isEmpty {
+                finalValue = newArray.joined(separator: ", ")
+            } else {
+                finalValue = item.revision.newValue
+            }
+
+            switch item.task.nodeType {
+            case .skills, .skillKeywords:
+                skillDecisions.append("- \(item.task.revNode.displayName): \(finalValue)")
+            case .titles:
+                titleDecisions.append("- \(finalValue)")
+            default:
+                otherDecisions.append("- \(item.task.revNode.displayName): \(String(finalValue.prefix(100)))")
+            }
+        }
+
+        if !skillDecisions.isEmpty {
+            sections.append("### Selected Skill Categories\n\(skillDecisions.joined(separator: "\n"))")
+        }
+
+        if !titleDecisions.isEmpty {
+            sections.append("### Selected Job Titles\n\(titleDecisions.joined(separator: "\n"))")
+        }
+
+        if !otherDecisions.isEmpty {
+            sections.append("### Other Phase 1 Decisions\n\(otherDecisions.joined(separator: "\n"))")
+        }
+
+        return sections.joined(separator: "\n\n")
     }
 
     // MARK: - Helpers

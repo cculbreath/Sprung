@@ -19,6 +19,7 @@ enum RevisionNodeType: String, Sendable {
     case skillKeywords   // Individual skill category keywords
     case titles          // Title node (select from title set library)
     case generic         // Standard revision
+    case compound        // Multiple related fields revised together
 }
 
 /// A revision task to execute
@@ -48,6 +49,19 @@ struct RevisionTask: Identifiable, Sendable, Equatable {
 struct RevisionTaskResult: Sendable {
     let taskId: UUID
     let result: Result<ProposedRevisionNode, Error>
+    /// For compound tasks, contains the individual field revisions
+    let compoundResults: [ProposedRevisionNode]?
+
+    init(taskId: UUID, result: Result<ProposedRevisionNode, Error>, compoundResults: [ProposedRevisionNode]? = nil) {
+        self.taskId = taskId
+        self.result = result
+        self.compoundResults = compoundResults
+    }
+}
+
+/// Response format for compound revision tasks
+struct CompoundRevisionResponse: Codable, Sendable {
+    let compoundFields: [ProposedRevisionNode]
 }
 
 // MARK: - Parallel Execution Context
@@ -211,6 +225,17 @@ actor CustomizationParallelExecutor {
         do {
             let fullPrompt = buildFullPrompt(preamble: preamble, task: task, context: context)
 
+            if task.nodeType == .compound {
+                // Compound task: parse as CompoundRevisionResponse
+                return try await executeCompoundTask(
+                    task: task,
+                    fullPrompt: fullPrompt,
+                    llmFacade: llmFacade,
+                    modelId: modelId,
+                    toolConfig: toolConfig
+                )
+            }
+
             if let toolConfig {
                 // Tool-enabled path: conversation loop with tool calls
                 let response = try await executeWithToolLoop(
@@ -242,6 +267,47 @@ actor CustomizationParallelExecutor {
                 result: .failure(error)
             )
         }
+    }
+
+    /// Execute a compound task that produces multiple field revisions.
+    private func executeCompoundTask(
+        task: RevisionTask,
+        fullPrompt: String,
+        llmFacade: LLMFacade,
+        modelId: String,
+        toolConfig: ToolConfiguration?
+    ) async throws -> RevisionTaskResult {
+        // First try to decode as CompoundRevisionResponse directly
+        do {
+            let compoundResponse = try await llmFacade.executeFlexibleJSON(
+                prompt: fullPrompt,
+                modelId: modelId,
+                as: CompoundRevisionResponse.self,
+                temperature: 0.3
+            )
+            let results = compoundResponse.compoundFields
+            let primary = results.first ?? ProposedRevisionNode()
+            return RevisionTaskResult(
+                taskId: task.id,
+                result: .success(primary),
+                compoundResults: results
+            )
+        } catch {
+            Logger.debug("[ParallelExecutor] CompoundRevisionResponse decode failed, trying single ProposedRevisionNode fallback", category: .ai)
+        }
+
+        // Fallback: try as a single ProposedRevisionNode
+        let single = try await llmFacade.executeFlexibleJSON(
+            prompt: fullPrompt,
+            modelId: modelId,
+            as: ProposedRevisionNode.self,
+            temperature: 0.3
+        )
+        return RevisionTaskResult(
+            taskId: task.id,
+            result: .success(single),
+            compoundResults: [single]
+        )
     }
 
     // MARK: - Tool-Enabled Execution

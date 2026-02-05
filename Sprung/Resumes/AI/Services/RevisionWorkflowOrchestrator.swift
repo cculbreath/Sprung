@@ -4,6 +4,7 @@
 //
 //  Service responsible for orchestrating revision workflow execution.
 //  Handles the core workflow logic for generating and resubmitting revisions.
+//  Integrates targeting plan generation, compound calls, and Phase 1->2 forwarding.
 //
 
 import Foundation
@@ -35,6 +36,7 @@ class RevisionWorkflowOrchestrator {
     private let guidanceStore: InferenceGuidanceStore?
     private let skillStore: SkillStore?
     private let titleSetStore: TitleSetStore?
+    private let targetingPlanService: TargetingPlanService
 
     // MARK: - Parallel Workflow Components
     private var promptCacheService: CustomizationPromptCacheService?
@@ -50,6 +52,12 @@ class RevisionWorkflowOrchestrator {
     private var currentResume: Resume?
     /// CoverRefStore reference for Phase 2 continuation
     private var currentCoverRefStore: CoverRefStore?
+    /// Cached targeting plan for the entire workflow
+    private var cachedTargetingPlan: TargetingPlan?
+    /// Cached Phase 1 decisions context for Phase 2 tasks
+    private var phase1DecisionsContext: String?
+    /// Cached customization context for Phase 2
+    private var cachedContext: CustomizationContext?
 
     /// Whether Phase 2 is still pending
     var hasPhase2Pending: Bool {
@@ -82,6 +90,7 @@ class RevisionWorkflowOrchestrator {
         guidanceStore: InferenceGuidanceStore? = nil,
         skillStore: SkillStore? = nil,
         titleSetStore: TitleSetStore? = nil,
+        targetingPlanService: TargetingPlanService = TargetingPlanService(),
         workflowState: RevisionWorkflowState
     ) {
         self.llm = llm
@@ -96,6 +105,7 @@ class RevisionWorkflowOrchestrator {
         self.guidanceStore = guidanceStore
         self.skillStore = skillStore
         self.titleSetStore = titleSetStore
+        self.targetingPlanService = targetingPlanService
         self.workflowState = workflowState
     }
 
@@ -136,6 +146,7 @@ class RevisionWorkflowOrchestrator {
             coverRefStore: coverRefStore,
             applicantProfileStore: applicantProfileStore
         )
+        self.cachedContext = context
 
         // 2. Initialize CustomizationPromptCacheService with backend
         let cacheService = CustomizationPromptCacheService(backend: .openRouter)
@@ -146,7 +157,17 @@ class RevisionWorkflowOrchestrator {
             cacheService.appendClarifyingQA(qa)
         }
 
-        // 4. Get RevNodes from phaseReviewManager.buildReviewRounds() -> (phase1, phase2)
+        // 4. Generate TargetingPlan via TargetingPlanService
+        Logger.info("Generating strategic targeting plan...", category: .ai)
+        let targetingPlan = try await targetingPlanService.generateTargetingPlan(
+            context: context,
+            llmFacade: llm,
+            modelId: modelId
+        )
+        self.cachedTargetingPlan = targetingPlan
+        Logger.info("Targeting plan generated: \(targetingPlan.emphasisThemes.count) themes, \(targetingPlan.workEntryGuidance.count) work entries", category: .ai)
+
+        // 5. Get RevNodes from phaseReviewManager.buildReviewRounds() -> (phase1, phase2)
         let (phase1Nodes, phase2Nodes) = phaseReviewManager.buildReviewRounds(for: resume)
 
         Logger.info("Starting parallel workflow - Phase 1: \(phase1Nodes.count), Phase 2: \(phase2Nodes.count)")
@@ -157,21 +178,22 @@ class RevisionWorkflowOrchestrator {
             return
         }
 
-        // 5. Store Phase 2 nodes for later execution
+        // 6. Store Phase 2 nodes for later execution
         pendingPhase2Nodes = phase2Nodes
         currentResume = resume
         currentCoverRefStore = coverRefStore
 
-        // 6. Set phase tracking
+        // 7. Set phase tracking
         currentPhaseNumber = 1
         totalPhases = (!phase1Nodes.isEmpty && !phase2Nodes.isEmpty) ? 2 : 1
 
-        // 7. Initialize CustomizationReviewQueue and wire up regeneration callback
+        // 8. Initialize CustomizationReviewQueue and wire up regeneration callbacks
         let queue = CustomizationReviewQueue()
         self.reviewQueue = queue
         setupParallelRegenerationCallback()
+        setupCompoundRegenerationCallback()
 
-        // 8. Execute Phase 1 (or Phase 2 directly if no Phase 1 nodes)
+        // 9. Execute Phase 1 (or Phase 2 directly if no Phase 1 nodes)
         if !phase1Nodes.isEmpty {
             try await executeParallelPhase(
                 nodes: phase1Nodes,
@@ -181,7 +203,7 @@ class RevisionWorkflowOrchestrator {
                 modelId: modelId
             )
         } else {
-            // No Phase 1 nodes — execute Phase 2 directly
+            // No Phase 1 nodes -- execute Phase 2 directly
             currentPhaseNumber = 2
             let captured = pendingPhase2Nodes
             pendingPhase2Nodes = []
@@ -194,7 +216,7 @@ class RevisionWorkflowOrchestrator {
             )
         }
 
-        // 9. Phase execution complete — show review UI
+        // 10. Phase execution complete -- show review UI
         workflowState.setProcessingRevisions(false)
         await delegate?.showParallelReviewQueue()
     }
@@ -243,17 +265,20 @@ class RevisionWorkflowOrchestrator {
         let preamble = cacheService.buildPreamble(context: promptContext)
         self.cachedPreamble = preamble
 
-        // Build tasks for this phase
+        // Build tasks for this phase with targeting plan and Phase 1 decisions
         let tasks = builder.buildTasks(
             from: nodes,
             resume: resume,
             jobDescription: context.jobDescription,
             skills: context.skills,
             titleSets: context.titleSets,
-            phase: phase
+            phase: phase,
+            targetingPlan: cachedTargetingPlan,
+            phase1Decisions: phase == 2 ? phase1DecisionsContext : nil,
+            knowledgeCards: context.knowledgeCards
         )
 
-        Logger.info("📋 Phase \(phase): Built \(tasks.count) tasks")
+        Logger.info("Phase \(phase): Built \(tasks.count) tasks (compound grouping may reduce from \(nodes.count) nodes)", category: .ai)
 
         // Build parallel execution context
         let execContext = ParallelExecutionContext(
@@ -283,15 +308,34 @@ class RevisionWorkflowOrchestrator {
             case .success(let revision):
                 // Find the matching task to create the review item
                 if let task = tasks.first(where: { $0.id == taskResult.taskId }) {
-                    reviewQueue?.add(task: task, revision: revision)
-                    Logger.debug("✅ Added revision for: \(task.revNode.displayName)")
+                    if task.nodeType == .compound, let compoundResults = taskResult.compoundResults {
+                        // Compound task: split into individual review items
+                        let originalNodes = resolveOriginalNodes(for: task, from: nodes)
+                        reviewQueue?.addCompoundGroup(
+                            compoundTask: task,
+                            revisions: compoundResults,
+                            originalNodes: originalNodes
+                        )
+                        Logger.debug("Added compound group for: \(task.revNode.displayName) (\(compoundResults.count) fields)", category: .ai)
+                    } else {
+                        reviewQueue?.add(task: task, revision: revision)
+                        Logger.debug("Added revision for: \(task.revNode.displayName)", category: .ai)
+                    }
                 }
             case .failure(let error):
-                Logger.error("❌ Task failed: \(error.localizedDescription)")
+                Logger.error("Task failed: \(error.localizedDescription)", category: .ai)
             }
         }
 
-        Logger.info("✅ Phase \(phase) execution complete: \(reviewQueue?.items.count ?? 0) items in queue")
+        Logger.info("Phase \(phase) execution complete: \(reviewQueue?.items.count ?? 0) items in queue", category: .ai)
+    }
+
+    /// Resolve original ExportedReviewNodes for a compound task's source node IDs.
+    private func resolveOriginalNodes(for task: RevisionTask, from allNodes: [ExportedReviewNode]) -> [ExportedReviewNode] {
+        guard let sourceIds = task.revNode.sourceNodeIds else { return [] }
+        return sourceIds.compactMap { sourceId in
+            allNodes.first { $0.id == sourceId }
+        }
     }
 
     private func setupParallelRegenerationCallback() {
@@ -301,6 +345,12 @@ class RevisionWorkflowOrchestrator {
                 originalRevision: originalRevision,
                 feedback: feedback
             )
+        }
+    }
+
+    private func setupCompoundRegenerationCallback() {
+        reviewQueue?.onCompoundRegenerationRequested = { [weak self] groupId, feedback in
+            return await self?.regenerateCompoundGroup(groupId: groupId, feedback: feedback)
         }
     }
 
@@ -349,15 +399,101 @@ class RevisionWorkflowOrchestrator {
 
         switch result.result {
         case .success(let newRevision):
-            Logger.info("✅ Regeneration successful for: \(item.task.revNode.displayName)")
+            Logger.info("Regeneration successful for: \(item.task.revNode.displayName)", category: .ai)
             return newRevision
         case .failure(let error):
-            Logger.error("❌ Regeneration failed: \(error.localizedDescription)")
+            Logger.error("Regeneration failed: \(error.localizedDescription)", category: .ai)
             return nil
         }
     }
 
-    /// Called when the current phase review is complete — applies approved changes and advances to the next phase or finalizes.
+    /// Regenerate an entire compound group.
+    private func regenerateCompoundGroup(groupId: String, feedback: String?) async -> [ProposedRevisionNode]? {
+        guard let queue = reviewQueue,
+              let executor = parallelExecutor,
+              let preamble = cachedPreamble,
+              let modelId = workflowState.currentModelId,
+              let builder = taskBuilder,
+              let context = cachedContext else {
+            Logger.error("Missing dependencies for compound regeneration")
+            return nil
+        }
+
+        // Get the group items to determine which nodes to regenerate
+        let groupItems = queue.itemsInCompoundGroup(groupId)
+        guard !groupItems.isEmpty else { return nil }
+
+        // Rebuild the compound task from the original nodes
+        let originalNodes = groupItems.map { $0.task.revNode }
+
+        guard let resume = currentResume else {
+            Logger.error("No resume available for compound regeneration")
+            return nil
+        }
+
+        // Rebuild as compound tasks (should produce 1 compound task from the group)
+        let tasks = builder.buildTasks(
+            from: originalNodes,
+            resume: resume,
+            jobDescription: context.jobDescription,
+            skills: context.skills,
+            titleSets: context.titleSets,
+            phase: groupItems[0].task.phase,
+            targetingPlan: cachedTargetingPlan,
+            phase1Decisions: phase1DecisionsContext,
+            knowledgeCards: context.knowledgeCards
+        )
+
+        // Find the compound task
+        guard let compoundTask = tasks.first(where: { $0.nodeType == .compound }) else {
+            Logger.error("Failed to rebuild compound task for group: \(groupId)")
+            return nil
+        }
+
+        // Add feedback to prompt
+        var regenerationPrompt = compoundTask.taskPrompt
+        if let feedback = feedback, !feedback.isEmpty {
+            regenerationPrompt += "\n\n## User Feedback\nThe previous revisions were rejected. Please incorporate this feedback:\n\(feedback)"
+        } else {
+            regenerationPrompt += "\n\n## Regeneration Request\nThe previous revisions were rejected. Please try a different approach."
+        }
+
+        let regenerationTask = RevisionTask(
+            revNode: compoundTask.revNode,
+            taskPrompt: regenerationPrompt,
+            nodeType: .compound,
+            phase: compoundTask.phase
+        )
+
+        let execContext = ParallelExecutionContext()
+
+        let result = await executor.executeSingle(
+            task: regenerationTask,
+            context: execContext,
+            llmFacade: llm,
+            modelId: modelId,
+            preamble: preamble,
+            toolConfig: cachedToolConfig
+        )
+
+        switch result.result {
+        case .success:
+            if let compoundResults = result.compoundResults {
+                Logger.info("Compound regeneration successful for group: \(groupId) (\(compoundResults.count) fields)", category: .ai)
+                return compoundResults
+            }
+            // Single result fallback
+            if case .success(let single) = result.result {
+                return [single]
+            }
+            return nil
+        case .failure(let error):
+            Logger.error("Compound regeneration failed: \(error.localizedDescription)", category: .ai)
+            return nil
+        }
+    }
+
+    /// Called when the current phase review is complete -- applies approved changes and advances to the next phase or finalizes.
     /// - Parameters:
     ///   - resume: The resume being customized
     ///   - context: The SwiftData model context for saving
@@ -385,7 +521,13 @@ class RevisionWorkflowOrchestrator {
         // 3. Trigger export
         exportCoordinator.debounceExport(resume: resume)
 
-        // 4. Advance to Phase 2 if pending, otherwise finalize
+        // 4. Build Phase 1 decisions context for Phase 2
+        if currentPhaseNumber == 1 && !pendingPhase2Nodes.isEmpty {
+            phase1DecisionsContext = RevisionTaskBuilder.buildPhase1DecisionsContext(from: approvedItems)
+            Logger.info("Built Phase 1 decisions context (\(phase1DecisionsContext?.count ?? 0) chars) for Phase 2", category: .ai)
+        }
+
+        // 5. Advance to Phase 2 if pending, otherwise finalize
         if !pendingPhase2Nodes.isEmpty {
             guard let skillStore else {
                 throw RevisionWorkflowError.missingDependency("SkillStore")
@@ -415,8 +557,13 @@ class RevisionWorkflowOrchestrator {
                 coverRefStore: coverRefStore,
                 applicantProfileStore: applicantProfileStore
             )
+            self.cachedContext = customizationContext
 
             workflowState.setProcessingRevisions(true)
+
+            // Re-setup callbacks after queue.clear()
+            setupParallelRegenerationCallback()
+            setupCompoundRegenerationCallback()
 
             try await executeParallelPhase(
                 nodes: captured,
@@ -471,6 +618,9 @@ class RevisionWorkflowOrchestrator {
         currentCoverRefStore = nil
         currentPhaseNumber = 1
         totalPhases = 1
+        cachedTargetingPlan = nil
+        phase1DecisionsContext = nil
+        cachedContext = nil
 
         reviewQueue?.clear()
         reviewQueue = nil
@@ -572,9 +722,9 @@ class RevisionWorkflowOrchestrator {
 
         if let treeNode = resume.nodes.first(where: { $0.id == item.task.revNode.id }) {
             treeNode.value = valueToApply
-            Logger.debug("✅ Applied scalar change to node: \(item.task.revNode.displayName)")
+            Logger.debug("Applied scalar change to node: \(item.task.revNode.displayName)")
         } else {
-            Logger.warning("⚠️ Could not find tree node: \(item.task.revNode.id)")
+            Logger.warning("Could not find tree node: \(item.task.revNode.id)")
         }
     }
 
@@ -594,19 +744,19 @@ class RevisionWorkflowOrchestrator {
         // Apply each value to its corresponding source node
         for (index, nodeId) in sourceNodeIds.enumerated() {
             guard index < valuesToApply.count else {
-                Logger.warning("⚠️ Not enough values for source node at index \(index)")
+                Logger.warning("Not enough values for source node at index \(index)")
                 continue
             }
 
             if let treeNode = resume.nodes.first(where: { $0.id == nodeId }) {
                 treeNode.value = valuesToApply[index]
-                Logger.debug("✅ Applied array value to node \(index): \(nodeId)")
+                Logger.debug("Applied array value to node \(index): \(nodeId)")
             } else {
-                Logger.warning("⚠️ Could not find source tree node: \(nodeId)")
+                Logger.warning("Could not find source tree node: \(nodeId)")
             }
         }
 
-        Logger.info("✅ Applied bundled changes (\(valuesToApply.count) values) for: \(item.task.revNode.displayName)")
+        Logger.info("Applied bundled changes (\(valuesToApply.count) values) for: \(item.task.revNode.displayName)")
     }
 
     /// Parse array values from a string (handles comma-separated or newline-separated lists)
