@@ -104,7 +104,7 @@ class RevisionWorkflowOrchestrator {
         guidanceStore: InferenceGuidanceStore? = nil,
         skillStore: SkillStore? = nil,
         titleSetStore: TitleSetStore? = nil,
-        targetingPlanService: TargetingPlanService = TargetingPlanService(),
+        targetingPlanService: TargetingPlanService,
         coherencePassService: CoherencePassService,
         workflowState: RevisionWorkflowState
     ) {

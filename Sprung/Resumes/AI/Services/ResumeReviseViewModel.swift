@@ -126,6 +126,7 @@ class ResumeReviseViewModel {
             guidanceStore: guidanceStore,
             skillStore: skillStore,
             titleSetStore: titleSetStore,
+            targetingPlanService: TargetingPlanService(),
             coherencePassService: CoherencePassService(),
             workflowState: self.workflowState
         )
