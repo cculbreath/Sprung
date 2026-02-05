@@ -9,6 +9,7 @@ struct ResumeSettingsSection: View {
     @AppStorage("fixOverflowMaxIterations") private var fixOverflowMaxIterations: Int = 3
     @AppStorage("reasoningEffort") private var reasoningEffort: String = "medium"
     @AppStorage("enableResumeCustomizationTools") private var enableResumeCustomizationTools: Bool = true
+    @AppStorage("enableCoherencePass") private var enableCoherencePass: Bool = true
 
     private let reasoningOptions: [(value: String, label: String, detail: String)] = [
         ("none", "None", "Fastest responses, no reasoning tokens"),
@@ -51,6 +52,13 @@ struct ResumeSettingsSection: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Toggle("AI Follow-up Questions", isOn: $enableResumeCustomizationTools)
                     Text("Allow AI to ask clarifying questions about your experience during resume customization.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Toggle("Coherence Check", isOn: $enableCoherencePass)
+                    Text("Run a final quality check after customization to catch repetition, misalignment, and inconsistencies across sections.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }

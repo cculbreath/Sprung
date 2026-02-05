@@ -16,6 +16,8 @@ import SwiftData
 protocol RevisionWorkflowOrchestratorDelegate: AnyObject {
     func showParallelReviewQueue()
     func hideParallelReviewQueue()
+    func showCoherenceReport()
+    func hideCoherenceReport()
 }
 
 /// Service responsible for orchestrating revision workflow execution.
@@ -37,6 +39,7 @@ class RevisionWorkflowOrchestrator {
     private let skillStore: SkillStore?
     private let titleSetStore: TitleSetStore?
     private let targetingPlanService: TargetingPlanService
+    private let coherencePassService: CoherencePassService
 
     // MARK: - Parallel Workflow Components
     private var promptCacheService: CustomizationPromptCacheService?
@@ -58,6 +61,17 @@ class RevisionWorkflowOrchestrator {
     private var phase1DecisionsContext: String?
     /// Cached customization context for Phase 2
     private var cachedContext: CustomizationContext?
+
+    /// Count of fields customized across all phases (for coherence threshold)
+    private var totalCustomizedFieldCount: Int = 0
+
+    // MARK: - Coherence Pass State
+
+    /// The most recent coherence report (nil until the pass runs).
+    private(set) var coherenceReport: CoherenceReport?
+
+    /// Whether the coherence pass is currently running.
+    private(set) var isRunningCoherencePass: Bool = false
 
     /// Whether Phase 2 is still pending
     var hasPhase2Pending: Bool {
@@ -91,6 +105,7 @@ class RevisionWorkflowOrchestrator {
         skillStore: SkillStore? = nil,
         titleSetStore: TitleSetStore? = nil,
         targetingPlanService: TargetingPlanService = TargetingPlanService(),
+        coherencePassService: CoherencePassService,
         workflowState: RevisionWorkflowState
     ) {
         self.llm = llm
@@ -106,6 +121,7 @@ class RevisionWorkflowOrchestrator {
         self.skillStore = skillStore
         self.titleSetStore = titleSetStore
         self.targetingPlanService = targetingPlanService
+        self.coherencePassService = coherencePassService
         self.workflowState = workflowState
     }
 
@@ -509,6 +525,10 @@ class RevisionWorkflowOrchestrator {
             applyReviewItemToResume(item, resume: resume)
         }
 
+        // Track total customized fields for coherence threshold
+        let appliedCount = approvedItems.filter { $0.shouldApplyRevision }.count
+        totalCustomizedFieldCount += appliedCount
+
         Logger.info("Applied \(approvedItems.count) phase \(currentPhaseNumber) changes to resume")
 
         // 2. Save to SwiftData
@@ -527,7 +547,7 @@ class RevisionWorkflowOrchestrator {
             Logger.info("Built Phase 1 decisions context (\(phase1DecisionsContext?.count ?? 0) chars) for Phase 2", category: .ai)
         }
 
-        // 5. Advance to Phase 2 if pending, otherwise finalize
+        // 5. Advance to Phase 2 if pending, otherwise run coherence pass or finalize
         if !pendingPhase2Nodes.isEmpty {
             guard let skillStore else {
                 throw RevisionWorkflowError.missingDependency("SkillStore")
@@ -576,7 +596,8 @@ class RevisionWorkflowOrchestrator {
             workflowState.setProcessingRevisions(false)
             await delegate?.showParallelReviewQueue()
         } else {
-            finalizeWorkflow()
+            // All phases complete -- run coherence pass if warranted
+            await runCoherencePassIfNeeded(resume: resume)
         }
     }
 
@@ -611,6 +632,71 @@ class RevisionWorkflowOrchestrator {
         reviewQueue?.hasApprovedItems ?? false
     }
 
+    // MARK: - Coherence Pass
+
+    /// Called by the UI when the user finishes reviewing the coherence report.
+    func completeCoherencePass() {
+        coherenceReport = nil
+        delegate?.hideCoherenceReport()
+        finalizeWorkflow()
+    }
+
+    /// Called by the UI when the user wants to skip the coherence report entirely.
+    func skipCoherencePass() {
+        coherenceReport = nil
+        delegate?.hideCoherenceReport()
+        finalizeWorkflow()
+    }
+
+    /// Run the coherence pass if enough fields were customized and the user hasn't opted out.
+    private func runCoherencePassIfNeeded(resume: Resume) async {
+        // Check opt-out flag
+        let coherenceEnabled = UserDefaults.standard.bool(forKey: "enableCoherencePass")
+        guard coherenceEnabled else {
+            Logger.info("[CoherencePass] Skipped (disabled in settings)")
+            finalizeWorkflow()
+            return
+        }
+
+        // Check minimum threshold
+        guard totalCustomizedFieldCount >= CoherencePassService.minimumFieldsForCoherenceCheck else {
+            Logger.info("[CoherencePass] Skipped (only \(totalCustomizedFieldCount) fields customized, need \(CoherencePassService.minimumFieldsForCoherenceCheck))")
+            finalizeWorkflow()
+            return
+        }
+
+        guard let modelId = workflowState.currentModelId else {
+            Logger.warning("[CoherencePass] No model ID available, skipping")
+            finalizeWorkflow()
+            return
+        }
+
+        isRunningCoherencePass = true
+        workflowState.setProcessingRevisions(true)
+
+        do {
+            let report = try await coherencePassService.runCoherenceCheck(
+                resume: resume,
+                targetingPlan: cachedTargetingPlan,
+                jobDescription: cachedContext?.jobDescription ?? "",
+                llmFacade: llm,
+                modelId: modelId
+            )
+
+            isRunningCoherencePass = false
+            workflowState.setProcessingRevisions(false)
+            coherenceReport = report
+
+            Logger.info("[CoherencePass] Report ready: \(report.overallCoherence.rawValue), \(report.issues.count) issues")
+            delegate?.showCoherenceReport()
+        } catch {
+            Logger.error("[CoherencePass] Failed: \(error.localizedDescription)")
+            isRunningCoherencePass = false
+            workflowState.setProcessingRevisions(false)
+            finalizeWorkflow()
+        }
+    }
+
     /// Clear all state and finalize the workflow
     private func finalizeWorkflow() {
         pendingPhase2Nodes = []
@@ -621,6 +707,9 @@ class RevisionWorkflowOrchestrator {
         cachedTargetingPlan = nil
         phase1DecisionsContext = nil
         cachedContext = nil
+        totalCustomizedFieldCount = 0
+        coherenceReport = nil
+        isRunningCoherencePass = false
 
         reviewQueue?.clear()
         reviewQueue = nil

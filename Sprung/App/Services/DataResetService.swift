@@ -131,6 +131,7 @@ final class DataResetService {
         defaults.removeObject(forKey: "reasoningEffort")
         defaults.removeObject(forKey: "fixOverflowMaxIterations")
         defaults.removeObject(forKey: "enableResumeCustomizationTools")
+        defaults.removeObject(forKey: "enableCoherencePass")
 
         // Reset debug settings
         defaults.removeObject(forKey: "debugLogLevel")

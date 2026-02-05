@@ -33,9 +33,22 @@ class ResumeReviseViewModel {
     /// Shows the parallel review queue UI
     var showParallelReviewQueueSheet: Bool = false
 
+    /// Shows the coherence report UI
+    var showCoherenceReportSheet: Bool = false
+
     /// The review queue for the parallel workflow (exposed for UI binding)
     var parallelReviewQueue: CustomizationReviewQueue? {
         workflowOrchestrator.reviewQueue
+    }
+
+    /// The coherence report from the post-assembly pass (exposed for UI binding)
+    var coherenceReport: CoherenceReport? {
+        workflowOrchestrator.coherenceReport
+    }
+
+    /// Whether the coherence pass is currently running
+    var isRunningCoherencePass: Bool {
+        workflowOrchestrator.isRunningCoherencePass
     }
 
     // MARK: - Convenience Accessors
@@ -113,6 +126,7 @@ class ResumeReviseViewModel {
             guidanceStore: guidanceStore,
             skillStore: skillStore,
             titleSetStore: titleSetStore,
+            coherencePassService: CoherencePassService(),
             workflowState: self.workflowState
         )
 
@@ -192,6 +206,18 @@ class ResumeReviseViewModel {
         workflowOrchestrator.totalPhases
     }
 
+    // MARK: - Coherence Pass
+
+    /// Complete the coherence report review and finalize the workflow.
+    func completeCoherencePass() {
+        workflowOrchestrator.completeCoherencePass()
+    }
+
+    /// Skip the coherence report and finalize the workflow.
+    func skipCoherencePass() {
+        workflowOrchestrator.skipCoherencePass()
+    }
+
     // MARK: - Forwarded Tool Methods
 
     func submitSkillExperienceResults(_ results: [SkillExperienceResult]) {
@@ -212,5 +238,13 @@ extension ResumeReviseViewModel: RevisionWorkflowOrchestratorDelegate {
 
     func hideParallelReviewQueue() {
         showParallelReviewQueueSheet = false
+    }
+
+    func showCoherenceReport() {
+        showCoherenceReportSheet = true
+    }
+
+    func hideCoherenceReport() {
+        showCoherenceReportSheet = false
     }
 }
