@@ -37,8 +37,19 @@ struct CustomizationContext {
     /// Applicant's profile information
     let applicantProfile: ApplicantProfileDraft
 
-    /// Knowledge cards providing background context
+    /// Knowledge cards filtered to those relevant to this job application.
+    /// When `relevantCardIds` is non-empty, this contains only matching cards.
+    /// When no relevance data exists, this contains all approved cards (fallback).
     let knowledgeCards: [KnowledgeCard]
+
+    /// All approved knowledge cards, regardless of relevance filtering.
+    /// Available for A1 tiered presentation (background tier) and any code
+    /// that needs the full set.
+    let allCards: [KnowledgeCard]
+
+    /// IDs of knowledge cards identified as relevant during job preprocessing.
+    /// Empty set when no preprocessing has been performed (fallback mode).
+    let relevantCardIds: Set<UUID>
 
     /// Approved skills from the skill bank
     let skills: [Skill]
@@ -102,8 +113,8 @@ struct CustomizationContext {
         // Get title sets from guidance store
         let titleSets = guidanceStore.titleSets()
 
-        // Get approved knowledge cards
-        let knowledgeCards = knowledgeCardStore.approvedCards
+        // Get all approved knowledge cards
+        let allApprovedCards = knowledgeCardStore.approvedCards
 
         // Get applicant profile
         let profile = applicantProfileStore.currentProfile()
@@ -112,10 +123,28 @@ struct CustomizationContext {
         // Get job description from resume's job application
         let jobDescription = resume.jobApp?.jobListingString ?? ""
 
+        // Parse relevantCardIds from the job app (stored as [String] of UUID strings)
+        let parsedRelevantIds: Set<UUID>
+        if let rawIds = resume.jobApp?.relevantCardIds, !rawIds.isEmpty {
+            parsedRelevantIds = Set(rawIds.compactMap { UUID(uuidString: $0) })
+        } else {
+            parsedRelevantIds = []
+        }
+
+        // Filter KCs: use relevant subset when available, fall back to all approved cards
+        let filteredCards: [KnowledgeCard]
+        if !parsedRelevantIds.isEmpty {
+            filteredCards = allApprovedCards.filter { parsedRelevantIds.contains($0.id) }
+        } else {
+            filteredCards = allApprovedCards
+        }
+
         return CustomizationContext(
             resume: resume,
             applicantProfile: profileDraft,
-            knowledgeCards: knowledgeCards,
+            knowledgeCards: filteredCards,
+            allCards: allApprovedCards,
+            relevantCardIds: parsedRelevantIds,
             skills: approvedSkills,
             titleSets: titleSets,
             writersVoice: coverRefStore.writersVoice,
