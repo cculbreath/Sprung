@@ -8,6 +8,8 @@
 //
 
 import Foundation
+import SwiftOpenAI
+import SwiftyJSON
 
 // MARK: - Supporting Types
 
@@ -71,6 +73,33 @@ struct ParallelExecutionContext: Sendable {
     }
 }
 
+// MARK: - Tool Configuration
+
+/// Configuration for tool-enabled execution in the parallel executor.
+/// Bundles tool definitions with a closure that executes tool calls,
+/// allowing the actor to invoke tools without depending on @MainActor types directly.
+struct ToolConfiguration: Sendable {
+    /// Tool definitions for the LLM request
+    let tools: [ChatCompletionParameters.Tool]
+
+    /// Closure that executes a named tool with JSON arguments and returns the result string.
+    /// The closure bridges to @MainActor tool registries as needed.
+    let executeTool: @Sendable (String, String) async throws -> String
+
+    /// Maximum number of tool call rounds before forcing a final response (default: 3)
+    let maxToolRounds: Int
+
+    init(
+        tools: [ChatCompletionParameters.Tool],
+        executeTool: @escaping @Sendable (String, String) async throws -> String,
+        maxToolRounds: Int = 3
+    ) {
+        self.tools = tools
+        self.executeTool = executeTool
+        self.maxToolRounds = maxToolRounds
+    }
+}
+
 // MARK: - Parallel Executor
 
 /// Actor that manages parallel execution of resume revision tasks.
@@ -101,13 +130,15 @@ actor CustomizationParallelExecutor {
     ///   - llmFacade: The LLM facade for API calls
     ///   - modelId: The model ID to use
     ///   - preamble: The preamble to prepend to each task prompt
+    ///   - toolConfig: Optional tool configuration for tool-enabled execution
     /// - Returns: AsyncStream of task results
     func execute(
         tasks: [RevisionTask],
         context: ParallelExecutionContext,
         llmFacade: LLMFacade,
         modelId: String,
-        preamble: String
+        preamble: String,
+        toolConfig: ToolConfiguration? = nil
     ) -> AsyncStream<RevisionTaskResult> {
         AsyncStream { continuation in
             Task {
@@ -126,7 +157,8 @@ actor CustomizationParallelExecutor {
                                 context: context,
                                 llmFacade: llmFacade,
                                 modelId: modelId,
-                                preamble: preamble
+                                preamble: preamble,
+                                toolConfig: toolConfig
                             )
                         }
                     }
@@ -148,7 +180,8 @@ actor CustomizationParallelExecutor {
         context: ParallelExecutionContext,
         llmFacade: LLMFacade,
         modelId: String,
-        preamble: String
+        preamble: String,
+        toolConfig: ToolConfiguration? = nil
     ) async -> RevisionTaskResult {
         await waitForSlot()
         defer {
@@ -160,7 +193,8 @@ actor CustomizationParallelExecutor {
             context: context,
             llmFacade: llmFacade,
             modelId: modelId,
-            preamble: preamble
+            preamble: preamble,
+            toolConfig: toolConfig
         )
     }
 
@@ -171,28 +205,167 @@ actor CustomizationParallelExecutor {
         context: ParallelExecutionContext,
         llmFacade: LLMFacade,
         modelId: String,
-        preamble: String
+        preamble: String,
+        toolConfig: ToolConfiguration? = nil
     ) async -> RevisionTaskResult {
         do {
             let fullPrompt = buildFullPrompt(preamble: preamble, task: task, context: context)
 
-            let response = try await llmFacade.executeFlexibleJSON(
-                prompt: fullPrompt,
-                modelId: modelId,
-                as: ProposedRevisionNode.self,
-                temperature: 0.3
-            )
-
-            return RevisionTaskResult(
-                taskId: task.id,
-                result: .success(response)
-            )
+            if let toolConfig {
+                // Tool-enabled path: conversation loop with tool calls
+                let response = try await executeWithToolLoop(
+                    prompt: fullPrompt,
+                    llmFacade: llmFacade,
+                    modelId: modelId,
+                    toolConfig: toolConfig
+                )
+                return RevisionTaskResult(
+                    taskId: task.id,
+                    result: .success(response)
+                )
+            } else {
+                // Non-tool path: single-shot flexible JSON (existing behavior)
+                let response = try await llmFacade.executeFlexibleJSON(
+                    prompt: fullPrompt,
+                    modelId: modelId,
+                    as: ProposedRevisionNode.self,
+                    temperature: 0.3
+                )
+                return RevisionTaskResult(
+                    taskId: task.id,
+                    result: .success(response)
+                )
+            }
         } catch {
             return RevisionTaskResult(
                 taskId: task.id,
                 result: .failure(error)
             )
         }
+    }
+
+    // MARK: - Tool-Enabled Execution
+
+    /// Execute a task using a conversation loop that supports tool calls.
+    /// The LLM can invoke tools (e.g., ReadKnowledgeCardsTool) to retrieve
+    /// additional context before producing the final ProposedRevisionNode JSON.
+    private func executeWithToolLoop(
+        prompt: String,
+        llmFacade: LLMFacade,
+        modelId: String,
+        toolConfig: ToolConfiguration
+    ) async throws -> ProposedRevisionNode {
+        // Build initial messages: system prompt (preamble + context) as a user message
+        // since executeWithTools takes raw messages
+        var messages: [ChatCompletionParameters.Message] = [
+            .init(role: .system, content: .text(
+                "You are a resume customization assistant. After gathering any needed context via tools, " +
+                "respond with a single JSON object matching the ProposedRevisionNode schema: " +
+                "{\"id\": string, \"oldValue\": string, \"newValue\": string, \"valueChanged\": bool, " +
+                "\"isTitleNode\": bool, \"why\": string, \"treePath\": string, " +
+                "\"nodeType\": \"scalar\"|\"list\", \"oldValueArray\": [string]?, \"newValueArray\": [string]?}"
+            )),
+            .init(role: .user, content: .text(prompt))
+        ]
+
+        var remainingRounds = toolConfig.maxToolRounds
+
+        while remainingRounds > 0 {
+            remainingRounds -= 1
+
+            let response = try await llmFacade.executeWithTools(
+                messages: messages,
+                tools: toolConfig.tools,
+                toolChoice: .auto,
+                modelId: modelId,
+                temperature: 0.3
+            )
+
+            guard let choice = response.choices?.first,
+                  let message = choice.message else {
+                throw LLMError.clientError("No response from model during tool conversation")
+            }
+
+            // Check for tool calls
+            if let toolCalls = message.toolCalls, !toolCalls.isEmpty {
+                Logger.info("[ParallelExecutor] Model requested \(toolCalls.count) tool call(s), round \(toolConfig.maxToolRounds - remainingRounds)", category: .ai)
+
+                // Add assistant message with tool calls to history
+                let assistantContent: ChatCompletionParameters.Message.ContentType =
+                    message.content.map { .text($0) } ?? .text("")
+                messages.append(ChatCompletionParameters.Message(
+                    role: .assistant,
+                    content: assistantContent,
+                    toolCalls: toolCalls
+                ))
+
+                // Execute each tool call and add results
+                for toolCall in toolCalls {
+                    let toolCallId = toolCall.id ?? UUID().uuidString
+                    let toolName = toolCall.function.name ?? "unknown"
+                    let toolArguments = toolCall.function.arguments
+
+                    Logger.debug("[ParallelExecutor] Executing tool: \(toolName)", category: .ai)
+
+                    let resultString: String
+                    do {
+                        resultString = try await toolConfig.executeTool(toolName, toolArguments)
+                    } catch {
+                        resultString = "{\"error\": \"\(error.localizedDescription)\"}"
+                        Logger.warning("[ParallelExecutor] Tool execution error: \(error.localizedDescription)", category: .ai)
+                    }
+
+                    messages.append(ChatCompletionParameters.Message(
+                        role: .tool,
+                        content: .text(resultString),
+                        toolCallID: toolCallId
+                    ))
+                }
+            } else {
+                // No tool calls - parse the final response as ProposedRevisionNode
+                let finalContent = message.content ?? ""
+                Logger.info("[ParallelExecutor] Tool conversation complete after \(toolConfig.maxToolRounds - remainingRounds) round(s)", category: .ai)
+                return try parseProposedRevisionNode(from: finalContent)
+            }
+        }
+
+        // Exhausted tool rounds - make one final call without tools to force a JSON response
+        Logger.warning("[ParallelExecutor] Exhausted \(toolConfig.maxToolRounds) tool rounds, forcing final response", category: .ai)
+
+        let finalResponse = try await llmFacade.executeWithTools(
+            messages: messages,
+            tools: [],
+            toolChoice: .none,
+            modelId: modelId,
+            temperature: 0.3
+        )
+
+        guard let finalChoice = finalResponse.choices?.first,
+              let finalMessage = finalChoice.message,
+              let finalContent = finalMessage.content else {
+            throw LLMError.clientError("No final response after exhausting tool rounds")
+        }
+
+        return try parseProposedRevisionNode(from: finalContent)
+    }
+
+    /// Parse a ProposedRevisionNode from a raw LLM response string.
+    /// Handles responses that may include markdown code fences or extra text around JSON.
+    private func parseProposedRevisionNode(from response: String) throws -> ProposedRevisionNode {
+        // Try to extract JSON object from the response
+        let jsonString: String
+        if let jsonStart = response.range(of: "{"),
+           let jsonEnd = response.range(of: "}", options: .backwards) {
+            jsonString = String(response[jsonStart.lowerBound...jsonEnd.upperBound])
+        } else {
+            jsonString = response
+        }
+
+        guard let data = jsonString.data(using: .utf8) else {
+            throw LLMError.clientError("Failed to convert tool conversation response to data")
+        }
+
+        return try JSONDecoder().decode(ProposedRevisionNode.self, from: data)
     }
 
     private func buildFullPrompt(
@@ -284,13 +457,15 @@ extension CustomizationParallelExecutor {
     ///   - llmFacade: The LLM facade for API calls
     ///   - modelId: The model ID to use
     ///   - preamble: The preamble to prepend to each task prompt
+    ///   - toolConfig: Optional tool configuration for tool-enabled execution
     /// - Returns: Dictionary mapping task IDs to results
     func executeAll(
         tasks: [RevisionTask],
         context: ParallelExecutionContext,
         llmFacade: LLMFacade,
         modelId: String,
-        preamble: String
+        preamble: String,
+        toolConfig: ToolConfiguration? = nil
     ) async -> [UUID: Result<ProposedRevisionNode, Error>] {
         var results: [UUID: Result<ProposedRevisionNode, Error>] = [:]
 
@@ -299,7 +474,8 @@ extension CustomizationParallelExecutor {
             context: context,
             llmFacade: llmFacade,
             modelId: modelId,
-            preamble: preamble
+            preamble: preamble,
+            toolConfig: toolConfig
         )
 
         for await taskResult in stream {
