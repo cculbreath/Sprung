@@ -42,8 +42,8 @@ final class SkillStore: SwiftDataStore {
         skills.filter { !$0.isPending }
     }
 
-    /// Skills grouped by category
-    var skillsByCategory: [SkillCategory: [Skill]] {
+    /// Skills grouped by category string
+    var skillsByCategory: [String: [Skill]] {
         Dictionary(grouping: skills, by: { $0.category })
     }
 
@@ -191,8 +191,8 @@ final class SkillStore: SwiftDataStore {
         skills.first { $0.id == id }
     }
 
-    /// Find skills by category
-    func skills(inCategory category: SkillCategory) -> [Skill] {
+    /// Find skills by category string
+    func skills(inCategory category: String) -> [Skill] {
         skills.filter { $0.category == category }
     }
 

@@ -75,19 +75,18 @@ Determine proficiency from evidence:
 
 ### Categories
 
-Assign each skill to ONE category:
-- Programming Languages
-- Frameworks & Libraries
-- Tools & Platforms
-- Hardware & Electronics
-- Fabrication & Manufacturing
-- Scientific & Analysis
-- Methodologies & Processes
-- Writing & Communication
-- Research Methods
-- Regulatory & Compliance
+Assign each skill to ONE category. Start with these universal anchors (available for any profession):
+- Tools & Software
 - Leadership & Management
-- Domain Expertise
+- Communication & Writing
+- Methodologies & Processes
+
+Then propose 2-5 additional domain-appropriate categories that fit the user's profile.
+For example, a physicist might use "Hardware & Electronics" and "Scientific & Analysis";
+a nurse might use "Clinical Skills" and "Patient Care"; a software developer might use
+"Programming Languages" and "Frameworks & Libraries".
+
+Keep total categories between 6-10 to avoid over-fragmentation.
 
 ### Quality Checklist
 

@@ -6,7 +6,7 @@ struct SkillsTabContent: View {
     let coordinator: OnboardingInterviewCoordinator
 
     @State private var expandedSkillIds: Set<UUID> = []
-    @State private var expandedCategories: Set<SkillCategory> = Set(SkillCategory.allCases)
+    @State private var expandedCategories: Set<String> = []
 
     /// Approved skills (from SwiftData store)
     private var approvedSkills: [Skill] {
@@ -26,17 +26,20 @@ struct SkillsTabContent: View {
     @ViewBuilder
     private func skillsListView(skills: [Skill]) -> some View {
         let grouped = Dictionary(grouping: skills, by: { $0.category })
-        let sortedCategories = SkillCategory.allCases.filter { grouped[$0] != nil }
+        let sortedCategories = SkillCategoryUtils.sortedCategories(from: skills)
 
         ForEach(sortedCategories, id: \.self) { category in
             if let categorySkills = grouped[category] {
                 categorySection(category: category, skills: categorySkills)
             }
         }
+        .onAppear {
+            expandedCategories = Set(SkillCategoryUtils.sortedCategories(from: skills))
+        }
     }
 
     @ViewBuilder
-    private func categorySection(category: SkillCategory, skills: [Skill]) -> some View {
+    private func categorySection(category: String, skills: [Skill]) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             // Category header
             Button {
@@ -54,7 +57,7 @@ struct SkillsTabContent: View {
                         .foregroundStyle(.secondary)
                         .frame(width: 12)
 
-                    Text(category.rawValue)
+                    Text(category)
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.secondary)
 

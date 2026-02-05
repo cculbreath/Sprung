@@ -52,7 +52,7 @@ struct SkillRecommendation: Codable, Equatable {
     /// The job requirement skill they likely have (e.g., "Flame Cutting")
     let skillName: String
 
-    /// SkillCategory raw value
+    /// Skill category name
     let category: String
 
     /// Confidence level: "high", "medium", "low"

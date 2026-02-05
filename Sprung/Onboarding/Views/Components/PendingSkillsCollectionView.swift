@@ -5,7 +5,7 @@ import SwiftUI
 struct PendingSkillsCollectionView: View {
     let coordinator: OnboardingInterviewCoordinator
 
-    @State private var expandedCategories: Set<SkillCategory> = Set(SkillCategory.allCases)
+    @State private var expandedCategories: Set<String> = []
 
     /// Pending skills from SwiftData store (not yet approved)
     private var pendingSkills: [Skill] {
@@ -77,7 +77,7 @@ struct PendingSkillsCollectionView: View {
     private var skillsListSection: some View {
         VStack(spacing: 6) {
             let grouped = Dictionary(grouping: pendingSkills, by: { $0.category })
-            let sortedCategories = SkillCategory.allCases.filter { grouped[$0] != nil }
+            let sortedCategories = SkillCategoryUtils.sortedCategories(from: pendingSkills)
 
             ForEach(sortedCategories, id: \.self) { category in
                 if let categorySkills = grouped[category] {
@@ -85,10 +85,13 @@ struct PendingSkillsCollectionView: View {
                 }
             }
         }
+        .onAppear {
+            expandedCategories = Set(SkillCategoryUtils.sortedCategories(from: pendingSkills))
+        }
     }
 
     @ViewBuilder
-    private func categorySection(category: SkillCategory, skills: [Skill]) -> some View {
+    private func categorySection(category: String, skills: [Skill]) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             // Category header
             Button {
@@ -106,7 +109,7 @@ struct PendingSkillsCollectionView: View {
                         .foregroundStyle(.secondary)
                         .frame(width: 10)
 
-                    Text(category.rawValue)
+                    Text(category)
                         .font(.caption.weight(.medium))
                         .foregroundStyle(.secondary)
 

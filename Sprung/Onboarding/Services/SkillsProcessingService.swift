@@ -142,7 +142,7 @@ final class SkillsProcessingService {
         do {
             // Build compact skill list for LLM analysis (all skills in one pass)
             let skillDescriptions = allSkills.map { skill in
-                "\(skill.id.uuidString): \(skill.canonical) [\(skill.category.rawValue)]"
+                "\(skill.id.uuidString): \(skill.canonical) [\(skill.category)]"
             }
 
             let duplicateGroups = try await analyzeAllSkillsForDuplicates(
@@ -682,7 +682,7 @@ final class SkillsProcessingService {
         Generate ATS (Applicant Tracking System) synonym variants for this skill:
 
         Skill: \(skill.canonical)
-        Category: \(skill.category.rawValue)
+        Category: \(skill.category)
 
         Generate variants that ATS systems commonly recognize, including:
         - Alternative spellings (e.g., "Javascript" → ["JavaScript", "JS"])

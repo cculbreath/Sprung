@@ -338,10 +338,10 @@ struct ArtifactRow: View {
 
             // Skills grouped by category
             let grouped = Dictionary(grouping: pendingSkills) { $0.category }
-            ForEach(SkillCategory.allCases, id: \.self) { category in
+            ForEach(SkillCategoryUtils.sortedCategories(from: pendingSkills), id: \.self) { category in
                 if let categorySkills = grouped[category], !categorySkills.isEmpty {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(category.rawValue)
+                        Text(category)
                             .font(.caption2.weight(.medium))
                             .foregroundStyle(.secondary)
 
@@ -414,10 +414,10 @@ struct ArtifactRow: View {
 
             // Skills grouped by category
             let grouped = Dictionary(grouping: skills) { $0.category }
-            ForEach(SkillCategory.allCases, id: \.self) { category in
+            ForEach(SkillCategoryUtils.sortedCategories(from: skills), id: \.self) { category in
                 if let categorySkills = grouped[category], !categorySkills.isEmpty {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(category.rawValue)
+                        Text(category)
                             .font(.caption2.weight(.medium))
                             .foregroundStyle(.secondary)
 

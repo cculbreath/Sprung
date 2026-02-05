@@ -9,48 +9,66 @@
 import Foundation
 @preconcurrency import SwiftData
 
-// MARK: - Skill Category
+// MARK: - Skill Category Utilities
 
-/// Category for organizing skills
-enum SkillCategory: String, Codable, CaseIterable {
-    case languages = "Programming Languages"
-    case frameworks = "Frameworks & Libraries"
-    case tools = "Tools & Platforms"
-    case hardware = "Hardware & Electronics"
-    case fabrication = "Fabrication & Manufacturing"
-    case scientific = "Scientific & Analysis"
-    case methodologies = "Methodologies & Processes"
-    case writing = "Writing & Communication"
-    case research = "Research Methods"
-    case regulatory = "Regulatory & Compliance"
-    case leadership = "Leadership & Management"
-    case domain = "Domain Expertise"
+/// Data-driven category utilities for skill organization.
+/// Categories are free-form strings assigned by the LLM during extraction.
+/// This utility provides icon and color lookup with sensible defaults.
+enum SkillCategoryUtils {
 
-    /// Legacy: old data stored as "Leadership & Communication". Decodes correctly;
-    /// Skill.category computed property remaps to .leadership.
-    case soft = "Leadership & Communication"
-
-    /// Categories shown in UI — excludes legacy `.soft`
-    static var displayCases: [SkillCategory] {
-        allCases.filter { $0 != .soft }
+    /// Known icon mappings for common category names.
+    /// Categories not in this table get a default icon.
+    static func icon(for category: String) -> String {
+        let normalized = normalizeCategory(category)
+        return knownIcons[normalized] ?? "square.grid.2x2"
     }
 
-    var icon: String {
-        switch self {
-        case .languages: return "chevron.left.forwardslash.chevron.right"
-        case .frameworks: return "square.stack.3d.up"
-        case .tools: return "wrench.and.screwdriver"
-        case .hardware: return "cpu"
-        case .fabrication: return "hammer"
-        case .scientific: return "flask"
-        case .methodologies: return "flowchart"
-        case .writing: return "text.document"
-        case .research: return "magnifyingglass"
-        case .regulatory: return "checkmark.shield"
-        case .leadership, .soft: return "person.2"
-        case .domain: return "building.2"
+    /// Normalize legacy category names to canonical forms.
+    /// "Leadership & Communication" -> "Leadership & Management"
+    static func normalizeCategory(_ category: String) -> String {
+        let trimmed = category.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let canonical = legacyRemapping[trimmed] {
+            return canonical
         }
+        return trimmed
     }
+
+    /// Sorted unique category strings from a collection of skills.
+    static func sortedCategories(from skills: [Skill]) -> [String] {
+        let categories = Set(skills.map { normalizeCategory($0.categoryRaw) })
+        return categories.sorted()
+    }
+
+    // MARK: - Private
+
+    private static let legacyRemapping: [String: String] = [
+        "Leadership & Communication": "Leadership & Management"
+    ]
+
+    private static let knownIcons: [String: String] = [
+        "Programming Languages": "chevron.left.forwardslash.chevron.right",
+        "Frameworks & Libraries": "square.stack.3d.up",
+        "Tools & Platforms": "wrench.and.screwdriver",
+        "Tools & Software": "wrench.and.screwdriver",
+        "Hardware & Electronics": "cpu",
+        "Fabrication & Manufacturing": "hammer",
+        "Scientific & Analysis": "flask",
+        "Methodologies & Processes": "flowchart",
+        "Writing & Communication": "text.document",
+        "Communication & Writing": "text.document",
+        "Research Methods": "magnifyingglass",
+        "Regulatory & Compliance": "checkmark.shield",
+        "Leadership & Management": "person.2",
+        "Domain Expertise": "building.2",
+        "Clinical Skills": "cross.case",
+        "Analytics & Strategy": "chart.bar.xaxis",
+        "Design & Creative": "paintbrush",
+        "Data & Analytics": "chart.bar",
+        "Finance & Accounting": "dollarsign.circle",
+        "Education & Training": "book",
+        "Project Management": "list.clipboard",
+        "Sales & Marketing": "megaphone",
+    ]
 }
 
 // MARK: - Proficiency Level
@@ -137,7 +155,7 @@ class Skill: Identifiable, Codable {
         id: UUID = UUID(),
         canonical: String,
         atsVariants: [String] = [],
-        category: SkillCategory,
+        category: String,
         proficiency: Proficiency,
         evidence: [SkillEvidence] = [],
         relatedSkills: [UUID] = [],
@@ -147,7 +165,7 @@ class Skill: Identifiable, Codable {
     ) {
         self.id = id
         self.canonical = canonical
-        self.categoryRaw = category.rawValue
+        self.categoryRaw = SkillCategoryUtils.normalizeCategory(category)
         self.proficiencyRaw = proficiency.rawValue
         self.lastUsed = lastUsed
         self.isFromOnboarding = isFromOnboarding
@@ -240,14 +258,13 @@ class Skill: Identifiable, Codable {
 
     // MARK: - Computed Properties
 
-    /// Category as enum. Remaps legacy `.soft` to `.leadership`.
-    var category: SkillCategory {
+    /// Normalized category string. Remaps legacy names automatically.
+    var category: String {
         get {
-            let raw = SkillCategory(rawValue: categoryRaw) ?? .domain
-            return raw == .soft ? .leadership : raw
+            SkillCategoryUtils.normalizeCategory(categoryRaw)
         }
         set {
-            categoryRaw = newValue.rawValue
+            categoryRaw = SkillCategoryUtils.normalizeCategory(newValue)
         }
     }
 

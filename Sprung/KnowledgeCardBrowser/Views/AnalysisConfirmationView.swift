@@ -78,13 +78,14 @@ struct AnalysisConfirmationView: View {
                         if !result.skillBank.skills.isEmpty {
                             Section("Skills to Add (\(result.skillBank.skills.count))") {
                                 let grouped = result.skillBank.groupedByCategory()
-                                ForEach(SkillCategory.allCases, id: \.self) { category in
+                                let sortedCats = SkillCategoryUtils.sortedCategories(from: result.skillBank.skills)
+                                ForEach(sortedCats, id: \.self) { category in
                                     if let skills = grouped[category], !skills.isEmpty {
                                         HStack {
-                                            Image(systemName: category.icon)
+                                            Image(systemName: SkillCategoryUtils.icon(for: category))
                                                 .foregroundStyle(.secondary)
                                                 .frame(width: 20)
-                                            Text(category.rawValue)
+                                            Text(category)
                                                 .font(.subheadline)
                                             Spacer()
                                             Text("\(skills.count)")

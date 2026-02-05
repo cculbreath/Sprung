@@ -68,7 +68,7 @@ class JobAppPreprocessor {
             description: "A skill the user likely has based on existing expertise",
             properties: [
                 "skill_name": JSONSchema(type: .string, description: "The job requirement skill they likely have"),
-                "category": JSONSchema(type: .string, description: "SkillCategory raw value"),
+                "category": JSONSchema(type: .string, description: "Skill category name"),
                 "confidence": JSONSchema(type: .string, description: "high, medium, or low"),
                 "reason": JSONSchema(type: .string, description: "Why this skill is inferred"),
                 "related_user_skills": JSONSchema(type: .array, description: "User skills suggesting this", items: JSONSchema(type: .string)),
@@ -397,7 +397,7 @@ class JobAppPreprocessor {
     ) async throws -> SkillMatchingResponse {
         // Build skill bank summary
         let skillSummaries = skills.map { skill -> String in
-            var line = "[\(skill.id.uuidString)]: \(skill.canonical) (\(skill.category.rawValue))"
+            var line = "[\(skill.id.uuidString)]: \(skill.canonical) (\(skill.category))"
             if !skill.atsVariants.isEmpty {
                 line += " - variants: \(skill.atsVariants.joined(separator: ", "))"
             }
@@ -448,7 +448,7 @@ class JobAppPreprocessor {
 
         For each suggested skill:
         - skill_name: The job requirement skill they likely have
-        - category: Appropriate SkillCategory (Programming Languages, Frameworks & Libraries, Tools & Platforms, Hardware & Electronics, Fabrication & Manufacturing, Scientific & Analysis, Methodologies & Processes, Writing & Communication, Research Methods, Regulatory & Compliance, Leadership & Management, Domain Expertise)
+        - category: Appropriate skill category (e.g. Programming Languages, Frameworks & Libraries, Tools & Platforms, Hardware & Electronics, Fabrication & Manufacturing, Scientific & Analysis, Methodologies & Processes, Writing & Communication, Research Methods, Regulatory & Compliance, Leadership & Management, Domain Expertise, or other domain-specific category)
         - confidence: "high" if multiple signals, "medium" if single strong signal, "low" if plausible inference
         - reason: Brief explanation of why this is inferred
         - related_user_skills: User's existing skill names that suggest this capability

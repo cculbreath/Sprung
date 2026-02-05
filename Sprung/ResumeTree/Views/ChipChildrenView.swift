@@ -190,7 +190,7 @@ struct ChipChildrenView: View {
                                 Text(skill.canonical)
                                     .font(.system(size: 11))
                                 Spacer()
-                                Text(skill.category.rawValue)
+                                Text(skill.category)
                                     .font(.system(size: 9))
                                     .foregroundStyle(.tertiary)
                             }

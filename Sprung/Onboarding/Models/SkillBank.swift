@@ -26,13 +26,13 @@ struct SkillBank: Codable {
         }
     }
 
-    /// Group skills by category
-    func groupedByCategory() -> [SkillCategory: [Skill]] {
+    /// Group skills by category string
+    func groupedByCategory() -> [String: [Skill]] {
         Dictionary(grouping: skills, by: { $0.category })
     }
 
     /// Get top N skills per category (by proficiency, then evidence count)
-    func topSkills(perCategory limit: Int) -> [SkillCategory: [Skill]] {
+    func topSkills(perCategory limit: Int) -> [String: [Skill]] {
         groupedByCategory().mapValues { categorySkills in
             categorySkills.sorted { a, b in
                 if a.proficiency != b.proficiency {

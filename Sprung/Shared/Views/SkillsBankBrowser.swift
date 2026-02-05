@@ -16,7 +16,7 @@ struct SkillsBankBrowser: View {
     let skillStore: SkillStore?
     var llmFacade: LLMFacade?
 
-    @State private var expandedCategories: Set<SkillCategory> = Set(SkillCategory.allCases)
+    @State private var expandedCategories: Set<String> = []
     @State private var expandedSkills: Set<UUID> = []
     @State private var searchText = ""
     @State private var selectedProficiency: Proficiency?
@@ -31,6 +31,11 @@ struct SkillsBankBrowser: View {
     @State private var showResultAlert = false
     @State private var errorMessage: String?
 
+    // Curation state
+    @State private var showCurationReview = false
+    @State private var curationPlan: SkillCurationPlan?
+    @State private var isCurating = false
+
     // Inline editing state
     @State private var editingSkillId: UUID?
     @State private var editingSkillName: String = ""
@@ -41,7 +46,7 @@ struct SkillsBankBrowser: View {
     @State private var refineInstruction = ""
 
     // Add skill feature state (inline)
-    @State private var addingToCategory: SkillCategory?
+    @State private var addingToCategory: String?
     @State private var newSkillName = ""
     @State private var newSkillProficiency: Proficiency = .proficient
     @State private var isAddingSkill = false
@@ -50,6 +55,7 @@ struct SkillsBankBrowser: View {
         case deduplication
         case atsExpansion
         case refine
+        case curation
     }
 
     /// All skills from the store
@@ -57,7 +63,7 @@ struct SkillsBankBrowser: View {
         skillStore?.skills ?? []
     }
 
-    private var groupedSkills: [SkillCategory: [Skill]] {
+    private var groupedSkills: [String: [Skill]] {
         var skills = allSkills
 
         // Apply search filter
@@ -77,8 +83,8 @@ struct SkillsBankBrowser: View {
         return Dictionary(grouping: skills, by: { $0.category })
     }
 
-    private var sortedCategories: [SkillCategory] {
-        SkillCategory.allCases.filter { groupedSkills[$0]?.isEmpty == false }
+    private var sortedCategories: [String] {
+        groupedSkills.keys.sorted()
     }
 
     var body: some View {
@@ -111,6 +117,14 @@ struct SkillsBankBrowser: View {
                 processingOverlay
             }
         }
+        .onAppear {
+            // Expand all categories by default
+            expandedCategories = Set(sortedCategories)
+        }
+        .onChange(of: allSkills.count) {
+            // Keep expanding new categories as they appear
+            expandedCategories.formUnion(sortedCategories)
+        }
         .alert("Processing Complete", isPresented: $showResultAlert) {
             Button("OK") { }
         } message: {
@@ -120,11 +134,19 @@ struct SkillsBankBrowser: View {
                 Text("Error: \(error)")
             }
         }
+        .sheet(isPresented: $showCurationReview) {
+            if let plan = curationPlan, let store = skillStore, let facade = llmFacade {
+                SkillCurationReviewView(plan: plan, skillStore: store, llmFacade: facade) {
+                    showCurationReview = false
+                    curationPlan = nil
+                }
+            }
+        }
     }
 
     // MARK: - Inline Add Skill
 
-    private func startAddingSkill(to category: SkillCategory) {
+    private func startAddingSkill(to category: String) {
         addingToCategory = category
         newSkillName = ""
         newSkillProficiency = .proficient
@@ -175,7 +197,7 @@ struct SkillsBankBrowser: View {
         }
     }
 
-    private func inlineAddSkillRow(for category: SkillCategory) -> some View {
+    private func inlineAddSkillRow(for category: String) -> some View {
         HStack(alignment: .center, spacing: 12) {
             // Status indicator
             if isAddingSkill {
@@ -364,6 +386,24 @@ struct SkillsBankBrowser: View {
             .popover(isPresented: $showRefinePopover, arrowEdge: .bottom) {
                 refinePopoverContent
             }
+
+            // Curate Skills button
+            Button(action: curateSkills) {
+                HStack(spacing: 6) {
+                    if currentOperation == .curation {
+                        ProgressView()
+                            .scaleEffect(0.6)
+                            .frame(width: 12, height: 12)
+                    } else {
+                        Image(systemName: "slider.horizontal.3")
+                    }
+                    Text("Curate")
+                }
+                .font(.caption.weight(.medium))
+            }
+            .buttonStyle(.bordered)
+            .disabled(isProcessing)
+            .help("AI-powered dedup, category rebalancing, and over-granularity flagging")
         }
     }
 
@@ -716,7 +756,7 @@ struct SkillsBankBrowser: View {
         .buttonStyle(.plain)
     }
 
-    private func categorySection(_ category: SkillCategory) -> some View {
+    private func categorySection(_ category: String) -> some View {
         let skills = groupedSkills[category] ?? []
         let isExpanded = expandedCategories.contains(category)
 
@@ -725,12 +765,12 @@ struct SkillsBankBrowser: View {
             HStack(spacing: 0) {
                 Button(action: { toggleCategory(category) }) {
                     HStack {
-                        Image(systemName: iconFor(category))
+                        Image(systemName: SkillCategoryUtils.icon(for: category))
                             .font(.title3)
-                            .foregroundStyle(colorFor(category))
+                            .foregroundStyle(colorForCategory(category))
                             .frame(width: 24)
 
-                        Text(category.rawValue)
+                        Text(category)
                             .font(.headline)
 
                         Text("(\(skills.count))")
@@ -752,10 +792,10 @@ struct SkillsBankBrowser: View {
                 } label: {
                     Image(systemName: "plus.circle.fill")
                         .font(.title3)
-                        .foregroundStyle(colorFor(category))
+                        .foregroundStyle(colorForCategory(category))
                 }
                 .buttonStyle(.plain)
-                .help("Add skill to \(category.rawValue)")
+                .help("Add skill to \(category)")
                 .padding(.trailing, 4)
                 .disabled(addingToCategory != nil)
             }
@@ -982,7 +1022,7 @@ struct SkillsBankBrowser: View {
         .background(Color(nsColor: .windowBackgroundColor))
     }
 
-    private func toggleCategory(_ category: SkillCategory) {
+    private func toggleCategory(_ category: String) {
         withAnimation(.easeInOut(duration: 0.2)) {
             if expandedCategories.contains(category) {
                 expandedCategories.remove(category)
@@ -992,24 +1032,71 @@ struct SkillsBankBrowser: View {
         }
     }
 
-    private func iconFor(_ category: SkillCategory) -> String {
-        category.icon
+    /// Stable color for a category based on hash of its name.
+    private func colorForCategory(_ category: String) -> Color {
+        let knownColors: [String: Color] = [
+            "Programming Languages": .blue,
+            "Frameworks & Libraries": .purple,
+            "Tools & Platforms": .orange,
+            "Tools & Software": .orange,
+            "Hardware & Electronics": .red,
+            "Fabrication & Manufacturing": .brown,
+            "Scientific & Analysis": .green,
+            "Methodologies & Processes": .cyan,
+            "Writing & Communication": .mint,
+            "Communication & Writing": .mint,
+            "Research Methods": .pink,
+            "Regulatory & Compliance": .gray,
+            "Leadership & Management": .teal,
+            "Domain Expertise": .indigo,
+        ]
+        if let known = knownColors[category] { return known }
+        // Stable color based on hash for unknown categories
+        let palette: [Color] = [.blue, .purple, .orange, .red, .green, .cyan, .mint, .pink, .teal, .indigo]
+        let index = abs(category.hashValue) % palette.count
+        return palette[index]
     }
 
-    private func colorFor(_ category: SkillCategory) -> Color {
-        switch category {
-        case .languages: return .blue
-        case .frameworks: return .purple
-        case .tools: return .orange
-        case .hardware: return .red
-        case .fabrication: return .brown
-        case .scientific: return .green
-        case .methodologies: return .cyan
-        case .writing: return .mint
-        case .research: return .pink
-        case .regulatory: return .gray
-        case .leadership, .soft: return .teal
-        case .domain: return .indigo
+    // MARK: - Curation
+
+    private func curateSkills() {
+        guard let skillStore = skillStore, let facade = llmFacade else { return }
+
+        isProcessing = true
+        currentOperation = .curation
+        processingMessage = "Analyzing skills for curation..."
+        processingProgress = 0
+
+        Task {
+            do {
+                let service = SkillBankCurationService(skillStore: skillStore, llmFacade: facade)
+                let plan = try await service.generateCurationPlan()
+
+                await MainActor.run {
+                    self.curationPlan = plan
+                    isProcessing = false
+                    currentOperation = nil
+
+                    if plan.isEmpty {
+                        lastResult = SkillsProcessingResult(
+                            operation: "Curation",
+                            skillsProcessed: skillStore.skills.count,
+                            skillsModified: 0,
+                            details: "No curation changes suggested"
+                        )
+                        showResultAlert = true
+                    } else {
+                        showCurationReview = true
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    errorMessage = error.localizedDescription
+                    isProcessing = false
+                    currentOperation = nil
+                    showResultAlert = true
+                }
+            }
         }
     }
 

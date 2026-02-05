@@ -17,7 +17,7 @@ struct SkillSelectionSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var searchText: String = ""
-    @State private var selectedCategory: SkillCategory?
+    @State private var selectedCategory: String?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -47,9 +47,9 @@ struct SkillSelectionSheet: View {
 
                 // Category picker
                 Picker("Category", selection: $selectedCategory) {
-                    Text("All").tag(nil as SkillCategory?)
-                    ForEach(SkillCategory.displayCases, id: \.self) { category in
-                        Text(category.rawValue).tag(category as SkillCategory?)
+                    Text("All").tag(nil as String?)
+                    ForEach(SkillCategoryUtils.sortedCategories(from: skillStore.approvedSkills), id: \.self) { category in
+                        Text(category).tag(category as String?)
                     }
                 }
                 .pickerStyle(.menu)
@@ -76,8 +76,8 @@ struct SkillSelectionSheet: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 List {
-                    ForEach(groupedSkills.keys.sorted(by: { $0.rawValue < $1.rawValue }), id: \.self) { category in
-                        Section(header: Text(category.rawValue)) {
+                    ForEach(groupedSkills.keys.sorted(), id: \.self) { category in
+                        Section(header: Text(category)) {
                             ForEach(groupedSkills[category] ?? [], id: \.id) { skill in
                                 SkillRow(skill: skill, isAlreadyAdded: isAlreadyAdded(skill))
                                     .contentShape(Rectangle())
@@ -118,7 +118,7 @@ struct SkillSelectionSheet: View {
         return skills.sorted { $0.canonical < $1.canonical }
     }
 
-    private var groupedSkills: [SkillCategory: [Skill]] {
+    private var groupedSkills: [String: [Skill]] {
         Dictionary(grouping: filteredSkills, by: { $0.category })
     }
 

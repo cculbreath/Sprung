@@ -261,7 +261,7 @@ actor DocumentProcessingService {
             skillsStats["total"].int = skillsResult.count
             var byCategory: [String: Int] = [:]
             for skill in skillsResult {
-                byCategory[skill.category.rawValue, default: 0] += 1
+                byCategory[skill.category, default: 0] += 1
             }
             skillsStats["byCategory"].dictionaryObject = byCategory as [String: Any]
             artifactRecord["skillsStats"] = skillsStats

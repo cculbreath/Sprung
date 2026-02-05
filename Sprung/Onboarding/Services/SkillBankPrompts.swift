@@ -28,7 +28,9 @@ enum SkillBankPrompts {
         )
     }
 
-    /// JSON Schema for skill extraction - used by Gemini's native structured output
+    /// JSON Schema for skill extraction - used by Gemini's native structured output.
+    /// Category is a free-form string. Universal anchors and LLM-proposed categories
+    /// are guided by the prompt text, not constrained by an enum in the schema.
     static let jsonSchema: [String: Any] = [
         "type": "object",
         "properties": [
@@ -53,12 +55,7 @@ enum SkillBankPrompts {
                         ],
                         "category": [
                             "type": "string",
-                            "enum": ["Programming Languages", "Frameworks & Libraries", "Tools & Platforms",
-                                    "Hardware & Electronics", "Fabrication & Manufacturing",
-                                    "Scientific & Analysis", "Methodologies & Processes",
-                                    "Writing & Communication", "Research Methods",
-                                    "Regulatory & Compliance", "Leadership & Management", "Domain Expertise"],
-                            "description": "Category for organizing skills"
+                            "description": "Category for organizing skills. Use universal anchors (Tools & Software, Leadership & Management, Communication & Writing, Methodologies & Processes) or propose 2-5 domain-appropriate categories that fit the user's profile. Keep total categories between 6-10."
                         ],
                         "proficiency": [
                             "type": "string",
