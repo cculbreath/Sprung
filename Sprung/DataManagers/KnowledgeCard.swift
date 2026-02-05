@@ -448,6 +448,26 @@ class KnowledgeCard: Identifiable, Codable {
         }
     }
 
+    /// Decoded array of quantified outcomes (what changed as a result of the work)
+    var outcomes: [String] {
+        get {
+            guard let json = outcomesJSON,
+                  let data = json.data(using: .utf8),
+                  let decoded = try? JSONDecoder().decode([String].self, from: data) else {
+                return []
+            }
+            return decoded
+        }
+        set {
+            if newValue.isEmpty {
+                outcomesJSON = nil
+            } else if let data = try? JSONEncoder().encode(newValue),
+                      let json = String(data: data, encoding: .utf8) {
+                outcomesJSON = json
+            }
+        }
+    }
+
     /// Whether this card uses the fact-based format
     var isFactBasedCard: Bool {
         factsJSON != nil || suggestedBulletsJSON != nil

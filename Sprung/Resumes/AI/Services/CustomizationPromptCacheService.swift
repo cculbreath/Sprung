@@ -17,8 +17,15 @@ struct CustomizationPromptContext {
     /// Applicant profile data
     let applicantProfile: ApplicantProfileDraft
 
-    /// Knowledge cards from document extraction
+    /// Knowledge cards filtered to relevant subset (or all if no relevance data)
     let knowledgeCards: [KnowledgeCard]
+
+    /// All approved knowledge cards, regardless of relevance filtering
+    let allCards: [KnowledgeCard]
+
+    /// IDs of knowledge cards identified as relevant during job preprocessing.
+    /// Empty set when no preprocessing has been performed (fallback mode).
+    let relevantCardIds: Set<UUID>
 
     /// Skills from the skill bank
     let skills: [Skill]
@@ -81,9 +88,13 @@ final class CustomizationPromptCacheService {
             sections.append(context.writersVoice)
         }
 
-        // 4. Knowledge card summaries
-        if !context.knowledgeCards.isEmpty {
-            sections.append(buildKnowledgeCardSection(context.knowledgeCards))
+        // 4. Knowledge card summaries (tiered by relevance)
+        let cardsForSection = context.allCards.isEmpty ? context.knowledgeCards : context.allCards
+        if !cardsForSection.isEmpty {
+            sections.append(buildKnowledgeCardSection(
+                allCards: cardsForSection,
+                relevantCardIds: context.relevantCardIds
+            ))
         }
 
         // 5. Skill bank
@@ -295,68 +306,181 @@ final class CustomizationPromptCacheService {
         return lines.joined(separator: "\n")
     }
 
-    private func buildKnowledgeCardSection(_ cards: [KnowledgeCard]) -> String {
+    private func buildKnowledgeCardSection(
+        allCards: [KnowledgeCard],
+        relevantCardIds: Set<UUID>
+    ) -> String {
         var lines = ["## Knowledge Cards (Evidence Base)"]
 
         lines.append("""
             The following knowledge cards contain verified evidence about the candidate's \
             experiences, achievements, and skills. Use these as the factual foundation \
-            for generated content. For verbatim source excerpts and evidence anchors, \
-            use the read_knowledge_cards tool with the card ID.
+            for generated content. Cards are organized by relevance to the target role.
             """)
 
-        for card in cards {
+        // Fallback: if no relevance data, treat all cards as Tier 1
+        if relevantCardIds.isEmpty {
             lines.append("")
-
-            // Header with ID for tool reference
-            let typeLabel = card.cardType?.displayName ?? "General"
-            let header = "### [\(card.id.uuidString)] \(card.title)"
-            lines.append(header)
-
-            var meta: [String] = ["**Type:** \(typeLabel)"]
-            if let org = card.organization, !org.isEmpty {
-                meta.append("**Organization:** \(org)")
+            lines.append("### Primary Evidence")
+            for card in allCards {
+                lines.append("")
+                appendTier1Card(card, to: &lines)
             }
-            if let dateRange = card.dateRange, !dateRange.isEmpty {
-                meta.append("**Period:** \(dateRange)")
-            }
-            if let quality = card.evidenceQuality, !quality.isEmpty {
-                meta.append("**Evidence:** \(quality)")
-            }
-            lines.append(meta.joined(separator: " | "))
+            return lines.joined(separator: "\n")
+        }
 
-            // Full narrative
-            if !card.narrative.isEmpty {
-                lines.append("\n**Narrative:**")
-                lines.append(card.narrative)
-            }
+        // Split cards into tiers
+        let tier1Cards = allCards.filter { relevantCardIds.contains($0.id) }
+        let nonRelevantCards = allCards.filter { !relevantCardIds.contains($0.id) }
 
-            // All facts with category and confidence
-            let kcFacts = card.facts
-            if !kcFacts.isEmpty {
-                lines.append("\n**Facts:**")
-                for fact in kcFacts {
-                    lines.append("- [\(fact.category)] \(fact.statement) (\(fact.confidence ?? ""))")
-                }
-            }
+        // Tier 2 heuristic: non-relevant cards that share technologies with Tier 1 cards
+        let tier1Technologies = Set(tier1Cards.flatMap { $0.technologies.map { $0.lowercased() } })
+        let tier1CardTypes = Set(tier1Cards.compactMap { $0.cardType })
 
-            // All suggested bullets
-            let bullets = card.suggestedBullets
-            if !bullets.isEmpty {
-                lines.append("\n**Resume Bullets:**")
-                for bullet in bullets {
-                    lines.append("- \(bullet)")
-                }
-            }
+        let tier2Cards = nonRelevantCards.filter { card in
+            let cardTechs = Set(card.technologies.map { $0.lowercased() })
+            let hasOverlappingTech = !cardTechs.isDisjoint(with: tier1Technologies)
+            let hasSameType = card.cardType.map { tier1CardTypes.contains($0) } ?? false
+            return hasOverlappingTech || hasSameType
+        }
 
-            // Technologies
-            let techs = card.technologies
-            if !techs.isEmpty {
-                lines.append("\n**Technologies:** \(techs.joined(separator: ", "))")
+        let tier2Ids = Set(tier2Cards.map { $0.id })
+        let tier3Cards = nonRelevantCards.filter { !tier2Ids.contains($0.id) }
+
+        // Tier 1 — Primary Evidence (full detail + outcomes)
+        if !tier1Cards.isEmpty {
+            lines.append("")
+            lines.append("### Primary Evidence — Directly Relevant to This Job")
+            for card in tier1Cards {
+                lines.append("")
+                appendTier1Card(card, to: &lines)
+            }
+        }
+
+        // Tier 2 — Supporting Evidence (abbreviated)
+        if !tier2Cards.isEmpty {
+            lines.append("")
+            lines.append("### Supporting Evidence — Transferable Skills")
+            lines.append("These cards share technologies or experience types with the primary evidence.")
+            for card in tier2Cards {
+                lines.append("")
+                appendTier2Card(card, to: &lines)
+            }
+        }
+
+        // Tier 3 — Background Context (minimal)
+        if !tier3Cards.isEmpty {
+            lines.append("")
+            lines.append("### Background Context — Breadth of Experience")
+            lines.append("Minimal summaries establishing breadth. Use read_knowledge_cards tool with the card ID for full details.")
+            for card in tier3Cards {
+                lines.append("")
+                appendTier3Card(card, to: &lines)
             }
         }
 
         return lines.joined(separator: "\n")
+    }
+
+    /// Tier 1: Full narrative + facts + bullets + technologies + outcomes
+    private func appendTier1Card(_ card: KnowledgeCard, to lines: inout [String]) {
+        let typeLabel = card.cardType?.displayName ?? "General"
+        lines.append("### [\(card.id.uuidString)] \(card.title)")
+
+        var meta: [String] = ["**Type:** \(typeLabel)"]
+        if let org = card.organization, !org.isEmpty {
+            meta.append("**Organization:** \(org)")
+        }
+        if let dateRange = card.dateRange, !dateRange.isEmpty {
+            meta.append("**Period:** \(dateRange)")
+        }
+        if let quality = card.evidenceQuality, !quality.isEmpty {
+            meta.append("**Evidence:** \(quality)")
+        }
+        lines.append(meta.joined(separator: " | "))
+
+        // Full narrative
+        if !card.narrative.isEmpty {
+            lines.append("\n**Narrative:**")
+            lines.append(card.narrative)
+        }
+
+        // All facts with category and confidence
+        let kcFacts = card.facts
+        if !kcFacts.isEmpty {
+            lines.append("\n**Facts:**")
+            for fact in kcFacts {
+                lines.append("- [\(fact.category)] \(fact.statement) (\(fact.confidence ?? ""))")
+            }
+        }
+
+        // All suggested bullets
+        let bullets = card.suggestedBullets
+        if !bullets.isEmpty {
+            lines.append("\n**Resume Bullets:**")
+            for bullet in bullets {
+                lines.append("- \(bullet)")
+            }
+        }
+
+        // Technologies
+        let techs = card.technologies
+        if !techs.isEmpty {
+            lines.append("\n**Technologies:** \(techs.joined(separator: ", "))")
+        }
+
+        // Outcomes (what changed as a result of the work)
+        let cardOutcomes = card.outcomes
+        if !cardOutcomes.isEmpty {
+            lines.append("\n**Outcomes (What Changed):**")
+            for outcome in cardOutcomes {
+                lines.append("- \(outcome)")
+            }
+        }
+    }
+
+    /// Tier 2: Title + type + org + date range + key technologies + brief summary + outcome headlines
+    private func appendTier2Card(_ card: KnowledgeCard, to lines: inout [String]) {
+        let typeLabel = card.cardType?.displayName ?? "General"
+        lines.append("#### [\(card.id.uuidString)] \(card.title)")
+
+        var meta: [String] = ["**Type:** \(typeLabel)"]
+        if let org = card.organization, !org.isEmpty {
+            meta.append("**Organization:** \(org)")
+        }
+        if let dateRange = card.dateRange, !dateRange.isEmpty {
+            meta.append("**Period:** \(dateRange)")
+        }
+        lines.append(meta.joined(separator: " | "))
+
+        // Brief summary: first ~200 chars of narrative
+        if !card.narrative.isEmpty {
+            let summary = String(card.narrative.prefix(200))
+            let truncated = summary.count < card.narrative.count ? summary + "..." : summary
+            lines.append(truncated)
+        }
+
+        // Technologies (list only)
+        let techs = card.technologies
+        if !techs.isEmpty {
+            lines.append("**Technologies:** \(techs.joined(separator: ", "))")
+        }
+
+        // Outcome headlines only
+        let cardOutcomes = card.outcomes
+        if !cardOutcomes.isEmpty {
+            lines.append("**Key Outcomes:** \(cardOutcomes.joined(separator: "; "))")
+        }
+    }
+
+    /// Tier 3: Title + type + org only, with tool reference note
+    private func appendTier3Card(_ card: KnowledgeCard, to lines: inout [String]) {
+        let typeLabel = card.cardType?.displayName ?? "General"
+        var meta = "- **[\(card.id.uuidString)]** \(card.title) (\(typeLabel))"
+        if let org = card.organization, !org.isEmpty {
+            meta += " — \(org)"
+        }
+        lines.append(meta)
     }
 
     private func buildSkillBankSection(_ skills: [Skill]) -> String {
@@ -551,6 +675,8 @@ final class CustomizationPromptCacheService {
         hasher.combine(context.applicantProfile.name)
         hasher.combine(context.applicantProfile.email)
         hasher.combine(context.knowledgeCards.count)
+        hasher.combine(context.allCards.count)
+        hasher.combine(context.relevantCardIds.count)
         hasher.combine(context.skills.count)
         hasher.combine(context.writersVoice)
         hasher.combine(context.titleSets.count)

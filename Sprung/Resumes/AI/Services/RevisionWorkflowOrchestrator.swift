@@ -42,6 +42,7 @@ class RevisionWorkflowOrchestrator {
     private(set) var reviewQueue: CustomizationReviewQueue?
     private var taskBuilder: RevisionTaskBuilder?
     private var cachedPreamble: String?
+    private var cachedToolConfig: ToolConfiguration?
 
     /// Phase 2 nodes deferred until Phase 1 review completes
     private var pendingPhase2Nodes: [ExportedReviewNode] = []
@@ -229,6 +230,8 @@ class RevisionWorkflowOrchestrator {
         let promptContext = CustomizationPromptContext(
             applicantProfile: context.applicantProfile,
             knowledgeCards: context.knowledgeCards,
+            allCards: context.allCards,
+            relevantCardIds: context.relevantCardIds,
             skills: context.skills,
             writersVoice: context.writersVoice,
             dossier: context.dossier,
@@ -260,13 +263,18 @@ class RevisionWorkflowOrchestrator {
             additionalContext: ""
         )
 
+        // Build tool configuration if tools are enabled and model supports them
+        let toolConfig = buildToolConfiguration(modelId: modelId, resume: resume)
+        self.cachedToolConfig = toolConfig
+
         // Execute tasks in parallel and stream results into queue
         let stream = await executor.execute(
             tasks: tasks,
             context: execContext,
             llmFacade: llm,
             modelId: modelId,
-            preamble: preamble
+            preamble: preamble,
+            toolConfig: toolConfig
         )
 
         // Stream results into the review queue
@@ -335,7 +343,8 @@ class RevisionWorkflowOrchestrator {
             context: execContext,
             llmFacade: llm,
             modelId: modelId,
-            preamble: preamble
+            preamble: preamble,
+            toolConfig: cachedToolConfig
         )
 
         switch result.result {
@@ -469,10 +478,74 @@ class RevisionWorkflowOrchestrator {
         parallelExecutor = nil
         taskBuilder = nil
         cachedPreamble = nil
+        cachedToolConfig = nil
 
         workflowState.setProcessingRevisions(false)
         workflowState.markWorkflowCompleted(reset: true)
         delegate?.hideParallelReviewQueue()
+    }
+
+    // MARK: - Tool Configuration
+
+    /// Build a ToolConfiguration for the parallel executor if tools are enabled
+    /// and the selected model supports tool calling. Returns nil if tools should not be used.
+    private func buildToolConfiguration(modelId: String, resume: Resume) -> ToolConfiguration? {
+        // Check feature flag
+        let toolsEnabled = UserDefaults.standard.bool(forKey: "enableResumeCustomizationTools")
+        guard toolsEnabled else {
+            Logger.debug("[Orchestrator] Tool feature flag disabled", category: .ai)
+            return nil
+        }
+
+        // Check model tool support
+        let model = openRouterService.findModel(id: modelId)
+        let supportsTools = model?.supportsTools ?? false
+        guard supportsTools else {
+            Logger.debug("[Orchestrator] Model \(modelId) does not support tools", category: .ai)
+            return nil
+        }
+
+        // Build the tool registry and definitions
+        let registry = ResumeToolRegistry(knowledgeCardStore: knowledgeCardStore)
+        let tools = registry.buildChatTools()
+
+        guard !tools.isEmpty else {
+            Logger.debug("[Orchestrator] No tools registered", category: .ai)
+            return nil
+        }
+
+        Logger.info("[Orchestrator] Enabling tool use with \(tools.count) tools for parallel execution", category: .ai)
+
+        // Capture the registry and resume for the execution closure.
+        // The closure bridges from the non-isolated actor context to @MainActor
+        // for tool execution.
+        let jobApp = resume.jobApp
+        let toolConfig = ToolConfiguration(
+            tools: tools,
+            executeTool: { @Sendable toolName, toolArguments in
+                let context = ResumeToolContext(
+                    resume: resume,
+                    jobApp: jobApp,
+                    presentUI: nil  // No UI presentation in parallel execution
+                )
+                let result = try await registry.executeTool(
+                    name: toolName,
+                    arguments: toolArguments,
+                    context: context
+                )
+                switch result {
+                case .immediate(let json):
+                    return json.rawString() ?? "{}"
+                case .pendingUserAction:
+                    // UI actions are not supported in parallel execution
+                    return "{\"error\": \"User interaction not available during parallel execution\"}"
+                case .error(let errorMessage):
+                    return "{\"error\": \"\(errorMessage)\"}"
+                }
+            }
+        )
+
+        return toolConfig
     }
 
     /// Apply a review item's changes to the resume tree
