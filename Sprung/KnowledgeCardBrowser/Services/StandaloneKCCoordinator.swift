@@ -317,20 +317,45 @@ class StandaloneKCCoordinator {
 
         let enrichmentService = CardEnrichmentService(llmFacade: facade)
         var enrichedCount = 0
+        let batchSize = 5
 
-        for (index, card) in cards.enumerated() {
-            status = .enriching(current: index + 1, total: cards.count, cardTitle: card.title)
+        for batchStart in stride(from: 0, to: cards.count, by: batchSize) {
+            let batchEnd = min(batchStart + batchSize, cards.count)
+            let batch = Array(cards[batchStart..<batchEnd])
 
-            // Find source text from artifact records
-            let sourceText = findSourceText(for: card)
+            // Resolve source texts on MainActor before dispatching
+            let sourceTexts = batch.map { findSourceText(for: $0) }
 
-            do {
-                try await enrichmentService.enrichCard(card, sourceText: sourceText)
+            status = .enriching(current: batchStart + 1, total: cards.count, cardTitle: "batch of \(batch.count)")
+
+            // Enrich batch in parallel
+            let successes = await withTaskGroup(of: (Int, Bool).self) { group in
+                for (i, (card, sourceText)) in zip(batch, sourceTexts).enumerated() {
+                    group.addTask {
+                        do {
+                            try await enrichmentService.enrichCard(card, sourceText: sourceText)
+                            return (i, true)
+                        } catch {
+                            Logger.warning("StandaloneKCCoordinator: Failed to enrich \(card.title): \(error.localizedDescription)", category: .ai)
+                            return (i, false)
+                        }
+                    }
+                }
+
+                var results = Array(repeating: false, count: batch.count)
+                for await (index, success) in group {
+                    results[index] = success
+                }
+                return results
+            }
+
+            // Persist successful enrichments on MainActor
+            for (i, success) in successes.enumerated() where success {
+                let card = batch[i]
                 knowledgeCardStore?.update(card)
                 enrichedCount += 1
+                status = .enriching(current: batchStart + i + 1, total: cards.count, cardTitle: card.title)
                 Logger.info("StandaloneKCCoordinator: Enriched card - \(card.title)", category: .ai)
-            } catch {
-                Logger.warning("StandaloneKCCoordinator: Failed to enrich \(card.title): \(error.localizedDescription)", category: .ai)
             }
         }
 
