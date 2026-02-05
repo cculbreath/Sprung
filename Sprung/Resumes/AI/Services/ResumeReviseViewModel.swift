@@ -58,15 +58,6 @@ class ResumeReviseViewModel {
         workflowState.isProcessingRevisions
     }
 
-    var phaseReviewState: PhaseReviewState {
-        get { phaseReviewManager.phaseReviewState }
-        set { phaseReviewManager.phaseReviewState = newValue }
-    }
-
-    var isHierarchicalReviewActive: Bool {
-        phaseReviewManager.isHierarchicalReviewActive
-    }
-
     var showSkillExperiencePicker: Bool {
         get { toolRunner.showSkillExperiencePicker }
         set { toolRunner.showSkillExperiencePicker = newValue }
@@ -107,18 +98,7 @@ class ResumeReviseViewModel {
             toolRegistry: registry
         )
 
-        self.phaseReviewManager = PhaseReviewManager(
-            llm: llmFacade,
-            openRouterService: openRouterService,
-            reasoningStreamManager: reasoningStreamManager,
-            exportCoordinator: exportCoordinator,
-            streamingService: streaming,
-            applicantProfileStore: applicantProfileStore,
-            knowledgeCardStore: knowledgeCardStore,
-            toolRunner: self.toolRunner,
-            guidanceStore: guidanceStore,
-            coverRefStore: coverRefStore
-        )
+        self.phaseReviewManager = PhaseReviewManager()
 
         self.workflowOrchestrator = RevisionWorkflowOrchestrator(
             llm: llmFacade,
@@ -136,8 +116,7 @@ class ResumeReviseViewModel {
             workflowState: self.workflowState
         )
 
-        // Set up delegates
-        phaseReviewManager.delegate = self
+        // Set up delegate
         workflowOrchestrator.delegate = self
     }
 
@@ -221,90 +200,6 @@ class ResumeReviseViewModel {
 
     func cancelSkillExperienceQuery() {
         toolRunner.cancelSkillExperienceQuery()
-    }
-
-    // MARK: - Forwarded Phase Review Methods
-
-    func completeCurrentPhase(resume: Resume, context: ModelContext) {
-        phaseReviewManager.completeCurrentPhase(resume: resume, context: context)
-    }
-
-    func acceptCurrentItemAndMoveNext(resume: Resume, context: ModelContext) {
-        phaseReviewManager.acceptCurrentItemAndMoveNext(resume: resume, context: context)
-    }
-
-    func rejectCurrentItemAndMoveNext() {
-        phaseReviewManager.rejectCurrentItemAndMoveNext()
-    }
-
-    func rejectCurrentItemWithFeedback(_ feedback: String) {
-        phaseReviewManager.rejectCurrentItemWithFeedback(feedback)
-    }
-
-    func acceptCurrentItemWithEdits(_ editedValue: String?, editedChildren: [String]?, resume: Resume, context: ModelContext) {
-        phaseReviewManager.acceptCurrentItemWithEdits(editedValue, editedChildren: editedChildren, resume: resume, context: context)
-    }
-
-    func acceptOriginalAndMoveNext(resume: Resume, context: ModelContext) {
-        phaseReviewManager.acceptOriginalAndMoveNext(resume: resume, context: context)
-    }
-
-    // MARK: - Navigation
-
-    func goToPreviousItem() {
-        phaseReviewManager.goToPreviousItem()
-    }
-
-    func goToNextItem() {
-        phaseReviewManager.goToNextItem()
-    }
-
-    var canGoToPrevious: Bool {
-        phaseReviewManager.canGoToPrevious
-    }
-
-    var canGoToNext: Bool {
-        phaseReviewManager.canGoToNext
-    }
-
-    func hasUnappliedApprovedChanges() -> Bool {
-        phaseReviewManager.hasUnappliedApprovedChanges()
-    }
-
-    func applyApprovedChangesAndClose(resume: Resume, context: ModelContext) {
-        phaseReviewManager.applyApprovedChangesAndClose(resume: resume, context: context)
-    }
-
-    func discardAllAndClose() {
-        phaseReviewManager.discardAllAndClose()
-    }
-}
-
-// MARK: - PhaseReviewDelegate
-
-extension ResumeReviseViewModel: PhaseReviewDelegate {
-    func setConversationContext(conversationId: UUID, modelId: String) {
-        workflowState.setConversationContext(conversationId: conversationId, modelId: modelId)
-    }
-
-    func setProcessingRevisions(_ processing: Bool) {
-        workflowState.setProcessingRevisions(processing)
-    }
-
-    func markWorkflowStarted() {
-        markWorkflowStarted(.customize)
-    }
-
-    func showReviewSheet() {
-        showParallelReviewQueueSheet = true
-    }
-
-    func hideReviewSheet() {
-        showParallelReviewQueueSheet = false
-    }
-
-    func setWorkflowCompleted() {
-        markWorkflowCompleted(reset: true)
     }
 }
 
