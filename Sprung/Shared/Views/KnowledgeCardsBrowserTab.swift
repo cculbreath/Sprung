@@ -23,19 +23,17 @@ struct KnowledgeCardsBrowserTab: View {
 
     enum CardTypeFilter: String, CaseIterable {
         case all = "All"
-        case job = "Jobs"
-        case skill = "Skills"
-        case education = "Education"
+        case employment = "Employment"
         case project = "Projects"
+        case education = "Education"
         case other = "Other"
 
-        var cardType: String? {
+        var cardType: CardType? {
             switch self {
             case .all: return nil
-            case .job: return "job"
-            case .skill: return "skill"
-            case .education: return "education"
-            case .project: return "project"
+            case .employment: return .employment
+            case .project: return .project
+            case .education: return .education
             case .other: return nil
             }
         }
@@ -47,10 +45,10 @@ struct KnowledgeCardsBrowserTab: View {
             if selectedFilter == .other {
                 result = result.filter {
                     guard let type = $0.cardType else { return true }
-                    return !["employment", "project", "education", "achievement"].contains(type.rawValue.lowercased())
+                    return !CardType.allCases.contains(type)
                 }
             } else if let filterType = selectedFilter.cardType {
-                result = result.filter { $0.cardType?.rawValue.lowercased() == filterType }
+                result = result.filter { $0.cardType == filterType }
             }
         }
         if !searchText.isEmpty {
@@ -316,11 +314,11 @@ struct KnowledgeCardsBrowserTab: View {
         case .other:
             return cards.filter {
                 guard let type = $0.cardType else { return true }
-                return !["employment", "project", "education", "achievement"].contains(type.rawValue.lowercased())
+                return !CardType.allCases.contains(type)
             }.count
         default:
             guard let filterType = filter.cardType else { return 0 }
-            return cards.filter { $0.cardType?.rawValue.lowercased() == filterType }.count
+            return cards.filter { $0.cardType == filterType }.count
         }
     }
 }

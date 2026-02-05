@@ -419,6 +419,7 @@ final class OnboardingDependencyContainer {
             cardMergeService: cardMergeService,
             chatInventoryService: chatInventoryService,
             agentActivityTracker: agentActivityTracker,
+            artifactRecordStore: artifactRecordStore,
             sessionUIState: stores.sessionUIState,
             phaseTransitionController: phaseTransitionController
         )

@@ -33,7 +33,8 @@ struct CompletionKnowledgeCardsTab: View {
 
     private var cardTypes: [String] {
         let types = Set(allCards.compactMap { $0.cardType?.rawValue.lowercased() })
-        return ["employment", "project", "education", "skill", "other"].filter { types.contains($0) }
+        let orderedTypes = CardType.allCases.map { $0.rawValue.lowercased() }
+        return orderedTypes.filter { types.contains($0) }
     }
 
     var body: some View {
@@ -224,20 +225,20 @@ struct CompletionKnowledgeCardsTab: View {
 
     private func iconFor(_ type: String) -> String {
         switch type {
-        case "employment", "job": return "briefcase.fill"
+        case "employment": return "briefcase.fill"
         case "project": return "folder.fill"
         case "education": return "graduationcap.fill"
-        case "skill": return "star.fill"
+        case "achievement": return "star.fill"
         default: return "doc.fill"
         }
     }
 
     private func colorFor(_ type: String) -> Color {
         switch type {
-        case "employment", "job": return .blue
+        case "employment": return .blue
         case "project": return .green
         case "education": return .orange
-        case "skill": return .purple
+        case "achievement": return .purple
         default: return .gray
         }
     }

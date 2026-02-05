@@ -18,6 +18,7 @@ final class KnowledgeCardWorkflowService {
     private let cardMergeService: CardMergeService
     private let chatInventoryService: ChatInventoryService?
     private let agentActivityTracker: AgentActivityTracker
+    private let artifactRecordStore: ArtifactRecordStore
     private weak var sessionUIState: SessionUIState?
     private weak var phaseTransitionController: PhaseTransitionController?
 
@@ -36,6 +37,7 @@ final class KnowledgeCardWorkflowService {
         cardMergeService: CardMergeService,
         chatInventoryService: ChatInventoryService?,
         agentActivityTracker: AgentActivityTracker,
+        artifactRecordStore: ArtifactRecordStore,
         sessionUIState: SessionUIState,
         phaseTransitionController: PhaseTransitionController?
     ) {
@@ -47,6 +49,7 @@ final class KnowledgeCardWorkflowService {
         self.cardMergeService = cardMergeService
         self.chatInventoryService = chatInventoryService
         self.agentActivityTracker = agentActivityTracker
+        self.artifactRecordStore = artifactRecordStore
         self.sessionUIState = sessionUIState
         self.phaseTransitionController = phaseTransitionController
     }
@@ -260,6 +263,12 @@ final class KnowledgeCardWorkflowService {
         ui.isGeneratingCards = false
         ui.cardAssignmentsReadyForApproval = false
 
+        // Launch enrichment in background (non-blocking)
+        let cardsToEnrich = approvedCards.filter { $0.factsJSON == nil && !$0.narrative.isEmpty }
+        if !cardsToEnrich.isEmpty {
+            runEnrichmentInBackground(cardsToEnrich)
+        }
+
         // Auto-advance to Phase 4 (Strategic Synthesis)
         // Phase 3 is entirely UI-driven - user approval triggers phase transition
         Logger.info("🚀 Auto-advancing to Phase 4 after card approval", category: .ai)
@@ -286,5 +295,113 @@ final class KnowledgeCardWorkflowService {
         userMessage["role"].string = "user"
         userMessage["content"].string = text
         await eventBus.publish(.llm(.enqueueUserMessage(payload: userMessage, isSystemGenerated: true)))
+    }
+
+    // MARK: - Background Enrichment
+
+    /// Launches card enrichment as a fire-and-forget background task.
+    /// Tracked via agentActivityTracker so progress is visible in the status bar.
+    private func runEnrichmentInBackground(_ cards: [KnowledgeCard]) {
+        guard let facade = llmFacadeProvider?() else {
+            Logger.warning("⚠️ Enrichment skipped - LLM facade not available", category: .ai)
+            return
+        }
+
+        // Check if enrichment model is configured before spawning task
+        guard let modelId = UserDefaults.standard.string(forKey: "kcExtractionModelId"), !modelId.isEmpty else {
+            Logger.warning("⚠️ Enrichment skipped - kcExtractionModelId not configured", category: .ai)
+            return
+        }
+
+        let agentId = UUID().uuidString
+        let enrichmentService = CardEnrichmentService(llmFacade: facade)
+        let tracker = agentActivityTracker
+        let store = knowledgeCardStore
+        let artifactStore = artifactRecordStore
+
+        tracker.trackAgent(
+            id: agentId,
+            type: .enrichment,
+            name: "Card Enrichment",
+            task: nil as Task<Void, Never>?
+        )
+        tracker.markRunning(agentId: agentId)
+        tracker.appendTranscript(
+            agentId: agentId,
+            entryType: .system,
+            content: "Starting enrichment for \(cards.count) cards"
+        )
+
+        Task {
+            var enrichedCount = 0
+            let batchSize = 5
+
+            for batchStart in stride(from: 0, to: cards.count, by: batchSize) {
+                let batchEnd = min(batchStart + batchSize, cards.count)
+                let batch = Array(cards[batchStart..<batchEnd])
+
+                let sourceTexts = batch.map { card -> String in
+                    Self.findSourceText(for: card, artifactStore: artifactStore)
+                }
+
+                tracker.appendTranscript(
+                    agentId: agentId,
+                    entryType: .system,
+                    content: "Enriching batch \(batchStart / batchSize + 1)",
+                    details: "Cards \(batchStart + 1)-\(batchEnd) of \(cards.count)"
+                )
+
+                let successes = await withTaskGroup(of: (Int, Bool).self) { group in
+                    for (i, (card, sourceText)) in zip(batch, sourceTexts).enumerated() {
+                        group.addTask {
+                            do {
+                                try await enrichmentService.enrichCard(card, sourceText: sourceText)
+                                return (i, true)
+                            } catch {
+                                Logger.warning("Enrichment failed for \(card.title): \(error.localizedDescription)", category: .ai)
+                                return (i, false)
+                            }
+                        }
+                    }
+
+                    var results = Array(repeating: false, count: batch.count)
+                    for await (index, success) in group {
+                        results[index] = success
+                    }
+                    return results
+                }
+
+                for (i, success) in successes.enumerated() where success {
+                    store.update(batch[i])
+                    enrichedCount += 1
+                }
+            }
+
+            tracker.appendTranscript(
+                agentId: agentId,
+                entryType: .system,
+                content: "Enrichment complete",
+                details: "Enriched \(enrichedCount) of \(cards.count) cards"
+            )
+            tracker.markCompleted(agentId: agentId)
+            Logger.info("✨ Background enrichment complete: \(enrichedCount)/\(cards.count) cards", category: .ai)
+        }
+    }
+
+    /// Resolve source document text for a card from artifact records.
+    private static func findSourceText(for card: KnowledgeCard, artifactStore: ArtifactRecordStore) -> String {
+        for anchor in card.evidenceAnchors {
+            if let artifact = artifactStore.artifact(byIdString: anchor.documentId),
+               !artifact.extractedContent.isEmpty {
+                return artifact.extractedContent
+            }
+        }
+
+        let allArtifacts = artifactStore.allArtifacts
+        if let match = allArtifacts.first(where: { !$0.extractedContent.isEmpty && $0.extractedContent.count > 500 }) {
+            return match.extractedContent
+        }
+
+        return card.narrative
     }
 }

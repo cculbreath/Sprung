@@ -24,6 +24,7 @@ enum AgentType: String, Codable, CaseIterable {
     case voiceProfile = "voice_profile"
     case skillsProcessing = "skills_processing"
     case atsExpansion = "ats_expansion"
+    case enrichment = "enrichment"
 
     var displayName: String {
         switch self {
@@ -37,6 +38,7 @@ enum AgentType: String, Codable, CaseIterable {
         case .voiceProfile: return "Voice Profile"
         case .skillsProcessing: return "Skills"
         case .atsExpansion: return "ATS"
+        case .enrichment: return "Enrichment"
         }
     }
 
@@ -52,6 +54,7 @@ enum AgentType: String, Codable, CaseIterable {
         case .voiceProfile: return "mic"
         case .skillsProcessing: return "hammer"
         case .atsExpansion: return "text.badge.plus"
+        case .enrichment: return "sparkles"
         }
     }
 }
