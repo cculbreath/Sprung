@@ -145,6 +145,7 @@ final class DiscoveryCoordinator {
 
     private let candidateDossierStore: CandidateDossierStore
     private let knowledgeCardStore: KnowledgeCardStore
+    private let skillStore: SkillStore
 
     // MARK: - Initialization
 
@@ -152,12 +153,14 @@ final class DiscoveryCoordinator {
         modelContext: ModelContext,
         jobAppStore: JobAppStore,
         candidateDossierStore: CandidateDossierStore,
-        knowledgeCardStore: KnowledgeCardStore
+        knowledgeCardStore: KnowledgeCardStore,
+        skillStore: SkillStore
     ) {
         self.pipelineCoordinator = DiscoveryPipelineCoordinator(modelContext: modelContext, jobAppStore: jobAppStore)
         self.networkingCoordinator = DiscoveryNetworkingCoordinator(modelContext: modelContext)
         self.candidateDossierStore = candidateDossierStore
         self.knowledgeCardStore = knowledgeCardStore
+        self.skillStore = skillStore
     }
 
     /// Configure the LLM service. Must be called after initialization with LLMFacade.
@@ -306,10 +309,12 @@ final class DiscoveryCoordinator {
 
         do {
             let prefs = preferencesStore.current()
+            let candidateContext = buildCandidateContext()
             try await networkingCoordinator.discoverJobSources(
                 using: agent,
                 sectors: prefs.targetSectors,
                 location: prefs.primaryLocation,
+                candidateContext: candidateContext,
                 statusCallback: { @MainActor [weak self] status in
                     self?.discoveryStatus = status
                 }
@@ -353,6 +358,47 @@ final class DiscoveryCoordinator {
         eventsDiscovery.cancel()
     }
 
+    /// Build a concise candidate context summary from knowledge cards and skills bank
+    private func buildCandidateContext() -> String {
+        var parts: [String] = []
+
+        // Knowledge cards: titles, organizations, and technologies
+        let cards = knowledgeCardStore.approvedCards
+        if !cards.isEmpty {
+            var dossierLines: [String] = []
+            for card in cards {
+                var line = "- \(card.title)"
+                if let org = card.organization, !org.isEmpty {
+                    line += " (\(org))"
+                }
+                if let dateRange = card.dateRange, !dateRange.isEmpty {
+                    line += " [\(dateRange)]"
+                }
+                dossierLines.append(line)
+
+                let techs = card.technologies
+                if !techs.isEmpty {
+                    dossierLines.append("  Technologies: \(techs.joined(separator: ", "))")
+                }
+            }
+            parts.append("## CANDIDATE DOSSIER\n\(dossierLines.joined(separator: "\n"))")
+        }
+
+        // Skills bank: grouped by category
+        let skills = skillStore.approvedSkills
+        if !skills.isEmpty {
+            let grouped = Dictionary(grouping: skills, by: { $0.category })
+            var skillLines: [String] = []
+            for (category, categorySkills) in grouped.sorted(by: { $0.key < $1.key }) {
+                let names = categorySkills.map { $0.canonical }.joined(separator: ", ")
+                skillLines.append("- \(category): \(names)")
+            }
+            parts.append("## SKILLS BANK\n\(skillLines.joined(separator: "\n"))")
+        }
+
+        return parts.joined(separator: "\n\n")
+    }
+
     /// Start sources discovery with state managed by coordinator (persists across navigation)
     func startSourcesDiscovery() {
         sourcesDiscovery.start { [weak self] callback in
@@ -362,12 +408,14 @@ final class DiscoveryCoordinator {
             }
 
             let prefs = self.preferencesStore.current()
+            let candidateContext = self.buildCandidateContext()
             try await self.networkingCoordinator.discoverJobSources(
                 using: agent,
                 sectors: prefs.targetSectors,
                 location: prefs.primaryLocation,
+                candidateContext: candidateContext,
                 statusCallback: { status in
-                    callback(status, nil) // Sources discovery doesn't stream reasoning
+                    callback(status, nil)
                 }
             )
         }

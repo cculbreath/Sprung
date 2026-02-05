@@ -12,6 +12,8 @@ struct SourcesView: View {
     let coordinator: DiscoveryCoordinator
     @Binding var triggerDiscovery: Bool
     @State private var showingAddSheet = false
+    @State private var editingSource: JobSource?
+    @State private var selectedCategory: SourceCategory?
 
     init(coordinator: DiscoveryCoordinator, triggerDiscovery: Binding<Bool> = .constant(false)) {
         self.coordinator = coordinator
@@ -20,6 +22,26 @@ struct SourcesView: View {
 
     private var isDiscovering: Bool {
         coordinator.sourcesDiscovery.isActive
+    }
+
+    private var filteredSources: [JobSource] {
+        guard let category = selectedCategory else {
+            return coordinator.jobSourceStore.sources
+        }
+        return coordinator.jobSourceStore.sources.filter { $0.category == category }
+    }
+
+    private var filteredDueSources: [JobSource] {
+        guard let category = selectedCategory else {
+            return coordinator.jobSourceStore.dueSources
+        }
+        return coordinator.jobSourceStore.dueSources.filter { $0.category == category }
+    }
+
+    /// Categories that actually have sources, for the filter bar
+    private var availableCategories: [SourceCategory] {
+        let used = Set(coordinator.jobSourceStore.sources.map { $0.category })
+        return SourceCategory.allCases.filter { used.contains($0) }
     }
 
     var body: some View {
@@ -78,23 +100,46 @@ struct SourcesView: View {
 
                 Spacer()
             } else {
+                // Category filter bar
+                if availableCategories.count > 1 {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 6) {
+                            FilterChip(label: "All", isSelected: selectedCategory == nil) {
+                                selectedCategory = nil
+                            }
+                            ForEach(availableCategories, id: \.self) { category in
+                                FilterChip(label: category.rawValue, isSelected: selectedCategory == category) {
+                                    selectedCategory = selectedCategory == category ? nil : category
+                                }
+                            }
+                        }
+                        .padding(.horizontal)
+                    }
+                    .padding(.top, 8)
+                    .padding(.bottom, -12)
+                }
+
                 List {
                     Section {
-                        ForEach(coordinator.jobSourceStore.dueSources) { source in
-                            SourceRowView(source: source, store: coordinator.jobSourceStore)
+                        ForEach(filteredDueSources) { source in
+                            SourceRowView(source: source, store: coordinator.jobSourceStore) {
+                                editingSource = source
+                            }
                         }
                         .onDelete { indexSet in
                             deleteFromDue(at: indexSet)
                         }
                     } header: {
-                        if !coordinator.jobSourceStore.dueSources.isEmpty {
+                        if !filteredDueSources.isEmpty {
                             Text("Due for Visit")
                         }
                     }
 
                     Section("All Sources") {
-                        ForEach(coordinator.jobSourceStore.sources) { source in
-                            SourceRowView(source: source, store: coordinator.jobSourceStore)
+                        ForEach(filteredSources) { source in
+                            SourceRowView(source: source, store: coordinator.jobSourceStore) {
+                                editingSource = source
+                            }
                         }
                         .onDelete { indexSet in
                             deleteFromAll(at: indexSet)
@@ -109,6 +154,9 @@ struct SourcesView: View {
         .navigationTitle("")
         .sheet(isPresented: $showingAddSheet) {
             AddSourceSheet(store: coordinator.jobSourceStore)
+        }
+        .sheet(item: $editingSource) { source in
+            AddSourceSheet(store: coordinator.jobSourceStore, editing: source)
         }
         .onChange(of: triggerDiscovery) { _, newValue in
             if newValue {
@@ -136,14 +184,14 @@ struct SourcesView: View {
     }
 
     private func deleteFromDue(at indexSet: IndexSet) {
-        let sources = coordinator.jobSourceStore.dueSources
+        let sources = filteredDueSources
         for index in indexSet {
             coordinator.jobSourceStore.delete(sources[index])
         }
     }
 
     private func deleteFromAll(at indexSet: IndexSet) {
-        let sources = coordinator.jobSourceStore.sources
+        let sources = filteredSources
         for index in indexSet {
             coordinator.jobSourceStore.delete(sources[index])
         }
@@ -153,6 +201,8 @@ struct SourcesView: View {
 struct SourceRowView: View {
     let source: JobSource
     let store: JobSourceStore
+    var onEdit: () -> Void
+    @State private var isHovered = false
 
     var body: some View {
         HStack {
@@ -201,9 +251,31 @@ struct SourceRowView: View {
                 }
             }
             .buttonStyle(.bordered)
+
+            Button {
+                store.delete(source)
+            } label: {
+                Image(systemName: "trash")
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.borderless)
+            .opacity(isHovered ? 1 : 0)
+            .help("Delete source")
         }
         .padding(.vertical, 4)
+        .onHover { hovering in
+            isHovered = hovering
+        }
+        .onTapGesture(count: 2) {
+            onEdit()
+        }
         .contextMenu {
+            Button {
+                onEdit()
+            } label: {
+                Label("Edit", systemImage: "pencil")
+            }
+
             Button {
                 if let url = URL(string: source.url) {
                     NSWorkspace.shared.open(url)
@@ -244,12 +316,26 @@ struct SourceRowView: View {
 
 struct AddSourceSheet: View {
     let store: JobSourceStore
+    let editing: JobSource?
     @Environment(\.dismiss) private var dismiss
 
     @State private var name = ""
     @State private var url = ""
     @State private var category: SourceCategory = .aggregator
     @State private var cadenceDays = 7
+
+    private var isEditing: Bool { editing != nil }
+
+    init(store: JobSourceStore, editing: JobSource? = nil) {
+        self.store = store
+        self.editing = editing
+        if let source = editing {
+            _name = State(initialValue: source.name)
+            _url = State(initialValue: source.url)
+            _category = State(initialValue: source.category)
+            _cadenceDays = State(initialValue: source.recommendedCadenceDays)
+        }
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -262,13 +348,13 @@ struct AddSourceSheet: View {
 
                 Spacer()
 
-                Text("Add Job Source")
+                Text(isEditing ? "Edit Job Source" : "Add Job Source")
                     .font(.headline)
 
                 Spacer()
 
-                Button("Add") {
-                    addSource()
+                Button(isEditing ? "Save" : "Add") {
+                    saveSource()
                 }
                 .keyboardShortcut(.defaultAction)
                 .disabled(name.isEmpty || url.isEmpty)
@@ -304,15 +390,45 @@ struct AddSourceSheet: View {
         }
         .frame(width: 400, height: 280)
         .onChange(of: category) { _, newCategory in
-            cadenceDays = newCategory.defaultCadenceDays
+            if !isEditing {
+                cadenceDays = newCategory.defaultCadenceDays
+            }
         }
     }
 
-    private func addSource() {
-        let source = JobSource(name: name, url: url, category: category)
-        source.recommendedCadenceDays = cadenceDays
-        source.isLLMGenerated = false
-        store.add(source)
+    private func saveSource() {
+        if let source = editing {
+            source.name = name
+            source.url = url
+            source.category = category
+            source.recommendedCadenceDays = cadenceDays
+        } else {
+            let source = JobSource(name: name, url: url, category: category)
+            source.recommendedCadenceDays = cadenceDays
+            source.isLLMGenerated = false
+            store.add(source)
+        }
         dismiss()
+    }
+}
+
+// MARK: - Filter Chip
+
+private struct FilterChip: View {
+    let label: String
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(label)
+                .font(.caption)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(isSelected ? Color.accentColor.opacity(0.2) : Color.secondary.opacity(0.1))
+                .foregroundStyle(isSelected ? Color.accentColor : .secondary)
+                .cornerRadius(6)
+        }
+        .buttonStyle(.plain)
     }
 }

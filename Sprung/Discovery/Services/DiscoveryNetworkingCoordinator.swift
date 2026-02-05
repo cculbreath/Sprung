@@ -70,11 +70,13 @@ final class DiscoveryNetworkingCoordinator {
         using agentService: DiscoveryAgentService,
         sectors: [String],
         location: String,
+        candidateContext: String = "",
         statusCallback: (@MainActor @Sendable (DiscoveryStatus) async -> Void)? = nil
     ) async throws {
         let result = try await agentService.discoverJobSources(
             sectors: sectors,
             location: location,
+            candidateContext: candidateContext,
             statusCallback: statusCallback
         )
 

@@ -194,7 +194,8 @@ final class AppDependencies {
             modelContext: modelContext,
             jobAppStore: jobAppStore,
             candidateDossierStore: candidateDossierStore,
-            knowledgeCardStore: knowledgeCardStore
+            knowledgeCardStore: knowledgeCardStore,
+            skillStore: skillStore
         )
         searchOpsCoordinator.configureLLMService(llmFacade: llmFacade)
         self.searchOpsCoordinator = searchOpsCoordinator

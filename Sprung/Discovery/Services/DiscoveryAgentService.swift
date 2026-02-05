@@ -187,12 +187,19 @@ actor DiscoveryAgentService {
     func discoverJobSources(
         sectors: [String],
         location: String,
+        candidateContext: String = "",
         statusCallback: (@MainActor @Sendable (DiscoveryStatus) async -> Void)? = nil
     ) async throws -> JobSourcesResult {
         let systemPrompt = loadPromptTemplate(named: "discovery_discover_job_sources")
+
+        var userMessage = "Discover job sources for sectors: \(sectors.joined(separator: ", ")) in \(location)"
+        if !candidateContext.isEmpty {
+            userMessage += "\n\n\(candidateContext)"
+        }
+
         let response = try await runOpenAIRequest(
             systemPrompt: systemPrompt,
-            userMessage: "Discover job sources for sectors: \(sectors.joined(separator: ", ")) in \(location)",
+            userMessage: userMessage,
             modelId: await modelId,
             reasoningEffort: await reasoningEffort,
             webSearchLocation: location,
