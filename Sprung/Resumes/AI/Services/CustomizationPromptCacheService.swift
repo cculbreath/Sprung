@@ -99,7 +99,8 @@ final class CustomizationPromptCacheService {
 
         // 5. Skill bank
         if !context.skills.isEmpty {
-            sections.append(buildSkillBankSection(context.skills))
+            let cardPool = context.allCards.isEmpty ? context.knowledgeCards : context.allCards
+            sections.append(buildSkillBankSection(context.skills, knowledgeCards: cardPool))
         }
 
         // 6. Title set library
@@ -483,32 +484,83 @@ final class CustomizationPromptCacheService {
         lines.append(meta)
     }
 
-    private func buildSkillBankSection(_ skills: [Skill]) -> String {
-        var lines = ["## Skill Bank"]
+    private func buildSkillBankSection(_ skills: [Skill], knowledgeCards: [KnowledgeCard]) -> String {
+        var lines = ["## Skill Bank (Verified from Evidence)"]
 
         lines.append("""
-            The following skills are verified from the candidate's experience.
-            Only use skills from this list - do not fabricate additional skills.
+            The following skills are verified from the candidate's experience, \
+            grouped by category. Each skill includes its proficiency level and \
+            the knowledge cards that demonstrate it. Only use skills from this \
+            list — do not fabricate additional skills.
             """)
 
-        // Group skills by source or just list them
-        let sortedSkills = skills.sorted { $0.canonical < $1.canonical }
+        // Build lookup: document ID → set of KC titles that reference that document
+        let docIdToCardTitles = buildDocumentIdToCardTitleLookup(knowledgeCards)
 
-        var currentLetter = ""
-        for skill in sortedSkills.prefix(100) { // Limit to prevent overflow
-            let firstLetter = String(skill.canonical.prefix(1)).uppercased()
-            if firstLetter != currentLetter {
-                currentLetter = firstLetter
-                lines.append("\n**\(currentLetter)**")
+        // Group skills by normalized category
+        let grouped = Dictionary(grouping: skills) { $0.category }
+
+        // Sort categories alphabetically
+        let sortedCategories = grouped.keys.sorted()
+
+        for category in sortedCategories {
+            guard let categorySkills = grouped[category] else { continue }
+
+            // Sort within category: evidence count desc → proficiency desc → alphabetical
+            let sorted = categorySkills.sorted { a, b in
+                let aEvidenceCount = a.evidence.count
+                let bEvidenceCount = b.evidence.count
+                if aEvidenceCount != bEvidenceCount {
+                    return aEvidenceCount > bEvidenceCount
+                }
+                let aProfOrder = a.proficiency.sortOrder
+                let bProfOrder = b.proficiency.sortOrder
+                if aProfOrder != bProfOrder {
+                    return aProfOrder < bProfOrder  // lower sortOrder = higher proficiency
+                }
+                return a.canonical.localizedCaseInsensitiveCompare(b.canonical) == .orderedAscending
             }
-            lines.append("- \(skill.canonical)")
-        }
 
-        if skills.count > 100 {
-            lines.append("\n*... and \(skills.count - 100) more skills*")
+            lines.append("")
+            lines.append("### \(category)")
+
+            for skill in sorted {
+                // Resolve evidence document IDs to KC titles
+                let evidenceDocIds = skill.evidence.map { $0.documentId }
+                var cardTitles: [String] = []
+                for docId in evidenceDocIds {
+                    if let titles = docIdToCardTitles[docId] {
+                        for title in titles where !cardTitles.contains(title) {
+                            cardTitles.append(title)
+                        }
+                    }
+                }
+
+                var entry = "- \(skill.canonical) (\(skill.proficiency.rawValue))"
+                if !cardTitles.isEmpty {
+                    entry += " — evidence: \(cardTitles.joined(separator: ", "))"
+                }
+                lines.append(entry)
+            }
         }
 
         return lines.joined(separator: "\n")
+    }
+
+    /// Build a lookup from source document IDs to knowledge card titles.
+    /// Multiple cards can reference the same document, so values are arrays.
+    private func buildDocumentIdToCardTitleLookup(_ cards: [KnowledgeCard]) -> [String: [String]] {
+        var lookup: [String: [String]] = [:]
+        for card in cards {
+            for anchor in card.evidenceAnchors {
+                var titles = lookup[anchor.documentId, default: []]
+                if !titles.contains(card.title) {
+                    titles.append(card.title)
+                    lookup[anchor.documentId] = titles
+                }
+            }
+        }
+        return lookup
     }
 
     private func buildTitleSetSection(_ titleSets: [TitleSetRecord]) -> String {
