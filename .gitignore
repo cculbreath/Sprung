@@ -24,6 +24,7 @@ test_*
 .gourceinclude
 .swiftlint.yml
 plans.md
+plans/
 
 # Private assets and notes (relocated outside the repo)
 debug/
