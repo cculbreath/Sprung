@@ -24,11 +24,36 @@ struct EventsView: View {
     let coordinator: DiscoveryCoordinator
     @Binding var triggerEventDiscovery: Bool
     @Binding var viewMode: EventsViewMode
+    @State private var selectedEventType: NetworkingEventType?
 
     init(coordinator: DiscoveryCoordinator, triggerEventDiscovery: Binding<Bool> = .constant(false), viewMode: Binding<EventsViewMode> = .constant(.list)) {
         self.coordinator = coordinator
         self._triggerEventDiscovery = triggerEventDiscovery
         self._viewMode = viewMode
+    }
+
+    // MARK: - Filtered Collections
+
+    private var filteredUpcoming: [NetworkingEventOpportunity] {
+        applyFilter(coordinator.eventStore.upcomingEvents)
+    }
+
+    private var filteredDiscovered: [NetworkingEventOpportunity] {
+        applyFilter(coordinator.eventStore.discoveredEvents)
+    }
+
+    private var filteredNeedsDebrief: [NetworkingEventOpportunity] {
+        applyFilter(coordinator.eventStore.needsDebrief)
+    }
+
+    private func applyFilter(_ events: [NetworkingEventOpportunity]) -> [NetworkingEventOpportunity] {
+        guard let eventType = selectedEventType else { return events }
+        return events.filter { $0.eventType == eventType }
+    }
+
+    private var availableEventTypes: [NetworkingEventType] {
+        let used = Set(coordinator.eventStore.allEvents.map { $0.eventType })
+        return NetworkingEventType.allCases.filter { used.contains($0) }
     }
 
     var body: some View {
@@ -106,57 +131,119 @@ struct EventsView: View {
     }
 
     private var eventListView: some View {
-        List {
-            if !coordinator.eventStore.upcomingEvents.isEmpty {
-                Section("Upcoming") {
-                    ForEach(coordinator.eventStore.upcomingEvents) { event in
-                        NavigationLink {
-                            EventPrepView(event: event, coordinator: coordinator)
-                        } label: {
-                            EventRowView(event: event)
+        VStack(spacing: 0) {
+            // Event type filter bar
+            if availableEventTypes.count > 1 {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        FilterChip(label: "All", isSelected: selectedEventType == nil) {
+                            selectedEventType = nil
                         }
-                        .contextMenu {
-                            eventContextMenu(for: event)
+                        ForEach(availableEventTypes, id: \.self) { eventType in
+                            FilterChip(label: eventType.rawValue, isSelected: selectedEventType == eventType) {
+                                selectedEventType = selectedEventType == eventType ? nil : eventType
+                            }
                         }
                     }
+                    .padding(.horizontal)
                 }
+                .padding(.vertical, 8)
             }
 
-            if !coordinator.eventStore.discoveredEvents.isEmpty {
-                Section("Discovered") {
-                    ForEach(coordinator.eventStore.discoveredEvents) { event in
-                        NavigationLink {
-                            EventPrepView(event: event, coordinator: coordinator)
-                        } label: {
-                            EventRowView(event: event)
-                        }
-                        .contextMenu {
-                            eventContextMenu(for: event)
+            List {
+                if !filteredUpcoming.isEmpty {
+                    Section("Upcoming") {
+                        ForEach(filteredUpcoming) { event in
+                            NavigationLink {
+                                EventPrepView(event: event, coordinator: coordinator)
+                            } label: {
+                                EventRowView(event: event, store: coordinator.eventStore)
+                            }
+                            .contextMenu {
+                                eventContextMenu(for: event)
+                            }
                         }
                     }
                 }
-            }
 
-            if !coordinator.eventStore.needsDebrief.isEmpty {
-                Section("Needs Debrief") {
-                    ForEach(coordinator.eventStore.needsDebrief) { event in
-                        NavigationLink {
-                            DebriefView(event: event, coordinator: coordinator)
-                        } label: {
-                            EventRowView(event: event)
+                if !filteredDiscovered.isEmpty {
+                    Section("Discovered") {
+                        ForEach(filteredDiscovered) { event in
+                            NavigationLink {
+                                EventPrepView(event: event, coordinator: coordinator)
+                            } label: {
+                                EventRowView(event: event, store: coordinator.eventStore)
+                            }
+                            .contextMenu {
+                                eventContextMenu(for: event)
+                            }
                         }
-                        .contextMenu {
-                            eventContextMenu(for: event)
+                    }
+                }
+
+                if !filteredNeedsDebrief.isEmpty {
+                    Section("Needs Debrief") {
+                        ForEach(filteredNeedsDebrief) { event in
+                            NavigationLink {
+                                DebriefView(event: event, coordinator: coordinator)
+                            } label: {
+                                EventRowView(event: event, store: coordinator.eventStore)
+                            }
+                            .contextMenu {
+                                eventContextMenu(for: event)
+                            }
                         }
                     }
                 }
             }
+            .scrollEdgeEffect()
         }
-        .scrollEdgeEffect()
     }
 
     @ViewBuilder
     private func eventContextMenu(for event: NetworkingEventOpportunity) -> some View {
+        // Status transitions
+        if event.status == .discovered || event.status == .recommended || event.status == .evaluating {
+            Button {
+                coordinator.eventStore.markAsPlanned(event)
+            } label: {
+                Label("Plan Attendance", systemImage: "calendar.badge.plus")
+            }
+
+            Button {
+                coordinator.eventStore.markAsSkipped(event)
+            } label: {
+                Label("Skip Event", systemImage: "forward.end")
+            }
+        }
+
+        if event.status == .planned {
+            Button {
+                coordinator.eventStore.markAsAttended(event)
+            } label: {
+                Label("Mark as Attended", systemImage: "checkmark.circle")
+            }
+        }
+
+        Divider()
+
+        // Feedback
+        Menu("Discovery Feedback") {
+            Button {
+                coordinator.eventStore.setDiscoveryFeedback(event, feedback: "more")
+            } label: {
+                Label("More Like This", systemImage: "hand.thumbsup")
+            }
+
+            Button {
+                coordinator.eventStore.setDiscoveryFeedback(event, feedback: "less")
+            } label: {
+                Label("Less Like This", systemImage: "hand.thumbsdown")
+            }
+        }
+
+        Divider()
+
         Button {
             if let url = URL(string: event.url) {
                 NSWorkspace.shared.open(url)
@@ -178,28 +265,39 @@ struct EventsView: View {
 
 struct EventRowView: View {
     let event: NetworkingEventOpportunity
+    let store: NetworkingEventStore
+    @State private var isHovered = false
 
     var body: some View {
         HStack {
             Image(systemName: event.eventType.icon)
                 .foregroundStyle(.blue)
+                .frame(width: 20)
 
             VStack(alignment: .leading, spacing: 4) {
-                Text(event.name)
-                    .font(.headline)
-                HStack {
+                HStack(spacing: 6) {
+                    Text(event.name)
+                        .font(.headline)
+                        .lineLimit(1)
+
+                    if let feedback = event.discoveryFeedback {
+                        Image(systemName: feedback == "more" ? "hand.thumbsup.fill" : "hand.thumbsdown.fill")
+                            .font(.caption2)
+                            .foregroundStyle(feedback == "more" ? .green : .orange)
+                    }
+                }
+                HStack(spacing: 6) {
                     Text(event.date, style: .date)
                     if let time = event.time {
                         Text("·")
                         Text(time)
                     }
+                    Text("·")
+                    Text(event.location)
+                        .lineLimit(1)
                 }
                 .font(.caption)
                 .foregroundStyle(.secondary)
-
-                Text(event.location)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
             }
 
             Spacer()
@@ -209,13 +307,64 @@ struct EventRowView: View {
                     .foregroundStyle(recommendation == .strongYes ? .green : .secondary)
             }
 
+            // Status transition button
+            statusButton(for: event)
+
             Text(event.status.rawValue)
                 .font(.caption)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
-                .background(Color.accentColor.opacity(0.1))
+                .background(statusColor(for: event.status).opacity(0.15))
+                .foregroundStyle(statusColor(for: event.status))
                 .cornerRadius(4)
+
+            Button {
+                store.delete(event)
+            } label: {
+                Image(systemName: "trash")
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.borderless)
+            .opacity(isHovered ? 1 : 0)
+            .help("Delete event")
         }
         .padding(.vertical, 4)
+        .onHover { hovering in
+            isHovered = hovering
+        }
+    }
+
+    @ViewBuilder
+    private func statusButton(for event: NetworkingEventOpportunity) -> some View {
+        switch event.status {
+        case .discovered, .recommended, .evaluating:
+            Button("Plan") {
+                store.markAsPlanned(event)
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+        case .planned:
+            Button("Attended") {
+                store.markAsAttended(event)
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+        default:
+            EmptyView()
+        }
+    }
+
+    private func statusColor(for status: EventPipelineStatus) -> Color {
+        switch status {
+        case .discovered: return .blue
+        case .evaluating: return .purple
+        case .recommended: return .green
+        case .planned: return .orange
+        case .attended: return .teal
+        case .debriefed: return .gray
+        case .skipped: return .secondary
+        case .cancelled: return .red
+        case .missed: return .red
+        }
     }
 }

@@ -98,10 +98,7 @@ enum EventRating: Int, Codable, CaseIterable {
 
 enum DiscoverySource: String, Codable {
     case webSearch = "Web Search"
-    case calendarDetected = "Calendar Detected"
     case manual = "Manually Added"
-    case contactSuggested = "Contact Suggested"
-    case recurring = "Recurring Event"
 }
 
 // MARK: - Networking Event Opportunity
@@ -169,6 +166,10 @@ class NetworkingEventOpportunity: Identifiable {
     var searchQueryUsed: String?
     var relevanceReason: String?
     var targetCompaniesLikelyJSON: String?  // JSON encoded [String]
+
+    // Discovery Feedback (guides future discovery)
+    var discoveryFeedback: String?  // "more" or "less"
+    var discoveryFeedbackNote: String?
 
     init() {}
 

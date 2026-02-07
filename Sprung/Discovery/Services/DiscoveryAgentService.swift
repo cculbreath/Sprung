@@ -211,14 +211,21 @@ actor DiscoveryAgentService {
     func discoverNetworkingEvents(
         sectors: [String],
         location: String,
+        candidateContext: String = "",
         daysAhead: Int = 14,
         statusCallback: (@MainActor @Sendable (DiscoveryStatus) async -> Void)? = nil,
         reasoningCallback: (@MainActor @Sendable (String) async -> Void)? = nil
     ) async throws -> NetworkingEventsResult {
         let systemPrompt = loadPromptTemplate(named: "discovery_discover_networking_events")
+
+        var userMessage = "Find networking events for sectors: \(sectors.joined(separator: ", ")) in \(location) for the next \(daysAhead) days"
+        if !candidateContext.isEmpty {
+            userMessage += "\n\n\(candidateContext)"
+        }
+
         let response = try await runOpenAIRequest(
             systemPrompt: systemPrompt,
-            userMessage: "Find networking events for sectors: \(sectors.joined(separator: ", ")) in \(location) for the next \(daysAhead) days",
+            userMessage: userMessage,
             modelId: await modelId,
             reasoningEffort: await reasoningEffort,
             webSearchLocation: location,

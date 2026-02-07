@@ -414,7 +414,7 @@ struct AddSourceSheet: View {
 
 // MARK: - Filter Chip
 
-private struct FilterChip: View {
+struct FilterChip: View {
     let label: String
     let isSelected: Bool
     let action: () -> Void

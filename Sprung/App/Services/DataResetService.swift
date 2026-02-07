@@ -34,31 +34,22 @@ final class DataResetService {
         return count
     }
 
-    /// Clear all knowledge cards from file storage
-    /// Knowledge cards are stored as JSON files in the Onboarding/Data directory
-    /// - Returns: Number of files deleted
+    /// Clear all knowledge cards from SwiftData
+    /// - Parameter context: SwiftData ModelContext
+    /// - Returns: Number of records deleted
     @discardableResult
-    func clearKnowledgeCards() throws -> Int {
-        let fileManager = FileManager.default
-        let appSupportURL = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        let dataURL = appSupportURL.appendingPathComponent("Onboarding/Data", isDirectory: true)
+    func clearKnowledgeCards(context: ModelContext) throws -> Int {
+        let descriptor = FetchDescriptor<KnowledgeCard>()
+        let cards = (try? context.fetch(descriptor)) ?? []
+        let count = cards.count
 
-        guard fileManager.fileExists(atPath: dataURL.path) else {
-            Logger.info("🗑️ No knowledge card directory found", category: .appLifecycle)
-            return 0
+        for card in cards {
+            context.delete(card)
         }
 
-        let contents = try fileManager.contentsOfDirectory(at: dataURL, includingPropertiesForKeys: nil)
-        var deletedCount = 0
-
-        // Delete transcript_record files (knowledge card data)
-        for fileURL in contents where fileURL.lastPathComponent.hasPrefix("transcript_record_") {
-            try fileManager.removeItem(at: fileURL)
-            deletedCount += 1
-        }
-
-        Logger.info("🗑️ Cleared \(deletedCount) knowledge card files", category: .appLifecycle)
-        return deletedCount
+        try context.save()
+        Logger.info("Cleared \(count) knowledge cards", category: .appLifecycle)
+        return count
     }
 
     /// Clear all writing samples from SwiftData
@@ -79,6 +70,75 @@ final class DataResetService {
         try context.save()
         Logger.info("🗑️ Cleared \(count) writing samples", category: .appLifecycle)
         return count
+    }
+
+    /// Clear all skills from SwiftData
+    /// - Parameter context: SwiftData ModelContext
+    /// - Returns: Number of records deleted
+    @discardableResult
+    func clearSkills(context: ModelContext) throws -> Int {
+        let descriptor = FetchDescriptor<Skill>()
+        let skills = (try? context.fetch(descriptor)) ?? []
+        let count = skills.count
+
+        for skill in skills {
+            context.delete(skill)
+        }
+
+        try context.save()
+        Logger.info("Cleared \(count) skills", category: .appLifecycle)
+        return count
+    }
+
+    /// Clear all title sets from SwiftData
+    /// - Parameter context: SwiftData ModelContext
+    /// - Returns: Number of records deleted
+    @discardableResult
+    func clearTitleSets(context: ModelContext) throws -> Int {
+        let descriptor = FetchDescriptor<TitleSetRecord>()
+        let titleSets = (try? context.fetch(descriptor)) ?? []
+        let count = titleSets.count
+
+        for titleSet in titleSets {
+            context.delete(titleSet)
+        }
+
+        try context.save()
+        Logger.info("Cleared \(count) title sets", category: .appLifecycle)
+        return count
+    }
+
+    /// Clear all candidate dossiers from SwiftData
+    /// - Parameter context: SwiftData ModelContext
+    /// - Returns: Number of records deleted
+    @discardableResult
+    func clearDossiers(context: ModelContext) throws -> Int {
+        let descriptor = FetchDescriptor<CandidateDossier>()
+        let dossiers = (try? context.fetch(descriptor)) ?? []
+        let count = dossiers.count
+
+        for dossier in dossiers {
+            context.delete(dossier)
+        }
+
+        try context.save()
+        Logger.info("Cleared \(count) dossiers", category: .appLifecycle)
+        return count
+    }
+
+    /// Reset all onboarding-generated data: knowledge cards, writing samples, skills, title sets, and dossiers
+    /// - Parameter context: SwiftData ModelContext
+    /// - Returns: Summary message of what was cleared
+    func resetOnboarding(context: ModelContext) throws -> String {
+        let kcCount = try clearKnowledgeCards(context: context)
+        let wsCount = try clearWritingSamples(context: context)
+        let skillCount = try clearSkills(context: context)
+        let tsCount = try clearTitleSets(context: context)
+        let dossierCount = try clearDossiers(context: context)
+
+        let summary = "Cleared \(kcCount) knowledge cards, \(wsCount) writing samples, \(skillCount) skills, \(tsCount) title sets, \(dossierCount) dossiers"
+        Logger.info("Onboarding reset: \(summary)", category: .appLifecycle)
+        return summary
     }
 
     // MARK: - Reset Orchestration

@@ -12,10 +12,10 @@ import Foundation
 
 /// A complete curation plan containing all proposed changes.
 struct SkillCurationPlan {
-    let mergeProposals: [MergeProposal]
-    let overGranularFlags: [OverGranularFlag]
-    let categoryReassignments: [CategoryReassignment]
-    let categoryConsolidations: [CategoryConsolidation]
+    var mergeProposals: [MergeProposal]
+    var overGranularFlags: [OverGranularFlag]
+    var categoryReassignments: [CategoryReassignment]
+    var categoryConsolidations: [CategoryConsolidation]
 
     var isEmpty: Bool {
         mergeProposals.isEmpty && overGranularFlags.isEmpty &&
@@ -111,9 +111,9 @@ final class SkillBankCurationService {
     private let llmFacade: LLMFacade
 
     private func getModelId() throws -> String {
-        guard let modelId = UserDefaults.standard.string(forKey: "skillsProcessingModelId"), !modelId.isEmpty else {
+        guard let modelId = UserDefaults.standard.string(forKey: "skillCurationModelId"), !modelId.isEmpty else {
             throw ModelConfigurationError.modelNotConfigured(
-                settingKey: "skillsProcessingModelId",
+                settingKey: "skillCurationModelId",
                 operationName: "Skill Bank Curation"
             )
         }
@@ -149,8 +149,7 @@ final class SkillBankCurationService {
             as: CurationResponse.self,
             schema: curationSchema,
             schemaName: "skill_curation",
-            maxOutputTokens: 65536,
-            backend: .gemini
+            backend: .openRouter
         )
 
         let plan = convertResponseToPlan(response: response, skills: allSkills)

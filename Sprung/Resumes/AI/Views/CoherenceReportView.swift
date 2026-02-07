@@ -48,28 +48,7 @@ struct CoherenceReportView: View {
                 successView
             } else {
                 // Issue list
-                ScrollView {
-                    LazyVStack(spacing: 8) {
-                        ForEach(activeIssues) { issue in
-                            CoherenceIssueCard(
-                                issue: issue,
-                                onDismiss: {
-                                    withAnimation(.easeOut(duration: 0.2)) {
-                                        dismissedIssueIds.insert(issue.id)
-                                    }
-                                },
-                                onFix: {
-                                    onFixIssue(issue)
-                                    withAnimation(.easeOut(duration: 0.2)) {
-                                        dismissedIssueIds.insert(issue.id)
-                                    }
-                                }
-                            )
-                        }
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                }
+                issueListView
             }
 
             Divider()
@@ -119,21 +98,29 @@ struct CoherenceReportView: View {
         }
     }
 
-    private var coherenceBadge: some View {
-        let (text, color): (String, Color) = {
-            switch report.overallCoherence {
-            case .good: return ("Good", .green)
-            case .fair: return ("Fair", .orange)
-            case .poor: return ("Needs Work", .red)
-            }
-        }()
+    private var coherenceBadgeText: String {
+        switch report.overallCoherence {
+        case .good: return "Good"
+        case .fair: return "Fair"
+        case .poor: return "Needs Work"
+        }
+    }
 
-        return Text(text)
+    private var coherenceBadgeColor: Color {
+        switch report.overallCoherence {
+        case .good: return .green
+        case .fair: return .orange
+        case .poor: return .red
+        }
+    }
+
+    private var coherenceBadge: some View {
+        Text(coherenceBadgeText)
             .font(.system(.caption, design: .rounded, weight: .semibold))
             .padding(.horizontal, 10)
             .padding(.vertical, 4)
-            .background(color.opacity(0.15))
-            .foregroundStyle(color)
+            .background(coherenceBadgeColor.opacity(0.15))
+            .foregroundStyle(coherenceBadgeColor)
             .clipShape(Capsule())
     }
 
@@ -157,6 +144,37 @@ struct CoherenceReportView: View {
             Spacer()
         }
         .frame(maxWidth: .infinity)
+    }
+
+    // MARK: - Issue List
+
+    private var issueListView: some View {
+        ScrollView {
+            LazyVStack(spacing: 8) {
+                ForEach(activeIssues) { issue in
+                    issueCard(for: issue)
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+        }
+    }
+
+    private func issueCard(for issue: CoherenceIssue) -> some View {
+        CoherenceIssueCard(
+            issue: issue,
+            onDismiss: {
+                withAnimation(.easeOut(duration: 0.2)) {
+                    _ = dismissedIssueIds.insert(issue.id)
+                }
+            },
+            onFix: {
+                onFixIssue(issue)
+                withAnimation(.easeOut(duration: 0.2)) {
+                    _ = dismissedIssueIds.insert(issue.id)
+                }
+            }
+        )
     }
 
     // MARK: - Footer
@@ -198,14 +216,17 @@ struct CoherenceReportView: View {
         .padding(16)
     }
 
-    private var issueSummaryLabel: some View {
+    private var issueSummaryText: String {
         let parts: [String] = [
             highCount > 0 ? "\(highCount) high" : nil,
             mediumCount > 0 ? "\(mediumCount) medium" : nil,
             lowCount > 0 ? "\(lowCount) low" : nil,
         ].compactMap { $0 }
+        return "\(activeIssues.count) issues: \(parts.joined(separator: ", "))"
+    }
 
-        return Text("\(activeIssues.count) issues: \(parts.joined(separator: ", "))")
+    private var issueSummaryLabel: some View {
+        Text(issueSummaryText)
             .font(.system(.caption, design: .rounded))
             .foregroundStyle(.secondary)
     }

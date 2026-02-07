@@ -45,12 +45,14 @@ struct EventsModuleView: View {
                 }
             )
 
-            // Existing EventsView
-            EventsView(
-                coordinator: coordinator,
-                triggerEventDiscovery: $triggerEventDiscovery,
-                viewMode: $viewMode
-            )
+            // Existing EventsView (NavigationStack for detail push)
+            NavigationStack {
+                EventsView(
+                    coordinator: coordinator,
+                    triggerEventDiscovery: $triggerEventDiscovery,
+                    viewMode: $viewMode
+                )
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: .discoveryTriggerEventDiscovery)) { _ in
             triggerEventDiscovery = true

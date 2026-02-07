@@ -10,12 +10,14 @@ struct ResetSettingsSection: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(ExperienceDefaultsStore.self) private var experienceDefaultsStore
     @Environment(InferenceGuidanceStore.self) private var inferenceGuidanceStore
+    @Environment(TitleSetStore.self) private var titleSetStore
     @State private var showFactoryResetConfirmation = false
     @State private var showFinalResetConfirmation = false
     @State private var showClearArtifactsConfirmation = false
     @State private var showClearKnowledgeCardsConfirmation = false
     @State private var showClearWritingSamplesConfirmation = false
     @State private var showClearSGMContentConfirmation = false
+    @State private var showResetOnboardingConfirmation = false
     @State private var clearResultMessage: String?
     @State private var resetError: String?
     @State private var isResetting = false
@@ -88,6 +90,14 @@ struct ResetSettingsSection: View {
         } message: {
             Text("This will clear all AI-generated resume content (summaries, highlights, skill groupings, job titles, objective) while preserving timeline facts (names, dates, locations). You can then re-run Seed Generation.")
         }
+        .alert("Reset Onboarding", isPresented: $showResetOnboardingConfirmation) {
+            Button("Cancel", role: .cancel) {}
+            Button("Reset", role: .destructive) {
+                resetOnboarding()
+            }
+        } message: {
+            Text("This will delete all knowledge cards, writing samples, skills, title sets, and dossiers. You will need to re-run onboarding to regenerate this data.")
+        }
     }
 
     private var granularClearingSection: some View {
@@ -127,6 +137,16 @@ struct ResetSettingsSection: View {
                         showClearSGMContentConfirmation = true
                     } label: {
                         Label("Reset Generated Content", systemImage: "sparkles")
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(isResetting)
+                }
+
+                HStack(spacing: 12) {
+                    Button(role: .destructive) {
+                        showResetOnboardingConfirmation = true
+                    } label: {
+                        Label("Reset Onboarding", systemImage: "arrow.counterclockwise.circle")
                     }
                     .buttonStyle(.bordered)
                     .disabled(isResetting)
@@ -195,7 +215,7 @@ struct ResetSettingsSection: View {
 
     private func clearKnowledgeCards() {
         do {
-            let count = try dataResetService.clearKnowledgeCards()
+            let count = try dataResetService.clearKnowledgeCards(context: modelContext)
             clearResultMessage = "Cleared \(count) knowledge card file\(count == 1 ? "" : "s")"
         } catch {
             clearResultMessage = "Error: \(error.localizedDescription)"
@@ -206,6 +226,17 @@ struct ResetSettingsSection: View {
         do {
             let count = try dataResetService.clearWritingSamples(context: modelContext)
             clearResultMessage = "Cleared \(count) writing sample\(count == 1 ? "" : "s")"
+        } catch {
+            clearResultMessage = "Error: \(error.localizedDescription)"
+        }
+    }
+
+    private func resetOnboarding() {
+        do {
+            let summary = try dataResetService.resetOnboarding(context: modelContext)
+            // TitleSetStore uses an in-memory cache; flush it after the service deletes records
+            titleSetStore.deleteAll()
+            clearResultMessage = summary
         } catch {
             clearResultMessage = "Error: \(error.localizedDescription)"
         }

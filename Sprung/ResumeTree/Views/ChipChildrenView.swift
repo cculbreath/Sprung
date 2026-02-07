@@ -20,6 +20,8 @@ struct ChipChildrenView: View {
 
     @Environment(ResumeDetailVM.self) private var vm
     @Environment(SkillStore.self) private var skillStore
+    @Environment(DragInfo.self) private var dragInfo
+    @Environment(AppEnvironment.self) private var appEnvironment
     @Environment(\.modelContext) private var modelContext
 
     @State private var isAddingChip: Bool = false
@@ -39,12 +41,30 @@ struct ChipChildrenView: View {
             // Chip flow with indentation
             FlowStack(spacing: 6, verticalSpacing: 6) {
                 ForEach(children, id: \.id) { child in
+                    let canReorder = parent.schemaAllowsChildMutation
                     ChipView(
                         node: child,
                         isMatched: isChipMatched(child),
                         onDelete: { vm.deleteNode(child, context: modelContext) },
                         skillStore: skillStore,
                         syncToLibrary: syncToSkillLibrary
+                    )
+                    .opacity(dragInfo.draggedNode == child ? 0.4 : 1.0)
+                    .overlay(chipDropIndicator(for: child))
+                    .onDrag {
+                        guard canReorder else { return NSItemProvider() }
+                        dragInfo.draggedNode = child
+                        return NSItemProvider(object: child.id as NSString)
+                    }
+                    .onDrop(
+                        of: [.plainText],
+                        delegate: ChipDropDelegate(
+                            node: child,
+                            siblings: children,
+                            dragInfo: dragInfo,
+                            appEnvironment: appEnvironment,
+                            canReorder: canReorder
+                        )
                     )
                 }
 
@@ -409,6 +429,23 @@ struct ChipChildrenView: View {
         addFromSkillBank(skill)
     }
 
+    @ViewBuilder
+    private func chipDropIndicator(for child: TreeNode) -> some View {
+        if dragInfo.dropTargetNode == child {
+            GeometryReader { proxy in
+                let isLeft = dragInfo.dropPosition == .above
+                Rectangle()
+                    .fill(Color.accentColor)
+                    .frame(width: 2)
+                    .position(
+                        x: isLeft ? 0 : proxy.size.width,
+                        y: proxy.size.height / 2
+                    )
+            }
+            .allowsHitTesting(false)
+        }
+    }
+
     private func addFromRecommendation(_ rec: SkillRecommendation) {
         let newNode = TreeNode(
             name: "",
@@ -646,5 +683,93 @@ private struct ChipView: View {
     private func cancelEdit() {
         showingSuggestions = false
         isEditing = false
+    }
+}
+
+// MARK: - Chip Drop Delegate
+
+private struct ChipDropDelegate: DropDelegate {
+    let node: TreeNode
+    let siblings: [TreeNode]
+    let dragInfo: DragInfo
+    let appEnvironment: AppEnvironment
+    let canReorder: Bool
+
+    func validateDrop(info: DropInfo) -> Bool {
+        guard canReorder,
+              let dragged = dragInfo.draggedNode,
+              dragged != node,
+              dragged.parent?.id == node.parent?.id else { return false }
+        return true
+    }
+
+    func dropEntered(info: DropInfo) {
+        guard canReorder,
+              let dragged = dragInfo.draggedNode,
+              dragged != node,
+              dragged.parent?.id == node.parent?.id else { return }
+
+        DispatchQueue.main.async {
+            dragInfo.dropTargetNode = node
+            // For chips in a flow layout, use left/right (mapped to above/below)
+            let midX = info.location.x
+            dragInfo.dropPosition = midX < 20 ? .above : .below
+        }
+    }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        guard canReorder else { return nil }
+        // Update left/right position as cursor moves within the chip
+        if let dragged = dragInfo.draggedNode,
+           dragged != node,
+           dragged.parent?.id == node.parent?.id {
+            let midX = info.location.x
+            dragInfo.dropPosition = midX < 20 ? .above : .below
+        }
+        return DropProposal(operation: .move)
+    }
+
+    func performDrop(info: DropInfo) -> Bool {
+        guard canReorder,
+              let dragged = dragInfo.draggedNode,
+              dragged.parent?.id == node.parent?.id else { return false }
+
+        reorder(draggedNode: dragged, overNode: node)
+
+        dragInfo.draggedNode = nil
+        dragInfo.dropTargetNode = nil
+        dragInfo.dropPosition = .none
+        return true
+    }
+
+    func dropExited(info: DropInfo) {
+        guard canReorder else { return }
+        dragInfo.dropTargetNode = nil
+        dragInfo.dropPosition = .none
+    }
+
+    private func reorder(draggedNode: TreeNode, overNode: TreeNode) {
+        guard let parent = overNode.parent, var array = parent.children else { return }
+        array.sort { $0.myIndex < $1.myIndex }
+        guard let fromIndex = array.firstIndex(of: draggedNode),
+              let toIndex = array.firstIndex(of: overNode) else { return }
+
+        withAnimation(.easeInOut) {
+            array.remove(at: fromIndex)
+            let insertionIndex = (dragInfo.dropPosition == .above) ? toIndex : toIndex + 1
+            let boundedIndex = max(0, min(insertionIndex, array.count))
+            array.insert(draggedNode, at: boundedIndex)
+            for (index, node) in array.enumerated() {
+                node.myIndex = index
+            }
+            parent.children = array
+        }
+
+        do {
+            try parent.resume.modelContext?.save()
+        } catch {
+            Logger.warning("Failed to save reordered chips: \(error.localizedDescription)", category: .storage)
+        }
+        appEnvironment.resumeExportCoordinator.debounceExport(resume: parent.resume)
     }
 }

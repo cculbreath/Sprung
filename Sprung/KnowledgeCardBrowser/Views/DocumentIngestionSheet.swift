@@ -33,6 +33,8 @@ struct DocumentIngestionSheet: View {
     @State private var showAnalysisSheet = false
     /// Whether to run deduplication on narrative cards
     @State private var deduplicateNarratives = false
+    /// Whether to extract and persist skills from imported documents
+    @State private var extractSkillsAfterImport = true
 
     // MARK: - Callbacks
 
@@ -83,7 +85,8 @@ struct DocumentIngestionSheet: View {
                                 newCards: selectedNew,
                                 enhancements: selectedEnhancements,
                                 artifacts: result.artifacts,
-                                skillBank: result.skillBank
+                                skillBank: result.skillBank,
+                                persistSkills: extractSkillsAfterImport
                             )
                             // Notify caller of first created card (for UI refresh)
                             if created > 0, let first = selectedNew.first {
@@ -149,8 +152,12 @@ struct DocumentIngestionSheet: View {
 
     private var optionsSection: some View {
         GroupBox {
-            Toggle("Deduplicate Narratives", isOn: $deduplicateNarratives)
-                .help("Run LLM-powered deduplication to merge similar narrative cards")
+            VStack(alignment: .leading, spacing: 8) {
+                Toggle("Deduplicate Narratives", isOn: $deduplicateNarratives)
+                    .help("Run LLM-powered deduplication to merge similar narrative cards")
+                Toggle("Extract skills from documents", isOn: $extractSkillsAfterImport)
+                    .help("Extract and add skills to the Skill Bank from imported documents")
+            }
         }
     }
 

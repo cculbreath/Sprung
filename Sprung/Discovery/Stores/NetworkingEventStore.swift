@@ -85,4 +85,15 @@ final class NetworkingEventStore: SwiftDataStore {
         saveContext()
     }
 
+    func markAsSkipped(_ event: NetworkingEventOpportunity) {
+        event.status = .skipped
+        saveContext()
+    }
+
+    func setDiscoveryFeedback(_ event: NetworkingEventOpportunity, feedback: String, note: String? = nil) {
+        event.discoveryFeedback = feedback
+        event.discoveryFeedbackNote = note
+        saveContext()
+    }
+
 }

@@ -14,6 +14,12 @@ struct ResumeEntryCardView: View {
     let node: TreeNode
     let depthOffset: Int
     @Environment(ResumeDetailVM.self) private var vm: ResumeDetailVM
+    @Environment(\.modelContext) private var modelContext
+
+    // Inline title rename state
+    @State private var isRenamingTitle = false
+    @State private var renameTitleText = ""
+    @FocusState private var isRenameFocused: Bool
 
     /// Matched skill IDs from job context
     private var matchedSkillIds: Set<UUID> {
@@ -82,10 +88,23 @@ struct ResumeEntryCardView: View {
                 )
             }
 
-            Text(node.computedTitle)
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(.primary)
-                .lineLimit(2)
+            if isRenamingTitle {
+                TextField("Name", text: $renameTitleText)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 13, weight: .semibold))
+                    .focused($isRenameFocused)
+                    .onSubmit { commitTitleRename() }
+                    .onExitCommand { cancelTitleRename() }
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 2)
+                    .background(Color(.textBackgroundColor), in: RoundedRectangle(cornerRadius: 4))
+                    .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(Color.accentColor.opacity(0.5), lineWidth: 1))
+            } else {
+                Text(node.computedTitle)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.primary)
+                    .lineLimit(2)
+            }
 
             Spacer()
 
@@ -102,6 +121,48 @@ struct ResumeEntryCardView: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
         .background(Color(.windowBackgroundColor).opacity(0.5))
+        .contextMenu {
+            Button {
+                print("[ResumeEntryCardView] Rename triggered for: '\(node.computedTitle)'")
+                renameTitleText = node.computedTitle
+                isRenamingTitle = true
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    isRenameFocused = true
+                }
+            } label: {
+                Label("Rename", systemImage: "pencil")
+            }
+        }
+    }
+
+    private func commitTitleRename() {
+        let trimmed = renameTitleText.trimmingCharacters(in: .whitespacesAndNewlines)
+        print("[ResumeEntryCardView] commitTitleRename: '\(trimmed)' for node '\(node.computedTitle)'")
+        guard !trimmed.isEmpty else {
+            print("[ResumeEntryCardView] commitTitleRename: empty, cancelling")
+            cancelTitleRename()
+            return
+        }
+        // Update the title child node's value
+        if let titleNode = titleNode {
+            print("[ResumeEntryCardView] Updating titleNode.value from '\(titleNode.value)' to '\(trimmed)'")
+            titleNode.value = trimmed
+        } else {
+            // No dedicated title child — update the node's own name
+            print("[ResumeEntryCardView] No titleNode found, updating node.name from '\(node.name)' to '\(trimmed)'")
+            node.name = trimmed
+        }
+        do {
+            try modelContext.save()
+            print("[ResumeEntryCardView] Save succeeded")
+        } catch {
+            Logger.error("Failed to save title rename: \(error)")
+        }
+        isRenamingTitle = false
+    }
+
+    private func cancelTitleRename() {
+        isRenamingTitle = false
     }
 
     private func toggleTitleSoloMode() {

@@ -28,6 +28,7 @@ struct ModelsSettingsView: View {
     @AppStorage("kcExtractionModelId") private var kcExtractionModelId: String = ""
     @AppStorage("guidanceExtractionModelId") private var guidanceExtractionModelId: String = ""
     @AppStorage("skillsProcessingModelId") private var skillsProcessingModelId: String = ""
+    @AppStorage("skillCurationModelId") private var skillCurationModelId: String = ""
     @AppStorage("skillsProcessingParallelAgents") private var skillsProcessingParallelAgents: Int = 12
 
     // MARK: - Additional Models
@@ -151,6 +152,9 @@ struct ModelsSettingsView: View {
         }
         modelRow(operation: "Skills Processing", backend: .gemini) {
             geminiPicker(selection: $skillsProcessingModelId, minTokens: 64000)
+        }
+        modelRow(operation: "Skill Curation", backend: .openRouter) {
+            openRouterPicker(selection: $skillCurationModelId)
         }
 
         Divider().padding(.vertical, 4)

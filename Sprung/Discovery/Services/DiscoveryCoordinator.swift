@@ -334,10 +334,12 @@ final class DiscoveryCoordinator {
             throw DiscoveryLLMError.toolExecutionFailed("Agent service not configured")
         }
         let prefs = preferencesStore.current()
+        let candidateContext = buildCandidateContext()
         try await networkingCoordinator.discoverNetworkingEvents(
             using: agent,
             sectors: prefs.targetSectors,
             location: prefs.primaryLocation,
+            candidateContext: candidateContext,
             daysAhead: daysAhead,
             streamCallback: streamCallback
         )

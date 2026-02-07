@@ -10,6 +10,7 @@ import SwiftUI
 struct JobSkillChipView: View {
     let skill: JobSkillEvidence
     let isActive: Bool
+    var isAdded: Bool = false
     let onHover: (Bool) -> Void
     let onTap: () -> Void
 
@@ -17,6 +18,7 @@ struct JobSkillChipView: View {
 
     // Category-specific active color
     private var activeColor: Color {
+        if isAdded { return .green }
         switch skill.category {
         case .matched:
             return .green
@@ -49,8 +51,9 @@ struct JobSkillChipView: View {
 
     @ViewBuilder
     private var chipBackground: some View {
-        if isActive {
-            // Use category-specific color when active
+        if isAdded {
+            Color.green.opacity(isActive ? 1 : 0.12)
+        } else if isActive {
             activeColor
         } else {
             switch skill.category {
@@ -65,6 +68,9 @@ struct JobSkillChipView: View {
     }
 
     private var chipTextColor: Color {
+        if isAdded {
+            return isActive ? .white : .green
+        }
         if isActive {
             return .white
         }
@@ -84,6 +90,9 @@ struct JobSkillChipView: View {
     }
 
     private var borderColor: Color {
+        if isAdded {
+            return isActive ? Color.green.opacity(0.8) : Color.green.opacity(0.4)
+        }
         if isActive {
             return activeColor.opacity(0.8)
         }

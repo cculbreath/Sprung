@@ -141,7 +141,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                let guidanceStore = self.guidanceStore,
                let searchOpsCoordinator = self.searchOpsCoordinator,
                let skillStore = self.skillStore,
-               let jobAppStore = self.jobAppStore {
+               let jobAppStore = self.jobAppStore,
+               let titleSetStore = self.titleSetStore {
                 let appState = appEnvironment.appState
                 let debugSettingsStore = appState.debugSettingsStore ?? appEnvironment.debugSettingsStore
                 let root = settingsView
@@ -160,6 +161,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     .environment(searchOpsCoordinator)
                     .environment(skillStore)
                     .environment(jobAppStore)
+                    .environment(titleSetStore)
                     .modelContainer(container)
                 hostingView = NSHostingView(rootView: AnyView(root))
             } else {

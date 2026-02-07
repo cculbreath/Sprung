@@ -5,17 +5,6 @@
 //
 import SwiftUI
 
-struct HeaderTextRow: View {
-    var body: some View {
-        HStack {
-            Text("Résumé Field Values")
-                .font(.headline)
-        }
-        .cornerRadius(5)
-        .padding(.vertical, 2)
-    }
-}
-
 /// Single-line text row with leading/trailing text
 /// Background color indicates AI status, not text color
 struct AlignedTextRow: View {

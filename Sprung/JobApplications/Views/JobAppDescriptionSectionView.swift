@@ -37,6 +37,7 @@ struct JobAppDescriptionSection: View {
 
                     JobAppSkillsPanel(
                         skillEvidence: requirements.skillEvidence,
+                        skillRecommendations: requirements.skillRecommendations,
                         hoveredSkill: $hoveredSkill,
                         selectedSkill: $selectedSkill,
                         isEditing: $isEditingSkills

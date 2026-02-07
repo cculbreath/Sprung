@@ -121,12 +121,14 @@ final class DiscoveryNetworkingCoordinator {
         using agentService: DiscoveryAgentService,
         sectors: [String],
         location: String,
+        candidateContext: String = "",
         daysAhead: Int = 14,
         streamCallback: (@MainActor @Sendable (DiscoveryStatus, String?) async -> Void)? = nil
     ) async throws {
         let result = try await agentService.discoverNetworkingEvents(
             sectors: sectors,
             location: location,
+            candidateContext: candidateContext,
             daysAhead: daysAhead,
             statusCallback: { status in
                 await streamCallback?(status, nil)

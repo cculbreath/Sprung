@@ -23,8 +23,4 @@ final class EventFeedbackStore: SwiftDataStore {
         )) ?? []
     }
 
-    func add(_ feedback: EventFeedback) {
-        modelContext.insert(feedback)
-        saveContext()
-    }
 }

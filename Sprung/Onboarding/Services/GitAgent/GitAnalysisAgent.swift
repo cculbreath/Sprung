@@ -593,7 +593,7 @@ class GitAnalysisAgent {
                     let skill = Skill(
                         canonical: card.proposedTitle,
                         atsVariants: card.technologies,
-                        category: .tools,  // Git analysis primarily finds tools/frameworks
+                        category: "Tools & Software",  // Git analysis primarily finds tools/frameworks
                         proficiency: .proficient,  // Default to proficient for demonstrated skills
                         evidence: evidence
                     )

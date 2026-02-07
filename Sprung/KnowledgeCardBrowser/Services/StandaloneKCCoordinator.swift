@@ -224,12 +224,13 @@ class StandaloneKCCoordinator {
         )
     }
 
-    /// Generate selected cards, apply enhancements, and persist skills.
+    /// Generate selected cards, apply enhancements, and optionally persist skills.
     func generateSelected(
         newCards: [KnowledgeCard],
         enhancements: [(proposal: KnowledgeCard, existing: KnowledgeCard)],
         artifacts: [JSON],
-        skillBank: SkillBank
+        skillBank: SkillBank,
+        persistSkills: Bool = true
     ) async throws -> (created: Int, enhanced: Int, skillsAdded: Int) {
         guard llmFacade != nil else {
             throw StandaloneKCError.llmNotConfigured
@@ -260,7 +261,7 @@ class StandaloneKCCoordinator {
 
         // Persist skills to SkillStore (directly approved, not pending)
         var skillsAdded = 0
-        if !skillBank.skills.isEmpty, let skillStore = skillStore {
+        if persistSkills, !skillBank.skills.isEmpty, let skillStore = skillStore {
             status = .persistingSkills(count: skillBank.skills.count)
 
             let newSkills = skillBank.skills.map { skill -> Skill in

@@ -11,6 +11,8 @@ struct ResumeSplitView: View {
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
     @Environment(ResStore.self) private var resStore: ResStore
     @Environment(AppEnvironment.self) private var appEnvironment: AppEnvironment
+    @Environment(TemplateStore.self) private var templateStore: TemplateStore
+    @Environment(KnowledgeCardStore.self) private var knowledgeCardStore: KnowledgeCardStore
 
     @Binding var isWide: Bool
     @Binding var tab: TabList
@@ -104,8 +106,12 @@ struct ResumeSplitView: View {
 
     // MARK: - Empty States
 
+    @State private var emptyStateTemplateID: UUID?
+
     private func noResumeState(selApp: JobApp) -> some View {
-        VStack(spacing: 0) {
+        let templates = templateStore.templates()
+
+        return VStack(spacing: 0) {
             ResumeBannerView(jobApp: selApp)
                 .frame(height: 32)
 
@@ -115,10 +121,58 @@ struct ResumeSplitView: View {
                     .fontWeight(.bold)
 
                 Text("Create a resume to customize it for this job application.")
+                    .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
-                    .padding(.horizontal)
+
+                VStack(spacing: 12) {
+                    Picker("Template", selection: $emptyStateTemplateID) {
+                        Text("Select a template").tag(nil as UUID?)
+                        ForEach(templates) { template in
+                            Text(template.name).tag(template.id as UUID?)
+                        }
+                    }
+                    .frame(width: 260)
+
+                    Button {
+                        guard
+                            let templateID = emptyStateTemplateID,
+                            let template = templates.first(where: { $0.id == templateID })
+                        else { return }
+                        if resStore.create(
+                            jobApp: selApp,
+                            sources: knowledgeCardStore.knowledgeCards,
+                            template: template
+                        ) != nil {
+                            refresh.toggle()
+                        }
+                    } label: {
+                        HStack {
+                            Image(systemName: "doc.badge.plus")
+                            Text("Create Resume")
+                        }
+                        .padding(.horizontal, 4)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
+                    .disabled(emptyStateTemplateID == nil)
+
+                    if templates.isEmpty {
+                        Button("Open Template Editor") {
+                            NotificationCenter.default.post(name: .showTemplateEditor, object: nil)
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                    }
+                }
+                .padding(.top, 8)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .onAppear {
+                if emptyStateTemplateID == nil {
+                    emptyStateTemplateID = templateStore.defaultTemplate()?.id
+                        ?? templates.first?.id
+                }
+            }
         }
     }
 

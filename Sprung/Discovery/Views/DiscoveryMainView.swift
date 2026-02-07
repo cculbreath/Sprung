@@ -135,7 +135,9 @@ struct DiscoveryMainView: View {
         case .sources:
             SourcesView(coordinator: coordinator, triggerDiscovery: $triggerSourceDiscovery)
         case .events:
-            EventsView(coordinator: coordinator, triggerEventDiscovery: $triggerEventDiscovery)
+            NavigationStack {
+                EventsView(coordinator: coordinator, triggerEventDiscovery: $triggerEventDiscovery)
+            }
         case .contacts:
             ContactsView(coordinator: coordinator)
         case .weeklyReview:

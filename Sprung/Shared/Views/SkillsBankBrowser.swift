@@ -16,6 +16,8 @@ struct SkillsBankBrowser: View {
     let skillStore: SkillStore?
     var llmFacade: LLMFacade?
 
+    @Environment(ArtifactRecordStore.self) private var artifactRecordStore
+
     @State private var expandedCategories: Set<String> = []
     @State private var expandedSkills: Set<UUID> = []
     @State private var searchText = ""
@@ -40,10 +42,16 @@ struct SkillsBankBrowser: View {
     @State private var editingSkillId: UUID?
     @State private var editingSkillName: String = ""
     @State private var editingSkillProficiency: Proficiency = .proficient
+    @State private var editingSkillCategory: String = ""
+    @State private var editingSkillCustomCategory: String = ""
 
     // Refine feature state
     @State private var showRefinePopover = false
     @State private var refineInstruction = ""
+
+    // Sort debounce after proficiency cycling
+    @State private var sortFrozenOrder: [UUID: Int] = [:]
+    @State private var sortUnfreezeTask: Task<Void, Never>?
 
     // Add skill feature state (inline)
     @State private var addingToCategory: String?
@@ -51,11 +59,23 @@ struct SkillsBankBrowser: View {
     @State private var newSkillProficiency: Proficiency = .proficient
     @State private var isAddingSkill = false
 
+    // New category creation state
+    @State private var isCreatingCategory = false
+    @State private var newCategoryName = ""
+
+    // Category rename state
+    @State private var renamingCategory: String?
+    @State private var renamingCategoryText = ""
+
+    // Extraction state
+    @State private var showExtractionSheet = false
+
     private enum ProcessingOperation {
         case deduplication
         case atsExpansion
         case refine
         case curation
+        case extraction
     }
 
     /// All skills from the store
@@ -84,7 +104,12 @@ struct SkillsBankBrowser: View {
     }
 
     private var sortedCategories: [String] {
-        groupedSkills.keys.sorted()
+        var categories = Set(groupedSkills.keys)
+        // Include the new category being added to (even if empty)
+        if let adding = addingToCategory {
+            categories.insert(adding)
+        }
+        return categories.sorted()
     }
 
     var body: some View {
@@ -103,6 +128,26 @@ struct SkillsBankBrowser: View {
                         LazyVStack(spacing: 12) {
                             ForEach(sortedCategories, id: \.self) { category in
                                 categorySection(category)
+                            }
+
+                            // New category creation
+                            if isCreatingCategory {
+                                newCategoryRow
+                            } else {
+                                Button {
+                                    isCreatingCategory = true
+                                    newCategoryName = ""
+                                } label: {
+                                    HStack(spacing: 6) {
+                                        Image(systemName: "plus.circle")
+                                            .font(.caption)
+                                        Text("New Category")
+                                            .font(.caption.weight(.medium))
+                                    }
+                                    .foregroundStyle(.secondary)
+                                    .padding(.vertical, 4)
+                                }
+                                .buttonStyle(.plain)
                             }
                         }
                         .padding(20)
@@ -140,6 +185,28 @@ struct SkillsBankBrowser: View {
                     showCurationReview = false
                     curationPlan = nil
                 }
+            }
+        }
+        .sheet(isPresented: $showExtractionSheet) {
+            if let store = skillStore, let facade = llmFacade {
+                SkillExtractionSheet(
+                    skillStore: store,
+                    llmFacade: facade,
+                    artifactRecordStore: artifactRecordStore,
+                    onComplete: { extractedCount, ranPostProcessing, extractionCurationPlan in
+                        lastResult = SkillsProcessingResult(
+                            operation: "Extraction",
+                            skillsProcessed: extractedCount,
+                            skillsModified: extractedCount,
+                            details: "Extracted \(extractedCount) skills from artifacts\(ranPostProcessing ? " (with post-processing)" : "")"
+                        )
+                        showResultAlert = true
+                        if let plan = extractionCurationPlan {
+                            curationPlan = plan
+                            showCurationReview = true
+                        }
+                    }
+                )
             }
         }
     }
@@ -305,8 +372,8 @@ struct SkillsBankBrowser: View {
                 .background(Color(nsColor: .controlBackgroundColor))
                 .clipShape(RoundedRectangle(cornerRadius: 8))
 
-                // Action buttons (only show if we have skills and facade)
-                if !allSkills.isEmpty && llmFacade != nil {
+                // Action buttons (show if we have facade; Extract always visible)
+                if llmFacade != nil {
                     actionButtons
                 }
             }
@@ -328,6 +395,21 @@ struct SkillsBankBrowser: View {
 
     private var actionButtons: some View {
         HStack(spacing: 8) {
+            // Extract from artifacts button (always visible)
+            Button(action: { showExtractionSheet = true }) {
+                HStack(spacing: 6) {
+                    Image(systemName: "doc.text.magnifyingglass")
+                    Text("Extract")
+                }
+                .font(.caption.weight(.medium))
+            }
+            .buttonStyle(.bordered)
+            .disabled(isProcessing)
+            .help("Extract skills from archived documents. Select artifacts and run AI-powered skill extraction.")
+
+            // Processing buttons (only when skills exist)
+            if !allSkills.isEmpty {
+
             // Consolidate duplicates button
             Button(action: consolidateDuplicates) {
                 HStack(spacing: 6) {
@@ -344,7 +426,7 @@ struct SkillsBankBrowser: View {
             }
             .buttonStyle(.bordered)
             .disabled(isProcessing)
-            .help("Use AI to identify and merge duplicate skills")
+            .help("Find and merge semantically equivalent skills (e.g., \"JavaScript\" and \"Javascript\"). Applies changes immediately.")
 
             // Add ATS variants button
             Button(action: expandATSVariants) {
@@ -362,7 +444,7 @@ struct SkillsBankBrowser: View {
             }
             .buttonStyle(.bordered)
             .disabled(isProcessing)
-            .help("Use AI to add ATS-friendly synonym variants to all skills")
+            .help("Generate ATS-friendly synonyms for each skill (e.g., \"JavaScript\" → JS, ECMAScript). Synonyms are included in resumes to improve keyword matching.")
 
             // Refine/cleanup button with popover
             Button {
@@ -382,7 +464,7 @@ struct SkillsBankBrowser: View {
             }
             .buttonStyle(.bordered)
             .disabled(isProcessing)
-            .help("Use AI to refine skill names with custom instructions")
+            .help("Rename skills using your own instructions (e.g., \"Limit to 3 words\", \"Use industry abbreviations\"). Opens a prompt where you describe the changes.")
             .popover(isPresented: $showRefinePopover, arrowEdge: .bottom) {
                 refinePopoverContent
             }
@@ -403,7 +485,9 @@ struct SkillsBankBrowser: View {
             }
             .buttonStyle(.bordered)
             .disabled(isProcessing)
-            .help("AI-powered dedup, category rebalancing, and over-granularity flagging")
+            .help("Comprehensive AI review: merges duplicates, rebalances categories, and flags overly granular entries. Presents a plan for your approval before making changes.")
+
+            } // end if !allSkills.isEmpty
         }
     }
 
@@ -677,12 +761,74 @@ struct SkillsBankBrowser: View {
         }
     }
 
+    // MARK: - New Category Creation
+
+    private var newCategoryRow: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "folder.badge.plus")
+                .font(.title3)
+                .foregroundStyle(.secondary)
+                .frame(width: 24)
+
+            TextField("Category name…", text: $newCategoryName)
+                .font(.subheadline.weight(.medium))
+                .textFieldStyle(.plain)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 6)
+                .background(Color(.textBackgroundColor))
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .stroke(Color.accentColor, lineWidth: 1)
+                )
+                .onSubmit { commitNewCategory() }
+
+            Button {
+                commitNewCategory()
+            } label: {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundStyle(.green)
+            }
+            .buttonStyle(.plain)
+            .disabled(newCategoryName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+
+            Button {
+                isCreatingCategory = false
+                newCategoryName = ""
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+
+            Spacer()
+        }
+        .padding(12)
+        .background(Color(nsColor: .controlBackgroundColor))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Color(nsColor: .separatorColor), lineWidth: 1)
+        )
+    }
+
+    private func commitNewCategory() {
+        let trimmed = newCategoryName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        isCreatingCategory = false
+        newCategoryName = ""
+        expandedCategories.insert(trimmed)
+        startAddingSkill(to: trimmed)
+    }
+
     // MARK: - Inline Editing
 
     private func startEditing(_ skill: Skill) {
         editingSkillId = skill.id
         editingSkillName = skill.canonical
         editingSkillProficiency = skill.proficiency
+        editingSkillCategory = skill.category
+        editingSkillCustomCategory = ""
     }
 
     private func commitEdit() {
@@ -700,6 +846,14 @@ struct SkillsBankBrowser: View {
         }
         if skill.proficiency != editingSkillProficiency {
             skill.proficiency = editingSkillProficiency
+            didChange = true
+        }
+        let resolvedCategory = editingSkillCategory == "__custom__"
+            ? editingSkillCustomCategory.trimmingCharacters(in: .whitespacesAndNewlines)
+            : editingSkillCategory
+        if !resolvedCategory.isEmpty && resolvedCategory != skill.category {
+            skill.category = resolvedCategory
+            expandedCategories.insert(resolvedCategory)
             didChange = true
         }
         if didChange {
@@ -722,6 +876,8 @@ struct SkillsBankBrowser: View {
     private func cancelEdit() {
         editingSkillId = nil
         editingSkillName = ""
+        editingSkillCategory = ""
+        editingSkillCustomCategory = ""
     }
 
     // MARK: - Existing UI Components
@@ -765,23 +921,36 @@ struct SkillsBankBrowser: View {
             HStack(spacing: 0) {
                 Button(action: { toggleCategory(category) }) {
                     HStack {
+                        Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .frame(width: 16)
+
                         Image(systemName: SkillCategoryUtils.icon(for: category))
                             .font(.title3)
                             .foregroundStyle(colorForCategory(category))
                             .frame(width: 24)
 
-                        Text(category)
-                            .font(.headline)
+                        if renamingCategory == category {
+                            TextField("Category name", text: $renamingCategoryText)
+                                .textFieldStyle(.plain)
+                                .font(.headline)
+                                .padding(.horizontal, 4)
+                                .padding(.vertical, 2)
+                                .background(Color(.textBackgroundColor), in: RoundedRectangle(cornerRadius: 4))
+                                .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(Color.accentColor.opacity(0.5), lineWidth: 1))
+                                .onSubmit { commitCategoryRename(from: category) }
+                                .onExitCommand { renamingCategory = nil }
+                        } else {
+                            Text(category)
+                                .font(.headline)
+                        }
 
                         Text("(\(skills.count))")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
 
                         Spacer()
-
-                        Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
                     }
                 }
                 .buttonStyle(.plain)
@@ -801,17 +970,29 @@ struct SkillsBankBrowser: View {
             }
             .padding(12)
             .background(Color(nsColor: .controlBackgroundColor))
+            .contextMenu {
+                Button("Rename") {
+                    print("[SkillsBankBrowser] Rename triggered for category: \(category)")
+                    renamingCategoryText = category
+                    renamingCategory = category
+                }
+            }
 
             // Skills list (when expanded)
             if isExpanded {
                 VStack(spacing: 1) {
-                    ForEach(skills.sorted { $0.proficiency.sortOrder < $1.proficiency.sortOrder }) { skill in
-                        skillRow(skill)
-                    }
-
                     // Inline add row when adding to this category
                     if addingToCategory == category {
                         inlineAddSkillRow(for: category)
+                    }
+
+                    ForEach(skills.sorted { a, b in
+                        if !sortFrozenOrder.isEmpty {
+                            return (sortFrozenOrder[a.id] ?? Int.max) < (sortFrozenOrder[b.id] ?? Int.max)
+                        }
+                        return a.proficiency.sortOrder < b.proficiency.sortOrder
+                    }) { skill in
+                        skillRow(skill)
                     }
                 }
                 .padding(.leading, 36)
@@ -844,6 +1025,9 @@ struct SkillsBankBrowser: View {
                         .fill(colorFor(editingSkillId == skill.id ? editingSkillProficiency : skill.proficiency))
                         .frame(width: 8, height: 8)
                         .padding(.top, 6)
+                        .onTapGesture {
+                            cycleProficiency(skill)
+                        }
                 }
 
                 VStack(alignment: .leading, spacing: 4) {
@@ -854,6 +1038,9 @@ struct SkillsBankBrowser: View {
                             Circle()
                                 .fill(colorFor(editingSkillId == skill.id ? editingSkillProficiency : skill.proficiency))
                                 .frame(width: 8, height: 8)
+                                .onTapGesture {
+                                    cycleProficiency(skill)
+                                }
                         }
 
                         if editingSkillId == skill.id {
@@ -920,6 +1107,38 @@ struct SkillsBankBrowser: View {
                                     .controlSize(.small)
                                     .frame(maxWidth: 200)
                                 }
+
+                                // Category picker
+                                HStack(spacing: 8) {
+                                    Text("Category:")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+
+                                    Picker("", selection: $editingSkillCategory) {
+                                        ForEach(sortedCategories, id: \.self) { cat in
+                                            Text(cat).tag(cat)
+                                        }
+                                        Divider()
+                                        Text("New Category…").tag("__custom__")
+                                    }
+                                    .controlSize(.small)
+                                    .frame(maxWidth: 200)
+
+                                    if editingSkillCategory == "__custom__" {
+                                        TextField("Category name", text: $editingSkillCustomCategory)
+                                            .font(.caption)
+                                            .textFieldStyle(.plain)
+                                            .padding(.horizontal, 6)
+                                            .padding(.vertical, 2)
+                                            .background(Color(.textBackgroundColor))
+                                            .clipShape(RoundedRectangle(cornerRadius: 4))
+                                            .overlay(
+                                                RoundedRectangle(cornerRadius: 4)
+                                                    .stroke(Color.accentColor, lineWidth: 1)
+                                            )
+                                            .frame(maxWidth: 160)
+                                    }
+                                }
                             }
                         } else {
                             // Display mode - double-click to edit
@@ -970,7 +1189,7 @@ struct SkillsBankBrowser: View {
                         .clipShape(Capsule())
                 }
 
-                // Proficiency badge
+                // Proficiency badge - click to cycle
                 Text(skill.proficiency.rawValue.capitalized)
                     .font(.caption2.weight(.medium))
                     .padding(.horizontal, 8)
@@ -978,6 +1197,9 @@ struct SkillsBankBrowser: View {
                     .background(colorFor(skill.proficiency).opacity(0.15))
                     .foregroundStyle(colorFor(skill.proficiency))
                     .clipShape(Capsule())
+                    .onTapGesture {
+                        cycleProficiency(skill)
+                    }
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
@@ -1022,6 +1244,32 @@ struct SkillsBankBrowser: View {
         .background(Color(nsColor: .windowBackgroundColor))
     }
 
+    private func cycleProficiency(_ skill: Skill) {
+        // Freeze current sort order before changing proficiency
+        if sortFrozenOrder.isEmpty {
+            let allSkills = groupedSkills.values.flatMap { $0 }
+            let sorted = allSkills.sorted { $0.proficiency.sortOrder < $1.proficiency.sortOrder }
+            sortFrozenOrder = Dictionary(uniqueKeysWithValues: sorted.enumerated().map { ($1.id, $0) })
+        }
+
+        switch skill.proficiency {
+        case .familiar: skill.proficiency = .proficient
+        case .proficient: skill.proficiency = .expert
+        case .expert: skill.proficiency = .familiar
+        }
+        skillStore?.update(skill)
+
+        // Reset debounce timer
+        sortUnfreezeTask?.cancel()
+        sortUnfreezeTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(2.5))
+            guard !Task.isCancelled else { return }
+            withAnimation(.easeInOut(duration: 0.35)) {
+                sortFrozenOrder = [:]
+            }
+        }
+    }
+
     private func toggleCategory(_ category: String) {
         withAnimation(.easeInOut(duration: 0.2)) {
             if expandedCategories.contains(category) {
@@ -1030,6 +1278,35 @@ struct SkillsBankBrowser: View {
                 expandedCategories.insert(category)
             }
         }
+    }
+
+    private func commitCategoryRename(from oldCategory: String) {
+        let trimmed = renamingCategoryText.trimmingCharacters(in: .whitespacesAndNewlines)
+        print("[SkillsBankBrowser] commitCategoryRename called: '\(oldCategory)' -> '\(trimmed)'")
+        guard !trimmed.isEmpty, trimmed != oldCategory, let store = skillStore else {
+            print("[SkillsBankBrowser] commitCategoryRename: guard failed (empty=\(trimmed.isEmpty), same=\(trimmed == oldCategory), store=\(skillStore != nil))")
+            renamingCategory = nil
+            return
+        }
+
+        let skillsToUpdate = store.skills.filter { $0.category == oldCategory }
+        print("[SkillsBankBrowser] Renaming \(skillsToUpdate.count) skills from '\(oldCategory)' to '\(trimmed)'")
+        guard let first = skillsToUpdate.first else {
+            print("[SkillsBankBrowser] No skills found for category '\(oldCategory)'")
+            renamingCategory = nil
+            return
+        }
+        for skill in skillsToUpdate {
+            skill.category = trimmed
+        }
+        store.update(first) // saveContext persists all mutations, changeVersion triggers UI refresh
+
+        // Update expanded state to track the new name
+        if expandedCategories.remove(oldCategory) != nil {
+            expandedCategories.insert(trimmed)
+        }
+
+        renamingCategory = nil
     }
 
     /// Stable color for a category based on hash of its name.
@@ -1102,8 +1379,8 @@ struct SkillsBankBrowser: View {
 
     private func colorFor(_ proficiency: Proficiency) -> Color {
         switch proficiency {
-        case .expert: return .green
-        case .proficient: return .blue
+        case .expert: return .blue
+        case .proficient: return .green
         case .familiar: return .orange
         }
     }

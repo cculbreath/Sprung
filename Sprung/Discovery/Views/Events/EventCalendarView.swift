@@ -168,7 +168,7 @@ struct EventCalendarView: View {
                                         EventPrepView(event: event, coordinator: coordinator)
                                     }
                                 } label: {
-                                    EventRowView(event: event)
+                                    EventRowView(event: event, store: coordinator.eventStore)
                                 }
                                 .contextMenu {
                                     Button(role: .destructive) {

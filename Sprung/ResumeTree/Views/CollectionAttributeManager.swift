@@ -3,7 +3,6 @@
 //  Sprung
 //
 //  Manages collection attribute modes for AI review.
-//  Extracted from NodeHeaderView for single responsibility.
 //
 
 import Foundation
