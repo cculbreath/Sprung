@@ -6,6 +6,42 @@
 //
 
 import Foundation
+import SwiftUI
+
+// MARK: - AI Review Mode
+
+enum AIReviewMode {
+    case bundle       // Purple - all together across entries
+    case iterate      // Indigo - each entry separately
+    case solo         // Teal - just this single node
+    case containsSolo // Contains a solo child (outline only, no icon)
+    case included     // Child of a reviewed container
+    case off          // Gray - disabled
+
+    var color: Color {
+        switch self {
+        case .bundle: return .purple
+        case .iterate: return .indigo
+        case .solo: return .teal
+        case .containsSolo: return .teal
+        case .included: return .indigo
+        case .off: return .gray
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .bundle: return "circle.hexagongrid.circle"
+        case .iterate: return "film.stack"
+        case .solo: return "target"
+        case .containsSolo: return "target"
+        case .included: return "target"
+        case .off: return "sparkles"
+        }
+    }
+}
+
+// MARK: - Collection Attribute Manager
 
 /// Manages collection attribute modes for AI review
 @MainActor
