@@ -48,8 +48,7 @@ final class TargetingPlanService {
             let plan = try await llmFacade.executeFlexibleJSON(
                 prompt: prompt,
                 modelId: modelId,
-                as: TargetingPlan.self,
-                temperature: 0.4
+                as: TargetingPlan.self
             )
             Logger.info("[TargetingPlan] Generated plan with \(plan.emphasisThemes.count) themes, \(plan.workEntryGuidance.count) work entries, \(plan.lateralConnections.count) lateral connections", category: .ai)
             return plan

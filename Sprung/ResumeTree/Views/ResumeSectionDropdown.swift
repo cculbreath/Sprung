@@ -40,18 +40,6 @@ struct ResumeSectionDropdown: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Section label
-            Text("Resume Content")
-                .font(.caption)
-                .fontWeight(.medium)
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 12)
-                .padding(.top, 8)
-                .padding(.bottom, 4)
-
-            Divider()
-                .padding(.horizontal, 8)
-
             // Navigation row
             ZStack {
                 // Centered: nav buttons + picker

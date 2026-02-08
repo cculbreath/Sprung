@@ -33,22 +33,19 @@ struct LLMRequestBuilder {
     /// Build parameters for a simple text request
     static func buildTextRequest(
         prompt: String,
-        modelId: String,
-        temperature: Double
+        modelId: String
     ) -> ChatCompletionParameters {
         let message = LLMMessage.text(role: .user, content: prompt)
         return ChatCompletionParameters(
             messages: [message],
-            model: .custom(modelId),
-            temperature: temperature
+            model: .custom(modelId)
         )
     }
     /// Build parameters for a request with image inputs
     static func buildVisionRequest(
         prompt: String,
         modelId: String,
-        images: [Data],
-        temperature: Double
+        images: [Data]
     ) -> ChatCompletionParameters {
         // Build content parts
         var contentParts: [ChatCompletionParameters.Message.ContentType.MessageContent] = [
@@ -69,8 +66,7 @@ struct LLMRequestBuilder {
         )
         return ChatCompletionParameters(
             messages: [message],
-            model: .custom(modelId),
-            temperature: temperature
+            model: .custom(modelId)
         )
     }
     /// Build parameters for a structured JSON request with optional schema
@@ -78,7 +74,6 @@ struct LLMRequestBuilder {
         prompt: String,
         modelId: String,
         responseType: T.Type,
-        temperature: Double,
         jsonSchema: JSONSchema? = nil
     ) -> ChatCompletionParameters {
         let message = LLMMessage.text(role: .user, content: prompt)
@@ -92,16 +87,14 @@ struct LLMRequestBuilder {
             return ChatCompletionParameters(
                 messages: [message],
                 model: .custom(modelId),
-                responseFormat: .jsonSchema(responseFormatSchema),
-                temperature: temperature
+                responseFormat: .jsonSchema(responseFormatSchema)
             )
         } else {
             Logger.debug("📝 Using basic JSON object mode (no schema enforcement)")
             return ChatCompletionParameters(
                 messages: [message],
                 model: .custom(modelId),
-                responseFormat: .jsonObject,
-                temperature: temperature
+                responseFormat: .jsonObject
             )
         }
     }
@@ -110,8 +103,7 @@ struct LLMRequestBuilder {
         prompt: String,
         modelId: String,
         images: [Data],
-        responseType: T.Type,
-        temperature: Double
+        responseType: T.Type
     ) -> ChatCompletionParameters {
         // Build content parts
         var contentParts: [ChatCompletionParameters.Message.ContentType.MessageContent] = [
@@ -133,8 +125,7 @@ struct LLMRequestBuilder {
         return ChatCompletionParameters(
             messages: [message],
             model: .custom(modelId),
-            responseFormat: .jsonObject,
-            temperature: temperature
+            responseFormat: .jsonObject
         )
     }
     /// Build parameters for a flexible JSON request (uses structured output when available)
@@ -142,7 +133,6 @@ struct LLMRequestBuilder {
         prompt: String,
         modelId: String,
         responseType: T.Type,
-        temperature: Double,
         jsonSchema: JSONSchema? = nil,
         supportsStructuredOutput: Bool,
         shouldAvoidJSONSchema: Bool
@@ -160,8 +150,7 @@ struct LLMRequestBuilder {
                 return ChatCompletionParameters(
                     messages: [message],
                     model: .custom(modelId),
-                    responseFormat: .jsonSchema(responseFormatSchema),
-                    temperature: temperature
+                    responseFormat: .jsonSchema(responseFormatSchema)
                 )
             } else {
                 // Use basic JSON object format (still structured but no schema)
@@ -169,8 +158,7 @@ struct LLMRequestBuilder {
                 return ChatCompletionParameters(
                     messages: [message],
                     model: .custom(modelId),
-                    responseFormat: .jsonObject,
-                    temperature: temperature
+                    responseFormat: .jsonObject
                 )
             }
         } else {
@@ -179,22 +167,19 @@ struct LLMRequestBuilder {
             Logger.debug("📝 Using basic mode with prompt-based JSON for model: \(modelId) (\(reason))")
             return ChatCompletionParameters(
                 messages: [message],
-                model: .custom(modelId),
-                temperature: temperature
+                model: .custom(modelId)
             )
         }
     }
     /// Build parameters for conversation requests
     static func buildConversationRequest(
         messages: [LLMMessageDTO],
-        modelId: String,
-        temperature: Double
+        modelId: String
     ) -> ChatCompletionParameters {
         let vendorMessages = LLMVendorMapper.vendorMessages(from: messages)
         return ChatCompletionParameters(
             messages: vendorMessages,
-            model: .custom(modelId),
-            temperature: temperature
+            model: .custom(modelId)
         )
     }
     /// Build parameters for structured conversation requests
@@ -202,7 +187,6 @@ struct LLMRequestBuilder {
         messages: [LLMMessageDTO],
         modelId: String,
         responseType: T.Type,
-        temperature: Double,
         jsonSchema: JSONSchema? = nil
     ) -> ChatCompletionParameters {
         let vendorMessages = LLMVendorMapper.vendorMessages(from: messages)
@@ -216,16 +200,14 @@ struct LLMRequestBuilder {
             return ChatCompletionParameters(
                 messages: vendorMessages,
                 model: .custom(modelId),
-                responseFormat: .jsonSchema(responseFormatSchema),
-                temperature: temperature
+                responseFormat: .jsonSchema(responseFormatSchema)
             )
         } else {
             Logger.debug("📝 Conversation using basic JSON object mode (no schema enforcement)")
             return ChatCompletionParameters(
                 messages: vendorMessages,
                 model: .custom(modelId),
-                responseFormat: .jsonObject,
-                temperature: temperature
+                responseFormat: .jsonObject
             )
         }
     }
@@ -236,7 +218,6 @@ struct LLMRequestBuilder {
         modelId: String,
         tools: [ChatCompletionParameters.Tool],
         toolChoice: ToolChoice?,
-        temperature: Double,
         reasoningEffort: String? = nil,
         maxTokens: Int? = nil
     ) -> ChatCompletionParameters {
@@ -247,7 +228,6 @@ struct LLMRequestBuilder {
             toolChoice: toolChoice,
             tools: tools,
             parallelToolCalls: true,
-            temperature: temperature,
             usage: .init(include: true)  // Enable OpenRouter token tracking
         )
         params.maxTokens = maxTokens

@@ -22,7 +22,6 @@ actor OpenAIResponsesConversationService: LLMStreamingConversationService {
         let modelId: String
     }
     private let service: OpenAIService
-    private let defaultTemperature: Double = 1.0
     private var conversations: [UUID: ConversationState] = [:]
     private var onboardingToolSchemas: [Tool] { [] }
     init(service: OpenAIService) {
@@ -31,14 +30,12 @@ actor OpenAIResponsesConversationService: LLMStreamingConversationService {
     func startConversation(
         systemPrompt: String?,
         userMessage: String,
-        modelId: String,
-        temperature: Double?
+        modelId: String
     ) async throws -> (UUID, String) {
         let parameters = makeParameters(
             systemPrompt: systemPrompt,
             userMessage: userMessage,
             modelId: modelId,
-            temperature: temperature,
             state: nil,
             images: [],
             streaming: false
@@ -62,8 +59,7 @@ actor OpenAIResponsesConversationService: LLMStreamingConversationService {
         userMessage: String,
         modelId: String,
         conversationId: UUID,
-        images: [Data],
-        temperature: Double?
+        images: [Data]
     ) async throws -> String {
         guard var state = conversations[conversationId] else {
             throw LLMError.clientError("Conversation not found")
@@ -75,7 +71,6 @@ actor OpenAIResponsesConversationService: LLMStreamingConversationService {
             systemPrompt: state.systemPrompt,
             userMessage: userMessage,
             modelId: modelId,
-            temperature: temperature,
             state: state,
             images: images,
             streaming: false
@@ -92,14 +87,12 @@ actor OpenAIResponsesConversationService: LLMStreamingConversationService {
         systemPrompt: String?,
         userMessage: String,
         modelId: String,
-        temperature: Double?,
         images: [Data]
     ) async throws -> (UUID, AsyncThrowingStream<LLMStreamChunkDTO, Error>) {
         let parameters = makeParameters(
             systemPrompt: systemPrompt,
             userMessage: userMessage,
             modelId: modelId,
-            temperature: temperature,
             state: nil,
             images: images,
             streaming: true
@@ -118,8 +111,7 @@ actor OpenAIResponsesConversationService: LLMStreamingConversationService {
         userMessage: String,
         modelId: String,
         conversationId: UUID,
-        images: [Data],
-        temperature: Double?
+        images: [Data]
     ) async throws -> AsyncThrowingStream<LLMStreamChunkDTO, Error> {
         guard let state = conversations[conversationId] else {
             throw LLMError.clientError("Conversation not found")
@@ -131,7 +123,6 @@ actor OpenAIResponsesConversationService: LLMStreamingConversationService {
             systemPrompt: state.systemPrompt,
             userMessage: userMessage,
             modelId: modelId,
-            temperature: temperature,
             state: state,
             images: images,
             streaming: true
@@ -149,7 +140,6 @@ actor OpenAIResponsesConversationService: LLMStreamingConversationService {
         systemPrompt: String?,
         userMessage: String,
         modelId: String,
-        temperature: Double?,
         state: ConversationState?,
         images: [Data],
         streaming: Bool
@@ -174,7 +164,6 @@ actor OpenAIResponsesConversationService: LLMStreamingConversationService {
             instructions: systemPrompt,
             previousResponseId: nil,
             store: true,
-            temperature: temperature ?? defaultTemperature,
             text: TextConfiguration(format: .text)
         )
         if let state, let remoteConversationId = state.remoteConversationId {

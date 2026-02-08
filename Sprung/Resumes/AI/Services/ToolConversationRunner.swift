@@ -93,8 +93,7 @@ class ToolConversationRunner {
                 messages: messages,
                 tools: tools,
                 toolChoice: currentToolChoice,
-                modelId: modelId,
-                temperature: 0.7
+                modelId: modelId
             )
 
             guard let choice = response.choices?.first,

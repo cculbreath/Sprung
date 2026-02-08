@@ -108,30 +108,28 @@ final class LLMFacade {
     func executeText(
         prompt: String,
         modelId: String,
-        temperature: Double? = nil,
         backend: Backend = .openRouter
     ) async throws -> String {
         if backend == .openRouter {
             try await capabilityValidator.validate(modelId: modelId, requires: [])
-            return try await client.executeText(prompt: prompt, modelId: modelId, temperature: temperature)
+            return try await client.executeText(prompt: prompt, modelId: modelId)
         }
         let altClient = try resolveClient(for: backend)
-        return try await altClient.executeText(prompt: prompt, modelId: modelId, temperature: temperature)
+        return try await altClient.executeText(prompt: prompt, modelId: modelId)
     }
 
     func executeTextWithImages(
         prompt: String,
         modelId: String,
         images: [Data],
-        temperature: Double? = nil,
         backend: Backend = .openRouter
     ) async throws -> String {
         if backend == .openRouter {
             try await capabilityValidator.validate(modelId: modelId, requires: [.vision])
-            return try await client.executeTextWithImages(prompt: prompt, modelId: modelId, images: images, temperature: temperature)
+            return try await client.executeTextWithImages(prompt: prompt, modelId: modelId, images: images)
         }
         let altClient = try resolveClient(for: backend)
-        return try await altClient.executeTextWithImages(prompt: prompt, modelId: modelId, images: images, temperature: temperature)
+        return try await altClient.executeTextWithImages(prompt: prompt, modelId: modelId, images: images)
     }
 
     // MARK: - Structured Execution
@@ -140,15 +138,14 @@ final class LLMFacade {
         prompt: String,
         modelId: String,
         as type: T.Type,
-        temperature: Double? = nil,
         backend: Backend = .openRouter
     ) async throws -> T {
         if backend == .openRouter {
             try await capabilityValidator.validate(modelId: modelId, requires: [.structuredOutput])
-            return try await client.executeStructured(prompt: prompt, modelId: modelId, as: type, temperature: temperature)
+            return try await client.executeStructured(prompt: prompt, modelId: modelId, as: type)
         }
         let altClient = try resolveClient(for: backend)
-        return try await altClient.executeStructured(prompt: prompt, modelId: modelId, as: type, temperature: temperature)
+        return try await altClient.executeStructured(prompt: prompt, modelId: modelId, as: type)
     }
 
     func executeStructuredWithImages<T: Codable & Sendable>(
@@ -156,15 +153,14 @@ final class LLMFacade {
         modelId: String,
         images: [Data],
         as type: T.Type,
-        temperature: Double? = nil,
         backend: Backend = .openRouter
     ) async throws -> T {
         if backend == .openRouter {
             try await capabilityValidator.validate(modelId: modelId, requires: [.vision, .structuredOutput])
-            return try await client.executeStructuredWithImages(prompt: prompt, modelId: modelId, images: images, as: type, temperature: temperature)
+            return try await client.executeStructuredWithImages(prompt: prompt, modelId: modelId, images: images, as: type)
         }
         let altClient = try resolveClient(for: backend)
-        return try await altClient.executeStructuredWithImages(prompt: prompt, modelId: modelId, images: images, as: type, temperature: temperature)
+        return try await altClient.executeStructuredWithImages(prompt: prompt, modelId: modelId, images: images, as: type)
     }
 
     func executeStructuredWithSchema<T: Codable & Sendable>(
@@ -173,15 +169,14 @@ final class LLMFacade {
         as type: T.Type,
         schema: JSONSchema,
         schemaName: String,
-        temperature: Double? = nil,
         backend: Backend = .openRouter
     ) async throws -> T {
         if backend == .openRouter {
             try await capabilityValidator.validate(modelId: modelId, requires: [.structuredOutput])
-            return try await client.executeStructuredWithSchema(prompt: prompt, modelId: modelId, as: type, schema: schema, schemaName: schemaName, temperature: temperature)
+            return try await client.executeStructuredWithSchema(prompt: prompt, modelId: modelId, as: type, schema: schema, schemaName: schemaName)
         }
         let altClient = try resolveClient(for: backend)
-        return try await altClient.executeStructuredWithSchema(prompt: prompt, modelId: modelId, as: type, schema: schema, schemaName: schemaName, temperature: temperature)
+        return try await altClient.executeStructuredWithSchema(prompt: prompt, modelId: modelId, as: type, schema: schema, schemaName: schemaName)
     }
 
     func executeStructuredWithDictionarySchema<T: Codable & Sendable>(
@@ -190,7 +185,6 @@ final class LLMFacade {
         as type: T.Type,
         schema: [String: Any],
         schemaName: String,
-        temperature: Double? = nil,
         maxOutputTokens: Int = 32768,
         keyDecodingStrategy: JSONDecoder.KeyDecodingStrategy = .useDefaultKeys,
         backend: Backend = .openRouter,
@@ -204,7 +198,6 @@ final class LLMFacade {
             let jsonString = try await specializedAPIs.generateStructuredJSON(
                 prompt: prompt,
                 modelId: modelId,
-                temperature: temperature ?? 0.2,
                 maxOutputTokens: maxOutputTokens,
                 jsonSchema: schema,
                 thinkingLevel: thinkingLevel
@@ -224,8 +217,7 @@ final class LLMFacade {
                 userPrompt: prompt,
                 modelId: modelId,
                 responseType: type,
-                schema: schema,
-                temperature: temperature
+                schema: schema
             )
 
         case .openRouter, .openAI:
@@ -236,7 +228,6 @@ final class LLMFacade {
                 as: type,
                 schema: jsonSchema,
                 schemaName: schemaName,
-                temperature: temperature,
                 backend: backend
             )
         }
@@ -246,7 +237,6 @@ final class LLMFacade {
         prompt: String,
         modelId: String,
         as type: T.Type,
-        temperature: Double? = nil,
         jsonSchema: JSONSchema? = nil,
         backend: Backend = .openRouter
     ) async throws -> T {
@@ -257,7 +247,6 @@ final class LLMFacade {
                 prompt: prompt,
                 modelId: modelId,
                 responseType: type,
-                temperature: temperature,
                 jsonSchema: jsonSchema
             )
         }
@@ -265,8 +254,7 @@ final class LLMFacade {
         return try await altClient.executeStructured(
             prompt: prompt,
             modelId: modelId,
-            as: type,
-            temperature: temperature
+            as: type
         )
     }
 
@@ -274,7 +262,6 @@ final class LLMFacade {
         prompt: String,
         modelId: String,
         as type: T.Type,
-        temperature: Double? = nil,
         reasoning: OpenRouterReasoning? = nil,
         jsonSchema: JSONSchema? = nil,
         backend: Backend = .openRouter
@@ -290,7 +277,6 @@ final class LLMFacade {
             prompt: prompt,
             modelId: modelId,
             responseType: type,
-            temperature: temperature,
             reasoning: reasoning,
             jsonSchema: jsonSchema
         )
@@ -302,7 +288,6 @@ final class LLMFacade {
         systemPrompt: String? = nil,
         userMessage: String,
         modelId: String,
-        temperature: Double? = nil,
         reasoning: OpenRouterReasoning? = nil,
         jsonSchema: JSONSchema? = nil
     ) async throws -> LLMStreamingHandle {
@@ -310,7 +295,6 @@ final class LLMFacade {
             systemPrompt: systemPrompt,
             userMessage: userMessage,
             modelId: modelId,
-            temperature: temperature,
             reasoning: reasoning,
             jsonSchema: jsonSchema,
             backend: .openRouter
@@ -321,7 +305,6 @@ final class LLMFacade {
         systemPrompt: String? = nil,
         userMessage: String,
         modelId: String,
-        temperature: Double? = nil,
         reasoning: OpenRouterReasoning? = nil,
         jsonSchema: JSONSchema? = nil,
         backend: Backend,
@@ -336,7 +319,6 @@ final class LLMFacade {
                 systemPrompt: systemPrompt,
                 userMessage: userMessage,
                 modelId: modelId,
-                temperature: temperature,
                 reasoning: reasoning,
                 jsonSchema: jsonSchema
             )
@@ -356,7 +338,6 @@ final class LLMFacade {
                 systemPrompt: systemPrompt,
                 userMessage: userMessage,
                 modelId: modelId,
-                temperature: temperature,
                 images: images
             )
             return streamingManager.makeStreamingHandle(conversationId: conversationId, sourceStream: sourceStream)
@@ -369,7 +350,6 @@ final class LLMFacade {
         modelId: String,
         conversationId: UUID,
         images: [Data] = [],
-        temperature: Double? = nil,
         reasoning: OpenRouterReasoning? = nil,
         jsonSchema: JSONSchema? = nil,
         backend: Backend = .openRouter
@@ -384,7 +364,6 @@ final class LLMFacade {
                 modelId: modelId,
                 conversationId: conversationId,
                 images: images,
-                temperature: temperature,
                 reasoning: reasoning,
                 jsonSchema: jsonSchema
             )
@@ -404,8 +383,7 @@ final class LLMFacade {
                 userMessage: userMessage,
                 modelId: modelId,
                 conversationId: conversationId,
-                images: images,
-                temperature: temperature
+                images: images
             )
             return streamingManager.makeStreamingHandle(conversationId: conversationId, sourceStream: sourceStream)
         }
@@ -419,7 +397,6 @@ final class LLMFacade {
         modelId: String,
         conversationId: UUID,
         images: [Data] = [],
-        temperature: Double? = nil,
         backend: Backend = .openRouter
     ) async throws -> String {
         if backend == .openRouter {
@@ -429,8 +406,7 @@ final class LLMFacade {
                 userMessage: userMessage,
                 modelId: modelId,
                 conversationId: conversationId,
-                images: images,
-                temperature: temperature
+                images: images
             )
         }
         guard let service = conversationServices[backend] else {
@@ -440,8 +416,7 @@ final class LLMFacade {
             userMessage: userMessage,
             modelId: modelId,
             conversationId: conversationId,
-            images: images,
-            temperature: temperature
+            images: images
         )
     }
 
@@ -451,7 +426,6 @@ final class LLMFacade {
         conversationId: UUID,
         as type: T.Type,
         images: [Data] = [],
-        temperature: Double? = nil,
         jsonSchema: JSONSchema? = nil,
         backend: Backend = .openRouter
     ) async throws -> T {
@@ -467,7 +441,6 @@ final class LLMFacade {
             conversationId: conversationId,
             responseType: type,
             images: images,
-            temperature: temperature,
             jsonSchema: jsonSchema
         )
     }
@@ -476,7 +449,6 @@ final class LLMFacade {
         systemPrompt: String? = nil,
         userMessage: String,
         modelId: String,
-        temperature: Double? = nil,
         backend: Backend = .openRouter
     ) async throws -> (UUID, String) {
         if backend == .openRouter {
@@ -484,8 +456,7 @@ final class LLMFacade {
             return try await llmService.startConversation(
                 systemPrompt: systemPrompt,
                 userMessage: userMessage,
-                modelId: modelId,
-                temperature: temperature
+                modelId: modelId
             )
         }
         guard let service = conversationServices[backend] else {
@@ -494,8 +465,7 @@ final class LLMFacade {
         return try await service.startConversation(
             systemPrompt: systemPrompt,
             userMessage: userMessage,
-            modelId: modelId,
-            temperature: temperature
+            modelId: modelId
         )
     }
 
@@ -511,7 +481,6 @@ final class LLMFacade {
         tools: [ChatCompletionParameters.Tool],
         toolChoice: ToolChoice? = .auto,
         modelId: String,
-        temperature: Double? = nil,
         reasoningEffort: String? = nil,
         maxTokens: Int? = nil,
         useFullContextLength: Bool = false,
@@ -534,7 +503,6 @@ final class LLMFacade {
                 modelId: modelId,
                 tools: tools,
                 toolChoice: toolChoice,
-                temperature: temperature ?? 0.7,
                 reasoningEffort: reasoningEffort,
                 maxTokens: resolvedMaxTokens
             )
@@ -547,7 +515,6 @@ final class LLMFacade {
             tools: tools,
             toolChoice: toolChoice,
             modelId: modelId,
-            temperature: temperature,
             reasoningEffort: reasoningEffort
         )
     }
@@ -557,7 +524,6 @@ final class LLMFacade {
         tools: [ChatCompletionParameters.Tool],
         toolChoice: ToolChoice?,
         modelId: String,
-        temperature: Double?,
         reasoningEffort: String?
     ) async throws -> ChatCompletionObject {
         let openAIModelId = modelId.hasPrefix("openai/") ? String(modelId.dropFirst(7)) : modelId
@@ -610,7 +576,6 @@ final class LLMFacade {
             model: .custom(openAIModelId),
             reasoning: reasoning,
             store: true,
-            temperature: temperature ?? 0.7,
             toolChoice: responsesToolChoice,
             tools: responsesTools.isEmpty ? nil : responsesTools
         )
@@ -722,21 +687,18 @@ final class LLMFacade {
     ///   - systemContent: Array of system content blocks (some may have cache_control)
     ///   - userPrompt: The user's request/prompt
     ///   - modelId: Anthropic model ID (e.g., "claude-sonnet-4-20250514")
-    ///   - temperature: Generation temperature
     /// - Returns: The assistant's text response
     func executeTextWithAnthropicCaching(
         systemContent: [AnthropicSystemBlock],
         userPrompt: String,
-        modelId: String,
-        temperature: Double? = nil
+        modelId: String
     ) async throws -> String {
         let parameters = AnthropicMessageParameter(
             model: modelId,
             messages: [.user(userPrompt)],
             system: .blocks(systemContent),
             maxTokens: 4096,
-            stream: false,
-            temperature: temperature ?? 0.7
+            stream: false
         )
 
         let stream = try await specializedAPIs.anthropicMessagesStream(parameters: parameters)
@@ -767,15 +729,13 @@ final class LLMFacade {
     ///   - modelId: Anthropic model ID (e.g., "claude-sonnet-4-20250514")
     ///   - responseType: The expected response type
     ///   - schema: JSON schema dictionary for the structured output
-    ///   - temperature: Generation temperature
     /// - Returns: The parsed response of type T
     func executeStructuredWithAnthropicCaching<T: Codable>(
         systemContent: [AnthropicSystemBlock],
         userPrompt: String,
         modelId: String,
         responseType: T.Type,
-        schema: [String: Any],
-        temperature: Double? = nil
+        schema: [String: Any]
     ) async throws -> T {
         let outputFormat = AnthropicOutputFormat.schema(
             schema: schema
@@ -787,7 +747,6 @@ final class LLMFacade {
             system: .blocks(systemContent),
             maxTokens: 4096,
             stream: false,
-            temperature: temperature ?? 0.7,
             outputFormat: outputFormat
         )
 

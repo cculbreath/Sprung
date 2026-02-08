@@ -735,7 +735,6 @@ final class CoachingService {
                 Only generate tasks for the specified category: \(category.displayName).
                 """,
             as: TaskRegenerationResponse.self,
-            temperature: 0.7,
             backend: .openRouter,
             modelId: modelId,
             schema: CoachingToolSchemas.buildTaskRegenerationSchema(),

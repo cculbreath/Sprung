@@ -565,7 +565,9 @@ class RevisionWorkflowOrchestrator {
             currentPhaseNumber = 2
             queue.clear()
 
-            let captured = pendingPhase2Nodes
+            // Re-derive Phase 2 nodes from updated tree to reflect Phase 1 changes
+            let (_, freshPhase2Nodes) = phaseReviewManager.buildReviewRounds(for: resume)
+            let captured = freshPhase2Nodes
             pendingPhase2Nodes = []
 
             // Build fresh context with Phase 1 changes applied

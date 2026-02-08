@@ -164,8 +164,7 @@ class GitAnalysisAgent {
                     messages: messages,
                     tools: tools,
                     toolChoice: .auto,
-                    modelId: modelId,
-                    temperature: 0.3
+                    modelId: modelId
                 )
 
                 // Emit token usage event if available
@@ -335,8 +334,7 @@ class GitAnalysisAgent {
             messages: messages,
             tools: tools,
             toolChoice: .auto,
-            modelId: modelId,
-            temperature: 0.2  // Lower temperature for more focused output
+            modelId: modelId
         )
 
         // Track token usage for this forced call

@@ -96,7 +96,6 @@ actor GoogleContentGenerator {
                 ]
             ],
             "generationConfig": [
-                "temperature": 0.1,
                 "maxOutputTokens": maxOutputTokens
             ]
         ]
@@ -192,7 +191,6 @@ actor GoogleContentGenerator {
                 ]
             ],
             "generationConfig": [
-                "temperature": 0.2,
                 "maxOutputTokens": 65536,
                 "responseMimeType": "application/json",
                 "responseSchema": DocumentExtractionPrompts.summaryJsonSchema
@@ -253,7 +251,6 @@ actor GoogleContentGenerator {
     /// - Parameters:
     ///   - prompt: The prompt text describing what to extract/generate
     ///   - modelId: Gemini model ID (defaults to flash-lite)
-    ///   - temperature: Generation temperature (default 0.2 for consistent JSON)
     ///   - maxOutputTokens: Maximum output tokens (default 65536 for large structured outputs)
     ///   - jsonSchema: Optional JSON Schema dictionary. When provided, enables native structured output.
     ///   - thinkingLevel: Controls reasoning behavior for Gemini 3+ models. Options: "minimal", "low", "medium", "high".
@@ -262,7 +259,6 @@ actor GoogleContentGenerator {
     func generateStructuredJSON(
         prompt: String,
         modelId: String? = nil,
-        temperature: Double = 0.2,
         maxOutputTokens: Int = 65536,
         jsonSchema: [String: Any]? = nil,
         thinkingLevel: String? = nil
@@ -289,7 +285,6 @@ actor GoogleContentGenerator {
 
         // Build generation config
         var generationConfig: [String: Any] = [
-            "temperature": temperature,
             "maxOutputTokens": maxOutputTokens
         ]
 

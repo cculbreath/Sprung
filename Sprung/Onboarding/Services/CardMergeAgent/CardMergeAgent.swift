@@ -183,7 +183,6 @@ class CardMergeAgent {
                     tools: tools,
                     toolChoice: .auto,
                     modelId: modelId,
-                    temperature: 0.2,  // Low temperature for consistent merging decisions
                     useFullContextLength: ephemeralTurns == 0
                 )
 

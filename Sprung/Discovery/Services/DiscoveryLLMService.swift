@@ -43,7 +43,6 @@ final class DiscoveryLLMService {
         prompt: String,
         systemPrompt: String? = nil,
         as type: T.Type,
-        temperature: Double = 0.7,
         backend: LLMFacade.Backend = .openRouter,
         modelId: String? = nil,
         schema: JSONSchema? = nil,
@@ -65,7 +64,6 @@ final class DiscoveryLLMService {
                 as: type,
                 schema: schema,
                 schemaName: schemaName,
-                temperature: temperature,
                 backend: backend
             )
         }
@@ -74,7 +72,6 @@ final class DiscoveryLLMService {
             prompt: fullPrompt,
             modelId: modelId ?? self.modelId,
             as: type,
-            temperature: temperature,
             backend: backend
         )
     }
@@ -89,7 +86,6 @@ final class DiscoveryLLMService {
         systemPrompt: String? = nil,
         as type: T.Type,
         jsonSchema: JSONSchema? = nil,
-        temperature: Double = 0.7,
         backend: LLMFacade.Backend = .openRouter,
         modelId: String? = nil,
         schemaName: String? = nil
@@ -110,7 +106,6 @@ final class DiscoveryLLMService {
                 as: type,
                 schema: schema,
                 schemaName: schemaName,
-                temperature: temperature,
                 backend: backend
             )
         }
@@ -119,7 +114,6 @@ final class DiscoveryLLMService {
             prompt: fullPrompt,
             modelId: modelId ?? self.modelId,
             as: type,
-            temperature: temperature,
             jsonSchema: jsonSchema,
             backend: backend
         )
@@ -174,8 +168,7 @@ final class DiscoveryLLMService {
             messages: messages,
             tools: conversation.tools,
             toolChoice: toolChoice ?? .auto,
-            modelId: conversation.modelId ?? modelId,
-            temperature: 0.7
+            modelId: conversation.modelId ?? modelId
         )
 
         guard let choices = completion.choices,

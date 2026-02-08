@@ -192,8 +192,7 @@ class FixOverflowService {
                         response = try await llm.executeStructured(
                             prompt: grokPrompt,
                             modelId: modelId,
-                            as: FixFitsResponseContainer.self,
-                            temperature: nil
+                            as: FixFitsResponseContainer.self
                         )
                     } else {
                         Logger.debug("Using standard image-based approach for fix fits request")
@@ -211,8 +210,7 @@ class FixOverflowService {
                             prompt: prompt,
                             modelId: modelId,
                             images: [imageData],
-                            as: FixFitsResponseContainer.self,
-                            temperature: nil
+                            as: FixFitsResponseContainer.self
                         )
                     }
                 }

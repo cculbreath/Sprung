@@ -61,8 +61,6 @@ final class OpenRouterServiceBackend {
     private let streamingExecutor: StreamingExecutor
     private let flexibleJSONExecutor: FlexibleJSONExecutor
     private var conversationCoordinator: ConversationCoordinator
-    // Configuration
-    private let defaultTemperature: Double = 1.0
     init(requestExecutor: LLMRequestExecutor = LLMRequestExecutor()) {
         self.requestExecutor = requestExecutor
         self.streamingExecutor = StreamingExecutor(requestExecutor: requestExecutor)
@@ -139,7 +137,6 @@ final class OpenRouterServiceBackend {
         prompt: String,
         modelId: String,
         responseType: T.Type,
-        temperature: Double? = nil,
         reasoning: OpenRouterReasoning? = nil,
         jsonSchema: JSONSchema? = nil
     ) -> AsyncThrowingStream<LLMStreamChunkDTO, Error> {
@@ -151,7 +148,6 @@ final class OpenRouterServiceBackend {
                         prompt: prompt,
                         modelId: modelId,
                         responseType: responseType,
-                        temperature: temperature ?? self.defaultTemperature,
                         jsonSchema: jsonSchema
                     )
                     self.streamingExecutor.applyReasoning(reasoning, to: &parameters)
@@ -176,7 +172,6 @@ final class OpenRouterServiceBackend {
         systemPrompt: String? = nil,
         userMessage: String,
         modelId: String,
-        temperature: Double? = nil,
         reasoning: OpenRouterReasoning? = nil,
         jsonSchema: JSONSchema? = nil
     ) async throws -> (conversationId: UUID, stream: AsyncThrowingStream<LLMStreamChunkDTO, Error>) {
@@ -190,8 +185,7 @@ final class OpenRouterServiceBackend {
         await persistConversation(conversationId: conversationId, messages: messages)
         var parameters = LLMRequestBuilder.buildConversationRequest(
             messages: messages,
-            modelId: modelId,
-            temperature: temperature ?? defaultTemperature
+            modelId: modelId
         )
         if let jsonSchema = jsonSchema {
             let responseFormatSchema = JSONSchemaResponseFormat(
@@ -231,7 +225,6 @@ final class OpenRouterServiceBackend {
         modelId: String,
         conversationId: UUID,
         images: [Data] = [],
-        temperature: Double? = nil,
         reasoning: OpenRouterReasoning? = nil,
         jsonSchema: JSONSchema? = nil
     ) -> AsyncThrowingStream<LLMStreamChunkDTO, Error> {
@@ -245,8 +238,7 @@ final class OpenRouterServiceBackend {
                     let seededMessages = messages
                     var parameters = LLMRequestBuilder.buildConversationRequest(
                         messages: messages,
-                        modelId: modelId,
-                        temperature: temperature ?? self.defaultTemperature
+                        modelId: modelId
                     )
                     if let jsonSchema = jsonSchema {
                         let responseFormatSchema = JSONSchemaResponseFormat(
@@ -292,8 +284,7 @@ final class OpenRouterServiceBackend {
     func startConversation(
         systemPrompt: String? = nil,
         userMessage: String,
-        modelId: String,
-        temperature: Double? = nil
+        modelId: String
     ) async throws -> (conversationId: UUID, response: String) {
         try await ensureInitialized()
         var messages: [LLMMessageDTO] = []
@@ -303,8 +294,7 @@ final class OpenRouterServiceBackend {
         messages.append(makeUserMessage(userMessage, images: []))
         let parameters = LLMRequestBuilder.buildConversationRequest(
             messages: messages,
-            modelId: modelId,
-            temperature: temperature ?? defaultTemperature
+            modelId: modelId
         )
         let response = try await requestExecutor.execute(parameters: parameters)
         let dto = LLMVendorMapper.responseDTO(from: response)
@@ -319,16 +309,14 @@ final class OpenRouterServiceBackend {
         userMessage: String,
         modelId: String,
         conversationId: UUID,
-        images: [Data] = [],
-        temperature: Double? = nil
+        images: [Data] = []
     ) async throws -> String {
         try await ensureInitialized()
         var messages = await loadMessages(conversationId: conversationId)
         messages.append(self.makeUserMessage(userMessage, images: images))
         let parameters = LLMRequestBuilder.buildConversationRequest(
             messages: messages,
-            modelId: modelId,
-            temperature: temperature ?? defaultTemperature
+            modelId: modelId
         )
         let response = try await requestExecutor.execute(parameters: parameters)
         let dto = LLMVendorMapper.responseDTO(from: response)
@@ -344,7 +332,6 @@ final class OpenRouterServiceBackend {
         conversationId: UUID,
         responseType: T.Type,
         images: [Data] = [],
-        temperature: Double? = nil,
         jsonSchema: JSONSchema? = nil
     ) async throws -> T {
         try await ensureInitialized()
@@ -354,7 +341,6 @@ final class OpenRouterServiceBackend {
             messages: messages,
             modelId: modelId,
             responseType: responseType,
-            temperature: temperature ?? defaultTemperature,
             jsonSchema: jsonSchema
         )
         let response = try await requestExecutor.execute(parameters: parameters)
@@ -376,7 +362,6 @@ final class OpenRouterServiceBackend {
         prompt: String,
         modelId: String,
         responseType: T.Type,
-        temperature: Double? = nil,
         jsonSchema: JSONSchema? = nil
     ) async throws -> T {
         try await ensureInitialized()
@@ -398,7 +383,6 @@ final class OpenRouterServiceBackend {
             prompt: prompt,
             modelId: modelId,
             responseType: responseType,
-            temperature: temperature ?? defaultTemperature,
             jsonSchema: jsonSchema,
             supportsStructuredOutput: supportsStructuredOutput,
             shouldAvoidJSONSchema: shouldAvoidJSONSchema,

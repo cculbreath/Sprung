@@ -107,7 +107,6 @@ class CoverLetterCommitteeSummaryGenerator {
                 prompt: summaryPrompt,
                 modelId: modelId,
                 as: CommitteeSummaryResponse.self,
-                temperature: 0.7,
                 jsonSchema: jsonSchema
         )
         Logger.info("🧠 Analysis summary generated using model \(modelId)")

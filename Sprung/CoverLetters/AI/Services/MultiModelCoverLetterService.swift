@@ -277,7 +277,6 @@ class MultiModelCoverLetterService {
                                 prompt: prompt,
                                 modelId: modelId,
                                 as: BestCoverLetterResponse.self,
-                                temperature: nil,
                                 jsonSchema: CoverLetterQuery.getJSONSchema(for: selectedVotingScheme)
                             )
                             return (modelId, .success(response))

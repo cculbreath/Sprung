@@ -67,14 +67,12 @@ actor GoogleImageAnalyzer {
     ///   - images: Array of image data (JPEG, PNG, WebP, HEIC, HEIF supported)
     ///   - prompt: The analysis prompt
     ///   - modelId: Gemini model ID (uses PDF extraction model setting if nil)
-    ///   - temperature: Generation temperature (default 0.1 for consistent analysis)
     ///   - maxOutputTokens: Maximum output tokens (default 8192)
     /// - Returns: Text response from the model
     func analyzeImages(
         images: [Data],
         prompt: String,
         modelId: String? = nil,
-        temperature: Double = 0.1,
         maxOutputTokens: Int = 8192
     ) async throws -> String {
         // Use provided model or require configuration
@@ -120,7 +118,6 @@ actor GoogleImageAnalyzer {
                 ["parts": parts]
             ],
             "generationConfig": [
-                "temperature": temperature,
                 "maxOutputTokens": maxOutputTokens
             ]
         ]
@@ -165,14 +162,12 @@ actor GoogleImageAnalyzer {
     ///   - prompt: The analysis prompt
     ///   - jsonSchema: JSON Schema dictionary for structured output
     ///   - modelId: Gemini model ID (uses PDF extraction model setting if nil)
-    ///   - temperature: Generation temperature (default 0.1 for consistent analysis)
     /// - Returns: JSON string response guaranteed to match the schema
     func analyzeImagesStructured(
         images: [Data],
         prompt: String,
         jsonSchema: [String: Any],
-        modelId: String? = nil,
-        temperature: Double = 0.1
+        modelId: String? = nil
     ) async throws -> String {
         // Use provided model or require configuration
         let effectiveModelId: String
@@ -215,7 +210,6 @@ actor GoogleImageAnalyzer {
                 ["parts": parts]
             ],
             "generationConfig": [
-                "temperature": temperature,
                 "maxOutputTokens": 16384,
                 "responseMimeType": "application/json",
                 "responseSchema": jsonSchema

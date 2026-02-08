@@ -144,8 +144,7 @@ struct AnthropicRequestBuilder {
             maxTokens: 4096,
             stream: true,
             tools: tools.isEmpty ? nil : tools,
-            toolChoice: toolChoice == .none && tools.isEmpty ? nil : toolChoice,
-            temperature: 1.0
+            toolChoice: toolChoice == .none && tools.isEmpty ? nil : toolChoice
         )
 
         Logger.info(
@@ -205,8 +204,7 @@ struct AnthropicRequestBuilder {
             maxTokens: 4096,
             stream: true,
             tools: tools.isEmpty ? nil : tools,
-            toolChoice: tools.isEmpty ? nil : .auto,
-            temperature: 1.0
+            toolChoice: tools.isEmpty ? nil : .auto
         )
 
         Logger.info(
@@ -294,8 +292,7 @@ struct AnthropicRequestBuilder {
             maxTokens: 4096,
             stream: true,
             tools: tools.isEmpty ? nil : tools,
-            toolChoice: tools.isEmpty ? nil : .auto,
-            temperature: 1.0
+            toolChoice: tools.isEmpty ? nil : .auto
         )
 
         // Log diagnostic info about tool blocks
@@ -397,8 +394,7 @@ struct AnthropicRequestBuilder {
             maxTokens: 4096,
             stream: true,
             tools: tools.isEmpty ? nil : tools,
-            toolChoice: tools.isEmpty ? nil : .auto,
-            temperature: 1.0
+            toolChoice: tools.isEmpty ? nil : .auto
         )
 
         Logger.info(

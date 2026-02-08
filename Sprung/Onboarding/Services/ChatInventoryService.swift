@@ -67,7 +67,6 @@ actor ChatInventoryService {
                 as: [Skill].self,
                 schema: Self.skillsSchema,
                 schemaName: "chat_skills",
-                temperature: 0.2,
                 backend: .openRouter
             )
         } catch {
@@ -84,7 +83,6 @@ actor ChatInventoryService {
                 as: [KnowledgeCard].self,
                 schema: Self.narrativeCardsSchema,
                 schemaName: "chat_narrativeCards",
-                temperature: 0.2,
                 backend: .openRouter
             )
         } catch {

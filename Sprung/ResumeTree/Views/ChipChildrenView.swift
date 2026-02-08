@@ -325,20 +325,36 @@ struct ChipChildrenView: View {
     }
 
     private var syncToggleRow: some View {
-        Toggle(isOn: $syncToSkillLibrary) {
-            HStack(spacing: 3) {
-                Image(systemName: "arrow.triangle.2.circlepath")
-                    .font(.system(size: 9))
-                    .foregroundStyle(.tertiary)
-                Text("Apply changes to skill library")
-                    .font(.system(size: 10))
-                    .foregroundStyle(.tertiary)
+        HStack(spacing: 12) {
+            Toggle(isOn: $syncToSkillLibrary) {
+                HStack(spacing: 3) {
+                    Image(systemName: "arrow.triangle.2.circlepath")
+                        .font(.system(size: 9))
+                        .foregroundStyle(.tertiary)
+                    Text("Apply changes to skill library")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.tertiary)
+                }
             }
+            .toggleStyle(.checkbox)
+            .controlSize(.small)
+            .help("When enabled, edits to skill names will also update the corresponding skill in your skill library")
+
+            Button {
+                syncAllToSkillBank()
+            } label: {
+                HStack(spacing: 3) {
+                    Image(systemName: "arrow.triangle.2.circlepath.circle")
+                        .font(.system(size: 9))
+                    Text("Sync all to skill bank")
+                        .font(.system(size: 10))
+                }
+                .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+            .help("Add any skills not yet in your skill bank")
         }
-        .toggleStyle(.checkbox)
-        .controlSize(.small)
         .padding(.top, 4)
-        .help("When enabled, edits to skill names will also update the corresponding skill in your skill library")
     }
 
     // MARK: - Logic
@@ -384,8 +400,23 @@ struct ChipChildrenView: View {
 
         do {
             try modelContext.save()
+            vm.refreshPDF()
         } catch {
             Logger.error("Failed to save new chip: \(error)")
+        }
+
+        if syncToSkillLibrary {
+            let chipValue = trimmed.lowercased()
+            let alreadyExists = skillStore.skills.contains { skill in
+                skill.canonical.lowercased() == chipValue ||
+                skill.atsVariants.contains { $0.lowercased() == chipValue }
+            }
+            if !alreadyExists {
+                let parentCategory = parent.parent?.computedTitle ?? "General"
+                let newSkill = Skill(canonical: trimmed, category: parentCategory, proficiency: .familiar)
+                skillStore.add(newSkill)
+                Logger.info("Synced new skill to library: '\(trimmed)' in category '\(parentCategory)'")
+            }
         }
 
         newChipText = ""
@@ -415,6 +446,7 @@ struct ChipChildrenView: View {
 
         do {
             try modelContext.save()
+            vm.refreshPDF()
         } catch {
             Logger.error("Failed to save skill from bank: \(error)")
         }
@@ -462,8 +494,43 @@ struct ChipChildrenView: View {
 
         do {
             try modelContext.save()
+            vm.refreshPDF()
         } catch {
             Logger.error("Failed to save recommendation: \(error)")
+        }
+
+        if syncToSkillLibrary {
+            let chipValue = rec.skillName.lowercased()
+            let alreadyExists = skillStore.skills.contains { skill in
+                skill.canonical.lowercased() == chipValue ||
+                skill.atsVariants.contains { $0.lowercased() == chipValue }
+            }
+            if !alreadyExists {
+                let parentCategory = parent.parent?.computedTitle ?? "General"
+                let newSkill = Skill(canonical: rec.skillName, category: parentCategory, proficiency: .familiar)
+                skillStore.add(newSkill)
+                Logger.info("Synced new skill to library: '\(rec.skillName)' in category '\(parentCategory)'")
+            }
+        }
+    }
+
+    private func syncAllToSkillBank() {
+        let parentCategory = parent.parent?.computedTitle ?? "General"
+        var addedCount = 0
+        for child in children {
+            let chipValue = child.value.lowercased()
+            let alreadyExists = skillStore.skills.contains { skill in
+                skill.canonical.lowercased() == chipValue ||
+                skill.atsVariants.contains { $0.lowercased() == chipValue }
+            }
+            if !alreadyExists && !child.value.isEmpty {
+                let newSkill = Skill(canonical: child.value, category: parentCategory, proficiency: .familiar)
+                skillStore.add(newSkill)
+                addedCount += 1
+            }
+        }
+        if addedCount > 0 {
+            Logger.info("Synced \(addedCount) new skills to library from '\(parentCategory)'")
         }
     }
 }
@@ -484,6 +551,7 @@ private struct ChipView: View {
     @State private var isHovering: Bool = false
     @FocusState private var isFieldFocused: Bool
     @Environment(\.modelContext) private var modelContext
+    @Environment(ResumeDetailVM.self) private var vm
 
     /// Get the icon mode for this chip node
     private var iconMode: AIIconMode {
@@ -654,6 +722,7 @@ private struct ChipView: View {
             node.value = trimmed
             do {
                 try modelContext.save()
+                vm.refreshPDF()
             } catch {
                 Logger.error("Failed to save chip edit: \(error)")
             }

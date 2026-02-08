@@ -104,6 +104,13 @@ struct ResumeEntryCardView: View {
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(.primary)
                     .lineLimit(2)
+                    .onTapGesture {
+                        renameTitleText = node.computedTitle
+                        isRenamingTitle = true
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                            isRenameFocused = true
+                        }
+                    }
             }
 
             Spacer()
@@ -154,6 +161,7 @@ struct ResumeEntryCardView: View {
         }
         do {
             try modelContext.save()
+            vm.refreshPDF()
             print("[ResumeEntryCardView] Save succeeded")
         } catch {
             Logger.error("Failed to save title rename: \(error)")

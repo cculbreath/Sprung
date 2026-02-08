@@ -9,26 +9,43 @@ struct ResumeCustomizeButton: View {
     @State private var isGeneratingResume = false
     @State private var showCustomizeModelSheet = false
     @State private var selectedCustomizeModel = ""
+    @State private var workflowTask: Task<Void, Never>?
     var body: some View {
-        Button(action: {
-            selectedTab = .resume
-            showCustomizeModelSheet = true
-        }, label: {
+        Group {
             let isBusy = isGeneratingResume || resumeReviseViewModel.isWorkflowBusy(.customize)
             if isBusy {
-                Label("Customize", systemImage: "wand.and.rays").fontWeight(.bold).foregroundColor(.blue)
-                    .symbolEffect(.variableColor.iterative.nonReversing)
-                    .font(.system(size: 14, weight: .light))
+                HStack(spacing: 4) {
+                    Label("Customize", systemImage: "wand.and.rays").fontWeight(.bold).foregroundColor(.blue)
+                        .symbolEffect(.variableColor.iterative.nonReversing)
+                        .font(.system(size: 14, weight: .light))
+
+                    Button {
+                        workflowTask?.cancel()
+                        workflowTask = nil
+                        isGeneratingResume = false
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.secondary)
+                            .font(.system(size: 14))
+                    }
+                    .buttonStyle(.plain)
+                    .help("Cancel customization")
+                }
             } else {
-                Label("Customize", systemImage: "wand.and.sparkles")
-                    .font(.system(size: 14, weight: .light))
+                Button(action: {
+                    selectedTab = .resume
+                    showCustomizeModelSheet = true
+                }, label: {
+                    Label("Customize", systemImage: "wand.and.sparkles")
+                        .font(.system(size: 14, weight: .light))
+                })
+                .buttonStyle(.automatic)
+                .help("Create Resume Revisions (requires nodes marked for AI revision)")
+                .disabled(jobAppStore.selectedApp == nil ||
+                          jobAppStore.selectedApp?.selectedRes?.rootNode == nil ||
+                          !(jobAppStore.selectedApp?.selectedRes?.hasUpdatableNodes == true))
             }
-        })
-        .buttonStyle( .automatic )
-        .help("Create Resume Revisions (requires nodes marked for AI revision)")
-        .disabled(jobAppStore.selectedApp == nil ||
-                  jobAppStore.selectedApp?.selectedRes?.rootNode == nil ||
-                  !(jobAppStore.selectedApp?.selectedRes?.hasUpdatableNodes == true))
+        }
         .sheet(isPresented: $showCustomizeModelSheet) {
             ModelSelectionSheet(
                 title: "Choose Model for Resume Customization",
@@ -38,7 +55,7 @@ struct ResumeCustomizeButton: View {
                 onModelSelected: { modelId in
                     selectedCustomizeModel = modelId
                     isGeneratingResume = true
-                    Task {
+                    workflowTask = Task {
                         await startCustomizeWorkflow(modelId: modelId)
                     }
                 }
@@ -65,6 +82,10 @@ struct ResumeCustomizeButton: View {
                 clarifyingQA: nil,
                 coverRefStore: coverRefStore
             )
+            if Task.isCancelled {
+                isGeneratingResume = false
+                return
+            }
             isGeneratingResume = false
         } catch {
             Logger.error("Error in customize workflow: \(error.localizedDescription)")

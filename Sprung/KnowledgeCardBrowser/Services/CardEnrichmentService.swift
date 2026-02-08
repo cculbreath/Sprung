@@ -42,7 +42,6 @@ actor CardEnrichmentService {
             as: FactExtractionResult.self,
             schema: Self.factExtractionSchema,
             schemaName: "fact_extraction",
-            temperature: 0.2,
             maxOutputTokens: 32768,
             backend: .gemini
         )

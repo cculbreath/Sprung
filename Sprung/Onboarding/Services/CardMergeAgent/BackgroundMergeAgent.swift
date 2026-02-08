@@ -207,8 +207,7 @@ class BackgroundMergeAgent {
             messages: messages,
             tools: [],
             toolChoice: nil,
-            modelId: modelId,
-            temperature: 0.3
+            modelId: modelId
         )
 
         guard let choice = response.choices?.first,

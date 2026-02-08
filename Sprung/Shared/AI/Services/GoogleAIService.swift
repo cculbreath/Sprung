@@ -153,7 +153,6 @@ actor GoogleAIService {
         images: [Data],
         prompt: String,
         modelId: String? = nil,
-        temperature: Double = 0.1,
         maxOutputTokens: Int = 8192
     ) async throws -> String {
         do {
@@ -161,7 +160,6 @@ actor GoogleAIService {
                 images: images,
                 prompt: prompt,
                 modelId: modelId,
-                temperature: temperature,
                 maxOutputTokens: maxOutputTokens
             )
         } catch let error as GoogleImageAnalyzer.ImageAnalysisError {
@@ -174,16 +172,14 @@ actor GoogleAIService {
         images: [Data],
         prompt: String,
         jsonSchema: [String: Any],
-        modelId: String? = nil,
-        temperature: Double = 0.1
+        modelId: String? = nil
     ) async throws -> String {
         do {
             return try await imageAnalyzer.analyzeImagesStructured(
                 images: images,
                 prompt: prompt,
                 jsonSchema: jsonSchema,
-                modelId: modelId,
-                temperature: temperature
+                modelId: modelId
             )
         } catch let error as GoogleImageAnalyzer.ImageAnalysisError {
             throw mapImageError(error)
@@ -216,7 +212,6 @@ actor GoogleAIService {
     func generateStructuredJSON(
         prompt: String,
         modelId: String? = nil,
-        temperature: Double = 0.2,
         maxOutputTokens: Int = 65536,
         jsonSchema: [String: Any]? = nil,
         thinkingLevel: String? = nil
@@ -225,7 +220,6 @@ actor GoogleAIService {
             return try await contentGenerator.generateStructuredJSON(
                 prompt: prompt,
                 modelId: modelId,
-                temperature: temperature,
                 maxOutputTokens: maxOutputTokens,
                 jsonSchema: jsonSchema,
                 thinkingLevel: thinkingLevel

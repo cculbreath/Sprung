@@ -113,7 +113,6 @@ class RevisionStreamingService {
             modelId: modelId,
             conversationId: conversationId,
             images: [],
-            temperature: nil,
             reasoning: reasoning,
             jsonSchema: jsonSchema
         )
@@ -146,7 +145,6 @@ class RevisionStreamingService {
             modelId: modelId,
             conversationId: conversationId,
             images: [],
-            temperature: nil,
             reasoning: reasoning,
             jsonSchema: jsonSchema
         )

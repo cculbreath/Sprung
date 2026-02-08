@@ -182,8 +182,7 @@ actor VoicePrimerExtractionService {
         let (_, responseText) = try await facade.startConversation(
             systemPrompt: "You are a voice analysis expert. Return only valid JSON without markdown formatting.",
             userMessage: fullPrompt,
-            modelId: modelId,
-            temperature: 0.3
+            modelId: modelId
         )
 
         // Try to extract JSON from response (it might be wrapped in markdown code blocks)

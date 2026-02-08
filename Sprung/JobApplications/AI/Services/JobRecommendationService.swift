@@ -70,8 +70,7 @@ class JobRecommendationService {
         let recommendation: JobRecommendation = try await llm.executeStructured(
             prompt: "\(systemPrompt)\n\n\(prompt)",
             modelId: modelId,
-            as: JobRecommendation.self,
-            temperature: nil
+            as: JobRecommendation.self
         )
         // Validate response
         guard recommendation.validate() else {

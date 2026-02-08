@@ -15,47 +15,40 @@ import SwiftOpenAI
 ///   of `LLMFacadeFactory`.
 final class OpenAIResponsesClient: LLMClient {
     private let service: OpenAIService
-    private let defaultTemperature: Double = 1.0
     private let decoder = JSONDecoder()
     init(service: OpenAIService) {
         self.service = service
     }
     func executeText(
         prompt: String,
-        modelId: String,
-        temperature: Double?
+        modelId: String
     ) async throws -> String {
         try await requestText(
             prompt: prompt,
             modelId: modelId,
-            images: [],
-            temperature: temperature
+            images: []
         )
     }
     func executeTextWithImages(
         prompt: String,
         modelId: String,
-        images: [Data],
-        temperature: Double?
+        images: [Data]
     ) async throws -> String {
         try await requestText(
             prompt: prompt,
             modelId: modelId,
-            images: images,
-            temperature: temperature
+            images: images
         )
     }
     func executeStructured<T>(
         prompt: String,
         modelId: String,
-        as type: T.Type,
-        temperature: Double?
+        as type: T.Type
     ) async throws -> T where T: Codable & Sendable {
         let raw = try await requestText(
             prompt: prompt,
             modelId: modelId,
-            images: [],
-            temperature: temperature
+            images: []
         )
         return try decode(raw, as: type)
     }
@@ -63,14 +56,12 @@ final class OpenAIResponsesClient: LLMClient {
         prompt: String,
         modelId: String,
         images: [Data],
-        as type: T.Type,
-        temperature: Double?
+        as type: T.Type
     ) async throws -> T where T: Codable & Sendable {
         let raw = try await requestText(
             prompt: prompt,
             modelId: modelId,
-            images: images,
-            temperature: temperature
+            images: images
         )
         return try decode(raw, as: type)
     }
@@ -80,15 +71,13 @@ final class OpenAIResponsesClient: LLMClient {
         modelId: String,
         as type: T.Type,
         schema: JSONSchema,
-        schemaName: String,
-        temperature: Double?
+        schemaName: String
     ) async throws -> T where T: Codable & Sendable {
         let raw = try await requestStructured(
             prompt: prompt,
             modelId: modelId,
             schema: schema,
-            schemaName: schemaName,
-            temperature: temperature
+            schemaName: schemaName
         )
         return try decode(raw, as: type)
     }
@@ -97,14 +86,12 @@ final class OpenAIResponsesClient: LLMClient {
     private func requestText(
         prompt: String,
         modelId: String,
-        images: [Data],
-        temperature: Double?
+        images: [Data]
     ) async throws -> String {
         let response = try await performRequest(
             prompt: prompt,
             modelId: modelId,
             images: images,
-            temperature: temperature,
             textConfig: TextConfiguration(format: .text)
         )
         guard let text = extractText(from: response), !text.isEmpty else {
@@ -117,15 +104,13 @@ final class OpenAIResponsesClient: LLMClient {
         prompt: String,
         modelId: String,
         schema: JSONSchema,
-        schemaName: String,
-        temperature: Double?
+        schemaName: String
     ) async throws -> String {
         let textConfig = TextConfiguration(format: .jsonSchema(schema, name: schemaName))
         let response = try await performRequest(
             prompt: prompt,
             modelId: modelId,
             images: [],
-            temperature: temperature,
             textConfig: textConfig
         )
         guard let text = extractText(from: response), !text.isEmpty else {
@@ -137,7 +122,6 @@ final class OpenAIResponsesClient: LLMClient {
         prompt: String,
         modelId: String,
         images: [Data],
-        temperature: Double?,
         textConfig: TextConfiguration
     ) async throws -> ResponseModel {
         var content: [ContentItem] = [
@@ -157,7 +141,6 @@ final class OpenAIResponsesClient: LLMClient {
             input: .array(inputItems),
             model: .custom(modelId),
             store: true,
-            temperature: temperature ?? defaultTemperature,
             text: textConfig
         )
         return try await service.responseCreate(parameters)

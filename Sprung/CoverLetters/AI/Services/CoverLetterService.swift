@@ -117,15 +117,13 @@ final class CoverLetterService {
             let combinedMessage = systemPrompt + "\n\n" + userMessage
             response = try await llm.executeText(
                 prompt: combinedMessage,
-                modelId: modelId,
-                temperature: nil
+                modelId: modelId
             )
         } else {
             let (conversationId, initialResponse) = try await llm.startConversation(
                 systemPrompt: systemPrompt,
                 userMessage: userMessage,
-                modelId: modelId,
-                temperature: nil
+                modelId: modelId
             )
             conversations[coverLetter.id] = conversationId
             response = initialResponse
@@ -184,16 +182,14 @@ final class CoverLetterService {
                 userMessage: userMessage,
                 modelId: modelId,
                 conversationId: conversationId,
-                images: [],
-                temperature: nil
+                images: []
             )
         } else {
             let systemPrompt = query.systemPrompt(for: modelId)
             let (conversationId, initialResponse) = try await llm.startConversation(
                 systemPrompt: systemPrompt,
                 userMessage: userMessage,
-                modelId: modelId,
-                temperature: nil
+                modelId: modelId
             )
             conversations[coverLetter.id] = conversationId
             response = initialResponse

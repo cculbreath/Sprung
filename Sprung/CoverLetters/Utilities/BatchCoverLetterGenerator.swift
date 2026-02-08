@@ -24,14 +24,13 @@ class BatchCoverLetterGenerator {
         self.coverRefStore = coverRefStore
     }
     private func executeText(_ prompt: String, modelId: String) async throws -> String {
-        return try await llmFacade.executeText(prompt: prompt, modelId: modelId, temperature: nil)
+        return try await llmFacade.executeText(prompt: prompt, modelId: modelId)
     }
     private func startConversation(systemPrompt: String?, userMessage: String, modelId: String) async throws -> (UUID, String) {
         return try await llmFacade.startConversation(
             systemPrompt: systemPrompt,
             userMessage: userMessage,
-            modelId: modelId,
-            temperature: nil
+            modelId: modelId
         )
     }
     private func continueConversation(userMessage: String, modelId: String, conversationId: UUID) async throws -> String {
@@ -39,8 +38,7 @@ class BatchCoverLetterGenerator {
             userMessage: userMessage,
             modelId: modelId,
             conversationId: conversationId,
-            images: [],
-            temperature: nil
+            images: []
         )
     }
     /// Generates cover letters in batch for multiple models and revisions

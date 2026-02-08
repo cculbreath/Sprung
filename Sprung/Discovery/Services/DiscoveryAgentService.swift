@@ -94,7 +94,6 @@ actor DiscoveryAgentService {
                 tools: tools,
                 toolChoice: enableTools ? .auto : nil,
                 modelId: model,
-                temperature: 0.7,
                 backend: backend
             )
 

@@ -310,7 +310,6 @@ class JobAppPreprocessor {
             as: PreprocessingResponse.self,
             schema: Self.preprocessingSchema,
             schemaName: "preprocessing_response",
-            temperature: 0.2,
             backend: .openRouter
         )
 
@@ -487,7 +486,6 @@ class JobAppPreprocessor {
             as: SkillMatchingResponse.self,
             schema: Self.skillMatchingSchema,
             schemaName: "skill_matching_response",
-            temperature: 0.2,
             backend: .openRouter
         )
     }

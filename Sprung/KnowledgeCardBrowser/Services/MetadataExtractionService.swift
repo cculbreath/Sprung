@@ -94,8 +94,7 @@ actor MetadataExtractionService {
                     try await facade.executeStructured(
                         prompt: prompt,
                         modelId: modelId,
-                        as: MetadataResponse.self,
-                        temperature: 0.2
+                        as: MetadataResponse.self
                     )
                 }
             }.value

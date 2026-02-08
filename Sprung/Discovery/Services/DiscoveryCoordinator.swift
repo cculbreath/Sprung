@@ -593,7 +593,6 @@ final class DiscoveryCoordinator {
             prompt: prompt,
             systemPrompt: "You are a career advisor helping someone identify job roles to target. Be specific with job titles.",
             as: RoleSuggestionsResult.self,
-            temperature: 0.7,
             backend: .openAI,
             schema: schema,
             schemaName: "role_suggestions"
@@ -675,7 +674,6 @@ final class DiscoveryCoordinator {
             systemPrompt: "Extract job search preferences from the provided profile and background. Return null for fields that cannot be determined.",
             as: LocationPreferencesResult.self,
             jsonSchema: schema,
-            temperature: 0.3,
             backend: .openAI,
             schemaName: "location_preferences"
         )

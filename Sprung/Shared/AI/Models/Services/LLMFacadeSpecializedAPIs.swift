@@ -239,7 +239,6 @@ final class LLMFacadeSpecializedAPIs {
     func generateStructuredJSON(
         prompt: String,
         modelId: String,
-        temperature: Double,
         maxOutputTokens: Int,
         jsonSchema: [String: Any],
         thinkingLevel: String? = nil
@@ -250,7 +249,6 @@ final class LLMFacadeSpecializedAPIs {
         return try await service.generateStructuredJSON(
             prompt: prompt,
             modelId: modelId,
-            temperature: temperature,
             maxOutputTokens: maxOutputTokens,
             jsonSchema: jsonSchema,
             thinkingLevel: thinkingLevel

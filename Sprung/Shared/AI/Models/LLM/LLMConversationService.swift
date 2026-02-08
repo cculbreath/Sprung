@@ -11,15 +11,13 @@ protocol LLMConversationService: AnyObject {
     func startConversation(
         systemPrompt: String?,
         userMessage: String,
-        modelId: String,
-        temperature: Double?
+        modelId: String
     ) async throws -> (UUID, String)
     func continueConversation(
         userMessage: String,
         modelId: String,
         conversationId: UUID,
-        images: [Data],
-        temperature: Double?
+        images: [Data]
     ) async throws -> String
 }
 protocol LLMStreamingConversationService: LLMConversationService {
@@ -27,15 +25,13 @@ protocol LLMStreamingConversationService: LLMConversationService {
         systemPrompt: String?,
         userMessage: String,
         modelId: String,
-        temperature: Double?,
         images: [Data]
     ) async throws -> (UUID, AsyncThrowingStream<LLMStreamChunkDTO, Error>)
     func continueConversationStreaming(
         userMessage: String,
         modelId: String,
         conversationId: UUID,
-        images: [Data],
-        temperature: Double?
+        images: [Data]
     ) async throws -> AsyncThrowingStream<LLMStreamChunkDTO, Error>
 }
 final class OpenRouterConversationService: LLMConversationService {
@@ -46,29 +42,25 @@ final class OpenRouterConversationService: LLMConversationService {
     func startConversation(
         systemPrompt: String?,
         userMessage: String,
-        modelId: String,
-        temperature: Double?
+        modelId: String
     ) async throws -> (UUID, String) {
         try await service.startConversation(
             systemPrompt: systemPrompt,
             userMessage: userMessage,
-            modelId: modelId,
-            temperature: temperature
+            modelId: modelId
         )
     }
     func continueConversation(
         userMessage: String,
         modelId: String,
         conversationId: UUID,
-        images: [Data],
-        temperature: Double?
+        images: [Data]
     ) async throws -> String {
         try await service.continueConversation(
             userMessage: userMessage,
             modelId: modelId,
             conversationId: conversationId,
-            images: images,
-            temperature: temperature
+            images: images
         )
     }
 }

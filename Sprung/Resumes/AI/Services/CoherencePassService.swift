@@ -56,8 +56,7 @@ final class CoherencePassService {
             let report = try await llmFacade.executeFlexibleJSON(
                 prompt: prompt,
                 modelId: modelId,
-                as: CoherenceReport.self,
-                temperature: 0.3
+                as: CoherenceReport.self
             )
             Logger.info("[CoherencePass] Completed: \(report.overallCoherence.rawValue), \(report.issues.count) issues", category: .ai)
             return report

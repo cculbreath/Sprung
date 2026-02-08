@@ -27,7 +27,6 @@ private class SprungOpenAILogger: OpenAILoggerProtocol {
 final class SwiftOpenAIClientWrapper: LLMClient {
     // Reuse existing request executor and builders
     private let executor: LLMRequestExecutor
-    private let defaultTemperature: Double = 1.0
     // Class-level flag to ensure logger is only injected once
     private static var loggerInjected = false
     private static let loggerInjectionLock = NSLock()
@@ -123,11 +122,10 @@ final class SwiftOpenAIClientWrapper: LLMClient {
             await self.executor.configureClient()
         }
     }
-    func executeText(prompt: String, modelId: String, temperature: Double? = nil) async throws -> String {
+    func executeText(prompt: String, modelId: String) async throws -> String {
         let params = LLMRequestBuilder.buildTextRequest(
             prompt: prompt,
-            modelId: modelId,
-            temperature: temperature ?? defaultTemperature
+            modelId: modelId
         )
         let response = try await executor.execute(parameters: params)
         let dto = LLMVendorMapper.responseDTO(from: response)
@@ -136,12 +134,11 @@ final class SwiftOpenAIClientWrapper: LLMClient {
         }
         return content
     }
-    func executeTextWithImages(prompt: String, modelId: String, images: [Data], temperature: Double? = nil) async throws -> String {
+    func executeTextWithImages(prompt: String, modelId: String, images: [Data]) async throws -> String {
         let params = LLMRequestBuilder.buildVisionRequest(
             prompt: prompt,
             modelId: modelId,
-            images: images,
-            temperature: temperature ?? defaultTemperature
+            images: images
         )
         let response = try await executor.execute(parameters: params)
         let dto = LLMVendorMapper.responseDTO(from: response)
@@ -150,38 +147,35 @@ final class SwiftOpenAIClientWrapper: LLMClient {
         }
         return content
     }
-    func executeStructured<T: Codable & Sendable>(prompt: String, modelId: String, as: T.Type, temperature: Double? = nil) async throws -> T {
+    func executeStructured<T: Codable & Sendable>(prompt: String, modelId: String, as: T.Type) async throws -> T {
         let params = LLMRequestBuilder.buildStructuredRequest(
             prompt: prompt,
             modelId: modelId,
             responseType: T.self,
-            temperature: temperature ?? defaultTemperature,
             jsonSchema: nil
         )
         let response = try await executor.execute(parameters: params)
         let dto = LLMVendorMapper.responseDTO(from: response)
         return try JSONResponseParser.parseStructured(dto, as: T.self)
     }
-    func executeStructuredWithImages<T: Codable & Sendable>(prompt: String, modelId: String, images: [Data], as: T.Type, temperature: Double? = nil) async throws -> T {
+    func executeStructuredWithImages<T: Codable & Sendable>(prompt: String, modelId: String, images: [Data], as: T.Type) async throws -> T {
         let params = LLMRequestBuilder.buildStructuredVisionRequest(
             prompt: prompt,
             modelId: modelId,
             images: images,
-            responseType: T.self,
-            temperature: temperature ?? defaultTemperature
+            responseType: T.self
         )
         let response = try await executor.execute(parameters: params)
         let dto = LLMVendorMapper.responseDTO(from: response)
         return try JSONResponseParser.parseStructured(dto, as: T.self)
     }
 
-    func executeStructuredWithSchema<T: Codable & Sendable>(prompt: String, modelId: String, as: T.Type, schema: JSONSchema, schemaName: String, temperature: Double? = nil) async throws -> T {
+    func executeStructuredWithSchema<T: Codable & Sendable>(prompt: String, modelId: String, as: T.Type, schema: JSONSchema, schemaName: String) async throws -> T {
         // For OpenRouter, we use the existing structured request with the provided schema
         let params = LLMRequestBuilder.buildStructuredRequest(
             prompt: prompt,
             modelId: modelId,
             responseType: T.self,
-            temperature: temperature ?? defaultTemperature,
             jsonSchema: schema
         )
         let response = try await executor.execute(parameters: params)

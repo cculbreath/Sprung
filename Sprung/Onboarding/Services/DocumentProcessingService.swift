@@ -612,8 +612,7 @@ actor DocumentProcessingService {
         do {
             let response = try await facade.executeText(
                 prompt: prompt,
-                modelId: modelId,
-                temperature: 0.3
+                modelId: modelId
             )
 
             let name = response.trimmingCharacters(in: .whitespacesAndNewlines)

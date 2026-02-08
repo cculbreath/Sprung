@@ -21,9 +21,6 @@ enum OnboardingLLMConfig {
 
     // MARK: - Generation Parameters
 
-    /// Temperature for LLM generation (1.0 = default, creative)
-    static let temperature: Double = 1.0
-
     /// Top-P for nucleus sampling (1.0 = consider all tokens)
     static let topP: Double = 1.0
 

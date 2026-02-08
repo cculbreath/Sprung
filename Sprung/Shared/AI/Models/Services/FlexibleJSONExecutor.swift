@@ -17,7 +17,6 @@ final class FlexibleJSONExecutor {
         prompt: String,
         modelId: String,
         responseType: T.Type,
-        temperature: Double,
         jsonSchema: JSONSchema?,
         supportsStructuredOutput: Bool,
         shouldAvoidJSONSchema: Bool,
@@ -28,7 +27,6 @@ final class FlexibleJSONExecutor {
             prompt: prompt,
             modelId: modelId,
             responseType: responseType,
-            temperature: temperature,
             jsonSchema: jsonSchema,
             supportsStructuredOutput: supportsStructuredOutput,
             shouldAvoidJSONSchema: shouldAvoidJSONSchema

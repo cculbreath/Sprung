@@ -68,14 +68,13 @@ class ResumeReviewService: @unchecked Sendable {
                 let response: String
                 if imageData.isEmpty {
                     // Text-only request
-                    response = try await llm.executeText(prompt: promptText, modelId: modelId, temperature: nil)
+                    response = try await llm.executeText(prompt: promptText, modelId: modelId)
                 } else {
                     // Multimodal request
                     response = try await llm.executeTextWithImages(
                         prompt: promptText,
                         modelId: modelId,
-                        images: imageData,
-                        temperature: nil
+                        images: imageData
                     )
                 }
                 // Check if request was cancelled

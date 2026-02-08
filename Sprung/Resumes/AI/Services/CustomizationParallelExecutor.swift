@@ -253,8 +253,7 @@ actor CustomizationParallelExecutor {
                 let response = try await llmFacade.executeFlexibleJSON(
                     prompt: fullPrompt,
                     modelId: modelId,
-                    as: ProposedRevisionNode.self,
-                    temperature: 0.3
+                    as: ProposedRevisionNode.self
                 )
                 return RevisionTaskResult(
                     taskId: task.id,
@@ -282,8 +281,7 @@ actor CustomizationParallelExecutor {
             let compoundResponse = try await llmFacade.executeFlexibleJSON(
                 prompt: fullPrompt,
                 modelId: modelId,
-                as: CompoundRevisionResponse.self,
-                temperature: 0.3
+                as: CompoundRevisionResponse.self
             )
             let results = compoundResponse.compoundFields
             let primary = results.first ?? ProposedRevisionNode()
@@ -300,8 +298,7 @@ actor CustomizationParallelExecutor {
         let single = try await llmFacade.executeFlexibleJSON(
             prompt: fullPrompt,
             modelId: modelId,
-            as: ProposedRevisionNode.self,
-            temperature: 0.3
+            as: ProposedRevisionNode.self
         )
         return RevisionTaskResult(
             taskId: task.id,
@@ -343,8 +340,7 @@ actor CustomizationParallelExecutor {
                 messages: messages,
                 tools: toolConfig.tools,
                 toolChoice: .auto,
-                modelId: modelId,
-                temperature: 0.3
+                modelId: modelId
             )
 
             guard let choice = response.choices?.first,
@@ -402,8 +398,7 @@ actor CustomizationParallelExecutor {
             messages: messages,
             tools: [],
             toolChoice: .none,
-            modelId: modelId,
-            temperature: 0.3
+            modelId: modelId
         )
 
         guard let finalChoice = finalResponse.choices?.first,

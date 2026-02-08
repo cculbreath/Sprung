@@ -28,7 +28,6 @@ struct AgentConfiguration {
     let initialUserMessage: String
     let maxTurns: Int
     let timeoutSeconds: TimeInterval
-    let temperature: Double
     let reasoningEffort: String?
 
     init(
@@ -39,7 +38,6 @@ struct AgentConfiguration {
         initialUserMessage: String,
         maxTurns: Int = 30,
         timeoutSeconds: TimeInterval = 300,
-        temperature: Double = 0.3,
         reasoningEffort: String? = nil
     ) {
         self.agentId = agentId
@@ -49,7 +47,6 @@ struct AgentConfiguration {
         self.initialUserMessage = initialUserMessage
         self.maxTurns = maxTurns
         self.timeoutSeconds = timeoutSeconds
-        self.temperature = temperature
         self.reasoningEffort = reasoningEffort
     }
 }
@@ -180,7 +177,6 @@ actor AgentRunner {
                     tools: tools,
                     toolChoice: .auto,
                     modelId: config.modelId,
-                    temperature: config.temperature,
                     reasoningEffort: config.reasoningEffort
                 )
 
@@ -599,7 +595,6 @@ extension AgentRunner {
             initialUserMessage: initialPrompt,
             maxTurns: 30,
             timeoutSeconds: 300,
-            temperature: 0.3,
             reasoningEffort: reasoningEffort
         )
 

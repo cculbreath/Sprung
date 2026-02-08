@@ -97,6 +97,14 @@ struct CustomizationReviewQueueView: View {
                 Text("Failed to regenerate \"\(error.displayName)\". You can try again or use a different action.")
             }
         }
+        .onChange(of: reviewQueue.allItemsReviewed) { _, allReviewed in
+            if allReviewed && phaseNumber < totalPhases {
+                Task {
+                    try? await Task.sleep(for: .milliseconds(500))
+                    onComplete()
+                }
+            }
+        }
     }
 
     // MARK: - Header View
@@ -231,11 +239,13 @@ struct CustomizationReviewQueueView: View {
             .buttonStyle(.bordered)
             .disabled(reviewQueue.pendingItems.isEmpty)
 
-            Button(totalPhases > 1 && phaseNumber < totalPhases ? "Complete Phase \(phaseNumber)" : "Complete Review") {
-                onComplete()
+            if phaseNumber >= totalPhases {
+                Button("Complete Review") {
+                    onComplete()
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(!reviewQueue.allItemsReviewed)
             }
-            .buttonStyle(.borderedProminent)
-            .disabled(!reviewQueue.allItemsReviewed)
         }
         .padding(16)
     }
@@ -625,7 +635,8 @@ struct CustomizationReviewCard: View {
                 Label("Approve", systemImage: "checkmark")
             }
             .buttonStyle(.borderedProminent)
-            .controlSize(.mini)
+            .controlSize(.regular)
+            .tint(.green)
 
             Button {
                 if isEditing {
@@ -651,7 +662,7 @@ struct CustomizationReviewCard: View {
                 Label(isEditing ? "Save" : "Edit", systemImage: isEditing ? "checkmark.circle" : "pencil")
             }
             .buttonStyle(.bordered)
-            .controlSize(.mini)
+            .controlSize(.small)
 
             if isEditing {
                 Button {
@@ -662,7 +673,7 @@ struct CustomizationReviewCard: View {
                     Image(systemName: "xmark")
                 }
                 .buttonStyle(.bordered)
-                .controlSize(.mini)
+                .controlSize(.small)
             }
 
             Button {
@@ -671,7 +682,7 @@ struct CustomizationReviewCard: View {
                 Label("Use Original", systemImage: "arrow.uturn.backward")
             }
             .buttonStyle(.bordered)
-            .controlSize(.mini)
+            .controlSize(.small)
             .foregroundStyle(.secondary)
 
             Button {
@@ -680,12 +691,12 @@ struct CustomizationReviewCard: View {
                 Label("Regenerate", systemImage: "arrow.clockwise")
             }
             .buttonStyle(.bordered)
-            .controlSize(.mini)
+            .controlSize(.small)
             .foregroundStyle(.orange)
 
             Spacer()
         }
-        .padding(.top, 4)
+        .padding(.top, 8)
     }
 
     // MARK: - Status Badge
