@@ -64,29 +64,6 @@ struct CompoundRevisionResponse: Codable, Sendable {
     let compoundFields: [ProposedRevisionNode]
 }
 
-// MARK: - Parallel Execution Context
-
-/// Lightweight context for parallel execution operations.
-/// Contains serializable strings for use in concurrent tasks.
-struct ParallelExecutionContext: Sendable {
-    let jobPosting: String
-    let resumeSnapshot: String
-    let applicantProfile: String
-    let additionalContext: String
-
-    init(
-        jobPosting: String = "",
-        resumeSnapshot: String = "",
-        applicantProfile: String = "",
-        additionalContext: String = ""
-    ) {
-        self.jobPosting = jobPosting
-        self.resumeSnapshot = resumeSnapshot
-        self.applicantProfile = applicantProfile
-        self.additionalContext = additionalContext
-    }
-}
-
 // MARK: - Tool Configuration
 
 /// Configuration for tool-enabled execution in the parallel executor.
@@ -140,7 +117,6 @@ actor CustomizationParallelExecutor {
     /// Returns an AsyncStream that yields results as tasks complete.
     /// - Parameters:
     ///   - tasks: The revision tasks to execute
-    ///   - context: The customization context
     ///   - llmFacade: The LLM facade for API calls
     ///   - modelId: The model ID to use
     ///   - preamble: The preamble to prepend to each task prompt
@@ -148,7 +124,6 @@ actor CustomizationParallelExecutor {
     /// - Returns: AsyncStream of task results
     func execute(
         tasks: [RevisionTask],
-        context: ParallelExecutionContext,
         llmFacade: LLMFacade,
         modelId: String,
         preamble: String,
@@ -168,7 +143,6 @@ actor CustomizationParallelExecutor {
 
                             return await self.executeTaskInternal(
                                 task: task,
-                                context: context,
                                 llmFacade: llmFacade,
                                 modelId: modelId,
                                 preamble: preamble,
@@ -191,7 +165,6 @@ actor CustomizationParallelExecutor {
     /// Execute a single revision task (convenience method)
     func executeSingle(
         task: RevisionTask,
-        context: ParallelExecutionContext,
         llmFacade: LLMFacade,
         modelId: String,
         preamble: String,
@@ -204,7 +177,6 @@ actor CustomizationParallelExecutor {
 
         return await executeTaskInternal(
             task: task,
-            context: context,
             llmFacade: llmFacade,
             modelId: modelId,
             preamble: preamble,
@@ -216,14 +188,13 @@ actor CustomizationParallelExecutor {
 
     private func executeTaskInternal(
         task: RevisionTask,
-        context: ParallelExecutionContext,
         llmFacade: LLMFacade,
         modelId: String,
         preamble: String,
         toolConfig: ToolConfiguration? = nil
     ) async -> RevisionTaskResult {
         do {
-            let fullPrompt = buildFullPrompt(preamble: preamble, task: task, context: context)
+            let fullPrompt = buildFullPrompt(preamble: preamble, task: task)
 
             if task.nodeType == .compound {
                 // Compound task: parse as CompoundRevisionResponse
@@ -249,11 +220,13 @@ actor CustomizationParallelExecutor {
                     result: .success(response)
                 )
             } else {
-                // Non-tool path: single-shot flexible JSON (existing behavior)
-                let response = try await llmFacade.executeFlexibleJSON(
+                // Non-tool path: single-shot structured output
+                let response = try await llmFacade.executeStructuredWithSchema(
                     prompt: fullPrompt,
                     modelId: modelId,
-                    as: ProposedRevisionNode.self
+                    as: ProposedRevisionNode.self,
+                    schema: CustomizationSchemas.proposedRevisionNode,
+                    schemaName: "proposed_revision_node"
                 )
                 return RevisionTaskResult(
                     taskId: task.id,
@@ -276,34 +249,19 @@ actor CustomizationParallelExecutor {
         modelId: String,
         toolConfig: ToolConfiguration?
     ) async throws -> RevisionTaskResult {
-        // First try to decode as CompoundRevisionResponse directly
-        do {
-            let compoundResponse = try await llmFacade.executeFlexibleJSON(
-                prompt: fullPrompt,
-                modelId: modelId,
-                as: CompoundRevisionResponse.self
-            )
-            let results = compoundResponse.compoundFields
-            let primary = results.first ?? ProposedRevisionNode()
-            return RevisionTaskResult(
-                taskId: task.id,
-                result: .success(primary),
-                compoundResults: results
-            )
-        } catch {
-            Logger.debug("[ParallelExecutor] CompoundRevisionResponse decode failed, trying single ProposedRevisionNode fallback", category: .ai)
-        }
-
-        // Fallback: try as a single ProposedRevisionNode
-        let single = try await llmFacade.executeFlexibleJSON(
+        let compoundResponse = try await llmFacade.executeStructuredWithSchema(
             prompt: fullPrompt,
             modelId: modelId,
-            as: ProposedRevisionNode.self
+            as: CompoundRevisionResponse.self,
+            schema: CustomizationSchemas.compoundRevisionResponse,
+            schemaName: "compound_revision_response"
         )
+        let results = compoundResponse.compoundFields
+        let primary = results.first ?? ProposedRevisionNode()
         return RevisionTaskResult(
             taskId: task.id,
-            result: .success(single),
-            compoundResults: [single]
+            result: .success(primary),
+            compoundResults: results
         )
     }
 
@@ -320,13 +278,18 @@ actor CustomizationParallelExecutor {
     ) async throws -> ProposedRevisionNode {
         // Build initial messages: system prompt (preamble + context) as a user message
         // since executeWithTools takes raw messages
+        let responseFormat: ResponseFormat = .jsonSchema(
+            JSONSchemaResponseFormat(
+                name: "proposed_revision_node",
+                strict: true,
+                schema: CustomizationSchemas.proposedRevisionNode
+            )
+        )
+
         var messages: [ChatCompletionParameters.Message] = [
             .init(role: .system, content: .text(
-                "You are a resume customization assistant. After gathering any needed context via tools, " +
-                "respond with a single JSON object matching the ProposedRevisionNode schema: " +
-                "{\"id\": string, \"oldValue\": string, \"newValue\": string, \"valueChanged\": bool, " +
-                "\"isTitleNode\": bool, \"why\": string, \"treePath\": string, " +
-                "\"nodeType\": \"scalar\"|\"list\", \"oldValueArray\": [string]?, \"newValueArray\": [string]?}"
+                "You are a resume customization assistant. Use the available tools to gather " +
+                "any needed context before producing your revision response."
             )),
             .init(role: .user, content: .text(prompt))
         ]
@@ -340,7 +303,8 @@ actor CustomizationParallelExecutor {
                 messages: messages,
                 tools: toolConfig.tools,
                 toolChoice: .auto,
-                modelId: modelId
+                modelId: modelId,
+                responseFormat: responseFormat
             )
 
             guard let choice = response.choices?.first,
@@ -387,7 +351,10 @@ actor CustomizationParallelExecutor {
                 // No tool calls - parse the final response as ProposedRevisionNode
                 let finalContent = message.content ?? ""
                 Logger.info("[ParallelExecutor] Tool conversation complete after \(toolConfig.maxToolRounds - remainingRounds) round(s)", category: .ai)
-                return try parseProposedRevisionNode(from: finalContent)
+                guard let data = finalContent.data(using: .utf8) else {
+                    throw LLMError.clientError("Failed to convert response to data")
+                }
+                return try JSONDecoder().decode(ProposedRevisionNode.self, from: data)
             }
         }
 
@@ -398,7 +365,8 @@ actor CustomizationParallelExecutor {
             messages: messages,
             tools: [],
             toolChoice: .none,
-            modelId: modelId
+            modelId: modelId,
+            responseFormat: responseFormat
         )
 
         guard let finalChoice = finalResponse.choices?.first,
@@ -407,51 +375,19 @@ actor CustomizationParallelExecutor {
             throw LLMError.clientError("No final response after exhausting tool rounds")
         }
 
-        return try parseProposedRevisionNode(from: finalContent)
-    }
-
-    /// Parse a ProposedRevisionNode from a raw LLM response string.
-    /// Handles responses that may include markdown code fences or extra text around JSON.
-    private func parseProposedRevisionNode(from response: String) throws -> ProposedRevisionNode {
-        // Try to extract JSON object from the response
-        let jsonString: String
-        if let jsonStart = response.range(of: "{"),
-           let jsonEnd = response.range(of: "}", options: .backwards) {
-            jsonString = String(response[jsonStart.lowerBound...jsonEnd.upperBound])
-        } else {
-            jsonString = response
+        guard let data = finalContent.data(using: .utf8) else {
+            throw LLMError.clientError("Failed to convert response to data")
         }
-
-        guard let data = jsonString.data(using: .utf8) else {
-            throw LLMError.clientError("Failed to convert tool conversation response to data")
-        }
-
         return try JSONDecoder().decode(ProposedRevisionNode.self, from: data)
     }
 
     private func buildFullPrompt(
         preamble: String,
-        task: RevisionTask,
-        context: ParallelExecutionContext
+        task: RevisionTask
     ) -> String {
+        // Preamble already contains job description, applicant profile, knowledge cards,
+        // skill bank, and all other shared context. Only append task-specific content.
         var prompt = preamble
-
-        // Add context sections if available
-        if !context.jobPosting.isEmpty {
-            prompt += "\n\n## Job Posting\n\(context.jobPosting)"
-        }
-
-        if !context.resumeSnapshot.isEmpty {
-            prompt += "\n\n## Current Resume\n\(context.resumeSnapshot)"
-        }
-
-        if !context.applicantProfile.isEmpty {
-            prompt += "\n\n## Applicant Profile\n\(context.applicantProfile)"
-        }
-
-        if !context.additionalContext.isEmpty {
-            prompt += "\n\n## Additional Context\n\(context.additionalContext)"
-        }
 
         // Add task-specific prompt
         prompt += "\n\n## Task\n\(task.taskPrompt)"
@@ -514,7 +450,6 @@ extension CustomizationParallelExecutor {
     /// Useful when you need all results before proceeding.
     /// - Parameters:
     ///   - tasks: The revision tasks to execute
-    ///   - context: The customization context
     ///   - llmFacade: The LLM facade for API calls
     ///   - modelId: The model ID to use
     ///   - preamble: The preamble to prepend to each task prompt
@@ -522,7 +457,6 @@ extension CustomizationParallelExecutor {
     /// - Returns: Dictionary mapping task IDs to results
     func executeAll(
         tasks: [RevisionTask],
-        context: ParallelExecutionContext,
         llmFacade: LLMFacade,
         modelId: String,
         preamble: String,
@@ -532,7 +466,6 @@ extension CustomizationParallelExecutor {
 
         let stream = execute(
             tasks: tasks,
-            context: context,
             llmFacade: llmFacade,
             modelId: modelId,
             preamble: preamble,

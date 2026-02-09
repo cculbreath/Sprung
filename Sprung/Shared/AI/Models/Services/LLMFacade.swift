@@ -484,6 +484,7 @@ final class LLMFacade {
         reasoningEffort: String? = nil,
         maxTokens: Int? = nil,
         useFullContextLength: Bool = false,
+        responseFormat: ResponseFormat? = nil,
         backend: Backend = .openRouter
     ) async throws -> ChatCompletionObject {
         if backend == .openRouter {
@@ -504,7 +505,8 @@ final class LLMFacade {
                 tools: tools,
                 toolChoice: toolChoice,
                 reasoningEffort: reasoningEffort,
-                maxTokens: resolvedMaxTokens
+                maxTokens: resolvedMaxTokens,
+                responseFormat: responseFormat
             )
             return try await llmService.executeToolRequest(parameters: parameters)
         }

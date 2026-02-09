@@ -149,6 +149,9 @@ class RevisionWorkflowOrchestrator {
             throw RevisionWorkflowError.missingDependency("InferenceGuidanceStore")
         }
 
+        // 0. Clear stale state from any previous run
+        resetWorkflowState()
+
         workflowState.markWorkflowStarted(.customize)
         workflowState.setProcessingRevisions(true)
         workflowState.currentModelId = modelId
@@ -296,14 +299,6 @@ class RevisionWorkflowOrchestrator {
 
         Logger.info("Phase \(phase): Built \(tasks.count) tasks (compound grouping may reduce from \(nodes.count) nodes)", category: .ai)
 
-        // Build parallel execution context
-        let execContext = ParallelExecutionContext(
-            jobPosting: context.jobDescription,
-            resumeSnapshot: "", // Could add resume snapshot if needed
-            applicantProfile: context.applicantProfile.name,
-            additionalContext: ""
-        )
-
         // Build tool configuration if tools are enabled and model supports them
         let toolConfig = buildToolConfiguration(modelId: modelId, resume: resume)
         self.cachedToolConfig = toolConfig
@@ -311,7 +306,6 @@ class RevisionWorkflowOrchestrator {
         // Execute tasks in parallel and stream results into queue
         let stream = await executor.execute(
             tasks: tasks,
-            context: execContext,
             llmFacade: llm,
             modelId: modelId,
             preamble: preamble,
@@ -400,13 +394,9 @@ class RevisionWorkflowOrchestrator {
             phase: item.task.phase
         )
 
-        // Build a minimal context for regeneration
-        let execContext = ParallelExecutionContext()
-
         // Execute single task via parallelExecutor.executeSingle()
         let result = await executor.executeSingle(
             task: regenerationTask,
-            context: execContext,
             llmFacade: llm,
             modelId: modelId,
             preamble: preamble,
@@ -481,11 +471,8 @@ class RevisionWorkflowOrchestrator {
             phase: compoundTask.phase
         )
 
-        let execContext = ParallelExecutionContext()
-
         let result = await executor.executeSingle(
             task: regenerationTask,
-            context: execContext,
             llmFacade: llm,
             modelId: modelId,
             preamble: preamble,
@@ -699,8 +686,9 @@ class RevisionWorkflowOrchestrator {
         }
     }
 
-    /// Clear all state and finalize the workflow
-    private func finalizeWorkflow() {
+    /// Reset all cached/stale state at the start of a new workflow run.
+    /// Prevents leakage of previous run's decisions, targeting plan, preamble, etc.
+    private func resetWorkflowState() {
         pendingPhase2Nodes = []
         currentResume = nil
         currentCoverRefStore = nil
@@ -720,7 +708,11 @@ class RevisionWorkflowOrchestrator {
         taskBuilder = nil
         cachedPreamble = nil
         cachedToolConfig = nil
+    }
 
+    /// Clear all state and finalize the workflow
+    private func finalizeWorkflow() {
+        resetWorkflowState()
         workflowState.setProcessingRevisions(false)
         workflowState.markWorkflowCompleted(reset: true)
         delegate?.hideParallelReviewQueue()

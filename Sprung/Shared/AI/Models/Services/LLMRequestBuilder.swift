@@ -219,9 +219,10 @@ struct LLMRequestBuilder {
         tools: [ChatCompletionParameters.Tool],
         toolChoice: ToolChoice?,
         reasoningEffort: String? = nil,
-        maxTokens: Int? = nil
+        maxTokens: Int? = nil,
+        responseFormat: ResponseFormat? = nil
     ) -> ChatCompletionParameters {
-        Logger.debug("🔧 Building tool request with \(tools.count) tools for model: \(modelId), reasoning: \(reasoningEffort ?? "default"), maxTokens: \(maxTokens.map { String($0) } ?? "default")")
+        Logger.debug("🔧 Building tool request with \(tools.count) tools for model: \(modelId), reasoning: \(reasoningEffort ?? "default"), maxTokens: \(maxTokens.map { String($0) } ?? "default"), responseFormat: \(responseFormat != nil ? "set" : "none")")
         var params = ChatCompletionParameters(
             messages: messages,
             model: .custom(modelId),
@@ -231,6 +232,9 @@ struct LLMRequestBuilder {
             usage: .init(include: true)  // Enable OpenRouter token tracking
         )
         params.maxTokens = maxTokens
+        if let responseFormat {
+            params.responseFormat = responseFormat
+        }
         if let effort = reasoningEffort {
             params.reasoningEffort = effort
         }

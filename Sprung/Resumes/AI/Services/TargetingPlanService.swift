@@ -11,6 +11,7 @@
 import Foundation
 import Observation
 import SwiftyJSON
+import SwiftOpenAI
 
 /// Service that generates a strategic targeting plan for resume customization.
 /// Runs a single LLM call with abbreviated KC summaries and job context to
@@ -45,10 +46,12 @@ final class TargetingPlanService {
         let prompt = buildStrategicPrompt(context: context)
 
         do {
-            let plan = try await llmFacade.executeFlexibleJSON(
+            let plan = try await llmFacade.executeStructuredWithSchema(
                 prompt: prompt,
                 modelId: modelId,
-                as: TargetingPlan.self
+                as: TargetingPlan.self,
+                schema: CustomizationSchemas.targetingPlan,
+                schemaName: "targeting_plan"
             )
             Logger.info("[TargetingPlan] Generated plan with \(plan.emphasisThemes.count) themes, \(plan.workEntryGuidance.count) work entries, \(plan.lateralConnections.count) lateral connections", category: .ai)
             return plan
@@ -82,9 +85,6 @@ final class TargetingPlanService {
         if let dossier = context.dossier {
             sections.append(buildDossierSummary(dossier))
         }
-
-        // Output schema
-        sections.append(buildOutputSchema())
 
         return sections.joined(separator: "\n\n---\n\n")
     }
@@ -137,11 +137,6 @@ final class TargetingPlanService {
         - Ignoring the candidate's actual strengths in favor of keyword matching
         - Suggesting the candidate is something they're not
         - Surface-level keyword mapping without strategic insight
-
-        ## Output Requirements
-
-        Respond with a single JSON object matching the schema below. \
-        No markdown code fences, no explanatory text — just the JSON.
         """
     }
 
@@ -303,62 +298,4 @@ final class TargetingPlanService {
         return lines.joined(separator: "\n")
     }
 
-    private func buildOutputSchema() -> String {
-        """
-        ## Output Schema
-
-        Respond with a single JSON object. All string arrays should contain meaningful, \
-        specific content — not generic filler. Card IDs should be exact UUID strings \
-        from the knowledge cards listed above.
-
-        ```json
-        {
-          "narrativeArc": "A 2-3 sentence description of the overarching story this resume tells for this specific role.",
-          "kcSectionMapping": [
-            {
-              "cardId": "UUID-string",
-              "cardTitle": "Human-readable card title",
-              "recommendedSection": "work|projects|skills|summary|education",
-              "rationale": "Why this card maps here for this job"
-            }
-          ],
-          "emphasisThemes": [
-            "Theme 1: specific and actionable",
-            "Theme 2: specific and actionable"
-          ],
-          "workEntryGuidance": [
-            {
-              "entryIdentifier": "Company Name - Role Title (or Project Name)",
-              "leadAngle": "What to lead with for this entry",
-              "emphasis": ["Aspect to highlight", "Another aspect"],
-              "deEmphasis": ["Aspect to minimize"],
-              "supportingCardIds": ["UUID-string"]
-            }
-          ],
-          "lateralConnections": [
-            {
-              "sourceCardId": "UUID-string",
-              "sourceCardTitle": "Card title",
-              "targetRequirement": "The job requirement this connects to",
-              "reasoning": "How this experience transfers non-obviously"
-            }
-          ],
-          "prioritizedSkills": [
-            "Most important skill for this role",
-            "Second most important"
-          ],
-          "identifiedGaps": [
-            "Specific gap relative to job requirements"
-          ],
-          "kcRelevanceTiers": {
-            "primary": ["UUID-string"],
-            "supporting": ["UUID-string"],
-            "background": ["UUID-string"]
-          }
-        }
-        ```
-
-        Remember: Be specific and strategic. Generic guidance is worse than no guidance.
-        """
-    }
 }

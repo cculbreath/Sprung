@@ -8,6 +8,7 @@
 //
 
 import Foundation
+import SwiftOpenAI
 
 /// Service that performs a single-call coherence check on a fully-assembled resume.
 /// Runs after the user has reviewed and approved all changes.
@@ -53,10 +54,12 @@ final class CoherencePassService {
         )
 
         do {
-            let report = try await llmFacade.executeFlexibleJSON(
+            let report = try await llmFacade.executeStructuredWithSchema(
                 prompt: prompt,
                 modelId: modelId,
-                as: CoherenceReport.self
+                as: CoherenceReport.self,
+                schema: CustomizationSchemas.coherenceReport,
+                schemaName: "coherence_report"
             )
             Logger.info("[CoherencePass] Completed: \(report.overallCoherence.rawValue), \(report.issues.count) issues", category: .ai)
             return report
@@ -185,7 +188,6 @@ final class CoherencePassService {
         - Locations should use resume path notation (e.g., "summary", "work.0.highlights[2]", "skills.1.keywords").
         - Only flag genuine issues — don't manufacture problems.
         - If the resume is coherent, return overallCoherence "good" with an empty issues array.
-        - Respond with a single JSON object. No markdown fences. No explanatory text.
         """)
 
         // Targeting plan context (if available)
@@ -217,29 +219,6 @@ final class CoherencePassService {
         ## Assembled Resume
 
         \(resumeText)
-        """)
-
-        // Output schema
-        sections.append("""
-        ---
-
-        ## Output Schema
-
-        ```json
-        {
-          "issues": [
-            {
-              "category": "achievementRepetition|summaryHighlightsAlignment|skillsContentAlignment|emphasisConsistency|narrativeFlow|sectionRedundancy",
-              "severity": "high|medium|low",
-              "description": "Plain-language explanation of the problem, quoting the specific text",
-              "locations": ["path.to.first.location", "path.to.second.location"],
-              "suggestion": "Recommended fix"
-            }
-          ],
-          "overallCoherence": "good|fair|poor",
-          "summary": "1-2 sentence assessment of overall coherence"
-        }
-        ```
         """)
 
         return sections.joined(separator: "\n\n")

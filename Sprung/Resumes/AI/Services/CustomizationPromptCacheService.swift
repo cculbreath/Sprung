@@ -722,18 +722,34 @@ final class CustomizationPromptCacheService {
     // MARK: - Hashing
 
     private func hashContext(_ context: CustomizationPromptContext) -> Int {
-        // Simple hash combining key elements
         var hasher = Hasher()
         hasher.combine(context.applicantProfile.name)
         hasher.combine(context.applicantProfile.email)
-        hasher.combine(context.knowledgeCards.count)
-        hasher.combine(context.allCards.count)
-        hasher.combine(context.relevantCardIds.count)
-        hasher.combine(context.skills.count)
         hasher.combine(context.writersVoice)
-        hasher.combine(context.titleSets.count)
         hasher.combine(context.jobApp.id)
         hasher.combine(clarifyingQA.count)
+
+        // Hash actual content, not just counts, to detect changes within same-size collections
+        for card in context.knowledgeCards {
+            hasher.combine(card.id)
+        }
+        for card in context.allCards {
+            hasher.combine(card.id)
+        }
+        for id in context.relevantCardIds {
+            hasher.combine(id)
+        }
+        for skill in context.skills {
+            hasher.combine(skill.canonical)
+            hasher.combine(skill.category)
+        }
+        for titleSet in context.titleSets {
+            hasher.combine(titleSet.id)
+        }
+        if let dossier = context.dossier {
+            hasher.combine(dossier.rawString() ?? "")
+        }
+
         return hasher.finalize()
     }
 }
