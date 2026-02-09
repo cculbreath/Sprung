@@ -364,6 +364,48 @@ class RevisionWorkflowOrchestrator {
         }
     }
 
+    /// Build a prompt section describing previous rejected attempts so the LLM avoids repeating them.
+    private func buildRejectionHistorySection(
+        history: [RejectionRecord],
+        currentFeedback: String?
+    ) -> String {
+        // Build the current rejection record inline (not yet stored in history)
+        // History contains all *prior* rejections; current feedback is for the attempt being rejected now.
+        var section = "\n\n## Previous Rejected Attempts\n\n"
+        section += "This field has been revised \(history.count) time(s) already, and each attempt was rejected. "
+        section += "Below is the full history of what was proposed and why the user rejected it.\n\n"
+        section += "**How to use this history:**\n"
+        section += "1. Read the user feedback across all attempts to understand what they want changed — it may be a small tweak or a larger shift in direction.\n"
+        section += "2. When feedback is specific (e.g., \"too formal\" or \"wrong skills\"), address that specific issue while preserving what worked.\n"
+        section += "3. When feedback is absent, the overall approach was unsuitable — try a meaningfully different angle.\n"
+        section += "4. Never produce output identical or near-identical to a previous attempt. Each revision must visibly incorporate the feedback.\n"
+
+        for (index, record) in history.enumerated() {
+            section += "\n### Attempt \(index + 1)\n"
+            if let array = record.proposedValueArray, !array.isEmpty {
+                section += "**Proposed:** \(array.joined(separator: "; "))\n"
+            } else {
+                section += "**Proposed:** \(record.proposedValue)\n"
+            }
+            if !record.reasoning.isEmpty {
+                section += "**Your reasoning at the time:** \(record.reasoning)\n"
+            }
+            if let feedback = record.userFeedback, !feedback.isEmpty {
+                section += "**Why it was rejected:** \(feedback)\n"
+            } else {
+                section += "**Why it was rejected:** (No specific feedback — the user found the overall approach unsuitable)\n"
+            }
+        }
+
+        // Add the current feedback as actionable guidance
+        if let feedback = currentFeedback, !feedback.isEmpty {
+            section += "\n## Direction for This Attempt\n\n"
+            section += "The user provided this guidance for what they want instead:\n\(feedback)"
+        }
+
+        return section
+    }
+
     private func regenerateParallelItem(
         itemId: UUID,
         originalRevision: ProposedRevisionNode,
@@ -378,13 +420,18 @@ class RevisionWorkflowOrchestrator {
             return nil
         }
 
-        // Build regeneration prompt with feedback
+        // Build regeneration prompt with full rejection history
         var regenerationPrompt = item.task.taskPrompt
-        if let feedback = feedback, !feedback.isEmpty {
-            regenerationPrompt += "\n\n## User Feedback\nThe previous revision was rejected. Please incorporate this feedback:\n\(feedback)"
-        } else {
-            regenerationPrompt += "\n\n## Regeneration Request\nThe previous revision was rejected. Please try a different approach."
-        }
+
+        // Build current rejection record to include alongside prior history
+        let currentRecord = RejectionRecord(
+            proposedValue: item.revision.newValue,
+            proposedValueArray: item.revision.newValueArray,
+            reasoning: item.revision.why,
+            userFeedback: feedback
+        )
+        let fullHistory = item.rejectionHistory + [currentRecord]
+        regenerationPrompt += buildRejectionHistorySection(history: fullHistory, currentFeedback: feedback)
 
         // Create a new task with the updated prompt
         let regenerationTask = RevisionTask(
@@ -456,13 +503,30 @@ class RevisionWorkflowOrchestrator {
             return nil
         }
 
-        // Add feedback to prompt
-        var regenerationPrompt = compoundTask.taskPrompt
-        if let feedback = feedback, !feedback.isEmpty {
-            regenerationPrompt += "\n\n## User Feedback\nThe previous revisions were rejected. Please incorporate this feedback:\n\(feedback)"
-        } else {
-            regenerationPrompt += "\n\n## Regeneration Request\nThe previous revisions were rejected. Please try a different approach."
+        // Build compound rejection history from all group items
+        var compoundHistory: [RejectionRecord] = []
+        for groupItem in groupItems {
+            // Each item carries its own chain; since they're rejected together,
+            // all chains should be the same length. Use the first item's history
+            // and build a combined current record from all fields.
+            compoundHistory = groupItem.rejectionHistory
+            break
         }
+
+        // Build a combined current rejection record from all group fields
+        let combinedProposed = groupItems.map { "\($0.task.revNode.displayName): \($0.revision.newValue)" }.joined(separator: "\n")
+        let combinedReasoning = groupItems.compactMap { $0.revision.why.isEmpty ? nil : "\($0.task.revNode.displayName): \($0.revision.why)" }.joined(separator: "\n")
+        let currentRecord = RejectionRecord(
+            proposedValue: combinedProposed,
+            proposedValueArray: nil,
+            reasoning: combinedReasoning,
+            userFeedback: feedback
+        )
+        let fullHistory = compoundHistory + [currentRecord]
+
+        // Add rejection history to prompt
+        var regenerationPrompt = compoundTask.taskPrompt
+        regenerationPrompt += buildRejectionHistorySection(history: fullHistory, currentFeedback: feedback)
 
         let regenerationTask = RevisionTask(
             revNode: compoundTask.revNode,
@@ -830,6 +894,10 @@ class RevisionWorkflowOrchestrator {
         }
 
         treeNode.value = valueToApply
+        // Sync parent entry name when updating a "name" field
+        if treeNode.name == "name", let parent = treeNode.parent {
+            parent.name = valueToApply
+        }
         Logger.debug("Applied scalar change to node: \(item.task.revNode.displayName)")
     }
 
@@ -868,6 +936,10 @@ class RevisionWorkflowOrchestrator {
             if treeNode.orderedChildren.isEmpty {
                 // Scalar node: set value directly
                 treeNode.value = valuesToApply[index]
+                // Sync parent entry name when updating a "name" field
+                if treeNode.name == "name", let parent = treeNode.parent {
+                    parent.name = valuesToApply[index]
+                }
                 Logger.debug("Applied scalar value to node \(index): \(nodeId)")
             } else {
                 // Container node: parse the value into individual entries and overwrite children
@@ -918,6 +990,7 @@ class RevisionWorkflowOrchestrator {
         }
 
         // Add new children beyond existing count
+        guard newValues.count > existing.count else { return }
         for index in existing.count..<newValues.count {
             let child = TreeNode(
                 name: "",

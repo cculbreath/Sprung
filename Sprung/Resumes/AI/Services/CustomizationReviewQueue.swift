@@ -8,6 +8,21 @@
 
 import Foundation
 
+// MARK: - Rejection History
+
+/// A record of a previous LLM attempt that was rejected by the user.
+/// Accumulated across regeneration cycles so the LLM can avoid repeating approaches.
+struct RejectionRecord: Equatable {
+    /// What the LLM proposed (scalar representation)
+    let proposedValue: String
+    /// What the LLM proposed (array form, if applicable)
+    let proposedValueArray: [String]?
+    /// The LLM's stated reasoning for the proposal
+    let reasoning: String
+    /// User's feedback explaining why they rejected (nil if rejected without comment)
+    let userFeedback: String?
+}
+
 // MARK: - Review Action
 
 /// User action on a customization review item
@@ -44,6 +59,8 @@ struct CustomizationReviewItem: Identifiable, Equatable {
     let previousVersionId: UUID?
     /// Compound group ID (non-nil if this item belongs to a compound group)
     let compoundGroupId: String?
+    /// History of previous rejected attempts, so regeneration can avoid repeating approaches
+    var rejectionHistory: [RejectionRecord]
 
     init(
         id: UUID = UUID(),
@@ -56,7 +73,8 @@ struct CustomizationReviewItem: Identifiable, Equatable {
         regenerationCount: Int = 0,
         isRegenerating: Bool = false,
         previousVersionId: UUID? = nil,
-        compoundGroupId: String? = nil
+        compoundGroupId: String? = nil,
+        rejectionHistory: [RejectionRecord] = []
     ) {
         self.id = id
         self.task = task
@@ -69,6 +87,7 @@ struct CustomizationReviewItem: Identifiable, Equatable {
         self.isRegenerating = isRegenerating
         self.previousVersionId = previousVersionId
         self.compoundGroupId = compoundGroupId
+        self.rejectionHistory = rejectionHistory
     }
 
     /// Whether this item has been acted upon
@@ -379,12 +398,17 @@ final class CustomizationReviewQueue {
                 guard index < groupItems.count else { break }
                 let oldItem = groupItems[index]
 
+                // Build updated rejection history for this field
+                let currentRecord = buildRejectionRecord(from: oldItem, feedback: feedback)
+                let updatedHistory = oldItem.rejectionHistory + [currentRecord]
+
                 let newItem = CustomizationReviewItem(
                     task: oldItem.task,
                     revision: newRevision,
                     regenerationCount: oldItem.regenerationCount + 1,
                     previousVersionId: oldItem.id,
-                    compoundGroupId: groupId
+                    compoundGroupId: groupId,
+                    rejectionHistory: updatedHistory
                 )
 
                 // Mark original as no longer regenerating
@@ -421,6 +445,16 @@ final class CustomizationReviewQueue {
         }
     }
 
+    /// Build a rejection record from an item's current revision and user feedback.
+    private func buildRejectionRecord(from item: CustomizationReviewItem, feedback: String?) -> RejectionRecord {
+        RejectionRecord(
+            proposedValue: item.revision.newValue,
+            proposedValueArray: item.revision.newValueArray,
+            reasoning: item.revision.why,
+            userFeedback: feedback
+        )
+    }
+
     /// Trigger regeneration for a rejected item
     private func triggerRegeneration(for item: CustomizationReviewItem, feedback: String?) async {
         guard let onRegenerationRequested else {
@@ -432,13 +466,18 @@ final class CustomizationReviewQueue {
 
         // Request regeneration
         if let newRevision = await onRegenerationRequested(item.id, item.revision, feedback) {
+            // Build updated rejection history: carry forward + add current rejection
+            let currentRecord = buildRejectionRecord(from: item, feedback: feedback)
+            let updatedHistory = item.rejectionHistory + [currentRecord]
+
             // Add the regenerated content as a new item
             let newItem = CustomizationReviewItem(
                 task: item.task,
                 revision: newRevision,
                 regenerationCount: item.regenerationCount + 1,
                 previousVersionId: item.id,
-                compoundGroupId: item.compoundGroupId
+                compoundGroupId: item.compoundGroupId,
+                rejectionHistory: updatedHistory
             )
 
             // Update original item to no longer be regenerating
@@ -482,6 +521,12 @@ final class CustomizationReviewQueue {
             items[index].editedChildren = children
             items[index].userAction = .edited
         }
+    }
+
+    /// Unapprove an item, resetting its action to nil while preserving any edits
+    func unapprove(itemId: UUID) {
+        guard let index = items.firstIndex(where: { $0.id == itemId }) else { return }
+        items[index].userAction = nil
     }
 
     /// Approve all pending items

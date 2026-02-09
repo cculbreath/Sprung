@@ -257,6 +257,12 @@ final class CustomizationPromptCacheService {
         The Title Set Library provides curated professional identity combinations the candidate has developed.
         When crafting summary statements or positioning, consider which title set best aligns with the target role.
 
+        ### 6. ARRAY ORDERING AND SCOPE DISCIPLINE
+
+        When producing array values, consider the sequence of items and arrange them in a logical order — for instance, grouping broad/high-level items together and more granular/specific items together, or ordering by relevance to the target role.
+
+        Do NOT extend the scope of a particular value beyond what is asked. Each task specifies exactly which field to revise. For example, if asked to review skill category names, respond with only category names — do not append individual skills to the categories. If asked to review keywords within a single category, respond with only those keywords — do not restructure categories or add fields outside the request.
+
         ## Role-Appropriate Framing
 
         Tailor bullet structure to the position type:
