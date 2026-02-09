@@ -789,13 +789,36 @@ class RevisionWorkflowOrchestrator {
         if let sourceNodeIds = item.task.revNode.sourceNodeIds, !sourceNodeIds.isEmpty {
             applyBundledChanges(item: item, sourceNodeIds: sourceNodeIds, resume: resume, context: context)
         } else {
-            // Scalar node - apply single value
-            applySingleChange(item: item, resume: resume)
+            applySingleChange(item: item, resume: resume, context: context)
         }
     }
 
-    /// Apply changes for a scalar (single value) node
-    private func applySingleChange(item: CustomizationReviewItem, resume: Resume) {
+    /// Apply changes for a single (non-bundled) node.
+    /// Handles both scalar leaf nodes and container nodes with children.
+    private func applySingleChange(item: CustomizationReviewItem, resume: Resume, context: ModelContext) {
+        guard let treeNode = resume.nodes.first(where: { $0.id == item.task.revNode.id }) else {
+            Logger.warning("Could not find tree node: \(item.task.revNode.id)")
+            return
+        }
+
+        // Container node (e.g., keywords with child entries): replace children
+        if !treeNode.orderedChildren.isEmpty {
+            let childValues: [String]
+            if let editedChildren = item.editedChildren, !editedChildren.isEmpty {
+                childValues = editedChildren
+            } else if let newArray = item.revision.newValueArray, !newArray.isEmpty {
+                childValues = newArray
+            } else if let editedContent = item.editedContent, !editedContent.isEmpty {
+                childValues = parseArrayFromString(editedContent)
+            } else {
+                childValues = parseArrayFromString(item.revision.newValue)
+            }
+            overwriteContainerChildren(container: treeNode, newValues: childValues, context: context)
+            Logger.debug("Applied \(childValues.count) children to container node: \(item.task.revNode.displayName)")
+            return
+        }
+
+        // Scalar leaf node: set value directly
         let valueToApply: String
         if let editedContent = item.editedContent {
             valueToApply = editedContent
@@ -806,12 +829,8 @@ class RevisionWorkflowOrchestrator {
             valueToApply = item.revision.newValue
         }
 
-        if let treeNode = resume.nodes.first(where: { $0.id == item.task.revNode.id }) {
-            treeNode.value = valueToApply
-            Logger.debug("Applied scalar change to node: \(item.task.revNode.displayName)")
-        } else {
-            Logger.warning("Could not find tree node: \(item.task.revNode.id)")
-        }
+        treeNode.value = valueToApply
+        Logger.debug("Applied scalar change to node: \(item.task.revNode.displayName)")
     }
 
     /// Apply changes for a bundled/array node.
