@@ -143,8 +143,8 @@ final class ExperienceDefaultsToTree {
             resume: resume
         ))
         applyEditorLabel(to: container, for: ExperienceSectionKey.work.rawValue)
-        container.schemaAllowsChildMutation = entryDescriptor?.allowsManualMutations ?? false
-        container.schemaAllowsNodeDeletion = entryDescriptor?.allowsManualMutations ?? false
+        container.schemaAllowsChildMutation = entryDescriptor?.allowsManualMutations ?? true
+        container.schemaAllowsNodeDeletion = entryDescriptor?.allowsManualMutations ?? true
 
         for (index, work) in experienceDefaults.work.enumerated() {
             let title = work.name.isEmpty ? "Work \(index + 1)" : work.name
@@ -184,7 +184,7 @@ final class ExperienceDefaultsToTree {
             resume: resume
         ))
         applyEditorLabel(to: container, for: ExperienceSectionKey.volunteer.rawValue)
-        container.schemaAllowsChildMutation = entryDescriptor?.allowsManualMutations ?? false
+        container.schemaAllowsChildMutation = entryDescriptor?.allowsManualMutations ?? true
 
         for (index, volunteer) in experienceDefaults.volunteer.enumerated() {
             let title = volunteer.organization.isEmpty ? "Volunteer \(index + 1)" : volunteer.organization
@@ -223,7 +223,7 @@ final class ExperienceDefaultsToTree {
             resume: resume
         ))
         applyEditorLabel(to: container, for: ExperienceSectionKey.education.rawValue)
-        container.schemaAllowsChildMutation = entryDescriptor?.allowsManualMutations ?? false
+        container.schemaAllowsChildMutation = entryDescriptor?.allowsManualMutations ?? true
 
         for (index, education) in experienceDefaults.education.enumerated() {
             let title = education.institution.isEmpty ? "Education \(index + 1)" : education.institution
@@ -263,7 +263,7 @@ final class ExperienceDefaultsToTree {
             resume: resume
         ))
         applyEditorLabel(to: container, for: ExperienceSectionKey.projects.rawValue)
-        container.schemaAllowsChildMutation = entryDescriptor?.allowsManualMutations ?? false
+        container.schemaAllowsChildMutation = entryDescriptor?.allowsManualMutations ?? true
 
         for (index, project) in experienceDefaults.projects.enumerated() {
             let title = project.name.isEmpty ? "Project \(index + 1)" : project.name
@@ -305,7 +305,7 @@ final class ExperienceDefaultsToTree {
             resume: resume
         ))
         applyEditorLabel(to: container, for: ExperienceSectionKey.skills.rawValue)
-        container.schemaAllowsChildMutation = entryDescriptor?.allowsManualMutations ?? false
+        container.schemaAllowsChildMutation = entryDescriptor?.allowsManualMutations ?? true
 
         for (index, skill) in experienceDefaults.skills.enumerated() {
             let title = skill.name.isEmpty ? "Skill \(index + 1)" : skill.name
@@ -340,7 +340,7 @@ final class ExperienceDefaultsToTree {
             resume: resume
         ))
         applyEditorLabel(to: container, for: ExperienceSectionKey.awards.rawValue)
-        container.schemaAllowsChildMutation = entryDescriptor?.allowsManualMutations ?? false
+        container.schemaAllowsChildMutation = entryDescriptor?.allowsManualMutations ?? true
 
         for (index, award) in experienceDefaults.awards.enumerated() {
             let title = award.title.isEmpty ? "Award \(index + 1)" : award.title
@@ -376,7 +376,7 @@ final class ExperienceDefaultsToTree {
             resume: resume
         ))
         applyEditorLabel(to: container, for: ExperienceSectionKey.certificates.rawValue)
-        container.schemaAllowsChildMutation = entryDescriptor?.allowsManualMutations ?? false
+        container.schemaAllowsChildMutation = entryDescriptor?.allowsManualMutations ?? true
 
         for (index, cert) in experienceDefaults.certificates.enumerated() {
             let title = cert.name.isEmpty ? "Certificate \(index + 1)" : cert.name
@@ -412,7 +412,7 @@ final class ExperienceDefaultsToTree {
             resume: resume
         ))
         applyEditorLabel(to: container, for: ExperienceSectionKey.publications.rawValue)
-        container.schemaAllowsChildMutation = entryDescriptor?.allowsManualMutations ?? false
+        container.schemaAllowsChildMutation = entryDescriptor?.allowsManualMutations ?? true
 
         for (index, pub) in experienceDefaults.publications.enumerated() {
             let title = pub.name.isEmpty ? "Publication \(index + 1)" : pub.name
@@ -449,7 +449,7 @@ final class ExperienceDefaultsToTree {
             resume: resume
         ))
         applyEditorLabel(to: container, for: ExperienceSectionKey.languages.rawValue)
-        container.schemaAllowsChildMutation = entryDescriptor?.allowsManualMutations ?? false
+        container.schemaAllowsChildMutation = entryDescriptor?.allowsManualMutations ?? true
 
         for (index, language) in experienceDefaults.languages.enumerated() {
             let title = language.language.isEmpty ? "Language \(index + 1)" : language.language
@@ -483,7 +483,7 @@ final class ExperienceDefaultsToTree {
             resume: resume
         ))
         applyEditorLabel(to: container, for: ExperienceSectionKey.interests.rawValue)
-        container.schemaAllowsChildMutation = entryDescriptor?.allowsManualMutations ?? false
+        container.schemaAllowsChildMutation = entryDescriptor?.allowsManualMutations ?? true
 
         for (index, interest) in experienceDefaults.interests.enumerated() {
             let title = interest.name.isEmpty ? "Interest \(index + 1)" : interest.name
@@ -517,7 +517,7 @@ final class ExperienceDefaultsToTree {
             resume: resume
         ))
         applyEditorLabel(to: container, for: ExperienceSectionKey.references.rawValue)
-        container.schemaAllowsChildMutation = entryDescriptor?.allowsManualMutations ?? false
+        container.schemaAllowsChildMutation = entryDescriptor?.allowsManualMutations ?? true
 
         for (index, ref) in experienceDefaults.references.enumerated() {
             let title = ref.name.isEmpty ? "Reference \(index + 1)" : ref.name
@@ -960,7 +960,7 @@ final class ExperienceDefaultsToTree {
     /// |---------|--------|
     /// | `skills.*.name` | skills.bundledAttributes = ["name"] |
     /// | `skills[].keywords` | skills.enumeratedAttributes = ["keywords"] |
-    /// | `custom.jobTitles[]` | Each jobTitle child marked aiToReplace |
+    /// | `custom.jobTitles` | jobTitles node marked aiToReplace (solo container) |
     /// | `custom.objective` | objective node marked aiToReplace |
     ///
     private func applyDefaultAIFields(to root: TreeNode, patterns: [String]) {

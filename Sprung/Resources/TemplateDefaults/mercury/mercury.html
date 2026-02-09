@@ -189,13 +189,13 @@
           <div class="contact-item contact-chip">{{basics.location.city}}{{#hasContent(basics.location.region)}}, {{basics.location.region}}{{/hasContent(basics.location.region)}}</div>
           {{/hasContent(basics.location.city, basics.location.region)}}
           {{#hasContent(basics.email)}}
-          <div class="contact-item contact-chip"><a href="mailto:{{{basics.email}}}" style="color:#f7f9ff; text-decoration:none;">{{{basics.email}}}</a></div>
+          <div class="contact-item contact-chip">{{{basics.email}}}</div>
           {{/hasContent(basics.email)}}
           {{#hasContent(basics.phone)}}
           <div class="contact-item contact-chip">{{basics.phone}}</div>
           {{/hasContent(basics.phone)}}
           {{#hasContent(basics.url)}}
-          <div class="contact-item contact-chip"><a href="https://{{{basics.url}}}" style="color:#f7f9ff; text-decoration:none;">{{{basics.url}}}</a></div>
+          <div class="contact-item contact-chip">{{{basics.url}}}</div>
           {{/hasContent(basics.url)}}
           {{#basics.profiles}}
           <div class="contact-item contact-chip">{{network}}{{#hasContent(username)}} · {{username}}{{/hasContent(username)}}{{#hasContent(url)}} · {{{url}}}{{/hasContent(url)}}</div>

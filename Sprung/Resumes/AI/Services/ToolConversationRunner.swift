@@ -20,11 +20,6 @@ class ToolConversationRunner {
     private let llm: LLMFacade
     private let toolRegistry: ResumeToolRegistry
 
-    // MARK: - UI State for Tool Interactions
-    var showSkillExperiencePicker: Bool = false
-    var pendingSkillQueries: [SkillQuery] = []
-    private var skillUIResponseContinuation: CheckedContinuation<ResumeToolUIResponse, Never>?
-
     init(llm: LLMFacade, toolRegistry: ResumeToolRegistry? = nil) {
         self.llm = llm
         self.toolRegistry = toolRegistry ?? ResumeToolRegistry()
@@ -123,10 +118,7 @@ class ToolConversationRunner {
 
                     let context = ResumeToolContext(
                         resume: resume,
-                        jobApp: jobApp,
-                        presentUI: { [weak self] request in
-                            await self?.handleToolUIRequest(request) ?? .cancelled
-                        }
+                        jobApp: jobApp
                     )
 
                     let result = try await toolRegistry.executeTool(
@@ -136,7 +128,7 @@ class ToolConversationRunner {
                     )
 
                     // Handle the result
-                    let resultString = await processToolResult(result)
+                    let resultString = processToolResult(result)
 
                     // Add tool result message
                     messages.append(ChatCompletionParameters.Message(
@@ -156,55 +148,13 @@ class ToolConversationRunner {
         throw LLMError.clientError("Tool execution exceeded maximum iterations")
     }
 
-    /// Submit skill experience results from the UI
-    func submitSkillExperienceResults(_ results: [SkillExperienceResult]) {
-        showSkillExperiencePicker = false
-        pendingSkillQueries = []
-        skillUIResponseContinuation?.resume(returning: .skillExperienceResults(results))
-        skillUIResponseContinuation = nil
-    }
-
-    /// Cancel the skill experience query
-    func cancelSkillExperienceQuery() {
-        showSkillExperiencePicker = false
-        pendingSkillQueries = []
-        skillUIResponseContinuation?.resume(returning: .cancelled)
-        skillUIResponseContinuation = nil
-    }
-
     // MARK: - Private Helpers
 
-    /// Handle UI request from a tool by presenting the appropriate UI and waiting for response
-    private func handleToolUIRequest(_ request: ResumeToolUIRequest) async -> ResumeToolUIResponse {
-        switch request {
-        case .skillExperiencePicker(let skills):
-            return await presentSkillExperiencePicker(skills)
-        }
-    }
-
-    /// Present the skill experience picker and wait for user response
-    private func presentSkillExperiencePicker(_ skills: [SkillQuery]) async -> ResumeToolUIResponse {
-        return await withCheckedContinuation { continuation in
-            self.skillUIResponseContinuation = continuation
-            self.pendingSkillQueries = skills
-            self.showSkillExperiencePicker = true
-        }
-    }
-
     /// Process a tool result into a string for the LLM
-    private func processToolResult(_ result: ResumeToolResult) async -> String {
+    private func processToolResult(_ result: ResumeToolResult) -> String {
         switch result {
         case .immediate(let json):
             return json.rawString() ?? "{}"
-
-        case .pendingUserAction(let uiRequest):
-            let uiResponse = await handleToolUIRequest(uiRequest)
-            switch uiResponse {
-            case .skillExperienceResults(let results):
-                return QueryUserExperienceLevelTool.formatResults(results)
-            case .cancelled:
-                return QueryUserExperienceLevelTool.formatCancellation()
-            }
 
         case .error(let errorMessage):
             return """

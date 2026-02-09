@@ -81,15 +81,6 @@ struct AppSheetsModifier: ViewModifier {
     @Environment(LLMFacade.self) private var llmFacade
     @State private var showReprocessConfirmation = false
     @State private var newlyAddedCardName: String = ""
-    private var skillExperiencePickerBinding: Binding<Bool> {
-        Binding(
-            get: { resumeReviseViewModel.showSkillExperiencePicker },
-            set: { newValue in
-                resumeReviseViewModel.showSkillExperiencePicker = newValue
-            }
-        )
-    }
-
     private var parallelReviewQueueBinding: Binding<Bool> {
         Binding(
             get: { resumeReviseViewModel.showParallelReviewQueueSheet },
@@ -251,17 +242,6 @@ struct AppSheetsModifier: ViewModifier {
                 SetupWizardView {
                     sheets.showSetupWizard = false
                 }
-            }
-            .sheet(isPresented: skillExperiencePickerBinding) {
-                SkillExperiencePickerSheet(
-                    skills: resumeReviseViewModel.pendingSkillQueries,
-                    onComplete: { results in
-                        resumeReviseViewModel.submitSkillExperienceResults(results)
-                    },
-                    onCancel: {
-                        resumeReviseViewModel.cancelSkillExperienceQuery()
-                    }
-                )
             }
             .sheet(isPresented: parallelReviewQueueBinding) {
                 ParallelReviewQueueSheetContent(

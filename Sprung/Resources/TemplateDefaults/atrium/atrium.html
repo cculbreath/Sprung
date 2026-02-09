@@ -175,9 +175,9 @@
         </div>
         <div class="contact">
           {{#hasContent(basics.location.city, basics.location.region)}}<span><span class="dot"></span>{{basics.location.city}}{{#hasContent(basics.location.region)}}, {{basics.location.region}}{{/hasContent(basics.location.region)}}</span>{{/hasContent(basics.location.city, basics.location.region)}}
-          {{#hasContent(basics.email)}}<span><span class="dot"></span><a href="mailto:{{{basics.email}}}">{{{basics.email}}}</a></span>{{/hasContent(basics.email)}}
+          {{#hasContent(basics.email)}}<span><span class="dot"></span>{{{basics.email}}}</span>{{/hasContent(basics.email)}}
           {{#hasContent(basics.phone)}}<span><span class="dot"></span>{{basics.phone}}</span>{{/hasContent(basics.phone)}}
-          {{#hasContent(basics.url)}}<span><span class="dot"></span><a href="https://{{{basics.url}}}">{{{basics.url}}}</a></span>{{/hasContent(basics.url)}}
+          {{#hasContent(basics.url)}}<span><span class="dot"></span>{{{basics.url}}}</span>{{/hasContent(basics.url)}}
         </div>
       </header>
 

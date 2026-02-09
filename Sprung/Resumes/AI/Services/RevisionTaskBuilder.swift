@@ -506,43 +506,31 @@ final class RevisionTaskBuilder {
         """
     }
 
-    /// Generate prompt for skills section revision.
+    /// Generate prompt for skills section revision (Phase 1: category names only).
     private func generateSkillsPrompt(for revNode: ExportedReviewNode, skills: [Skill]) -> String {
         let skillBank = formatSkillBank(skills)
 
         return """
-        Re-select skills from the Skill Bank for each category to better match this job posting.
+        Review and adjust the skill category names for this resume to better align with the target job posting.
 
         CRITICAL CONSTRAINTS:
-        - PRESERVE the existing category names exactly as shown below
-        - DO NOT rename, merge, or reorganize categories
-        - ONLY change which skills appear under each category
-        - Select skills ONLY from the Skill Bank below - do NOT invent skills
-        - Prefer higher-proficiency skills (expert > proficient > familiar) when multiple skills match the job
+        - Each value in newValueArray must be ONLY a category name — do NOT append individual skills
+        - You may rename categories to better match job posting terminology
+        - You may reorder categories by relevance to the job
+        - You may add or remove categories (but keep 4-7 total)
+        - Category names should be concise (2-5 words)
 
         ## Available Skills from Skill Bank
 
         \(skillBank)
 
-        Current skills on resume (preserve these category names):
+        Current category names on resume:
         \(revNode.value)
 
-        Your task: For each existing category, select the most job-relevant skills from the Skill Bank.
-        Keep the same category names but optimize the skill selection within each.
+        Your task: Optimize category names and their order for this job posting.
+        Individual skill selection within categories will happen in a separate step.
 
-        Return a JSON object with this structure:
-        {
-          "id": "\(revNode.id)",
-          "oldValue": "\(escapeForJSON(revNode.value))",
-          "newValue": "{{categories with updated skills as comma-separated list}}",
-          "valueChanged": true,
-          "why": "explanation of skill selection changes (not category changes)",
-          "treePath": "\(revNode.path)",
-          "nodeType": "list",
-          "newValueArray": ["ExistingCategory1: skill1, skill2", "ExistingCategory2: skill3, skill4"]
-        }
-
-        Remember: Category names must match the original exactly. Only the skills within each category should change.
+        \(jsonResponseBlock(for: revNode))
         """
     }
 
@@ -589,17 +577,7 @@ final class RevisionTaskBuilder {
 
         Current skills: \(revNode.value)
 
-        Return a JSON object with this structure:
-        {
-          "id": "\(revNode.id)",
-          "oldValue": "\(escapeForJSON(revNode.value))",
-          "newValue": "{{new skill selection as comma-separated list}}",
-          "valueChanged": true,
-          "why": "explanation of skill selection changes",
-          "treePath": "\(revNode.path)",
-          "nodeType": "list",
-          "newValueArray": ["skill1", "skill2", "skill3"]
-        }
+        \(jsonResponseBlock(for: revNode))
         """
     }
 
@@ -611,16 +589,7 @@ final class RevisionTaskBuilder {
 
             Current titles: \(revNode.value)
 
-            Return a JSON object with this structure:
-            {
-              "id": "\(revNode.id)",
-              "oldValue": "\(escapeForJSON(revNode.value))",
-              "newValue": "{{proposed titles as period-separated string}}",
-              "valueChanged": true,
-              "why": "explanation of why these titles were chosen",
-              "treePath": "\(revNode.path)",
-              "nodeType": "scalar"
-            }
+            \(jsonResponseBlock(for: revNode))
             """
         }
 
@@ -644,18 +613,7 @@ final class RevisionTaskBuilder {
 
         Current titles: \(revNode.value)
 
-        Return a JSON object with this structure:
-        {
-          "id": "\(revNode.id)",
-          "oldValue": "\(escapeForJSON(revNode.value))",
-          "newValue": "{{titles from selected set as period-separated string}}",
-          "valueChanged": true,
-          "why": "explanation of why this title set was selected",
-          "treePath": "\(revNode.path)",
-          "nodeType": "scalar"
-        }
-
-        Include "selectedSetIndex" in your response indicating which set (0-indexed) you selected.
+        \(jsonResponseBlock(for: revNode))
         """
     }
 
@@ -674,22 +632,52 @@ final class RevisionTaskBuilder {
 
     /// Build the standard JSON response instruction block.
     private func jsonResponseBlock(for revNode: ExportedReviewNode) -> String {
-        """
-        ## Output Format
+        if revNode.isContainer {
+            return """
+            ## Output Format
 
-        Return a JSON object with this structure:
-        {
-          "id": "\(revNode.id)",
-          "oldValue": "\(escapeForJSON(revNode.value))",
-          "newValue": "{{proposed revision}}",
-          "valueChanged": true,
-          "why": "explanation of changes",
-          "treePath": "\(revNode.path)",
-          "nodeType": "\(revNode.isContainer ? "list" : "scalar")\(revNode.isContainer ? "\",\n  \"newValueArray\": [\"item1\", \"item2\", \"item3\"]" : "\"")"
+            This is a LIST node. You MUST populate newValueArray with individual items.
+
+            {
+              "id": "\(revNode.id)",
+              "oldValue": "\(escapeForJSON(revNode.value))",
+              "newValue": "{{newline-joined summary}}",
+              "valueChanged": true,
+              "why": "explanation of changes",
+              "treePath": "\(revNode.path)",
+              "nodeType": "list",
+              "newValueArray": ["item1", "item2", "item3"],
+              "oldValueArray": \(formatOldValueArray(revNode))
+            }
+
+            If no changes are needed, set "valueChanged" to false and copy the current values.
+            """
+        } else {
+            return """
+            ## Output Format
+
+            {
+              "id": "\(revNode.id)",
+              "oldValue": "\(escapeForJSON(revNode.value))",
+              "newValue": "{{proposed revision}}",
+              "valueChanged": true,
+              "why": "explanation of changes",
+              "treePath": "\(revNode.path)",
+              "nodeType": "scalar",
+              "newValueArray": [],
+              "oldValueArray": []
+            }
+
+            If no changes are needed, set "valueChanged" to false and copy the current value.
+            """
         }
+    }
 
-        If no changes are needed, set "valueChanged" to false and copy the current value to "newValue".
-        """
+    /// Format the old value array for inclusion in the JSON template.
+    private func formatOldValueArray(_ revNode: ExportedReviewNode) -> String {
+        guard let children = revNode.childValues, !children.isEmpty else { return "[]" }
+        let items = children.map { "\"\(escapeForJSON($0))\"" }.joined(separator: ", ")
+        return "[\(items)]"
     }
 
     /// Generate prompt for work highlights (bullet points).

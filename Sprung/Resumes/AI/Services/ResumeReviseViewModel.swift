@@ -71,16 +71,6 @@ class ResumeReviseViewModel {
         workflowState.isProcessingRevisions
     }
 
-    var showSkillExperiencePicker: Bool {
-        get { toolRunner.showSkillExperiencePicker }
-        set { toolRunner.showSkillExperiencePicker = newValue }
-    }
-
-    var pendingSkillQueries: [SkillQuery] {
-        get { toolRunner.pendingSkillQueries }
-        set { toolRunner.pendingSkillQueries = newValue }
-    }
-
     // MARK: - Initialization
 
     init(
@@ -219,15 +209,6 @@ class ResumeReviseViewModel {
         workflowOrchestrator.skipCoherencePass()
     }
 
-    // MARK: - Forwarded Tool Methods
-
-    func submitSkillExperienceResults(_ results: [SkillExperienceResult]) {
-        toolRunner.submitSkillExperienceResults(results)
-    }
-
-    func cancelSkillExperienceQuery() {
-        toolRunner.cancelSkillExperienceQuery()
-    }
 }
 
 // MARK: - RevisionWorkflowOrchestratorDelegate

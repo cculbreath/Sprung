@@ -18,7 +18,7 @@
 // |-------------------|------------------------------------------------------|
 // | skills.*.name     | skills.bundledAttributes = ["name"]                  |
 // | skills[].keywords | skills.enumeratedAttributes = ["keywords"]           |
-// | custom.jobTitles[]| jobTitles.status = .aiToReplace, children marked     |
+// | custom.jobTitles  | jobTitles.status = .aiToReplace (solo container)     |
 // | custom.objective  | objective.status = .aiToReplace (scalar)             |
 //
 // Each TreeNode stores:
@@ -40,8 +40,9 @@
 //    -> Generate pattern like "custom.jobTitles[]"
 //    -> Export as container enumerate -> Phase 2 RevNodes
 //
-// 4. For scalar nodes with aiToReplace and no children:
+// 4. For nodes with aiToReplace (leaf or container, no bundle/enumerate):
 //    -> Export directly -> Phase 2 RevNodes
+//    -> Container nodes export as one RevNode with childValues
 //
 // Pattern Syntax:
 // | Symbol | Meaning                 | Result                              |
@@ -119,7 +120,11 @@ class PhaseReviewManager {
             // Check for collection patterns (bundled/enumerated attributes)
             if let bundled = node.bundledAttributes, !bundled.isEmpty {
                 for attr in bundled {
-                    let pattern = "\(currentPath).*.\(attr)"
+                    // "*" means "bundle all direct children" (flat containers like jobTitles)
+                    // Named attrs mean "bundle this field across entries" (e.g., skills.*.name)
+                    let pattern = attr == "*"
+                        ? "\(currentPath).*"
+                        : "\(currentPath).*.\(attr)"
                     if !processedPaths.contains(pattern) {
                         processedPaths.insert(pattern)
                         let nodes = TreeNode.exportNodesMatchingPath(pattern, from: rootNode)
@@ -154,16 +159,15 @@ class PhaseReviewManager {
                 }
             }
 
-            // Check for scalar node (no children, AI-enabled)
-            let isScalar = node.status == .aiToReplace &&
-                           node.orderedChildren.isEmpty &&
-                           node.bundledAttributes == nil &&
-                           node.enumeratedAttributes == nil
+            // Check for AI-enabled leaf or container node (no bundle/enumerate attributes)
+            let isAIMarked = node.status == .aiToReplace &&
+                             node.bundledAttributes == nil &&
+                             node.enumeratedAttributes == nil
 
-            if isScalar && !processedPaths.contains(currentPath) {
+            if isAIMarked && !processedPaths.contains(currentPath) {
                 processedPaths.insert(currentPath)
                 let nodes = TreeNode.exportNodesMatchingPath(currentPath, from: rootNode)
-                // Scalar nodes default to phase 2
+                // AI-marked nodes default to phase 2
                 addToPhase(nodes, phase: 2, pattern: currentPath)
             }
 

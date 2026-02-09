@@ -822,8 +822,7 @@ class RevisionWorkflowOrchestrator {
             executeTool: { @Sendable toolName, toolArguments in
                 let context = ResumeToolContext(
                     resume: resume,
-                    jobApp: jobApp,
-                    presentUI: nil  // No UI presentation in parallel execution
+                    jobApp: jobApp
                 )
                 let result = try await registry.executeTool(
                     name: toolName,
@@ -833,9 +832,6 @@ class RevisionWorkflowOrchestrator {
                 switch result {
                 case .immediate(let json):
                     return json.rawString() ?? "{}"
-                case .pendingUserAction:
-                    // UI actions are not supported in parallel execution
-                    return "{\"error\": \"User interaction not available during parallel execution\"}"
                 case .error(let errorMessage):
                     return "{\"error\": \"\(errorMessage)\"}"
                 }

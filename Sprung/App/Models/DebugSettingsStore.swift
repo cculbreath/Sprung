@@ -71,18 +71,12 @@ final class DebugSettingsStore {
             defaults.set(showOnboardingDebugButton, forKey: Keys.showOnboardingDebugButton)
         }
     }
-    var forceQueryUserExperienceTool: Bool {
-        didSet {
-            defaults.set(forceQueryUserExperienceTool, forKey: Keys.forceQueryUserExperienceTool)
-        }
-    }
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         let storedLevel = LogLevelSetting(rawValue: defaults.integer(forKey: Keys.debugLogLevel)) ?? .info
         self.logLevelSetting = storedLevel
         self.saveDebugPrompts = defaults.bool(forKey: Keys.saveDebugPrompts)
         self.showOnboardingDebugButton = defaults.object(forKey: Keys.showOnboardingDebugButton) as? Bool ?? true
-        self.forceQueryUserExperienceTool = defaults.bool(forKey: Keys.forceQueryUserExperienceTool)
         // Apply persisted settings to the logging facade on initialization.
         Logger.updateMinimumLevel(storedLevel.loggerLevel)
         Logger.updateFileLogging(isEnabled: saveDebugPrompts)
@@ -92,6 +86,5 @@ final class DebugSettingsStore {
         static let debugLogLevel = "debugLogLevel"
         static let saveDebugPrompts = "saveDebugPrompts"
         static let showOnboardingDebugButton = "showOnboardingDebugButton"
-        static let forceQueryUserExperienceTool = "forceQueryUserExperienceTool"
     }
 }

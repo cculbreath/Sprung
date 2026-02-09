@@ -30,16 +30,29 @@ struct OpenRouterReasoning: Codable {
 /// - Important: This is an internal implementation type. Use `LLMFacade` as the
 ///   public entry point for LLM operations.
 struct LLMRequestBuilder {
+    /// Apply OpenRouter provider routing preferences based on model ID.
+    /// Routes Anthropic models to Anthropic's direct provider to avoid
+    /// Vertex AI compatibility issues (e.g., unsupported beta headers).
+    private static func withProviderPreferences(
+        _ params: ChatCompletionParameters,
+        modelId: String
+    ) -> ChatCompletionParameters {
+        guard modelId.hasPrefix("anthropic/") else { return params }
+        var params = params
+        params.provider = .init(order: ["Anthropic"], allowFallbacks: true)
+        return params
+    }
+
     /// Build parameters for a simple text request
     static func buildTextRequest(
         prompt: String,
         modelId: String
     ) -> ChatCompletionParameters {
         let message = LLMMessage.text(role: .user, content: prompt)
-        return ChatCompletionParameters(
+        return withProviderPreferences(ChatCompletionParameters(
             messages: [message],
             model: .custom(modelId)
-        )
+        ), modelId: modelId)
     }
     /// Build parameters for a request with image inputs
     static func buildVisionRequest(
@@ -64,10 +77,10 @@ struct LLMRequestBuilder {
             role: .user,
             content: .contentArray(contentParts)
         )
-        return ChatCompletionParameters(
+        return withProviderPreferences(ChatCompletionParameters(
             messages: [message],
             model: .custom(modelId)
-        )
+        ), modelId: modelId)
     }
     /// Build parameters for a structured JSON request with optional schema
     static func buildStructuredRequest<T: Codable>(
@@ -84,18 +97,18 @@ struct LLMRequestBuilder {
                 schema: schema
             )
             Logger.debug("📝 Using structured output with JSON Schema enforcement")
-            return ChatCompletionParameters(
+            return withProviderPreferences(ChatCompletionParameters(
                 messages: [message],
                 model: .custom(modelId),
                 responseFormat: .jsonSchema(responseFormatSchema)
-            )
+            ), modelId: modelId)
         } else {
             Logger.debug("📝 Using basic JSON object mode (no schema enforcement)")
-            return ChatCompletionParameters(
+            return withProviderPreferences(ChatCompletionParameters(
                 messages: [message],
                 model: .custom(modelId),
                 responseFormat: .jsonObject
-            )
+            ), modelId: modelId)
         }
     }
     /// Build parameters for a structured request with images
@@ -122,11 +135,11 @@ struct LLMRequestBuilder {
             role: .user,
             content: .contentArray(contentParts)
         )
-        return ChatCompletionParameters(
+        return withProviderPreferences(ChatCompletionParameters(
             messages: [message],
             model: .custom(modelId),
             responseFormat: .jsonObject
-        )
+        ), modelId: modelId)
     }
     /// Build parameters for a flexible JSON request (uses structured output when available)
     static func buildFlexibleJSONRequest<T: Codable>(
@@ -147,28 +160,28 @@ struct LLMRequestBuilder {
                     schema: schema
                 )
                 Logger.debug("📝 Using structured output with JSON Schema enforcement for model: \(modelId)")
-                return ChatCompletionParameters(
+                return withProviderPreferences(ChatCompletionParameters(
                     messages: [message],
                     model: .custom(modelId),
                     responseFormat: .jsonSchema(responseFormatSchema)
-                )
+                ), modelId: modelId)
             } else {
                 // Use basic JSON object format (still structured but no schema)
                 Logger.debug("📝 Using structured output with JSON object mode for model: \(modelId)")
-                return ChatCompletionParameters(
+                return withProviderPreferences(ChatCompletionParameters(
                     messages: [message],
                     model: .custom(modelId),
                     responseFormat: .jsonObject
-                )
+                ), modelId: modelId)
             }
         } else {
             // Use basic mode - rely on prompt instructions for JSON formatting
             let reason = shouldAvoidJSONSchema ? "avoiding due to previous failures" : "model doesn't support structured output"
             Logger.debug("📝 Using basic mode with prompt-based JSON for model: \(modelId) (\(reason))")
-            return ChatCompletionParameters(
+            return withProviderPreferences(ChatCompletionParameters(
                 messages: [message],
                 model: .custom(modelId)
-            )
+            ), modelId: modelId)
         }
     }
     /// Build parameters for conversation requests
@@ -177,10 +190,10 @@ struct LLMRequestBuilder {
         modelId: String
     ) -> ChatCompletionParameters {
         let vendorMessages = LLMVendorMapper.vendorMessages(from: messages)
-        return ChatCompletionParameters(
+        return withProviderPreferences(ChatCompletionParameters(
             messages: vendorMessages,
             model: .custom(modelId)
-        )
+        ), modelId: modelId)
     }
     /// Build parameters for structured conversation requests
     static func buildStructuredConversationRequest<T: Codable>(
@@ -197,18 +210,18 @@ struct LLMRequestBuilder {
                 schema: schema
             )
             Logger.debug("📝 Conversation using structured output with JSON Schema enforcement")
-            return ChatCompletionParameters(
+            return withProviderPreferences(ChatCompletionParameters(
                 messages: vendorMessages,
                 model: .custom(modelId),
                 responseFormat: .jsonSchema(responseFormatSchema)
-            )
+            ), modelId: modelId)
         } else {
             Logger.debug("📝 Conversation using basic JSON object mode (no schema enforcement)")
-            return ChatCompletionParameters(
+            return withProviderPreferences(ChatCompletionParameters(
                 messages: vendorMessages,
                 model: .custom(modelId),
                 responseFormat: .jsonObject
-            )
+            ), modelId: modelId)
         }
     }
 
@@ -238,6 +251,6 @@ struct LLMRequestBuilder {
         if let effort = reasoningEffort {
             params.reasoningEffort = effort
         }
-        return params
+        return withProviderPreferences(params, modelId: modelId)
     }
 }

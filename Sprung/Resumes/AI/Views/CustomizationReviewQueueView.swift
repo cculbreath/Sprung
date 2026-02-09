@@ -67,6 +67,9 @@ struct CustomizationReviewQueueView: View {
                                 },
                                 onUseOriginal: {
                                     reviewQueue.setAction(for: item.id, action: .useOriginal)
+                                },
+                                onUnapprove: {
+                                    reviewQueue.unapprove(itemId: item.id)
                                 }
                             )
                         }
@@ -95,6 +98,11 @@ struct CustomizationReviewQueueView: View {
         } message: {
             if let error = reviewQueue.lastRegenerationError {
                 Text("Failed to regenerate \"\(error.displayName)\". You can try again or use a different action.")
+            }
+        }
+        .onChange(of: reviewQueue.activeItems.count) { oldCount, newCount in
+            if oldCount == 0 && newCount > 0 {
+                filter = .pending
             }
         }
         .onChange(of: reviewQueue.allItemsApproved) { _, allApproved in
@@ -388,6 +396,9 @@ struct CompoundGroupView: View {
                     },
                     onUseOriginal: {
                         reviewQueue.setAction(for: item.id, action: .useOriginal)
+                    },
+                    onUnapprove: {
+                        reviewQueue.unapprove(itemId: item.id)
                     }
                 )
                 .padding(.horizontal, 6)
@@ -413,6 +424,7 @@ struct CustomizationReviewCard: View {
     let onEdit: (String) -> Void
     let onEditArray: ([String]) -> Void
     let onUseOriginal: () -> Void
+    var onUnapprove: (() -> Void)? = nil
 
     @State private var editedContent: String = ""
     @State private var editedItems: [String] = []
@@ -430,6 +442,19 @@ struct CustomizationReviewCard: View {
     /// Get the array elements from the revision
     private var contentArray: [String] {
         item.revision.newValueArray ?? []
+    }
+
+    /// Display array: prefers user edits over LLM proposed values
+    private var displayContentArray: [String] {
+        if let edited = item.editedChildren, !edited.isEmpty {
+            return edited
+        }
+        return contentArray
+    }
+
+    /// Display scalar: prefers user edits over LLM proposed value
+    private var displayContentScalar: String {
+        item.editedContent ?? item.revision.newValue
     }
 
     var body: some View {
@@ -453,8 +478,8 @@ struct CustomizationReviewCard: View {
             // Compact content - always visible
             compactContent
 
-            // Action buttons (only if pending and not regenerating)
-            if item.userAction == nil && !item.isRegenerating {
+            // Action buttons (hidden while regenerating)
+            if !item.isRegenerating {
                 actionButtons
             }
 
@@ -530,9 +555,9 @@ struct CustomizationReviewCard: View {
                         scalarEditingView
                     }
                 } else {
-                    if isArrayContent, !contentArray.isEmpty {
+                    if isArrayContent, !displayContentArray.isEmpty {
                         VStack(alignment: .leading, spacing: 2) {
-                            ForEach(contentArray, id: \.self) { value in
+                            ForEach(displayContentArray, id: \.self) { value in
                                 HStack(alignment: .top, spacing: 4) {
                                     Text("\u{2022}")
                                         .foregroundStyle(.blue)
@@ -542,7 +567,7 @@ struct CustomizationReviewCard: View {
                             }
                         }
                     } else {
-                        SelectableText(item.revision.newValue.isEmpty ? "(empty)" : item.revision.newValue)
+                        SelectableText(displayContentScalar.isEmpty ? "(empty)" : displayContentScalar)
                             .font(.system(.callout, design: .rounded))
                     }
                 }
@@ -627,65 +652,70 @@ struct CustomizationReviewCard: View {
 
     // MARK: - Action Buttons
 
+    @ViewBuilder
     private var actionButtons: some View {
+        if isEditing {
+            editingButtons
+        } else if item.userAction == nil {
+            pendingButtons
+        } else if item.isApproved {
+            approvedButtons
+        }
+        // Rejected items: no buttons (regeneration handles them)
+    }
+
+    /// Buttons shown while editing (any prior state)
+    private var editingButtons: some View {
         HStack(spacing: 8) {
             Button {
-                if isEditing {
-                    // Save pending edits before approving
-                    if isArrayContent {
-                        let nonEmptyItems = editedItems.filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
-                        onEditArray(nonEmptyItems)
-                    } else {
-                        onEdit(editedContent)
-                    }
-                    isEditing = false
+                if isArrayContent {
+                    let nonEmptyItems = editedItems.filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+                    onEditArray(nonEmptyItems)
                 } else {
-                    onApprove()
+                    onEdit(editedContent)
                 }
+                isEditing = false
             } label: {
-                Label(isEditing ? "Save & Approve" : "Approve", systemImage: "checkmark")
+                Label("Save", systemImage: "checkmark.circle")
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.regular)
             .tint(.green)
 
             Button {
-                if isEditing {
-                    // Save changes
-                    if isArrayContent {
-                        // Filter out empty items and save
-                        let nonEmptyItems = editedItems.filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
-                        onEditArray(nonEmptyItems)
-                    } else {
-                        onEdit(editedContent)
-                    }
-                    isEditing = false
-                } else {
-                    // Start editing
-                    if isArrayContent {
-                        editedItems = contentArray.isEmpty ? [""] : contentArray
-                    } else {
-                        editedContent = item.revision.newValue
-                    }
-                    isEditing = true
-                }
+                isEditing = false
+                editedContent = ""
+                editedItems = []
             } label: {
-                Label(isEditing ? "Save" : "Edit", systemImage: isEditing ? "checkmark.circle" : "pencil")
+                Label("Cancel", systemImage: "xmark")
             }
             .buttonStyle(.bordered)
             .controlSize(.small)
 
-            if isEditing {
-                Button {
-                    isEditing = false
-                    editedContent = ""
-                    editedItems = []
-                } label: {
-                    Image(systemName: "xmark")
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
+            Spacer()
+        }
+        .padding(.top, 8)
+    }
+
+    /// Buttons shown for pending items (userAction == nil)
+    private var pendingButtons: some View {
+        HStack(spacing: 8) {
+            Button {
+                onApprove()
+            } label: {
+                Label("Approve", systemImage: "checkmark")
             }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.regular)
+            .tint(.green)
+
+            Button {
+                enterEditMode()
+            } label: {
+                Label("Edit", systemImage: "pencil")
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
 
             Button {
                 onUseOriginal()
@@ -708,6 +738,46 @@ struct CustomizationReviewCard: View {
             Spacer()
         }
         .padding(.top, 8)
+    }
+
+    /// Buttons shown for approved items (.approved, .edited, .useOriginal)
+    private var approvedButtons: some View {
+        HStack(spacing: 8) {
+            Button {
+                enterEditMode()
+            } label: {
+                Label("Edit", systemImage: "pencil")
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+
+            Button {
+                onUnapprove?()
+            } label: {
+                Label("Unapprove", systemImage: "arrow.uturn.backward")
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .foregroundStyle(.orange)
+
+            Spacer()
+        }
+        .padding(.top, 8)
+    }
+
+    /// Pre-populate editors and enter edit mode.
+    /// Prefers existing user edits over the LLM's proposed values.
+    private func enterEditMode() {
+        if isArrayContent {
+            if let edited = item.editedChildren, !edited.isEmpty {
+                editedItems = edited
+            } else {
+                editedItems = contentArray.isEmpty ? [""] : contentArray
+            }
+        } else {
+            editedContent = item.editedContent ?? item.revision.newValue
+        }
+        isEditing = true
     }
 
     // MARK: - Status Badge

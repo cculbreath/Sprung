@@ -34,60 +34,6 @@ struct ResumeToolContext {
     let resume: Resume
     /// The job application context (if available)
     let jobApp: JobApp?
-    /// Callback to present UI and await user response
-    let presentUI: (@MainActor (ResumeToolUIRequest) async -> ResumeToolUIResponse)?
-}
-
-/// Request for UI presentation from a tool
-enum ResumeToolUIRequest {
-    case skillExperiencePicker(skills: [SkillQuery])
-}
-
-/// Response from UI after user interaction
-enum ResumeToolUIResponse {
-    case skillExperienceResults([SkillExperienceResult])
-    case cancelled
-}
-
-/// Skill query parameter from LLM
-struct SkillQuery: Codable, Equatable {
-    let keyword: String
-}
-
-/// User's response about skill experience
-struct SkillExperienceResult: Codable, Equatable {
-    let keyword: String
-    let level: ExperienceLevel
-    let comment: String?
-}
-
-/// Experience level options
-enum ExperienceLevel: String, Codable, CaseIterable, Equatable {
-    case none = "none"
-    case novice = "novice"
-    case competent = "competent"
-    case advanced = "advanced"
-    case expert = "expert"
-
-    var displayName: String {
-        switch self {
-        case .none: return "No Experience"
-        case .novice: return "Novice"
-        case .competent: return "Competent"
-        case .advanced: return "Advanced"
-        case .expert: return "Expert"
-        }
-    }
-
-    var shortDescription: String {
-        switch self {
-        case .none: return "I have no experience with this"
-        case .novice: return "Basic understanding, limited practical use"
-        case .competent: return "Can work independently on typical tasks"
-        case .advanced: return "Deep expertise, can mentor others"
-        case .expert: return "Industry-leading knowledge"
-        }
-    }
 }
 
 // MARK: - Tool Result
@@ -96,8 +42,6 @@ enum ExperienceLevel: String, Codable, CaseIterable, Equatable {
 enum ResumeToolResult {
     /// Tool completed immediately with a result
     case immediate(JSON)
-    /// Tool requires user interaction - UI will be presented
-    case pendingUserAction(ResumeToolUIRequest)
     /// Tool encountered an error
     case error(String)
 }
@@ -111,9 +55,6 @@ class ResumeToolRegistry {
     private var tools: [any ResumeTool] = []
 
     init(knowledgeCardStore: KnowledgeCardStore? = nil) {
-        // Register default tools
-        registerTool(QueryUserExperienceLevelTool())
-
         if let store = knowledgeCardStore {
             registerTool(ReadKnowledgeCardsTool(knowledgeCardStore: store))
         }

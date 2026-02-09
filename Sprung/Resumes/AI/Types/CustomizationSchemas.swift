@@ -29,7 +29,7 @@ enum CustomizationSchemas {
                 ),
                 "newValue": JSONSchema(
                     type: .string,
-                    description: "Proposed revised text value"
+                    description: "For scalar nodes: the revised text. For list nodes: a newline-joined summary of newValueArray (secondary to newValueArray)."
                 ),
                 "valueChanged": JSONSchema(
                     type: .boolean,
@@ -49,17 +49,17 @@ enum CustomizationSchemas {
                 ),
                 "nodeType": JSONSchema(
                     type: .string,
-                    description: "Whether this node holds a single value or an array",
+                    description: "Node type: 'list' for array content (keywords, highlights, bullet points) — MUST populate newValueArray. 'scalar' for single text values — set newValueArray to null.",
                     enum: ["scalar", "list"]
                 ),
                 "oldValueArray": JSONSchema(
-                    type: .union([.array, .null]),
-                    description: "Original array values for list nodes",
+                    type: .array,
+                    description: "Original array of individual items for list nodes. Empty array [] when nodeType is 'scalar'.",
                     items: JSONSchema(type: .string)
                 ),
                 "newValueArray": JSONSchema(
-                    type: .union([.array, .null]),
-                    description: "Proposed array values for list nodes",
+                    type: .array,
+                    description: "Array of individual items when nodeType is 'list'. Each element is a separate string (e.g., one keyword per element, one bullet per element). Empty array [] when nodeType is 'scalar'.",
                     items: JSONSchema(type: .string)
                 )
             ],

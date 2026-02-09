@@ -139,6 +139,15 @@ struct ResumeEntryCardView: View {
             } label: {
                 Label("Rename", systemImage: "pencil")
             }
+
+            if node.allowsDeletion {
+                Divider()
+                Button(role: .destructive) {
+                    vm.deleteNode(node, context: modelContext)
+                } label: {
+                    Label("Delete", systemImage: "trash")
+                }
+            }
         }
     }
 

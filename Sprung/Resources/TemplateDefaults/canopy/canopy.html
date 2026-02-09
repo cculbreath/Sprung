@@ -213,9 +213,9 @@
         {{#hasContent(custom.jobTitles)}}<div class="tagline">{{ joinBullet(custom.jobTitles) }}</div>{{/hasContent(custom.jobTitles)}}
         <div class="contact-row">
           {{#hasContent(basics.location.city, basics.location.region)}}<div class="contact-item"><span class="contact-dot"></span>{{basics.location.city}}{{#hasContent(basics.location.region)}}, {{basics.location.region}}{{/hasContent(basics.location.region)}}</div>{{/hasContent(basics.location.city, basics.location.region)}}
-          {{#hasContent(basics.email)}}<div class="contact-item"><span class="contact-dot"></span><a href="mailto:{{{basics.email}}}">{{{basics.email}}}</a></div>{{/hasContent(basics.email)}}
+          {{#hasContent(basics.email)}}<div class="contact-item"><span class="contact-dot"></span>{{{basics.email}}}</div>{{/hasContent(basics.email)}}
           {{#hasContent(basics.phone)}}<div class="contact-item"><span class="contact-dot"></span>{{basics.phone}}</div>{{/hasContent(basics.phone)}}
-          {{#hasContent(basics.url)}}<div class="contact-item"><span class="contact-dot"></span><a href="https://{{{basics.url}}}">{{{basics.url}}}</a></div>{{/hasContent(basics.url)}}
+          {{#hasContent(basics.url)}}<div class="contact-item"><span class="contact-dot"></span>{{{basics.url}}}</div>{{/hasContent(basics.url)}}
         </div>
       </header>
 

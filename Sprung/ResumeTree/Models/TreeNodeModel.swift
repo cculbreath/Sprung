@@ -175,16 +175,19 @@ enum LeafStatus: String, Codable, Hashable {
             }
         }
 
-        // Solo nodes: leaf with status == .aiToReplace (not already counted above)
-        if status == .aiToReplace && orderedChildren.isEmpty {
+        // Solo nodes: status == .aiToReplace with no bundle/enumerate attributes
+        // Counts both leaf nodes and solo containers (e.g., jobTitles) as 1 revnode each
+        if status == .aiToReplace && bundledAttributes == nil && enumeratedAttributes == nil {
             // Only count if not part of a container enumerate (those are counted above)
             if parent?.enumeratedAttributes?.contains("*") != true {
                 count += 1
             }
         }
 
-        // Recurse into children (but skip if this is container enumerate - already counted)
-        if enumeratedAttributes?.contains("*") != true {
+        // Recurse into children (skip if container enumerate or solo container - already counted)
+        let isSoloContainer = status == .aiToReplace && !orderedChildren.isEmpty &&
+                              bundledAttributes == nil && enumeratedAttributes == nil
+        if enumeratedAttributes?.contains("*") != true && !isSoloContainer {
             for child in orderedChildren {
                 count += child.revnodeCount
             }

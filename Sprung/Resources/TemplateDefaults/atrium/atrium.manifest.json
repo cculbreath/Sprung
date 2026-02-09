@@ -144,7 +144,7 @@
     "projects[].description",
     "skills.*.name",
     "skills[].keywords",
-    "custom.jobTitles[]"
+    "custom.jobTitles"
   ],
   "reviewPhases": {
     "skills": [
