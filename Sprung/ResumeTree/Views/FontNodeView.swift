@@ -6,11 +6,18 @@
 import SwiftData
 import SwiftUI
 struct FontNodeView: View {
-    @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
-    @Environment(AppEnvironment.self) private var appEnvironment: AppEnvironment
+    @Environment(ResumeDetailVM.self) private var vm: ResumeDetailVM
     @State var node: FontSizeNode
-    // State variables for editing and hover actions.
     @State private var isEditing: Bool = false
+    private static let fontFormatter: NumberFormatter = {
+        let f = NumberFormatter()
+        f.numberStyle = .decimal
+        f.minimumFractionDigits = 0
+        f.maximumFractionDigits = 1
+        f.minimum = 1
+        f.maximum = 100
+        return f
+    }()
     var body: some View {
         Stepper {
             HStack {
@@ -23,18 +30,14 @@ struct FontNodeView: View {
                         TextField(
                             "",
                             value: $node.fontValue,
-                            formatter: NumberFormatter()
+                            formatter: Self.fontFormatter
                         )
                         .frame(width: 50, alignment: .trailing).multilineTextAlignment(.trailing)
                         .onSubmit {
                             isEditing = false
-                            if let res = jobAppStore.selectedApp?.selectedRes {
-                                appEnvironment.resumeExportCoordinator.debounceExport(resume: res)
-                            } else {
-                                Logger.debug("FontNodeView: No selected resume to export after edit submission")
-                            }
-                        }.padding(.trailing, 0)
-                        Text("pt") // Postfix text (unit)
+                        }
+                        .padding(.trailing, 0)
+                        Text("pt")
                             .foregroundColor(.secondary).padding(.leading, 0)
                     }
                 }
@@ -46,13 +49,7 @@ struct FontNodeView: View {
         }
         .padding(.horizontal, 5)
         .onChange(of: node.fontValue) {
-            if !isEditing {
-                if let res = jobAppStore.selectedApp?.selectedRes {
-                    appEnvironment.resumeExportCoordinator.debounceExport(resume: res)
-                } else {
-                    Logger.debug("FontNodeView: No selected resume to export on value change")
-                }
-            }
+            vm.refreshPDF()
         }
         .cornerRadius(5)
     }

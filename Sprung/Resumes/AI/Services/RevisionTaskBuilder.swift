@@ -905,7 +905,14 @@ final class RevisionTaskBuilder {
 
         for item in approvedItems {
             let finalValue: String
-            if let edited = item.editedContent {
+            if item.userAction == .useOriginal {
+                // User kept the original — report original value, not the LLM proposal
+                if let oldArray = item.revision.oldValueArray, !oldArray.isEmpty {
+                    finalValue = oldArray.joined(separator: ", ")
+                } else {
+                    finalValue = item.revision.oldValue
+                }
+            } else if let edited = item.editedContent {
                 finalValue = edited
             } else if let editedChildren = item.editedChildren, !editedChildren.isEmpty {
                 finalValue = editedChildren.joined(separator: ", ")
@@ -921,7 +928,7 @@ final class RevisionTaskBuilder {
             case .titles:
                 titleDecisions.append("- \(finalValue)")
             default:
-                otherDecisions.append("- \(item.task.revNode.displayName): \(String(finalValue.prefix(100)))")
+                otherDecisions.append("- \(item.task.revNode.displayName): \(finalValue)")
             }
         }
 

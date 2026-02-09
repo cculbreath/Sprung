@@ -116,16 +116,20 @@ struct UnifiedToolbar: CustomizableToolbarContent {
                 CoverLetterGenerateButton()
             }
 
-            ToolbarItem(id: "optimizeResume", placement: .secondaryAction, showsByDefault: true) {
+            ToolbarItem(id: "experienceEditorMain", placement: .secondaryAction, showsByDefault: true) {
                 Button(action: {
-                    sheets.showResumeReview = true
+                    Task { @MainActor in
+                        if !NSApp.sendAction(#selector(AppDelegate.showExperienceEditorWindow), to: nil, from: nil),
+                           let delegate = NSApplication.shared.delegate as? AppDelegate {
+                            delegate.showExperienceEditorWindow()
+                        }
+                    }
                 }, label: {
-                    Label("Optimize", systemImage: "wand.and.stars")
+                    Label("Experience", systemImage: "building.columns")
                         .font(.system(size: 14, weight: .light))
                 })
                 .buttonStyle(.automatic)
-                .help("Optimize resume (reorder skills, fix overflow, assess quality)")
-                .disabled(jobAppStore.selectedApp?.selectedRes == nil)
+                .help("Open Experience Editor")
             }
 
             ToolbarItem(id: "analyze", placement: .secondaryAction, showsByDefault: true) {

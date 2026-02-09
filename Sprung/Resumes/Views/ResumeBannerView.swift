@@ -34,7 +34,7 @@ struct ResumeBannerView: View {
         }
         .background {
             // Visual layer: the actual banner tint
-            Color(red: 237/255, green: 241/255, blue: 242/255)
+            Color(red: 222/255, green: 226/255, blue: 228/255)
         }
         .overlay(alignment: .bottom) {
             Rectangle()

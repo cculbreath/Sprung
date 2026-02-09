@@ -9,6 +9,10 @@
       },
       {
         "input" : "textarea",
+        "key" : "objective"
+      },
+      {
+        "input" : "textarea",
         "key" : "moreInfo"
       }
     ]
@@ -70,19 +74,36 @@
     "work" : "Work Experience"
   },
   "sectionOrder" : [
-    "custom.jobTitles",
-    "custom.objective",
+    "custom",
     "skills",
     "education",
     "work",
-    "projects",
-    "custom.moreInfo"
+    "projects"
   ],
   "transparentKeys" : [
     "custom",
     "template"
   ],
   "sections" : {
+    "custom" : {
+      "type" : "object",
+      "fields" : [
+        {
+          "allowsManualMutations" : true,
+          "input" : "text",
+          "key" : "jobTitles",
+          "repeatable" : true
+        },
+        {
+          "input" : "textarea",
+          "key" : "objective"
+        },
+        {
+          "input" : "textarea",
+          "key" : "moreInfo"
+        }
+      ]
+    },
     "projects" : {
       "hiddenFields" : [
         "highlights",

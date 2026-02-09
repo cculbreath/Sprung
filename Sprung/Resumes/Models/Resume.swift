@@ -100,8 +100,6 @@ class Resume: Identifiable, Hashable {
     @Attribute(originalName: "textRes")
     var textResume: String = ""
     var pdfData: Data?
-    @Transient
-    var isExporting: Bool = false
     var jsonTxt: String {
         do {
             let context = try ResumeTemplateDataBuilder.buildContext(from: self)

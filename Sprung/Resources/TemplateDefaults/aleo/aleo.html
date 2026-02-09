@@ -184,12 +184,16 @@
               margin-top: 4pt;
               font-variant-numeric: lining-nums;
               line-height: 1.22;
+              padding-left: 14pt;
+              text-indent: -14pt;
             }
 
             /* Star bullet */
             .skill-div::before {
               content: "★ ";
-              display: inline-block; /* keeps star on same line as title */
+              display: inline-block;
+              width: 14pt;
+              text-indent: 0;
             }
 
             /* Category title (same line as star) */
@@ -205,6 +209,7 @@
               font-style: italic;
               font-weight: 300;
               line-height: 1.22;
+              text-indent: 0;
             }
             /* Individual keyword spans - separator added via JS */
             .skill-keywords .kw.has-sep::after {

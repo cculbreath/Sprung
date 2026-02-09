@@ -10,6 +10,14 @@ final class ResumeExportCoordinator {
     private let exportService: ResumeExportService
     private var pendingWorkItems: [UUID: DispatchWorkItem] = [:]
     private let debounceInterval: TimeInterval
+    /// Observable set of resume IDs currently being exported.
+    /// Views should check this instead of Resume.isExporting (@Transient
+    /// properties on SwiftData models don't reliably trigger SwiftUI observation).
+    private(set) var exportingResumeIDs: Set<UUID> = []
+    /// Convenience check for a specific resume.
+    func isExporting(_ resume: Resume) -> Bool {
+        exportingResumeIDs.contains(resume.id)
+    }
     init(
         exportService: ResumeExportService,
         debounceInterval: TimeInterval = 0.5
@@ -24,13 +32,13 @@ final class ResumeExportCoordinator {
         onFinish: (() -> Void)? = nil
     ) {
         cancelPendingExport(for: resume)
-        resume.isExporting = true
+        exportingResumeIDs.insert(resume.id)
         onStart?()
         let workItem = DispatchWorkItem { [weak self, weak resume] in
             guard let self, let resume else { return }
             Task { @MainActor in
                 defer {
-                    resume.isExporting = false
+                    self.exportingResumeIDs.remove(resume.id)
                     onFinish?()
                 }
                 do {
@@ -50,12 +58,13 @@ final class ResumeExportCoordinator {
     func cancelPendingExport(for resume: Resume) {
         guard let item = pendingWorkItems.removeValue(forKey: resume.id) else { return }
         item.cancel()
+        exportingResumeIDs.remove(resume.id)
     }
     /// Performs an immediate export and waits for completion.
     func ensureFreshRenderedText(for resume: Resume) async throws {
         cancelPendingExport(for: resume)
-        resume.isExporting = true
-        defer { resume.isExporting = false }
+        exportingResumeIDs.insert(resume.id)
+        defer { exportingResumeIDs.remove(resume.id) }
         do {
             try await exportService.export(for: resume)
         } catch {

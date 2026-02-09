@@ -40,11 +40,12 @@ struct ResumeSplitView: View {
     // MARK: - Resume Editor Content
 
     private func resumeEditorContent(selApp: JobApp, selRes: Resume) -> some View {
-        HStack(spacing: 0) {
-            // Editor column: banner + detail
-            VStack(spacing: 0) {
-                ResumeBannerView(jobApp: selApp)
-                    .frame(height: 32)
+        VStack(spacing: 0) {
+            ResumeBannerView(jobApp: selApp)
+                .frame(height: 32)
+
+            HStack(spacing: 0) {
+                // Editor column
                 ResumeDetailView(
                     resume: selRes,
                     tab: $tab,
@@ -55,18 +56,18 @@ struct ResumeSplitView: View {
                     exportCoordinator: appEnvironment.resumeExportCoordinator
                 )
                 .id(selRes.id)
-            }
-            .frame(
-                minWidth: isWide ? 300 : 220,
-                maxWidth: .infinity,
-                maxHeight: .infinity
-            )
+                .frame(
+                    minWidth: isWide ? 300 : 220,
+                    maxWidth: .infinity,
+                    maxHeight: .infinity
+                )
 
-            ResumePreviewChevronBar(pdfPreviewVisible: $pdfPreviewVisible)
+                ResumePreviewChevronBar(pdfPreviewVisible: $pdfPreviewVisible)
 
-            if pdfPreviewVisible {
-                pdfPreviewSection(resume: selRes)
-                    .transition(.move(edge: .trailing).combined(with: .opacity))
+                if pdfPreviewVisible {
+                    pdfPreviewSection(resume: selRes)
+                        .transition(.move(edge: .trailing).combined(with: .opacity))
+                }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

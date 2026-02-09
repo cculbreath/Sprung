@@ -97,8 +97,8 @@ struct CustomizationReviewQueueView: View {
                 Text("Failed to regenerate \"\(error.displayName)\". You can try again or use a different action.")
             }
         }
-        .onChange(of: reviewQueue.allItemsReviewed) { _, allReviewed in
-            if allReviewed && phaseNumber < totalPhases {
+        .onChange(of: reviewQueue.allItemsApproved) { _, allApproved in
+            if allApproved && phaseNumber < totalPhases {
                 Task {
                     try? await Task.sleep(for: .milliseconds(500))
                     onComplete()
@@ -244,7 +244,7 @@ struct CustomizationReviewQueueView: View {
                     onComplete()
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(!reviewQueue.allItemsReviewed)
+                .disabled(!reviewQueue.allItemsApproved)
             }
         }
         .padding(16)
@@ -630,9 +630,20 @@ struct CustomizationReviewCard: View {
     private var actionButtons: some View {
         HStack(spacing: 8) {
             Button {
-                onApprove()
+                if isEditing {
+                    // Save pending edits before approving
+                    if isArrayContent {
+                        let nonEmptyItems = editedItems.filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+                        onEditArray(nonEmptyItems)
+                    } else {
+                        onEdit(editedContent)
+                    }
+                    isEditing = false
+                } else {
+                    onApprove()
+                }
             } label: {
-                Label("Approve", systemImage: "checkmark")
+                Label(isEditing ? "Save & Approve" : "Approve", systemImage: "checkmark")
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.regular)

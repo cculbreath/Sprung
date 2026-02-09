@@ -522,7 +522,7 @@ class RevisionWorkflowOrchestrator {
         // 1. Apply approved items to the resume tree
         let approvedItems = queue.approvedItems
         for item in approvedItems {
-            applyReviewItemToResume(item, resume: resume)
+            applyReviewItemToResume(item, resume: resume, context: context)
         }
 
         // Track total customized fields for coherence threshold
@@ -609,7 +609,7 @@ class RevisionWorkflowOrchestrator {
 
         let approvedItems = queue.approvedItems
         for item in approvedItems {
-            applyReviewItemToResume(item, resume: resume)
+            applyReviewItemToResume(item, resume: resume, context: context)
         }
 
         Logger.info("Applied \(approvedItems.count) approved changes and closing workflow")
@@ -790,12 +790,12 @@ class RevisionWorkflowOrchestrator {
     }
 
     /// Apply a review item's changes to the resume tree
-    private func applyReviewItemToResume(_ item: CustomizationReviewItem, resume: Resume) {
+    private func applyReviewItemToResume(_ item: CustomizationReviewItem, resume: Resume, context: ModelContext) {
         guard item.shouldApplyRevision else { return }  // Skip useOriginal items
 
         // Check if this is a bundled/array node
         if let sourceNodeIds = item.task.revNode.sourceNodeIds, !sourceNodeIds.isEmpty {
-            applyBundledChanges(item: item, sourceNodeIds: sourceNodeIds, resume: resume)
+            applyBundledChanges(item: item, sourceNodeIds: sourceNodeIds, resume: resume, context: context)
         } else {
             // Scalar node - apply single value
             applySingleChange(item: item, resume: resume)
@@ -807,6 +807,9 @@ class RevisionWorkflowOrchestrator {
         let valueToApply: String
         if let editedContent = item.editedContent {
             valueToApply = editedContent
+        } else if let editedChildren = item.editedChildren, !editedChildren.isEmpty {
+            // Defensive: array edit on a scalar item — join into single value
+            valueToApply = editedChildren.joined(separator: ", ")
         } else {
             valueToApply = item.revision.newValue
         }
@@ -819,12 +822,19 @@ class RevisionWorkflowOrchestrator {
         }
     }
 
-    /// Apply changes for a bundled/array node
-    private func applyBundledChanges(item: CustomizationReviewItem, sourceNodeIds: [String], resume: Resume) {
-        // Get the values to apply - prefer edited children, then new value array, then parse from newValue
+    /// Apply changes for a bundled/array node.
+    /// Each entry in valuesToApply maps 1:1 to a sourceNodeId.
+    /// For scalar source nodes, the value is written directly.
+    /// For container source nodes, the value is parsed and the children are overwritten.
+    private func applyBundledChanges(item: CustomizationReviewItem, sourceNodeIds: [String], resume: Resume, context: ModelContext) {
+        // Get the values to apply - prefer edited children, then edited content parsed as array,
+        // then new value array, then parse from newValue
         let valuesToApply: [String]
         if let editedChildren = item.editedChildren, !editedChildren.isEmpty {
             valuesToApply = editedChildren
+        } else if let editedContent = item.editedContent, !editedContent.isEmpty {
+            // Defensive: scalar edit on a bundled item — parse into array
+            valuesToApply = parseArrayFromString(editedContent)
         } else if let newValueArray = item.revision.newValueArray, !newValueArray.isEmpty {
             valuesToApply = newValueArray
         } else {
@@ -839,11 +849,20 @@ class RevisionWorkflowOrchestrator {
                 continue
             }
 
-            if let treeNode = resume.nodes.first(where: { $0.id == nodeId }) {
-                treeNode.value = valuesToApply[index]
-                Logger.debug("Applied array value to node \(index): \(nodeId)")
-            } else {
+            guard let treeNode = resume.nodes.first(where: { $0.id == nodeId }) else {
                 Logger.warning("Could not find source tree node: \(nodeId)")
+                continue
+            }
+
+            if treeNode.orderedChildren.isEmpty {
+                // Scalar node: set value directly
+                treeNode.value = valuesToApply[index]
+                Logger.debug("Applied scalar value to node \(index): \(nodeId)")
+            } else {
+                // Container node: parse the value into individual entries and overwrite children
+                let childValues = parseArrayFromString(valuesToApply[index])
+                overwriteContainerChildren(container: treeNode, newValues: childValues, context: context)
+                Logger.debug("Applied \(childValues.count) children to container node \(index): \(nodeId)")
             }
         }
 
@@ -869,6 +888,38 @@ class RevisionWorkflowOrchestrator {
         return text.components(separatedBy: ",")
             .map { $0.trimmingCharacters(in: .whitespaces) }
             .filter { !$0.isEmpty }
+    }
+
+    /// Overwrite a container node's children with new values, adding or removing entries as needed.
+    private func overwriteContainerChildren(container: TreeNode, newValues: [String], context: ModelContext) {
+        let existing = container.orderedChildren
+
+        // Update existing children that overlap
+        for (index, child) in existing.enumerated() {
+            if index < newValues.count {
+                child.value = newValues[index]
+                child.myIndex = index
+            } else {
+                // Excess child — remove
+                container.children?.removeAll { $0.id == child.id }
+                context.delete(child)
+            }
+        }
+
+        // Add new children beyond existing count
+        for index in existing.count..<newValues.count {
+            let child = TreeNode(
+                name: "",
+                value: newValues[index],
+                children: nil,
+                parent: container,
+                inEditor: true,
+                status: .saved,
+                resume: container.resume
+            )
+            child.myIndex = index
+            container.addChild(child)
+        }
     }
 }
 

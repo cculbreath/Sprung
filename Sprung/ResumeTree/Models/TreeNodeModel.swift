@@ -607,17 +607,15 @@ extension TreeNode {
 
     /// Bundle multiple exported nodes into a single revnode with combined values.
     private static func bundleExportedNodes(_ nodes: [ExportedReviewNode], pattern: String) -> ExportedReviewNode {
-        // Collect all values (either from childValues or direct value)
+        // Collect one value per source node (1:1 with sourceNodeIds).
+        // For containers, use the concatenated value — NOT flattened children —
+        // so that applyBundledChanges can map each entry back to its source node.
         var allValues: [String] = []
         var allIds: [String] = []
 
         for node in nodes {
             allIds.append(node.id)
-            if let childValues = node.childValues, !childValues.isEmpty {
-                // Container node - add all its children
-                allValues.append(contentsOf: childValues)
-            } else if !node.value.isEmpty {
-                // Scalar node - add its value
+            if !node.value.isEmpty {
                 allValues.append(node.value)
             }
         }

@@ -478,6 +478,8 @@ private struct FieldValueEditor: View {
                 displayView
             }
         }
+        .onChange(of: node.value) { _, _ in vm.refreshPDF() }
+        .onChange(of: node.name) { _, _ in vm.refreshPDF() }
         .contextMenu {
             attributeAIContextMenu
         }
@@ -668,6 +670,8 @@ private struct BulletItemEditor: View {
                 .disabled(node.status == .disabled)
             }
         }
+        .onChange(of: node.value) { _, _ in vm.refreshPDF() }
+        .onChange(of: node.name) { _, _ in vm.refreshPDF() }
         .padding(.vertical, 2)
         .contextMenu {
             bulletAIContextMenu
