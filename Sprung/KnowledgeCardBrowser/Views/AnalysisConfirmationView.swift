@@ -10,18 +10,22 @@ import SwiftUI
 
 struct AnalysisConfirmationView: View {
     let result: StandaloneKCCoordinator.AnalysisResult
+    let coordinator: StandaloneKCCoordinator
     let onConfirm: ([KnowledgeCard], [(proposal: KnowledgeCard, existing: KnowledgeCard)]) -> Void
     let onCancel: () -> Void
 
     @State private var selectedNewCards: Set<UUID>
     @State private var selectedEnhancements: Set<UUID>
+    @State private var isGenerating = false
 
     init(
         result: StandaloneKCCoordinator.AnalysisResult,
+        coordinator: StandaloneKCCoordinator,
         onConfirm: @escaping ([KnowledgeCard], [(proposal: KnowledgeCard, existing: KnowledgeCard)]) -> Void,
         onCancel: @escaping () -> Void
     ) {
         self.result = result
+        self.coordinator = coordinator
         self.onConfirm = onConfirm
         self.onCancel = onCancel
         // Select all by default
@@ -32,7 +36,9 @@ struct AnalysisConfirmationView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                if result.newCards.isEmpty && result.enhancements.isEmpty {
+                if isGenerating {
+                    generatingProgressView
+                } else if result.newCards.isEmpty && result.enhancements.isEmpty {
                     emptyStateView
                 } else {
                     List {
@@ -108,6 +114,20 @@ struct AnalysisConfirmationView: View {
         }
     }
 
+    private var generatingProgressView: some View {
+        VStack(spacing: 16) {
+            Spacer()
+            ProgressView()
+                .controlSize(.large)
+            Text(coordinator.status.displayText)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+            Spacer()
+        }
+        .frame(maxWidth: .infinity)
+    }
+
     private var emptyStateView: some View {
         ContentUnavailableView(
             "No Cards Found",
@@ -145,24 +165,33 @@ struct AnalysisConfirmationView: View {
 
     private var footerView: some View {
         HStack {
-            let skillCount = result.skillBank.skills.count
-            let skillText = skillCount > 0 ? " + \(skillCount) skills" : ""
-            Text("\(selectedCount) selected\(skillText)")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            if isGenerating {
+                Text(coordinator.status.displayText)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            } else {
+                let skillCount = result.skillBank.skills.count
+                let skillText = skillCount > 0 ? " + \(skillCount) skills" : ""
+                Text("\(selectedCount) selected\(skillText)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
 
             Spacer()
 
             Button("Cancel", action: onCancel)
                 .keyboardShortcut(.cancelAction)
+                .disabled(isGenerating)
 
             Button("Generate") {
+                isGenerating = true
                 let newCards = result.newCards.filter { selectedNewCards.contains($0.id) }
                 let enhancements = result.enhancements.filter { selectedEnhancements.contains($0.proposal.id) }
                 onConfirm(newCards, enhancements)
             }
             .buttonStyle(.borderedProminent)
-            .disabled(selectedNewCards.isEmpty && selectedEnhancements.isEmpty)
+            .disabled(isGenerating || (selectedNewCards.isEmpty && selectedEnhancements.isEmpty))
             .keyboardShortcut(.defaultAction)
         }
         .padding()

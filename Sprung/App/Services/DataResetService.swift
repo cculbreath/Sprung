@@ -197,6 +197,7 @@ final class DataResetService {
         defaults.removeObject(forKey: "debugLogLevel")
         defaults.removeObject(forKey: "saveDebugPrompts")
         defaults.removeObject(forKey: "showOnboardingDebugButton")
+        defaults.removeObject(forKey: "logLLMTranscripts")
 
         // Reset other app state
         defaults.removeObject(forKey: "lastOpenedJobAppId")

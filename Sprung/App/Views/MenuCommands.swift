@@ -106,4 +106,6 @@ extension Notification.Name {
     // Module Navigation
     /// Navigate to a specific module (userInfo: ["module": String (AppModule.rawValue)])
     static let navigateToModule = Notification.Name("navigateToModule")
+    /// Navigate to a specific tab in the References module (userInfo: ["tab": String (ReferencesModuleView.Tab.rawValue)])
+    static let navigateToReferencesTab = Notification.Name("navigateToReferencesTab")
 }

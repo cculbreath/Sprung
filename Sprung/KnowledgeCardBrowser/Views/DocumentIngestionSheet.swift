@@ -79,6 +79,7 @@ struct DocumentIngestionSheet: View {
             if let result = analysisResult, let coordinator = coordinator {
                 AnalysisConfirmationView(
                     result: result,
+                    coordinator: coordinator,
                     onConfirm: { selectedNew, selectedEnhancements in
                         Task {
                             let (created, _, _) = try await coordinator.generateSelected(

@@ -72,16 +72,17 @@ class MenuNotificationHandler {
             forName: .toggleKnowledgeCards,
             object: nil,
             queue: .main
-        ) { [weak self] _ in
-            // Open the knowledge cards deck browser sheet
-            self?.sheets?.wrappedValue.showKnowledgeCardsBrowser = true
+        ) { _ in
+            NotificationCenter.default.post(name: .navigateToModule, object: nil, userInfo: ["module": AppModule.references.rawValue])
+            NotificationCenter.default.post(name: .navigateToReferencesTab, object: nil, userInfo: ["tab": "Knowledge"])
         }
         NotificationCenter.default.addObserver(
             forName: .showWritingContextBrowser,
             object: nil,
             queue: .main
-        ) { [weak self] _ in
-            self?.sheets?.wrappedValue.showWritingContextBrowser = true
+        ) { _ in
+            NotificationCenter.default.post(name: .navigateToModule, object: nil, userInfo: ["module": AppModule.references.rawValue])
+            NotificationCenter.default.post(name: .navigateToReferencesTab, object: nil, userInfo: ["tab": "Writing"])
         }
         // Resume Commands
         NotificationCenter.default.addObserver(

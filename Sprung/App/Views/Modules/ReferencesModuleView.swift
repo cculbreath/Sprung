@@ -5,6 +5,7 @@
 //  References module - unified browser for all reference data types.
 //
 
+import AppKit
 import SwiftUI
 
 /// References module - unified browser matching Reference Browser with all 5 data types
@@ -66,6 +67,8 @@ struct ReferencesModuleView: View {
                     }
 
                     Spacer()
+
+                    exportMenu
                 }
                 .padding(.horizontal)
                 .padding(.top, 12)
@@ -93,6 +96,90 @@ struct ReferencesModuleView: View {
             tabContent
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+        .onReceive(NotificationCenter.default.publisher(for: .navigateToReferencesTab)) { notification in
+            if let tabString = notification.userInfo?["tab"] as? String,
+               let tab = Tab(rawValue: tabString) {
+                selectedTab = tab
+            }
+        }
+    }
+
+    // MARK: - Export
+
+    private var exportMenu: some View {
+        Menu {
+            Button(action: { exportToJSON(knowledgeCardStore.knowledgeCards, filename: "knowledge-cards.json") }) {
+                Label("Export Knowledge Cards", systemImage: "brain.head.profile")
+            }
+            Button(action: { exportToJSON(coverRefStore.storedCoverRefs, filename: "writing-samples.json") }) {
+                Label("Export Writing Samples", systemImage: "doc.text")
+            }
+            Button(action: { exportToJSON(skillStore.skills, filename: "skills.json") }) {
+                Label("Export Skills", systemImage: "star.fill")
+            }
+            if titleSetStore.hasTitleSets {
+                Button(action: exportTitleSets) {
+                    Label("Export Title Sets", systemImage: "person.crop.rectangle.stack")
+                }
+            }
+            Divider()
+            Button(action: exportAll) {
+                Label("Export All", systemImage: "square.and.arrow.up")
+            }
+        } label: {
+            Image(systemName: "square.and.arrow.up")
+                .font(.title3)
+        }
+        .menuStyle(.borderlessButton)
+        .help("Export reference data as JSON")
+    }
+
+    private func exportToJSON<T: Encodable>(_ data: T, filename: String) {
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = filename
+        panel.allowedContentTypes = [.json]
+
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+
+        do {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+            let jsonData = try encoder.encode(data)
+            try jsonData.write(to: url)
+        } catch {
+            Logger.error("Export failed: \(error.localizedDescription)", category: .ai)
+        }
+    }
+
+    private func exportTitleSets() {
+        let exportable = titleSetStore.allTitleSets.map { record in
+            TitleSetExport(
+                id: record.id.uuidString,
+                words: record.words.map { $0.text },
+                notes: record.notes,
+                createdAt: record.createdAt
+            )
+        }
+        exportToJSON(exportable, filename: "title-sets.json")
+    }
+
+    private func exportAll() {
+        let titleSetExports = titleSetStore.allTitleSets.map { record in
+            TitleSetExport(
+                id: record.id.uuidString,
+                words: record.words.map { $0.text },
+                notes: record.notes,
+                createdAt: record.createdAt
+            )
+        }
+        let bundle = ReferenceBundleExport(
+            knowledgeCards: knowledgeCardStore.knowledgeCards,
+            writingSamples: coverRefStore.storedCoverRefs,
+            skills: skillStore.skills,
+            titleSets: titleSetExports,
+            dossier: dossierStore.dossier
+        )
+        exportToJSON(bundle, filename: "all-references.json")
     }
 
     private func countFor(_ tab: Tab) -> Int {
@@ -356,5 +443,32 @@ private struct DossierBrowserTabInline: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(.vertical, 40)
+    }
+}
+
+// MARK: - Export Types
+
+private struct TitleSetExport: Codable {
+    let id: String
+    let words: [String]
+    let notes: String?
+    let createdAt: Date
+}
+
+private struct ReferenceBundleExport: Codable {
+    let knowledgeCards: [KnowledgeCard]
+    let writingSamples: [CoverRef]
+    let skills: [Skill]
+    let titleSets: [TitleSetExport]
+    let dossier: CandidateDossier?
+    let exportedAt: Date
+
+    init(knowledgeCards: [KnowledgeCard], writingSamples: [CoverRef], skills: [Skill], titleSets: [TitleSetExport], dossier: CandidateDossier?) {
+        self.knowledgeCards = knowledgeCards
+        self.writingSamples = writingSamples
+        self.skills = skills
+        self.titleSets = titleSets
+        self.dossier = dossier
+        self.exportedAt = Date()
     }
 }

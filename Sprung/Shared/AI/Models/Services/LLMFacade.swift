@@ -110,12 +110,20 @@ final class LLMFacade {
         modelId: String,
         backend: Backend = .openRouter
     ) async throws -> String {
+        let start = ContinuousClock.now
+        let result: String
         if backend == .openRouter {
             try await capabilityValidator.validate(modelId: modelId, requires: [])
-            return try await client.executeText(prompt: prompt, modelId: modelId)
+            result = try await client.executeText(prompt: prompt, modelId: modelId)
+        } else {
+            let altClient = try resolveClient(for: backend)
+            result = try await altClient.executeText(prompt: prompt, modelId: modelId)
         }
-        let altClient = try resolveClient(for: backend)
-        return try await altClient.executeText(prompt: prompt, modelId: modelId)
+        LLMTranscriptLogger.logTextCall(
+            method: "executeText", modelId: modelId, backend: backend.displayName,
+            prompt: prompt, response: result, durationMs: elapsedMs(from: start)
+        )
+        return result
     }
 
     func executeTextWithImages(
@@ -124,12 +132,20 @@ final class LLMFacade {
         images: [Data],
         backend: Backend = .openRouter
     ) async throws -> String {
+        let start = ContinuousClock.now
+        let result: String
         if backend == .openRouter {
             try await capabilityValidator.validate(modelId: modelId, requires: [.vision])
-            return try await client.executeTextWithImages(prompt: prompt, modelId: modelId, images: images)
+            result = try await client.executeTextWithImages(prompt: prompt, modelId: modelId, images: images)
+        } else {
+            let altClient = try resolveClient(for: backend)
+            result = try await altClient.executeTextWithImages(prompt: prompt, modelId: modelId, images: images)
         }
-        let altClient = try resolveClient(for: backend)
-        return try await altClient.executeTextWithImages(prompt: prompt, modelId: modelId, images: images)
+        LLMTranscriptLogger.logTextCall(
+            method: "executeTextWithImages", modelId: modelId, backend: backend.displayName,
+            prompt: "[+\(images.count) images] \(prompt)", response: result, durationMs: elapsedMs(from: start)
+        )
+        return result
     }
 
     // MARK: - Structured Execution
@@ -140,12 +156,21 @@ final class LLMFacade {
         as type: T.Type,
         backend: Backend = .openRouter
     ) async throws -> T {
+        let start = ContinuousClock.now
+        let result: T
         if backend == .openRouter {
             try await capabilityValidator.validate(modelId: modelId, requires: [.structuredOutput])
-            return try await client.executeStructured(prompt: prompt, modelId: modelId, as: type)
+            result = try await client.executeStructured(prompt: prompt, modelId: modelId, as: type)
+        } else {
+            let altClient = try resolveClient(for: backend)
+            result = try await altClient.executeStructured(prompt: prompt, modelId: modelId, as: type)
         }
-        let altClient = try resolveClient(for: backend)
-        return try await altClient.executeStructured(prompt: prompt, modelId: modelId, as: type)
+        let jsonString = (try? JSONEncoder().encode(result)).flatMap { String(data: $0, encoding: .utf8) } ?? String(describing: result)
+        LLMTranscriptLogger.logStructuredCall(
+            method: "executeStructured", modelId: modelId, backend: backend.displayName,
+            prompt: prompt, responseType: String(describing: T.self), responseJSON: jsonString, durationMs: elapsedMs(from: start)
+        )
+        return result
     }
 
     func executeStructuredWithImages<T: Codable & Sendable>(
@@ -155,12 +180,21 @@ final class LLMFacade {
         as type: T.Type,
         backend: Backend = .openRouter
     ) async throws -> T {
+        let start = ContinuousClock.now
+        let result: T
         if backend == .openRouter {
             try await capabilityValidator.validate(modelId: modelId, requires: [.vision, .structuredOutput])
-            return try await client.executeStructuredWithImages(prompt: prompt, modelId: modelId, images: images, as: type)
+            result = try await client.executeStructuredWithImages(prompt: prompt, modelId: modelId, images: images, as: type)
+        } else {
+            let altClient = try resolveClient(for: backend)
+            result = try await altClient.executeStructuredWithImages(prompt: prompt, modelId: modelId, images: images, as: type)
         }
-        let altClient = try resolveClient(for: backend)
-        return try await altClient.executeStructuredWithImages(prompt: prompt, modelId: modelId, images: images, as: type)
+        let jsonString = (try? JSONEncoder().encode(result)).flatMap { String(data: $0, encoding: .utf8) } ?? String(describing: result)
+        LLMTranscriptLogger.logStructuredCall(
+            method: "executeStructuredWithImages", modelId: modelId, backend: backend.displayName,
+            prompt: "[+\(images.count) images] \(prompt)", responseType: String(describing: T.self), responseJSON: jsonString, durationMs: elapsedMs(from: start)
+        )
+        return result
     }
 
     func executeStructuredWithSchema<T: Codable & Sendable>(
@@ -171,12 +205,21 @@ final class LLMFacade {
         schemaName: String,
         backend: Backend = .openRouter
     ) async throws -> T {
+        let start = ContinuousClock.now
+        let result: T
         if backend == .openRouter {
             try await capabilityValidator.validate(modelId: modelId, requires: [.structuredOutput])
-            return try await client.executeStructuredWithSchema(prompt: prompt, modelId: modelId, as: type, schema: schema, schemaName: schemaName)
+            result = try await client.executeStructuredWithSchema(prompt: prompt, modelId: modelId, as: type, schema: schema, schemaName: schemaName)
+        } else {
+            let altClient = try resolveClient(for: backend)
+            result = try await altClient.executeStructuredWithSchema(prompt: prompt, modelId: modelId, as: type, schema: schema, schemaName: schemaName)
         }
-        let altClient = try resolveClient(for: backend)
-        return try await altClient.executeStructuredWithSchema(prompt: prompt, modelId: modelId, as: type, schema: schema, schemaName: schemaName)
+        let jsonString = (try? JSONEncoder().encode(result)).flatMap { String(data: $0, encoding: .utf8) } ?? String(describing: result)
+        LLMTranscriptLogger.logStructuredCall(
+            method: "executeStructuredWithSchema(\(schemaName))", modelId: modelId, backend: backend.displayName,
+            prompt: prompt, responseType: String(describing: T.self), responseJSON: jsonString, durationMs: elapsedMs(from: start)
+        )
+        return result
     }
 
     func executeStructuredWithDictionarySchema<T: Codable & Sendable>(
@@ -190,9 +233,11 @@ final class LLMFacade {
         backend: Backend = .openRouter,
         thinkingLevel: String? = nil
     ) async throws -> T {
+        let start = ContinuousClock.now
         let decoder = JSONDecoder()
         decoder.keyDecodingStrategy = keyDecodingStrategy
 
+        let result: T
         switch backend {
         case .gemini:
             let jsonString = try await specializedAPIs.generateStructuredJSON(
@@ -205,14 +250,13 @@ final class LLMFacade {
             guard let data = jsonString.data(using: .utf8) else {
                 throw LLMError.clientError("Failed to convert Gemini response to data")
             }
-            return try decoder.decode(T.self, from: data)
+            result = try decoder.decode(T.self, from: data)
 
         case .anthropic:
-            // Use Anthropic's structured output directly via specialized APIs
             let systemContent: [AnthropicSystemBlock] = [
                 AnthropicSystemBlock(text: "You are a helpful assistant that responds with well-structured JSON.")
             ]
-            return try await executeStructuredWithAnthropicCaching(
+            result = try await executeStructuredWithAnthropicCaching(
                 systemContent: systemContent,
                 userPrompt: prompt,
                 modelId: modelId,
@@ -222,7 +266,7 @@ final class LLMFacade {
 
         case .openRouter, .openAI:
             let jsonSchema = try JSONSchema.from(dictionary: schema)
-            return try await executeStructuredWithSchema(
+            result = try await executeStructuredWithSchema(
                 prompt: prompt,
                 modelId: modelId,
                 as: type,
@@ -231,6 +275,12 @@ final class LLMFacade {
                 backend: backend
             )
         }
+        let jsonString = (try? JSONEncoder().encode(result)).flatMap { String(data: $0, encoding: .utf8) } ?? String(describing: result)
+        LLMTranscriptLogger.logStructuredCall(
+            method: "executeStructuredWithDictionarySchema(\(schemaName))", modelId: modelId, backend: backend.displayName,
+            prompt: prompt, responseType: String(describing: T.self), responseJSON: jsonString, durationMs: elapsedMs(from: start)
+        )
+        return result
     }
 
     func executeFlexibleJSON<T: Codable & Sendable>(
@@ -240,22 +290,31 @@ final class LLMFacade {
         jsonSchema: JSONSchema? = nil,
         backend: Backend = .openRouter
     ) async throws -> T {
+        let start = ContinuousClock.now
         let required: [ModelCapability] = jsonSchema == nil ? [] : [.structuredOutput]
+        let result: T
         if backend == .openRouter {
             try await capabilityValidator.validate(modelId: modelId, requires: required)
-            return try await llmService.executeFlexibleJSON(
+            result = try await llmService.executeFlexibleJSON(
                 prompt: prompt,
                 modelId: modelId,
                 responseType: type,
                 jsonSchema: jsonSchema
             )
+        } else {
+            let altClient = try resolveClient(for: backend)
+            result = try await altClient.executeStructured(
+                prompt: prompt,
+                modelId: modelId,
+                as: type
+            )
         }
-        let altClient = try resolveClient(for: backend)
-        return try await altClient.executeStructured(
-            prompt: prompt,
-            modelId: modelId,
-            as: type
+        let jsonString = (try? JSONEncoder().encode(result)).flatMap { String(data: $0, encoding: .utf8) } ?? String(describing: result)
+        LLMTranscriptLogger.logStructuredCall(
+            method: "executeFlexibleJSON", modelId: modelId, backend: backend.displayName,
+            prompt: prompt, responseType: String(describing: T.self), responseJSON: jsonString, durationMs: elapsedMs(from: start)
         )
+        return result
     }
 
     func executeStructuredStreaming<T: Codable & Sendable>(
@@ -279,6 +338,10 @@ final class LLMFacade {
             responseType: type,
             reasoning: reasoning,
             jsonSchema: jsonSchema
+        )
+        LLMTranscriptLogger.logStreamingRequest(
+            method: "executeStructuredStreaming", modelId: modelId,
+            backend: backend.displayName, prompt: prompt
         )
         return streamingManager.makeStreamingHandle(conversationId: nil, sourceStream: sourceStream)
     }
@@ -310,6 +373,7 @@ final class LLMFacade {
         backend: Backend,
         images: [Data] = []
     ) async throws -> LLMStreamingHandle {
+        let handle: LLMStreamingHandle
         if backend == .openRouter {
             var required: [ModelCapability] = []
             if reasoning != nil { required.append(.reasoning) }
@@ -322,9 +386,8 @@ final class LLMFacade {
                 reasoning: reasoning,
                 jsonSchema: jsonSchema
             )
-            return streamingManager.makeStreamingHandle(conversationId: conversationId, sourceStream: sourceStream)
-        }
-        if backend == .openAI {
+            handle = streamingManager.makeStreamingHandle(conversationId: conversationId, sourceStream: sourceStream)
+        } else if backend == .openAI {
             guard reasoning == nil else {
                 throw LLMError.clientError("Reasoning mode is not supported for OpenAI Responses streaming")
             }
@@ -340,9 +403,15 @@ final class LLMFacade {
                 modelId: modelId,
                 images: images
             )
-            return streamingManager.makeStreamingHandle(conversationId: conversationId, sourceStream: sourceStream)
+            handle = streamingManager.makeStreamingHandle(conversationId: conversationId, sourceStream: sourceStream)
+        } else {
+            throw LLMError.clientError("Streaming conversations are not supported for backend \(backend.displayName)")
         }
-        throw LLMError.clientError("Streaming conversations are not supported for backend \(backend.displayName)")
+        LLMTranscriptLogger.logStreamingRequest(
+            method: "startConversationStreaming", modelId: modelId, backend: backend.displayName,
+            prompt: "System: \(systemPrompt ?? "(none)")\nUser: \(userMessage)"
+        )
+        return handle
     }
 
     func continueConversationStreaming(
@@ -354,6 +423,7 @@ final class LLMFacade {
         jsonSchema: JSONSchema? = nil,
         backend: Backend = .openRouter
     ) async throws -> LLMStreamingHandle {
+        let handle: LLMStreamingHandle
         if backend == .openRouter {
             var required: [ModelCapability] = images.isEmpty ? [] : [.vision]
             if reasoning != nil { required.append(.reasoning) }
@@ -367,9 +437,8 @@ final class LLMFacade {
                 reasoning: reasoning,
                 jsonSchema: jsonSchema
             )
-            return streamingManager.makeStreamingHandle(conversationId: conversationId, sourceStream: sourceStream)
-        }
-        if backend == .openAI {
+            handle = streamingManager.makeStreamingHandle(conversationId: conversationId, sourceStream: sourceStream)
+        } else if backend == .openAI {
             guard reasoning == nil else {
                 throw LLMError.clientError("Reasoning mode is not supported for OpenAI Responses streaming")
             }
@@ -385,9 +454,15 @@ final class LLMFacade {
                 conversationId: conversationId,
                 images: images
             )
-            return streamingManager.makeStreamingHandle(conversationId: conversationId, sourceStream: sourceStream)
+            handle = streamingManager.makeStreamingHandle(conversationId: conversationId, sourceStream: sourceStream)
+        } else {
+            throw LLMError.clientError("Streaming conversations are not supported for backend \(backend.displayName)")
         }
-        throw LLMError.clientError("Streaming conversations are not supported for backend \(backend.displayName)")
+        LLMTranscriptLogger.logStreamingRequest(
+            method: "continueConversationStreaming", modelId: modelId, backend: backend.displayName,
+            prompt: "ConversationId: \(conversationId)\nUser: \(userMessage)"
+        )
+        return handle
     }
 
     // MARK: - Conversation (Non-Streaming)
@@ -399,25 +474,33 @@ final class LLMFacade {
         images: [Data] = [],
         backend: Backend = .openRouter
     ) async throws -> String {
+        let start = ContinuousClock.now
+        let result: String
         if backend == .openRouter {
             let required: [ModelCapability] = images.isEmpty ? [] : [.vision]
             try await capabilityValidator.validate(modelId: modelId, requires: required)
-            return try await llmService.continueConversation(
+            result = try await llmService.continueConversation(
+                userMessage: userMessage,
+                modelId: modelId,
+                conversationId: conversationId,
+                images: images
+            )
+        } else {
+            guard let service = conversationServices[backend] else {
+                throw LLMError.clientError("Selected backend does not support conversations")
+            }
+            result = try await service.continueConversation(
                 userMessage: userMessage,
                 modelId: modelId,
                 conversationId: conversationId,
                 images: images
             )
         }
-        guard let service = conversationServices[backend] else {
-            throw LLMError.clientError("Selected backend does not support conversations")
-        }
-        return try await service.continueConversation(
-            userMessage: userMessage,
-            modelId: modelId,
-            conversationId: conversationId,
-            images: images
+        LLMTranscriptLogger.logTextCall(
+            method: "continueConversation", modelId: modelId, backend: backend.displayName,
+            prompt: "ConversationId: \(conversationId)\nUser: \(userMessage)", response: result, durationMs: elapsedMs(from: start)
         )
+        return result
     }
 
     func continueConversationStructured<T: Codable & Sendable>(
@@ -429,13 +512,14 @@ final class LLMFacade {
         jsonSchema: JSONSchema? = nil,
         backend: Backend = .openRouter
     ) async throws -> T {
+        let start = ContinuousClock.now
         guard backend == .openRouter else {
             throw LLMError.clientError("Conversations are only supported via OpenRouter at this time")
         }
         var required: [ModelCapability] = [.structuredOutput]
         if !images.isEmpty { required.append(.vision) }
         try await capabilityValidator.validate(modelId: modelId, requires: required)
-        return try await llmService.continueConversationStructured(
+        let result = try await llmService.continueConversationStructured(
             userMessage: userMessage,
             modelId: modelId,
             conversationId: conversationId,
@@ -443,6 +527,12 @@ final class LLMFacade {
             images: images,
             jsonSchema: jsonSchema
         )
+        let jsonString = (try? JSONEncoder().encode(result)).flatMap { String(data: $0, encoding: .utf8) } ?? String(describing: result)
+        LLMTranscriptLogger.logStructuredCall(
+            method: "continueConversationStructured", modelId: modelId, backend: backend.displayName,
+            prompt: "ConversationId: \(conversationId)\nUser: \(userMessage)", responseType: String(describing: T.self), responseJSON: jsonString, durationMs: elapsedMs(from: start)
+        )
+        return result
     }
 
     func startConversation(
@@ -451,22 +541,30 @@ final class LLMFacade {
         modelId: String,
         backend: Backend = .openRouter
     ) async throws -> (UUID, String) {
+        let start = ContinuousClock.now
+        let result: (UUID, String)
         if backend == .openRouter {
             try await capabilityValidator.validate(modelId: modelId, requires: [])
-            return try await llmService.startConversation(
+            result = try await llmService.startConversation(
+                systemPrompt: systemPrompt,
+                userMessage: userMessage,
+                modelId: modelId
+            )
+        } else {
+            guard let service = conversationServices[backend] else {
+                throw LLMError.clientError("Selected backend does not support conversations")
+            }
+            result = try await service.startConversation(
                 systemPrompt: systemPrompt,
                 userMessage: userMessage,
                 modelId: modelId
             )
         }
-        guard let service = conversationServices[backend] else {
-            throw LLMError.clientError("Selected backend does not support conversations")
-        }
-        return try await service.startConversation(
-            systemPrompt: systemPrompt,
-            userMessage: userMessage,
-            modelId: modelId
+        LLMTranscriptLogger.logTextCall(
+            method: "startConversation", modelId: modelId, backend: backend.displayName,
+            prompt: "System: \(systemPrompt ?? "(none)")\nUser: \(userMessage)", response: result.1, durationMs: elapsedMs(from: start)
         )
+        return result
     }
 
     func cancelAllRequests() {
@@ -487,6 +585,8 @@ final class LLMFacade {
         responseFormat: ResponseFormat? = nil,
         backend: Backend = .openRouter
     ) async throws -> ChatCompletionObject {
+        let start = ContinuousClock.now
+        let result: ChatCompletionObject
         if backend == .openRouter {
             try await capabilityValidator.validate(modelId: modelId, requires: [])
 
@@ -508,17 +608,29 @@ final class LLMFacade {
                 maxTokens: resolvedMaxTokens,
                 responseFormat: responseFormat
             )
-            return try await llmService.executeToolRequest(parameters: parameters)
+            result = try await llmService.executeToolRequest(parameters: parameters)
+        } else {
+            // For OpenAI backend, delegate to specialized handler
+            result = try await executeToolsViaOpenAI(
+                messages: messages,
+                tools: tools,
+                toolChoice: toolChoice,
+                modelId: modelId,
+                reasoningEffort: reasoningEffort
+            )
         }
-
-        // For OpenAI backend, delegate to specialized handler
-        return try await executeToolsViaOpenAI(
-            messages: messages,
-            tools: tools,
-            toolChoice: toolChoice,
-            modelId: modelId,
-            reasoningEffort: reasoningEffort
+        let toolNames = tools.map { $0.function.name }
+        let firstChoice = result.choices?.first
+        let content = firstChoice?.message?.content
+        let responseToolCalls = firstChoice?.message?.toolCalls?.map {
+            "\($0.function.name)(\($0.function.arguments.prefix(200)))"
+        } ?? []
+        LLMTranscriptLogger.logToolCall(
+            method: "executeWithTools", modelId: modelId, backend: backend.displayName,
+            messageCount: messages.count, toolNames: toolNames,
+            responseContent: content, responseToolCalls: responseToolCalls, durationMs: elapsedMs(from: start)
         )
+        return result
     }
 
     private func executeToolsViaOpenAI(
@@ -653,7 +765,8 @@ final class LLMFacade {
         onWebSearchComplete: (@MainActor @Sendable () async -> Void)? = nil,
         onTextDelta: (@MainActor @Sendable (String) async -> Void)? = nil
     ) async throws -> String {
-        try await specializedAPIs.executeWithWebSearch(
+        let start = ContinuousClock.now
+        let result = try await specializedAPIs.executeWithWebSearch(
             systemPrompt: systemPrompt,
             userMessage: userMessage,
             modelId: modelId,
@@ -663,6 +776,11 @@ final class LLMFacade {
             onWebSearchComplete: onWebSearchComplete,
             onTextDelta: onTextDelta
         )
+        LLMTranscriptLogger.logTextCall(
+            method: "executeWithWebSearch", modelId: modelId, backend: "OpenAI",
+            prompt: "System: \(systemPrompt)\nUser: \(userMessage)", response: result, durationMs: elapsedMs(from: start)
+        )
+        return result
     }
 
     func responseCreateStream(
@@ -695,6 +813,7 @@ final class LLMFacade {
         userPrompt: String,
         modelId: String
     ) async throws -> String {
+        let start = ContinuousClock.now
         let parameters = AnthropicMessageParameter(
             model: modelId,
             messages: [.user(userPrompt)],
@@ -720,6 +839,11 @@ final class LLMFacade {
         }
 
         Logger.info("✅ Anthropic cached request completed: \(resultText.count) chars", category: .ai)
+        LLMTranscriptLogger.logAnthropicCall(
+            method: "executeTextWithAnthropicCaching", modelId: modelId,
+            systemBlockCount: systemContent.count, userPrompt: userPrompt,
+            response: resultText, durationMs: elapsedMs(from: start)
+        )
         return resultText
     }
 
@@ -739,6 +863,7 @@ final class LLMFacade {
         responseType: T.Type,
         schema: [String: Any]
     ) async throws -> T {
+        let start = ContinuousClock.now
         let outputFormat = AnthropicOutputFormat.schema(
             schema: schema
         )
@@ -769,6 +894,11 @@ final class LLMFacade {
         }
 
         Logger.info("✅ Anthropic structured request completed: \(resultText.count) chars", category: .ai)
+        LLMTranscriptLogger.logAnthropicCall(
+            method: "executeStructuredWithAnthropicCaching", modelId: modelId,
+            systemBlockCount: systemContent.count, userPrompt: userPrompt,
+            response: resultText, durationMs: elapsedMs(from: start)
+        )
 
         // Parse the response as the expected type
         guard let data = resultText.data(using: .utf8) else {
@@ -793,13 +923,20 @@ final class LLMFacade {
         modelId: String? = nil,
         maxOutputTokens: Int = 65536
     ) async throws -> (text: String, tokenUsage: GoogleAIService.GeminiTokenUsage?) {
-        try await specializedAPIs.generateFromPDF(
+        let start = ContinuousClock.now
+        let result = try await specializedAPIs.generateFromPDF(
             pdfData: pdfData,
             filename: filename,
             prompt: prompt,
             modelId: modelId,
             maxOutputTokens: maxOutputTokens
         )
+        LLMTranscriptLogger.logGeminiCall(
+            method: "generateFromPDF", modelId: modelId ?? "(default)",
+            prompt: prompt, attachmentInfo: "PDF: \(filename) (\(pdfData.count) bytes)",
+            response: result.text, durationMs: elapsedMs(from: start)
+        )
+        return result
     }
 
     func generateDocumentSummary(
@@ -807,11 +944,19 @@ final class LLMFacade {
         filename: String,
         modelId: String? = nil
     ) async throws -> DocumentSummary {
-        try await specializedAPIs.generateDocumentSummary(
+        let start = ContinuousClock.now
+        let result = try await specializedAPIs.generateDocumentSummary(
             content: content,
             filename: filename,
             modelId: modelId
         )
+        let jsonString = (try? JSONEncoder().encode(result)).flatMap { String(data: $0, encoding: .utf8) } ?? String(describing: result)
+        LLMTranscriptLogger.logGeminiCall(
+            method: "generateDocumentSummary", modelId: modelId ?? "(default)",
+            prompt: "Summarize: \(filename)", attachmentInfo: "Text content: \(content.count) chars",
+            response: jsonString, durationMs: elapsedMs(from: start)
+        )
+        return result
     }
 
     func analyzeImagesWithGemini(
@@ -819,11 +964,18 @@ final class LLMFacade {
         prompt: String,
         modelId: String? = nil
     ) async throws -> String {
-        try await specializedAPIs.analyzeImagesWithGemini(
+        let start = ContinuousClock.now
+        let result = try await specializedAPIs.analyzeImagesWithGemini(
             images: images,
             prompt: prompt,
             modelId: modelId
         )
+        LLMTranscriptLogger.logGeminiCall(
+            method: "analyzeImagesWithGemini", modelId: modelId ?? "(default)",
+            prompt: prompt, attachmentInfo: "\(images.count) images",
+            response: result, durationMs: elapsedMs(from: start)
+        )
+        return result
     }
 
     func analyzeImagesWithGeminiStructured(
@@ -832,17 +984,32 @@ final class LLMFacade {
         jsonSchema: [String: Any],
         modelId: String? = nil
     ) async throws -> String {
-        try await specializedAPIs.analyzeImagesWithGeminiStructured(
+        let start = ContinuousClock.now
+        let result = try await specializedAPIs.analyzeImagesWithGeminiStructured(
             images: images,
             prompt: prompt,
             jsonSchema: jsonSchema,
             modelId: modelId
         )
+        LLMTranscriptLogger.logGeminiCall(
+            method: "analyzeImagesWithGeminiStructured", modelId: modelId ?? "(default)",
+            prompt: prompt, attachmentInfo: "\(images.count) images (structured)",
+            response: result, durationMs: elapsedMs(from: start)
+        )
+        return result
     }
 
     // MARK: - Text-to-Speech (Specialized)
 
     func createTTSClient() -> TTSCapable {
         specializedAPIs.createTTSClient()
+    }
+
+    // MARK: - Transcript Timing
+
+    private func elapsedMs(from start: ContinuousClock.Instant) -> Int {
+        let elapsed = start.duration(to: .now)
+        return Int(elapsed.components.seconds * 1000
+            + elapsed.components.attoseconds / 1_000_000_000_000_000)
     }
 }

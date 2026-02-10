@@ -15,6 +15,16 @@ struct KnowledgeCardEditSheet: View {
     @State private var location: String = ""
     @State private var enabledByDefault: Bool = true
 
+    // Extractable metadata
+    @State private var domains: [String] = []
+    @State private var scaleItems: [String] = []
+    @State private var keywords: [String] = []
+
+    // Enrichment fields
+    @State private var technologies: [String] = []
+    @State private var outcomes: [String] = []
+    @State private var suggestedBullets: [String] = []
+
     @State private var hasUnsavedChanges = false
     @State private var showDiscardAlert = false
 
@@ -49,6 +59,16 @@ struct KnowledgeCardEditSheet: View {
             _dateRange = State(initialValue: card.dateRange ?? "")
             _location = State(initialValue: card.location ?? "")
             _enabledByDefault = State(initialValue: card.enabledByDefault)
+
+            // Extractable metadata
+            _domains = State(initialValue: card.extractable.domains)
+            _scaleItems = State(initialValue: card.extractable.scale)
+            _keywords = State(initialValue: card.extractable.keywords)
+
+            // Enrichment fields
+            _technologies = State(initialValue: card.technologies)
+            _outcomes = State(initialValue: card.outcomes)
+            _suggestedBullets = State(initialValue: card.suggestedBullets)
         }
     }
 
@@ -65,6 +85,8 @@ struct KnowledgeCardEditSheet: View {
                     basicInfoSection
                     metadataSection
                     contentSection
+                    extractableSection
+                    enrichmentSection
                     settingsSection
                 }
                 .padding(24)
@@ -84,6 +106,12 @@ struct KnowledgeCardEditSheet: View {
         .onChange(of: dateRange) { _, _ in hasUnsavedChanges = true }
         .onChange(of: location) { _, _ in hasUnsavedChanges = true }
         .onChange(of: enabledByDefault) { _, _ in hasUnsavedChanges = true }
+        .onChange(of: domains) { _, _ in hasUnsavedChanges = true }
+        .onChange(of: scaleItems) { _, _ in hasUnsavedChanges = true }
+        .onChange(of: keywords) { _, _ in hasUnsavedChanges = true }
+        .onChange(of: technologies) { _, _ in hasUnsavedChanges = true }
+        .onChange(of: outcomes) { _, _ in hasUnsavedChanges = true }
+        .onChange(of: suggestedBullets) { _, _ in hasUnsavedChanges = true }
         .alert("Discard Changes?", isPresented: $showDiscardAlert) {
             Button("Discard", role: .destructive) {
                 onCancel()
@@ -251,6 +279,105 @@ struct KnowledgeCardEditSheet: View {
         .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 
+    private var extractableSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Job Matching")
+                .font(.headline)
+                .foregroundStyle(.primary)
+
+            editableTagGroup("Domains", systemImage: "globe", items: $domains, placeholder: "e.g., Backend Engineering")
+            editableTagGroup("Keywords", systemImage: "tag", items: $keywords, placeholder: "e.g., distributed systems")
+            editableTagGroup("Scale & Metrics", systemImage: "chart.bar", items: $scaleItems, placeholder: "e.g., 10M daily active users")
+        }
+        .padding(16)
+        .background(Color(nsColor: .controlBackgroundColor))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+
+    private var enrichmentSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Enrichment Data")
+                .font(.headline)
+                .foregroundStyle(.primary)
+
+            editableTagGroup("Technologies", systemImage: "cpu", items: $technologies, placeholder: "e.g., Kubernetes")
+            editableListGroup("Outcomes", systemImage: "target", items: $outcomes, placeholder: "e.g., Reduced deploy time by 60%")
+            editableListGroup("Suggested Bullets", systemImage: "list.bullet", items: $suggestedBullets, placeholder: "Resume bullet template")
+        }
+        .padding(16)
+        .background(Color(nsColor: .controlBackgroundColor))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+
+    // MARK: - Reusable Tag/List Editors
+
+    private func editableTagGroup(_ label: String, systemImage: String, items: Binding<[String]>, placeholder: String) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Label(label, systemImage: systemImage)
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(.secondary)
+
+            if !items.wrappedValue.isEmpty {
+                FlowStack(spacing: 6, verticalSpacing: 6) {
+                    ForEach(Array(items.wrappedValue.enumerated()), id: \.offset) { index, item in
+                        HStack(spacing: 4) {
+                            Text(item)
+                                .font(.caption)
+                            Button {
+                                items.wrappedValue.remove(at: index)
+                            } label: {
+                                Image(systemName: "xmark")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color.blue.opacity(0.1), in: Capsule())
+                    }
+                }
+            }
+
+            AddItemField(placeholder: placeholder) { newItem in
+                items.wrappedValue.append(newItem)
+            }
+        }
+    }
+
+    private func editableListGroup(_ label: String, systemImage: String, items: Binding<[String]>, placeholder: String) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Label(label, systemImage: systemImage)
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(.secondary)
+
+            ForEach(Array(items.wrappedValue.enumerated()), id: \.offset) { index, item in
+                HStack(spacing: 8) {
+                    Text(item)
+                        .font(.caption)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .lineLimit(2)
+                    Button {
+                        items.wrappedValue.remove(at: index)
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.secondary)
+                            .font(.caption)
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(Color.secondary.opacity(0.05))
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+            }
+
+            AddItemField(placeholder: placeholder) { newItem in
+                items.wrappedValue.append(newItem)
+            }
+        }
+    }
+
     private var settingsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Settings")
@@ -319,6 +446,10 @@ struct KnowledgeCardEditSheet: View {
             existingCard.dateRange = dateRange.isEmpty ? nil : dateRange.trimmingCharacters(in: .whitespaces)
             existingCard.location = location.isEmpty ? nil : location.trimmingCharacters(in: .whitespaces)
             existingCard.enabledByDefault = enabledByDefault
+            existingCard.extractable = ExtractableMetadata(domains: domains, scale: scaleItems, keywords: keywords)
+            existingCard.technologies = technologies
+            existingCard.outcomes = outcomes
+            existingCard.suggestedBullets = suggestedBullets
             onSave(existingCard)
         } else {
             // Create new card
@@ -330,9 +461,45 @@ struct KnowledgeCardEditSheet: View {
                 organization: organization.isEmpty ? nil : organization.trimmingCharacters(in: .whitespaces),
                 location: location.isEmpty ? nil : location.trimmingCharacters(in: .whitespaces),
                 enabledByDefault: enabledByDefault,
-                isFromOnboarding: false
+                isFromOnboarding: false,
+                extractable: ExtractableMetadata(domains: domains, scale: scaleItems, keywords: keywords)
             )
+            newCard.technologies = technologies
+            newCard.outcomes = outcomes
+            newCard.suggestedBullets = suggestedBullets
             onSave(newCard)
         }
+    }
+}
+
+// MARK: - Add Item Field
+
+private struct AddItemField: View {
+    let placeholder: String
+    let onAdd: (String) -> Void
+
+    @State private var text = ""
+
+    var body: some View {
+        HStack(spacing: 6) {
+            TextField(placeholder, text: $text)
+                .textFieldStyle(.roundedBorder)
+                .font(.caption)
+                .onSubmit { addItem() }
+
+            Button(action: addItem) {
+                Image(systemName: "plus.circle.fill")
+                    .foregroundStyle(.blue)
+            }
+            .buttonStyle(.plain)
+            .disabled(text.trimmingCharacters(in: .whitespaces).isEmpty)
+        }
+    }
+
+    private func addItem() {
+        let trimmed = text.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return }
+        onAdd(trimmed)
+        text = ""
     }
 }

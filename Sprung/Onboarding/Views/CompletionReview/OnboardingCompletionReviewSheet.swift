@@ -229,12 +229,14 @@ struct OnboardingCompletionReviewSheet: View {
                     }
                     Button("Browse Knowledge Cards") {
                         Task { @MainActor in
-                            NotificationCenter.default.post(name: .toggleKnowledgeCards, object: nil)
+                            NotificationCenter.default.post(name: .navigateToModule, object: nil, userInfo: ["module": AppModule.references.rawValue])
+                            NotificationCenter.default.post(name: .navigateToReferencesTab, object: nil, userInfo: ["tab": "Knowledge"])
                         }
                     }
                     Button("Browse Writing Context") {
                         Task { @MainActor in
-                            NotificationCenter.default.post(name: .showWritingContextBrowser, object: nil)
+                            NotificationCenter.default.post(name: .navigateToModule, object: nil, userInfo: ["module": AppModule.references.rawValue])
+                            NotificationCenter.default.post(name: .navigateToReferencesTab, object: nil, userInfo: ["tab": "Writing"])
                         }
                     }
                 }

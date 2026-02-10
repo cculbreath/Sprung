@@ -18,45 +18,6 @@ struct AppSheets {
     // UI state that was previously in ResumeButtons
     var showResumeInspector = false
     var showCoverLetterInspector = false
-    // Unified reference browser (replaces separate Knowledge and Writing browsers)
-    var showUnifiedReferenceBrowser = false
-    var unifiedBrowserInitialTab: UnifiedReferenceBrowserOverlay.Tab = .knowledge
-    // Legacy properties (kept for backwards compatibility during transition)
-    var showKnowledgeCardsBrowser: Bool {
-        get { showUnifiedReferenceBrowser && unifiedBrowserInitialTab == .knowledge }
-        set {
-            if newValue {
-                unifiedBrowserInitialTab = .knowledge
-                showUnifiedReferenceBrowser = true
-            } else {
-                showUnifiedReferenceBrowser = false
-            }
-        }
-    }
-    // Writing context browser (CoverRefs: dossier + writing samples + background facts)
-    var showWritingContextBrowser: Bool {
-        get { showUnifiedReferenceBrowser && unifiedBrowserInitialTab == .writing }
-        set {
-            if newValue {
-                unifiedBrowserInitialTab = .writing
-                showUnifiedReferenceBrowser = true
-            } else {
-                showUnifiedReferenceBrowser = false
-            }
-        }
-    }
-    // Title Sets browser
-    var showTitleSetsBrowser: Bool {
-        get { showUnifiedReferenceBrowser && unifiedBrowserInitialTab == .titleSets }
-        set {
-            if newValue {
-                unifiedBrowserInitialTab = .titleSets
-                showUnifiedReferenceBrowser = true
-            } else {
-                showUnifiedReferenceBrowser = false
-            }
-        }
-    }
     // Setup wizard (first-run configuration)
     var showSetupWizard = false
     // Job capture from URL scheme (sprung://capture-job?url=...)
@@ -73,14 +34,6 @@ struct AppSheetsModifier: ViewModifier {
     @Environment(EnabledLLMStore.self) private var enabledLLMStore
     @Environment(AppState.self) private var appState
     @Environment(ResumeReviseViewModel.self) private var resumeReviseViewModel
-    @Environment(KnowledgeCardStore.self) private var knowledgeCardStore
-    @Environment(CoverRefStore.self) private var coverRefStore
-    @Environment(SkillStore.self) private var skillStore
-    @Environment(CandidateDossierStore.self) private var candidateDossierStore
-    @Environment(TitleSetStore.self) private var titleSetStore
-    @Environment(LLMFacade.self) private var llmFacade
-    @State private var showReprocessConfirmation = false
-    @State private var newlyAddedCardName: String = ""
     private var parallelReviewQueueBinding: Binding<Bool> {
         Binding(
             get: { resumeReviseViewModel.showParallelReviewQueueSheet },
@@ -178,65 +131,6 @@ struct AppSheetsModifier: ViewModifier {
             .sheet(isPresented: $refPopup) {
                 ResRefView()
                     .padding()
-            }
-            .sheet(isPresented: $sheets.showUnifiedReferenceBrowser) {
-                UnifiedReferenceBrowserOverlay(
-                    isPresented: $sheets.showUnifiedReferenceBrowser,
-                    initialTab: sheets.unifiedBrowserInitialTab,
-                    knowledgeCards: .init(
-                        get: { knowledgeCardStore.knowledgeCards },
-                        set: { _ in }
-                    ),
-                    knowledgeCardStore: knowledgeCardStore,
-                    onKnowledgeCardUpdated: { card in
-                        knowledgeCardStore.update(card)
-                    },
-                    onKnowledgeCardDeleted: { card in
-                        knowledgeCardStore.delete(card)
-                    },
-                    onKnowledgeCardAdded: { card in
-                        knowledgeCardStore.add(card)
-                        // Check if there are active jobs to reprocess
-                        let activeStatuses: [Statuses] = [.new, .queued, .inProgress]
-                        let activeJobCount = jobAppStore.jobApps.filter { job in
-                            !job.jobDescription.isEmpty && activeStatuses.contains(job.status)
-                        }.count
-                        if activeJobCount > 0 {
-                            newlyAddedCardName = card.title
-                            showReprocessConfirmation = true
-                        }
-                    },
-                    writingSamples: .init(
-                        get: { coverRefStore.storedCoverRefs },
-                        set: { _ in }
-                    ),
-                    onWritingSampleUpdated: { ref in
-                        // SwiftData auto-updates
-                    },
-                    onWritingSampleDeleted: { ref in
-                        coverRefStore.deleteCoverRef(ref)
-                    },
-                    onWritingSampleAdded: { ref in
-                        coverRefStore.addCoverRef(ref)
-                    },
-                    skillStore: skillStore,
-                    dossierStore: candidateDossierStore,
-                    titleSetStore: titleSetStore,
-                    llmFacade: llmFacade
-                )
-            }
-            .alert("Re-run Job Pre-processing?", isPresented: $showReprocessConfirmation) {
-                Button("Re-process All") {
-                    let count = jobAppStore.rerunPreprocessingForActiveJobs()
-                    Logger.info("🔄 [AppSheets] Queued \(count) active jobs for reprocessing after KC addition", category: .ai)
-                }
-                Button("Not Now", role: .cancel) {}
-            } message: {
-                let activeStatuses: [Statuses] = [.new, .queued, .inProgress]
-                let activeJobCount = jobAppStore.jobApps.filter { job in
-                    !job.jobDescription.isEmpty && activeStatuses.contains(job.status)
-                }.count
-                Text("You added \"\(newlyAddedCardName)\" to your knowledge cards. Would you like to re-run pre-processing for \(activeJobCount) active job\(activeJobCount == 1 ? "" : "s") to match them with relevant cards?")
             }
             .sheet(isPresented: $sheets.showSetupWizard) {
                 SetupWizardView {

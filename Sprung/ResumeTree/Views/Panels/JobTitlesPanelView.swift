@@ -121,8 +121,8 @@ struct JobTitlesPanelView: View {
 
     private var browseButton: some View {
         Button {
-            sheets.unifiedBrowserInitialTab = .titleSets
-            sheets.showUnifiedReferenceBrowser = true
+            NotificationCenter.default.post(name: .navigateToModule, object: nil, userInfo: ["module": AppModule.references.rawValue])
+            NotificationCenter.default.post(name: .navigateToReferencesTab, object: nil, userInfo: ["tab": "Titles"])
         } label: {
             Label("Browse Title Sets", systemImage: "text.magnifyingglass")
         }
