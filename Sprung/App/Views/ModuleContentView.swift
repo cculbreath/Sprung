@@ -58,5 +58,6 @@ struct ModuleContentView: View {
                 }
             }
         }
+        .toolbarRole(.editor)
     }
 }

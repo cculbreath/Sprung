@@ -98,6 +98,7 @@ struct ResumeEditorModuleView: View {
                 showNewAppSheet: $sheets.showNewJobApp
             )
         }
+        .toolbarRole(.editor)
         .appSheets(sheets: $sheets, clarifyingQuestions: $clarifyingQuestions, refPopup: $refPopup)
         .onChange(of: jobAppStore.selectedApp) { _, newValue in
             navigationState.saveSelectedJobApp(newValue)

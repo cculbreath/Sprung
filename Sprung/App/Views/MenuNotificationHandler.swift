@@ -68,22 +68,6 @@ class MenuNotificationHandler {
                 self?.handleBestJob()
             }
         }
-        NotificationCenter.default.addObserver(
-            forName: .toggleKnowledgeCards,
-            object: nil,
-            queue: .main
-        ) { _ in
-            NotificationCenter.default.post(name: .navigateToModule, object: nil, userInfo: ["module": AppModule.references.rawValue])
-            NotificationCenter.default.post(name: .navigateToReferencesTab, object: nil, userInfo: ["tab": "Knowledge"])
-        }
-        NotificationCenter.default.addObserver(
-            forName: .showWritingContextBrowser,
-            object: nil,
-            queue: .main
-        ) { _ in
-            NotificationCenter.default.post(name: .navigateToModule, object: nil, userInfo: ["module": AppModule.references.rawValue])
-            NotificationCenter.default.post(name: .navigateToReferencesTab, object: nil, userInfo: ["tab": "Writing"])
-        }
         // Resume Commands
         NotificationCenter.default.addObserver(
             forName: .customizeResume,
