@@ -164,17 +164,6 @@ struct UnifiedToolbar: CustomizableToolbarContent {
                 .help(selectedTab == .coverLetter ? "Toggle Cover Letter Inspector" : "Inspector")
             }
 
-            ToolbarItem(id: "knowledgeCards", placement: .primaryAction, showsByDefault: false) {
-                Button(action: {
-                    sheets.showKnowledgeCardsBrowser = true
-                }, label: {
-                    Label("Knowledge", systemImage: "brain.head.profile")
-                        .font(.system(size: 14, weight: .light))
-                })
-                .buttonStyle(.automatic)
-                .help("Browse Knowledge Cards")
-            }
-
             ToolbarItem(id: "settings", placement: .primaryAction, showsByDefault: false) {
                 Button("Settings", systemImage: "gear") {
                     Task { @MainActor in
