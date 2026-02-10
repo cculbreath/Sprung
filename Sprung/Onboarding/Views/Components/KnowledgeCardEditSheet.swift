@@ -99,19 +99,15 @@ struct KnowledgeCardEditSheet: View {
         }
         .frame(width: 600, height: 700)
         .background(Color(nsColor: .windowBackgroundColor))
-        .onChange(of: title) { _, _ in hasUnsavedChanges = true }
-        .onChange(of: narrative) { _, _ in hasUnsavedChanges = true }
-        .onChange(of: cardType) { _, _ in hasUnsavedChanges = true }
-        .onChange(of: organization) { _, _ in hasUnsavedChanges = true }
-        .onChange(of: dateRange) { _, _ in hasUnsavedChanges = true }
-        .onChange(of: location) { _, _ in hasUnsavedChanges = true }
-        .onChange(of: enabledByDefault) { _, _ in hasUnsavedChanges = true }
-        .onChange(of: domains) { _, _ in hasUnsavedChanges = true }
-        .onChange(of: scaleItems) { _, _ in hasUnsavedChanges = true }
-        .onChange(of: keywords) { _, _ in hasUnsavedChanges = true }
-        .onChange(of: technologies) { _, _ in hasUnsavedChanges = true }
-        .onChange(of: outcomes) { _, _ in hasUnsavedChanges = true }
-        .onChange(of: suggestedBullets) { _, _ in hasUnsavedChanges = true }
+        .modifier(ChangeTracker(
+            title: title, narrative: narrative, cardType: cardType,
+            organization: organization, dateRange: dateRange, location: location,
+            enabledByDefault: enabledByDefault, domains: domains,
+            scaleItems: scaleItems, keywords: keywords,
+            technologies: technologies, outcomes: outcomes,
+            suggestedBullets: suggestedBullets,
+            hasUnsavedChanges: $hasUnsavedChanges
+        ))
         .alert("Discard Changes?", isPresented: $showDiscardAlert) {
             Button("Discard", role: .destructive) {
                 onCancel()
@@ -460,15 +456,53 @@ struct KnowledgeCardEditSheet: View {
                 dateRange: dateRange.isEmpty ? nil : dateRange.trimmingCharacters(in: .whitespaces),
                 organization: organization.isEmpty ? nil : organization.trimmingCharacters(in: .whitespaces),
                 location: location.isEmpty ? nil : location.trimmingCharacters(in: .whitespaces),
+                extractable: ExtractableMetadata(domains: domains, scale: scaleItems, keywords: keywords),
                 enabledByDefault: enabledByDefault,
-                isFromOnboarding: false,
-                extractable: ExtractableMetadata(domains: domains, scale: scaleItems, keywords: keywords)
+                isFromOnboarding: false
             )
             newCard.technologies = technologies
             newCard.outcomes = outcomes
             newCard.suggestedBullets = suggestedBullets
             onSave(newCard)
         }
+    }
+}
+
+// MARK: - Change Tracker
+
+/// Breaks up the long onChange chain into a separate ViewModifier
+/// so the Swift type-checker doesn't time out on the main body.
+private struct ChangeTracker: ViewModifier {
+    let title: String
+    let narrative: String
+    let cardType: KnowledgeCard.CardType?
+    let organization: String
+    let dateRange: String
+    let location: String
+    let enabledByDefault: Bool
+    let domains: [String]
+    let scaleItems: [String]
+    let keywords: [String]
+    let technologies: [String]
+    let outcomes: [String]
+    let suggestedBullets: [String]
+    @Binding var hasUnsavedChanges: Bool
+
+    func body(content: Content) -> some View {
+        content
+            .onChange(of: title) { _, _ in hasUnsavedChanges = true }
+            .onChange(of: narrative) { _, _ in hasUnsavedChanges = true }
+            .onChange(of: cardType) { _, _ in hasUnsavedChanges = true }
+            .onChange(of: organization) { _, _ in hasUnsavedChanges = true }
+            .onChange(of: dateRange) { _, _ in hasUnsavedChanges = true }
+            .onChange(of: location) { _, _ in hasUnsavedChanges = true }
+            .onChange(of: enabledByDefault) { _, _ in hasUnsavedChanges = true }
+            .onChange(of: domains) { _, _ in hasUnsavedChanges = true }
+            .onChange(of: scaleItems) { _, _ in hasUnsavedChanges = true }
+            .onChange(of: keywords) { _, _ in hasUnsavedChanges = true }
+            .onChange(of: technologies) { _, _ in hasUnsavedChanges = true }
+            .onChange(of: outcomes) { _, _ in hasUnsavedChanges = true }
+            .onChange(of: suggestedBullets) { _, _ in hasUnsavedChanges = true }
     }
 }
 
