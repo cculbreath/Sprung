@@ -25,7 +25,6 @@ struct KnowledgeCardEditSheet: View {
     @State private var outcomes: [String] = []
     @State private var suggestedBullets: [String] = []
 
-    @State private var hasUnsavedChanges = false
     @State private var showDiscardAlert = false
 
     @FocusState private var focusedField: Field?
@@ -35,6 +34,25 @@ struct KnowledgeCardEditSheet: View {
     private var isValid: Bool {
         !title.trimmingCharacters(in: .whitespaces).isEmpty &&
         !narrative.trimmingCharacters(in: .whitespaces).isEmpty
+    }
+
+    private var hasUnsavedChanges: Bool {
+        guard let card else {
+            return !title.isEmpty || !narrative.isEmpty || !organization.isEmpty
+        }
+        return title != card.title
+            || narrative != card.narrative
+            || cardType != card.cardType
+            || organization != (card.organization ?? "")
+            || dateRange != (card.dateRange ?? "")
+            || location != (card.location ?? "")
+            || enabledByDefault != card.enabledByDefault
+            || domains != card.extractable.domains
+            || scaleItems != card.extractable.scale
+            || keywords != card.extractable.keywords
+            || technologies != card.technologies
+            || outcomes != card.outcomes
+            || suggestedBullets != card.suggestedBullets
     }
 
     private var wordCount: Int {
@@ -99,15 +117,6 @@ struct KnowledgeCardEditSheet: View {
         }
         .frame(width: 600, height: 700)
         .background(Color(nsColor: .windowBackgroundColor))
-        .modifier(ChangeTracker(
-            title: title, narrative: narrative, cardType: cardType,
-            organization: organization, dateRange: dateRange, location: location,
-            enabledByDefault: enabledByDefault, domains: domains,
-            scaleItems: scaleItems, keywords: keywords,
-            technologies: technologies, outcomes: outcomes,
-            suggestedBullets: suggestedBullets,
-            hasUnsavedChanges: $hasUnsavedChanges
-        ))
         .alert("Discard Changes?", isPresented: $showDiscardAlert) {
             Button("Discard", role: .destructive) {
                 onCancel()
@@ -465,44 +474,6 @@ struct KnowledgeCardEditSheet: View {
             newCard.suggestedBullets = suggestedBullets
             onSave(newCard)
         }
-    }
-}
-
-// MARK: - Change Tracker
-
-/// Breaks up the long onChange chain into a separate ViewModifier
-/// so the Swift type-checker doesn't time out on the main body.
-private struct ChangeTracker: ViewModifier {
-    let title: String
-    let narrative: String
-    let cardType: KnowledgeCard.CardType?
-    let organization: String
-    let dateRange: String
-    let location: String
-    let enabledByDefault: Bool
-    let domains: [String]
-    let scaleItems: [String]
-    let keywords: [String]
-    let technologies: [String]
-    let outcomes: [String]
-    let suggestedBullets: [String]
-    @Binding var hasUnsavedChanges: Bool
-
-    func body(content: Content) -> some View {
-        content
-            .onChange(of: title) { _, _ in hasUnsavedChanges = true }
-            .onChange(of: narrative) { _, _ in hasUnsavedChanges = true }
-            .onChange(of: cardType) { _, _ in hasUnsavedChanges = true }
-            .onChange(of: organization) { _, _ in hasUnsavedChanges = true }
-            .onChange(of: dateRange) { _, _ in hasUnsavedChanges = true }
-            .onChange(of: location) { _, _ in hasUnsavedChanges = true }
-            .onChange(of: enabledByDefault) { _, _ in hasUnsavedChanges = true }
-            .onChange(of: domains) { _, _ in hasUnsavedChanges = true }
-            .onChange(of: scaleItems) { _, _ in hasUnsavedChanges = true }
-            .onChange(of: keywords) { _, _ in hasUnsavedChanges = true }
-            .onChange(of: technologies) { _, _ in hasUnsavedChanges = true }
-            .onChange(of: outcomes) { _, _ in hasUnsavedChanges = true }
-            .onChange(of: suggestedBullets) { _, _ in hasUnsavedChanges = true }
     }
 }
 
