@@ -68,7 +68,8 @@ class ResumeToolRegistry {
     /// Build ChatCompletionParameters.Tool array for OpenRouter
     func buildChatTools() -> [ChatCompletionParameters.Tool] {
         tools.map { tool in
-            let schema = AgentSchemaUtilities.buildJSONSchema(from: type(of: tool).parametersSchema)
+            // Tool schemas are static compile-time dictionaries; crash correctly signals malformed schema
+            let schema = try! JSONSchema.from(dictionary: type(of: tool).parametersSchema)
             let function = ChatCompletionParameters.ChatFunction(
                 name: type(of: tool).name,
                 strict: false,

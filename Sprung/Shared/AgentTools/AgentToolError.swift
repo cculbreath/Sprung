@@ -1,14 +1,14 @@
 //
-//  GitToolError.swift
+//  AgentToolError.swift
 //  Sprung
 //
-//  Error types for git filesystem tools.
+//  Error types for agent filesystem tools.
 //
 
 import Foundation
 
-/// Errors from git filesystem tools
-enum GitToolError: LocalizedError {
+/// Errors from agent filesystem tools
+enum AgentToolError: LocalizedError {
     case pathOutsideRepo(String)
     case fileNotFound(String)
     case notADirectory(String)

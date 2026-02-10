@@ -56,19 +56,19 @@ struct ReadFileTool: AgentTool {
         repoRoot: URL
     ) throws -> Result {
         // Resolve and validate path (handles ".", "/", relative paths)
-        let filePath = try GitToolUtilities.resolveAndValidatePath(parameters.path, repoRoot: repoRoot)
+        let filePath = try FilesystemToolUtilities.resolveAndValidatePath(parameters.path, repoRoot: repoRoot)
         let offset = max(1, parameters.offset ?? 1)
         let limit = min(2000, parameters.limit ?? 500)
 
         // Check file exists
         guard FileManager.default.fileExists(atPath: filePath) else {
-            throw GitToolError.fileNotFound(parameters.path)
+            throw AgentToolError.fileNotFound(parameters.path)
         }
 
         // Check if binary
         let fileURL = URL(fileURLWithPath: filePath)
-        if GitToolUtilities.isBinaryFile(at: fileURL) {
-            throw GitToolError.binaryFile(parameters.path)
+        if FilesystemToolUtilities.isBinaryFile(at: fileURL) {
+            throw AgentToolError.binaryFile(parameters.path)
         }
 
         // Read file

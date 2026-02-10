@@ -82,7 +82,7 @@ struct GrepSearchTool: AgentTool {
         ripgrepPath: URL? = nil
     ) throws -> Result {
         // Resolve and validate path (handles ".", "/", relative paths, nil defaults to repoRoot)
-        let searchPath = try GitToolUtilities.resolveAndValidatePath(parameters.path ?? ".", repoRoot: repoRoot)
+        let searchPath = try FilesystemToolUtilities.resolveAndValidatePath(parameters.path ?? ".", repoRoot: repoRoot)
         let limit = min(50, parameters.limit ?? 20)
         let contextLines = min(5, parameters.contextLines ?? 2)
 
@@ -269,7 +269,7 @@ struct GrepSearchTool: AgentTool {
 
         while let itemURL = enumerator?.nextObject() as? URL {
             // Skip noise directories
-            if GitToolUtilities.skipDirectories.contains(itemURL.lastPathComponent) {
+            if FilesystemToolUtilities.skipDirectories.contains(itemURL.lastPathComponent) {
                 enumerator?.skipDescendants()
                 continue
             }
@@ -279,7 +279,7 @@ struct GrepSearchTool: AgentTool {
 
             // Check file pattern
             if let filePattern = filePattern {
-                let globRegex = try GitToolUtilities.globToRegex(filePattern)
+                let globRegex = try FilesystemToolUtilities.globToRegex(filePattern)
                 let name = itemURL.lastPathComponent
                 if globRegex.firstMatch(in: name, range: NSRange(name.startIndex..., in: name)) == nil {
                     continue
@@ -287,7 +287,7 @@ struct GrepSearchTool: AgentTool {
             }
 
             // Skip binary files
-            if GitToolUtilities.isBinaryFile(at: itemURL) {
+            if FilesystemToolUtilities.isBinaryFile(at: itemURL) {
                 continue
             }
 

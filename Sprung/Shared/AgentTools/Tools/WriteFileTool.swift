@@ -47,7 +47,7 @@ struct WriteFileTool: AgentTool {
         repoRoot: URL
     ) throws -> Result {
         // Resolve and validate path
-        let filePath = try GitToolUtilities.resolveAndValidatePath(parameters.path, repoRoot: repoRoot)
+        let filePath = try FilesystemToolUtilities.resolveAndValidatePath(parameters.path, repoRoot: repoRoot)
         let fileURL = URL(fileURLWithPath: filePath)
 
         // Create parent directories if needed

@@ -63,7 +63,7 @@ struct ListDirectoryTool: AgentTool {
         gitignorePatterns _: [String] = []
     ) throws -> Result {
         // Resolve and validate path (handles ".", "/", relative paths)
-        let dirPath = try GitToolUtilities.resolveAndValidatePath(parameters.path, repoRoot: repoRoot)
+        let dirPath = try FilesystemToolUtilities.resolveAndValidatePath(parameters.path, repoRoot: repoRoot)
         let maxDepth = min(5, parameters.depth ?? 2)
         let limit = min(500, parameters.limit ?? 100)
 
@@ -72,7 +72,7 @@ struct ListDirectoryTool: AgentTool {
         var isDirectory: ObjCBool = false
         guard FileManager.default.fileExists(atPath: dirPath, isDirectory: &isDirectory),
               isDirectory.boolValue else {
-            throw GitToolError.notADirectory(parameters.path)
+            throw AgentToolError.notADirectory(parameters.path)
         }
 
         var entries: [Entry] = []
@@ -106,7 +106,7 @@ struct ListDirectoryTool: AgentTool {
                 let name = itemURL.lastPathComponent
 
                 // Skip noise directories
-                if GitToolUtilities.skipDirectories.contains(name) {
+                if FilesystemToolUtilities.skipDirectories.contains(name) {
                     continue
                 }
 
@@ -164,7 +164,7 @@ struct ListDirectoryTool: AgentTool {
         for entry in entries {
             let indent = String(repeating: "  ", count: entry.depth - baseDepth)
             let icon = entry.type == "directory" ? "📁" : (entry.type == "symlink" ? "🔗" : "📄")
-            let sizeStr = entry.size.map { " (\(GitToolUtilities.formatFileSize($0)))" } ?? ""
+            let sizeStr = entry.size.map { " (\(FilesystemToolUtilities.formatFileSize($0)))" } ?? ""
             lines.append("\(indent)\(icon) \(entry.name)\(sizeStr)")
         }
         return lines.joined(separator: "\n")

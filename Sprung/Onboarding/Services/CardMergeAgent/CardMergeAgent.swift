@@ -580,7 +580,8 @@ class CardMergeAgent {
 
     private static func buildTool<T: AgentTool>(_ tool: T.Type) -> ChatCompletionParameters.Tool {
         let schemaDict = tool.parametersSchema
-        let schema = AgentSchemaUtilities.buildJSONSchema(from: schemaDict)
+        // Tool schemas are static compile-time dictionaries; crash correctly signals malformed schema
+        let schema = try! JSONSchema.from(dictionary: schemaDict)
 
         let function = ChatCompletionParameters.ChatFunction(
             name: tool.name,

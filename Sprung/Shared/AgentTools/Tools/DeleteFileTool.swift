@@ -41,18 +41,18 @@ struct DeleteFileTool: AgentTool {
         repoRoot: URL
     ) throws -> Result {
         // Resolve and validate path
-        let filePath = try GitToolUtilities.resolveAndValidatePath(parameters.path, repoRoot: repoRoot)
+        let filePath = try FilesystemToolUtilities.resolveAndValidatePath(parameters.path, repoRoot: repoRoot)
 
         // Check file exists
         guard FileManager.default.fileExists(atPath: filePath) else {
-            throw GitToolError.fileNotFound(parameters.path)
+            throw AgentToolError.fileNotFound(parameters.path)
         }
 
         // Ensure it's a file, not a directory
         var isDirectory: ObjCBool = false
         FileManager.default.fileExists(atPath: filePath, isDirectory: &isDirectory)
         if isDirectory.boolValue {
-            throw GitToolError.notADirectory(parameters.path)
+            throw AgentToolError.notADirectory(parameters.path)
         }
 
         // Delete the file

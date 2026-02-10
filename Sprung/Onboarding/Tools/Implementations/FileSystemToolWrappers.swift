@@ -2,7 +2,7 @@
 //  FileSystemToolWrappers.swift
 //  Sprung
 //
-//  Wraps GitAgent's FileSystemTools for use in the main interview LLM.
+//  Wraps shared AgentTools filesystem tools for use in the main interview LLM.
 //  These tools allow the LLM to browse exported artifacts using familiar
 //  filesystem operations (read_file, list_directory, glob_search, grep_search).
 //
@@ -14,27 +14,6 @@
 import Foundation
 import SwiftyJSON
 import SwiftOpenAI
-
-// MARK: - Artifact Filesystem Context
-
-/// Manages the exported artifact filesystem root for tool execution.
-/// Set by the coordinator when artifacts are exported.
-actor ArtifactFilesystemContext {
-    private var _rootURL: URL?
-
-    var rootURL: URL? {
-        _rootURL
-    }
-
-    func setRoot(_ url: URL?) {
-        _rootURL = url
-    }
-
-    /// Initializer for dependency injection
-    init(rootURL: URL? = nil) {
-        self._rootURL = rootURL
-    }
-}
 
 // MARK: - Read File Tool Wrapper
 

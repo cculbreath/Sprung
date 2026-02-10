@@ -61,13 +61,13 @@ struct GlobSearchTool: AgentTool {
     ) throws -> Result {
         let pattern = parameters.pattern
         // Resolve and validate path (handles ".", "/", relative paths, nil defaults to repoRoot)
-        let searchPath = try GitToolUtilities.resolveAndValidatePath(parameters.path ?? ".", repoRoot: repoRoot)
+        let searchPath = try FilesystemToolUtilities.resolveAndValidatePath(parameters.path ?? ".", repoRoot: repoRoot)
         let limit = min(200, parameters.limit ?? 50)
 
         let searchURL = URL(fileURLWithPath: searchPath)
 
         // Parse the glob pattern
-        let regex = try GitToolUtilities.globToRegex(pattern)
+        let regex = try FilesystemToolUtilities.globToRegex(pattern)
 
         // Collect matching files
         var matches: [FileMatch] = []
@@ -82,7 +82,7 @@ struct GlobSearchTool: AgentTool {
 
         while let itemURL = enumerator?.nextObject() as? URL {
             // Skip noise directories
-            if GitToolUtilities.skipDirectories.contains(itemURL.lastPathComponent) {
+            if FilesystemToolUtilities.skipDirectories.contains(itemURL.lastPathComponent) {
                 enumerator?.skipDescendants()
                 continue
             }

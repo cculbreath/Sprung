@@ -1,14 +1,14 @@
 //
-//  GitToolUtilities.swift
+//  FilesystemToolUtilities.swift
 //  Sprung
 //
-//  Shared utilities for git analysis tools.
+//  Shared utilities for filesystem agent tools.
 //
 
 import Foundation
 
-/// Shared utilities for git tools
-enum GitToolUtilities {
+/// Shared utilities for filesystem tools
+enum FilesystemToolUtilities {
     /// Directories to always skip when traversing
     static let skipDirectories = Set([
         ".git", "node_modules", "__pycache__", ".pytest_cache",
@@ -24,7 +24,7 @@ enum GitToolUtilities {
     ///   - userPath: The path provided by the LLM (could be ".", "/", "", relative, or absolute)
     ///   - repoRoot: The repository/sandbox root directory
     /// - Returns: The resolved absolute path within the repo
-    /// - Throws: GitToolError.pathOutsideRepo if the resolved path escapes the repo root
+    /// - Throws: AgentToolError.pathOutsideRepo if the resolved path escapes the repo root
     static func resolveAndValidatePath(_ userPath: String, repoRoot: URL) throws -> String {
         // Handle empty string, ".", "/" as root of repo
         let normalizedPath: String
@@ -46,7 +46,7 @@ enum GitToolUtilities {
 
         // Security check: ensure resolved path is within repo root
         guard resolvedURL.path.hasPrefix(repoRoot.standardized.path) else {
-            throw GitToolError.pathOutsideRepo(userPath)
+            throw AgentToolError.pathOutsideRepo(userPath)
         }
 
         return resolvedURL.path
@@ -168,7 +168,7 @@ enum GitToolUtilities {
     }
 }
 
-/// Global function for backward compatibility
+/// Global function for convenience
 func resolveAndValidatePath(_ userPath: String, repoRoot: URL) throws -> String {
-    try GitToolUtilities.resolveAndValidatePath(userPath, repoRoot: repoRoot)
+    try FilesystemToolUtilities.resolveAndValidatePath(userPath, repoRoot: repoRoot)
 }

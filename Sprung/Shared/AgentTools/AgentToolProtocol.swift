@@ -2,12 +2,12 @@
 //  AgentToolProtocol.swift
 //  Sprung
 //
-//  Protocol for tools used by the git analysis agent.
+//  Protocol for tools used by multi-turn LLM agents.
 //
 
 import Foundation
 
-/// Protocol for all agent tools used by the git analysis agent
+/// Protocol for all agent tools (filesystem, analysis, merge, etc.)
 protocol AgentTool {
     /// Tool name (used in function calling)
     static var name: String { get }
