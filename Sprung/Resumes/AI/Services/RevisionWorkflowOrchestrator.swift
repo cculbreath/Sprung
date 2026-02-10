@@ -304,6 +304,9 @@ class RevisionWorkflowOrchestrator {
         let preamble = cacheService.buildPreamble(context: promptContext)
         self.cachedPreamble = preamble
 
+        // Build text resume snapshot for cross-section context
+        let textResumeSnapshot = ResumeTextSnapshotBuilder.buildSnapshot(resume: resume)
+
         // Build tasks for this phase with targeting plan and Phase 1 decisions
         let tasks = builder.buildTasks(
             from: nodes,
@@ -314,7 +317,8 @@ class RevisionWorkflowOrchestrator {
             phase: phase,
             targetingPlan: cachedTargetingPlan,
             phase1Decisions: phase == 2 ? phase1DecisionsContext : nil,
-            knowledgeCards: context.knowledgeCards
+            knowledgeCards: context.knowledgeCards,
+            textResumeSnapshot: textResumeSnapshot
         )
 
         Logger.info("Phase \(phase): Built \(tasks.count) tasks (compound grouping may reduce from \(nodes.count) nodes)", category: .ai)
@@ -538,6 +542,9 @@ class RevisionWorkflowOrchestrator {
             return nil
         }
 
+        // Build text resume snapshot for cross-section context
+        let textResumeSnapshot = ResumeTextSnapshotBuilder.buildSnapshot(resume: resume)
+
         // Rebuild as compound tasks (should produce 1 compound task from the group)
         let tasks = builder.buildTasks(
             from: originalNodes,
@@ -548,7 +555,8 @@ class RevisionWorkflowOrchestrator {
             phase: groupItems[0].task.phase,
             targetingPlan: cachedTargetingPlan,
             phase1Decisions: phase1DecisionsContext,
-            knowledgeCards: context.knowledgeCards
+            knowledgeCards: context.knowledgeCards,
+            textResumeSnapshot: textResumeSnapshot
         )
 
         // Find the compound task

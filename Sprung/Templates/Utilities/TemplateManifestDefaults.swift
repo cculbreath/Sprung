@@ -65,6 +65,7 @@ struct TemplateManifestOverrides: Codable {
     var transparentKeys: [String]?
     var reviewPhases: [String: [TemplateManifest.ReviewPhaseConfig]]?
     var editorPanels: [String: String]?
+    var pageLimit: Int?
 
     /// Initialize with type-safe StandardSection array
     init(
@@ -80,7 +81,8 @@ struct TemplateManifestOverrides: Codable {
         listContainers: [String]? = nil,
         transparentKeys: [String]? = nil,
         reviewPhases: [String: [TemplateManifest.ReviewPhaseConfig]]? = nil,
-        editorPanels: [String: String]? = nil
+        editorPanels: [String: String]? = nil,
+        pageLimit: Int? = nil
     ) {
         self.sectionOrder = sectionOrder?.map(\.rawValue)
         self.styling = styling
@@ -95,6 +97,7 @@ struct TemplateManifestOverrides: Codable {
         self.transparentKeys = transparentKeys
         self.reviewPhases = reviewPhases
         self.editorPanels = editorPanels
+        self.pageLimit = pageLimit
     }
     enum CodingKeys: String, CodingKey {
         case sectionOrder
@@ -110,6 +113,7 @@ struct TemplateManifestOverrides: Codable {
         case transparentKeys
         case reviewPhases
         case editorPanels
+        case pageLimit
     }
 }
 enum TemplateManifestDefaults {
@@ -236,6 +240,7 @@ enum TemplateManifestDefaults {
         let transparentKeys = overrides.transparentKeys ?? base.transparentKeys
         let reviewPhases = overrides.reviewPhases ?? base.reviewPhases
         let editorPanels = overrides.editorPanels ?? base.editorPanels
+        let pageLimit = overrides.pageLimit ?? base.pageLimit
 
         Logger.debug("🎯 [TemplateManifestDefaults.apply] Building manifest with defaultAIFields=\(defaultAIFields?.description ?? "nil")")
 
@@ -252,7 +257,8 @@ enum TemplateManifestDefaults {
             defaultAIFields: defaultAIFields,
             listContainers: listContainers,
             reviewPhases: reviewPhases,
-            editorPanels: editorPanels
+            editorPanels: editorPanels,
+            pageLimit: pageLimit
         )
     }
     // MARK: - Base Manifest Construction

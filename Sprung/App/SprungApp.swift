@@ -234,6 +234,10 @@ struct SprungApp: App {
                     NotificationCenter.default.post(name: .optimizeResume, object: nil)
                 }
                 .keyboardShortcut("o", modifiers: [.command])
+                Button("Polish with AI...") {
+                    NotificationCenter.default.post(name: .polishResume, object: nil)
+                }
+                .keyboardShortcut("p", modifiers: [.command, .shift])
                 Divider()
                 Button("Template Editor...") {
                     appDelegate.showTemplateEditorWindow()

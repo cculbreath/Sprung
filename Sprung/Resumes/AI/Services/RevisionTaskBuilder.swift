@@ -36,7 +36,8 @@ final class RevisionTaskBuilder {
         phase: Int,
         targetingPlan: TargetingPlan? = nil,
         phase1Decisions: String? = nil,
-        knowledgeCards: [KnowledgeCard] = []
+        knowledgeCards: [KnowledgeCard] = [],
+        textResumeSnapshot: String? = nil
     ) -> [RevisionTask] {
         // Separate specialized nodes from compound-eligible nodes
         var specializedTasks: [RevisionTask] = []
@@ -53,7 +54,8 @@ final class RevisionTaskBuilder {
                     titleSets: titleSets,
                     targetingPlan: targetingPlan,
                     phase1Decisions: phase1Decisions,
-                    knowledgeCards: knowledgeCards
+                    knowledgeCards: knowledgeCards,
+                    textResumeSnapshot: textResumeSnapshot
                 )
                 specializedTasks.append(RevisionTask(
                     revNode: revNode,
@@ -77,7 +79,8 @@ final class RevisionTaskBuilder {
                     for: group,
                     targetingPlan: targetingPlan,
                     phase1Decisions: phase1Decisions,
-                    knowledgeCards: knowledgeCards
+                    knowledgeCards: knowledgeCards,
+                    textResumeSnapshot: textResumeSnapshot
                 )
                 // Use a synthetic compound node that references all group members
                 let compoundNode = buildCompoundNode(from: group)
@@ -96,7 +99,8 @@ final class RevisionTaskBuilder {
                     titleSets: titleSets,
                     targetingPlan: targetingPlan,
                     phase1Decisions: phase1Decisions,
-                    knowledgeCards: knowledgeCards
+                    knowledgeCards: knowledgeCards,
+                    textResumeSnapshot: textResumeSnapshot
                 )
                 compoundTasks.append(RevisionTask(
                     revNode: single,
@@ -191,25 +195,27 @@ final class RevisionTaskBuilder {
         titleSets: [TitleSet],
         targetingPlan: TargetingPlan? = nil,
         phase1Decisions: String? = nil,
-        knowledgeCards: [KnowledgeCard] = []
+        knowledgeCards: [KnowledgeCard] = [],
+        textResumeSnapshot: String? = nil
     ) -> String {
         let targetingSection = buildTargetingSection(for: revNode, plan: targetingPlan)
         let phase1Section = phase1DecisionsSection(phase1Decisions)
 
         switch nodeType {
         case .skills:
-            return generateSkillsPrompt(for: revNode, skills: skills) + phase1Section
+            return generateSkillsPrompt(for: revNode, skills: skills, textResumeSnapshot: textResumeSnapshot) + phase1Section
         case .skillKeywords:
-            return generateSkillKeywordsPrompt(for: revNode, skills: skills) + phase1Section
+            return generateSkillKeywordsPrompt(for: revNode, skills: skills, textResumeSnapshot: textResumeSnapshot) + phase1Section
         case .titles:
-            return generateTitlesPrompt(for: revNode, titleSets: titleSets) + phase1Section
+            return generateTitlesPrompt(for: revNode, titleSets: titleSets, textResumeSnapshot: textResumeSnapshot) + phase1Section
         case .generic:
             return routeGenericPrompt(
                 for: revNode,
                 targetingPlanSection: targetingSection,
                 phase1Decisions: phase1Decisions,
                 knowledgeCards: knowledgeCards,
-                targetingPlan: targetingPlan
+                targetingPlan: targetingPlan,
+                textResumeSnapshot: textResumeSnapshot
             )
         case .compound:
             // Should not reach here -- compound is built via generateCompoundPrompt
@@ -287,7 +293,8 @@ final class RevisionTaskBuilder {
         targetingPlanSection: String?,
         phase1Decisions: String? = nil,
         knowledgeCards: [KnowledgeCard] = [],
-        targetingPlan: TargetingPlan? = nil
+        targetingPlan: TargetingPlan? = nil,
+        textResumeSnapshot: String? = nil
     ) -> String {
         let pathLower = revNode.path.lowercased()
         let phase1Section = phase1DecisionsSection(phase1Decisions)
@@ -301,20 +308,21 @@ final class RevisionTaskBuilder {
             return generateHighlightsPrompt(
                 for: revNode,
                 targetingPlanSection: targetingPlanSection,
-                suggestedBullets: bulletSection
+                suggestedBullets: bulletSection,
+                textResumeSnapshot: textResumeSnapshot
             ) + phase1Section
         }
 
         // Match objective or summary at the section level (custom.objective, custom.summary, basics.summary)
         if pathLower.contains("objective") || pathLower.contains("summary") {
-            return generateNarrativePrompt(for: revNode, targetingPlanSection: targetingPlanSection) + phase1Section
+            return generateNarrativePrompt(for: revNode, targetingPlanSection: targetingPlanSection, textResumeSnapshot: textResumeSnapshot) + phase1Section
         }
 
         if pathLower.contains("description") {
-            return generateDescriptionPrompt(for: revNode, targetingPlanSection: targetingPlanSection) + phase1Section
+            return generateDescriptionPrompt(for: revNode, targetingPlanSection: targetingPlanSection, textResumeSnapshot: textResumeSnapshot) + phase1Section
         }
 
-        return generateDefaultGenericPrompt(for: revNode, targetingPlanSection: targetingPlanSection) + phase1Section
+        return generateDefaultGenericPrompt(for: revNode, targetingPlanSection: targetingPlanSection, textResumeSnapshot: textResumeSnapshot) + phase1Section
     }
 
     // MARK: - Suggested Bullets
@@ -375,7 +383,8 @@ final class RevisionTaskBuilder {
         for group: [ExportedReviewNode],
         targetingPlan: TargetingPlan?,
         phase1Decisions: String?,
-        knowledgeCards: [KnowledgeCard]
+        knowledgeCards: [KnowledgeCard],
+        textResumeSnapshot: String? = nil
     ) -> String {
         let parent = parentPath(for: group[0].path)
         let phase1Section = phase1DecisionsSection(phase1Decisions)
@@ -465,6 +474,7 @@ final class RevisionTaskBuilder {
         \(fieldsList.joined(separator: "\n"))
         \(targetingSection.isEmpty ? "" : "\n## Strategic Guidance\n\n\(targetingSection)")
         \(bulletSection)
+        \(resumeContextSection(textResumeSnapshot))
 
         ## Requirements
 
@@ -507,7 +517,7 @@ final class RevisionTaskBuilder {
     }
 
     /// Generate prompt for skills section revision (Phase 1: category names only).
-    private func generateSkillsPrompt(for revNode: ExportedReviewNode, skills: [Skill]) -> String {
+    private func generateSkillsPrompt(for revNode: ExportedReviewNode, skills: [Skill], textResumeSnapshot: String? = nil) -> String {
         let skillBank = formatSkillBank(skills)
 
         return """
@@ -526,6 +536,7 @@ final class RevisionTaskBuilder {
 
         Current category names on resume:
         \(revNode.value)
+        \(resumeContextSection(textResumeSnapshot))
 
         Your task: Optimize category names and their order for this job posting.
         Individual skill selection within categories will happen in a separate step.
@@ -535,7 +546,7 @@ final class RevisionTaskBuilder {
     }
 
     /// Generate prompt for skill keywords revision.
-    private func generateSkillKeywordsPrompt(for revNode: ExportedReviewNode, skills: [Skill]) -> String {
+    private func generateSkillKeywordsPrompt(for revNode: ExportedReviewNode, skills: [Skill], textResumeSnapshot: String? = nil) -> String {
         let categoryName = extractCategoryName(from: revNode)
         let matchedCategory = matchCategory(from: revNode, skills: skills)
 
@@ -576,18 +587,20 @@ final class RevisionTaskBuilder {
         \(skillReference)
 
         Current skills: \(revNode.value)
+        \(resumeContextSection(textResumeSnapshot))
 
         \(jsonResponseBlock(for: revNode))
         """
     }
 
     /// Generate prompt for titles revision.
-    private func generateTitlesPrompt(for revNode: ExportedReviewNode, titleSets: [TitleSet]) -> String {
+    private func generateTitlesPrompt(for revNode: ExportedReviewNode, titleSets: [TitleSet], textResumeSnapshot: String? = nil) -> String {
         if titleSets.isEmpty {
             return """
             No title sets are available in the Title Set Library. Propose original job titles that best position the applicant for this specific job based on the job description and the applicant's background.
 
             Current titles: \(revNode.value)
+            \(resumeContextSection(textResumeSnapshot))
 
             \(jsonResponseBlock(for: revNode))
             """
@@ -612,12 +625,26 @@ final class RevisionTaskBuilder {
         \(titleSetReference)
 
         Current titles: \(revNode.value)
+        \(resumeContextSection(textResumeSnapshot))
 
         \(jsonResponseBlock(for: revNode))
         """
     }
 
     // MARK: - Field-Specific Generic Prompts
+
+    /// Build the optional full-resume context section for prompts.
+    private func resumeContextSection(_ snapshot: String?) -> String {
+        guard let snapshot, !snapshot.isEmpty else { return "" }
+        return """
+
+        ## Current Full Resume
+
+        Below is the current complete resume. Avoid duplicating content that already appears in other sections.
+
+        \(snapshot)
+        """
+    }
 
     /// Build the optional strategic guidance section for prompts.
     private func strategicGuidanceSection(_ targetingPlanSection: String?) -> String {
@@ -686,7 +713,8 @@ final class RevisionTaskBuilder {
     private func generateHighlightsPrompt(
         for revNode: ExportedReviewNode,
         targetingPlanSection: String?,
-        suggestedBullets: String? = nil
+        suggestedBullets: String? = nil,
+        textResumeSnapshot: String? = nil
     ) -> String {
         let bulletReference = suggestedBullets.map { "\n\n\($0)" } ?? ""
 
@@ -703,6 +731,7 @@ final class RevisionTaskBuilder {
         \(revNode.value)
         \(strategicGuidanceSection(targetingPlanSection))
         \(bulletReference)
+        \(resumeContextSection(textResumeSnapshot))
 
         ## Requirements
 
@@ -753,7 +782,7 @@ final class RevisionTaskBuilder {
     /// Generate prompt for objective/summary narrative fields.
     /// Adapted from ObjectiveGenerator with word count constraints, value proposition focus,
     /// and voice matching.
-    private func generateNarrativePrompt(for revNode: ExportedReviewNode, targetingPlanSection: String?) -> String {
+    private func generateNarrativePrompt(for revNode: ExportedReviewNode, targetingPlanSection: String?, textResumeSnapshot: String? = nil) -> String {
         """
         ## Task: Revise Professional Summary
 
@@ -766,6 +795,7 @@ final class RevisionTaskBuilder {
         **Current summary:**
         \(revNode.value)
         \(strategicGuidanceSection(targetingPlanSection))
+        \(resumeContextSection(textResumeSnapshot))
 
         ## Requirements
 
@@ -799,7 +829,7 @@ final class RevisionTaskBuilder {
     /// Generate prompt for project/work description fields.
     /// Adapted from ProjectsGenerator with KC-specific technology references and concise
     /// narrative structure.
-    private func generateDescriptionPrompt(for revNode: ExportedReviewNode, targetingPlanSection: String?) -> String {
+    private func generateDescriptionPrompt(for revNode: ExportedReviewNode, targetingPlanSection: String?, textResumeSnapshot: String? = nil) -> String {
         """
         ## Task: Revise Description
 
@@ -812,6 +842,7 @@ final class RevisionTaskBuilder {
         **Current description:**
         \(revNode.value)
         \(strategicGuidanceSection(targetingPlanSection))
+        \(resumeContextSection(textResumeSnapshot))
 
         ## Requirements
 
@@ -844,7 +875,7 @@ final class RevisionTaskBuilder {
 
     /// Improved default generic prompt for fields that don't match highlights, narrative, or description patterns.
     /// Still enforces evidence constraints, forbidden patterns, and voice matching.
-    private func generateDefaultGenericPrompt(for revNode: ExportedReviewNode, targetingPlanSection: String?) -> String {
+    private func generateDefaultGenericPrompt(for revNode: ExportedReviewNode, targetingPlanSection: String?, textResumeSnapshot: String? = nil) -> String {
         """
         ## Task: Revise Resume Content
 
@@ -857,6 +888,7 @@ final class RevisionTaskBuilder {
         **Current value:**
         \(revNode.value)
         \(strategicGuidanceSection(targetingPlanSection))
+        \(resumeContextSection(textResumeSnapshot))
 
         ## Requirements
 

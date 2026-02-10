@@ -97,6 +97,13 @@ class MenuNotificationHandler {
             self?.sheets?.wrappedValue.showResumeReview = true
         }
         NotificationCenter.default.addObserver(
+            forName: .polishResume,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.sheets?.wrappedValue.showResumeRevision = true
+        }
+        NotificationCenter.default.addObserver(
             forName: .showResumeInspector,
             object: nil,
             queue: .main

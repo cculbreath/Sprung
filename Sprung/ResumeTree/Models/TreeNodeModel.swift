@@ -913,4 +913,22 @@ extension TreeNode {
         }
         return dict
     }
+
+    /// Convert TreeNode to revision-format dictionary for the revision agent workspace.
+    /// Includes: id, name, value, myIndex, isTitleNode, children — omits editor-only fields.
+    func toRevisionDictionary() -> [String: Any] {
+        var dict: [String: Any] = [
+            "id": id,
+            "name": name,
+            "value": value,
+            "myIndex": myIndex,
+            "isTitleNode": isTitleNode
+        ]
+        if let children = children, !children.isEmpty {
+            dict["children"] = orderedChildren.map { $0.toRevisionDictionary() }
+        } else {
+            dict["children"] = [] as [[String: Any]]
+        }
+        return dict
+    }
 }

@@ -132,6 +132,18 @@ struct UnifiedToolbar: CustomizableToolbarContent {
                 .help("Open Experience Editor")
             }
 
+            ToolbarItem(id: "polishResume", placement: .secondaryAction, showsByDefault: false) {
+                Button(action: {
+                    sheets.showResumeRevision = true
+                }, label: {
+                    Label("Polish Resume", systemImage: "sparkles")
+                        .font(.system(size: 14, weight: .light))
+                })
+                .buttonStyle(.automatic)
+                .help("Polish resume with AI revision agent")
+                .disabled(jobAppStore.selectedApp?.selectedRes == nil)
+            }
+
             ToolbarItem(id: "analyze", placement: .secondaryAction, showsByDefault: true) {
                 Button(action: {
                     sheets.showApplicationReview = true

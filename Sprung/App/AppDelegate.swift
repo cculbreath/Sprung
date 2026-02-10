@@ -37,9 +37,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Wait until the app is fully loaded before modifying the menu and toolbar
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
             self.setupAppMenu()
-            // Ensure toolbar displays icons and labels
+            // Ensure toolbar displays icons and labels and enables customization
             if let toolbar = NSApp.mainWindow?.toolbar {
                 toolbar.displayMode = .iconAndLabel
+                toolbar.allowsUserCustomization = true
             }
         }
         // We no longer add a separate Profile main menu to avoid duplication

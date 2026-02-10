@@ -18,6 +18,9 @@ struct ModelsSettingsView: View {
     @AppStorage("seedGenerationAnthropicModelId") private var seedGenerationAnthropicModelId: String = ""
     @AppStorage("seedGenerationOpenRouterModelId") private var seedGenerationOpenRouterModelId: String = ""
 
+    // MARK: - Resume Revision
+    @AppStorage("resumeRevisionModelId") private var resumeRevisionModelId: String = ""
+
     // MARK: - Document Processing
     @AppStorage("onboardingPDFExtractionModelId") private var pdfExtractionModelId: String = ""
     @AppStorage("onboardingDocSummaryModelId") private var docSummaryModelId: String = ""
@@ -124,6 +127,11 @@ struct ModelsSettingsView: View {
 
         // Experience Defaults - special case with backend switcher
         experienceDefaultsRow
+
+        // Resume Revision
+        modelRow(operation: "Resume Revision", backend: .anthropic) {
+            anthropicPicker(selection: $resumeRevisionModelId)
+        }
 
         Divider().padding(.vertical, 4)
 

@@ -427,6 +427,9 @@ struct TemplateManifest: Codable {
     /// (e.g., "jobTitlesPanel").
     let editorPanels: [String: String]?
 
+    /// Target page count for the rendered resume. `nil` means no constraint.
+    let pageLimit: Int?
+
     /// Configuration for a single review phase
     struct ReviewPhaseConfig: Codable {
         /// Phase number (1-indexed, executed in order)
@@ -468,7 +471,8 @@ struct TemplateManifest: Codable {
         defaultAIFields: [String]? = nil,
         listContainers: [String]? = nil,
         reviewPhases: [String: [ReviewPhaseConfig]]? = nil,
-        editorPanels: [String: String]? = nil
+        editorPanels: [String: String]? = nil,
+        pageLimit: Int? = nil
     ) {
         self.slug = slug
         self.schemaVersion = schemaVersion
@@ -482,6 +486,7 @@ struct TemplateManifest: Codable {
         self.listContainers = listContainers
         self.reviewPhases = reviewPhases
         self.editorPanels = editorPanels
+        self.pageLimit = pageLimit
         var normalized: [String: Section] = [:]
         var synthesized: Set<String> = []
         for (key, var section) in sections {
@@ -508,6 +513,7 @@ struct TemplateManifest: Codable {
         listContainers = try container.decodeIfPresent([String].self, forKey: .listContainers)
         reviewPhases = try container.decodeIfPresent([String: [ReviewPhaseConfig]].self, forKey: .reviewPhases)
         editorPanels = try container.decodeIfPresent([String: String].self, forKey: .editorPanels)
+        pageLimit = try container.decodeIfPresent(Int.self, forKey: .pageLimit)
         let decodedSections = try container.decode([String: Section].self, forKey: .sections)
         var normalized: [String: Section] = [:]
         var synthesized: Set<String> = []
@@ -537,6 +543,7 @@ struct TemplateManifest: Codable {
         try container.encodeIfPresent(listContainers, forKey: .listContainers)
         try container.encodeIfPresent(reviewPhases, forKey: .reviewPhases)
         try container.encodeIfPresent(editorPanels, forKey: .editorPanels)
+        try container.encodeIfPresent(pageLimit, forKey: .pageLimit)
         try container.encode(sections, forKey: .sections)
     }
     func section(for key: String) -> Section? {
@@ -624,6 +631,7 @@ struct TemplateManifest: Codable {
         case listContainers
         case reviewPhases
         case editorPanels
+        case pageLimit
     }
 }
 // MARK: - Encoding helpers
