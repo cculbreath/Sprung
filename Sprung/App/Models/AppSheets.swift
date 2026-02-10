@@ -268,6 +268,8 @@ private struct ParallelReviewQueueSheetContent: View {
                     reviewQueue: reviewQueue,
                     phaseNumber: resumeReviseViewModel.currentPhaseNumber,
                     totalPhases: resumeReviseViewModel.totalPhases,
+                    isProcessing: resumeReviseViewModel.isProcessingRevisions,
+                    reasoningStreamManager: reasoningStreamManager,
                     onComplete: {
                         guard let resume = selectedResume else { return }
                         Task {

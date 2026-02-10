@@ -14,6 +14,8 @@ struct CustomizationReviewQueueView: View {
     @Bindable var reviewQueue: CustomizationReviewQueue
     let phaseNumber: Int
     let totalPhases: Int
+    let isProcessing: Bool
+    var reasoningStreamManager: ReasoningStreamManager? = nil
     let onComplete: () -> Void
     let onCancel: () -> Void
 
@@ -37,46 +39,66 @@ struct CustomizationReviewQueueView: View {
             filterTabs
 
             // Scrollable list of review cards with compound grouping
-            ScrollView {
-                LazyVStack(spacing: 8) {
-                    ForEach(filteredGroups) { group in
-                        if group.items.count > 1 {
-                            // Compound group: shared container with group header
-                            CompoundGroupView(
-                                group: group,
-                                reviewQueue: reviewQueue
-                            )
-                        } else if let item = group.items.first {
-                            // Single item (non-compound)
-                            CustomizationReviewCard(
-                                item: item,
-                                isCompoundMember: false,
-                                onApprove: { reviewQueue.setAction(for: item.id, action: .approved) },
-                                onReject: { feedback in
-                                    if let feedback = feedback, !feedback.isEmpty {
-                                        reviewQueue.setAction(for: item.id, action: .rejectedWithComment(feedback))
-                                    } else {
-                                        reviewQueue.setAction(for: item.id, action: .rejected)
-                                    }
-                                },
-                                onEdit: { content in
-                                    reviewQueue.setEditedContent(for: item.id, content: content)
-                                },
-                                onEditArray: { children in
-                                    reviewQueue.setEditedChildren(for: item.id, children: children)
-                                },
-                                onUseOriginal: {
-                                    reviewQueue.setAction(for: item.id, action: .useOriginal)
-                                },
-                                onUnapprove: {
-                                    reviewQueue.unapprove(itemId: item.id)
+            if isProcessing && reviewQueue.activeItems.isEmpty {
+                // Show reasoning stream or loading spinner while waiting for LLM results
+                if let manager = reasoningStreamManager, !manager.reasoningText.isEmpty {
+                    inlineReasoningView(manager: manager)
+                } else {
+                    Spacer()
+                    AnimatedThinkingText(
+                        statusMessage: "Preparing Phase \(phaseNumber) customizations..."
+                    )
+                    Spacer()
+                }
+            } else {
+                VStack(spacing: 0) {
+                    // Compact reasoning indicator when items are arriving but still processing
+                    if isProcessing, let manager = reasoningStreamManager, !manager.reasoningText.isEmpty {
+                        compactReasoningIndicator(manager: manager)
+                    }
+
+                    ScrollView {
+                        LazyVStack(spacing: 8) {
+                            ForEach(filteredGroups) { group in
+                                if group.items.count > 1 {
+                                    // Compound group: shared container with group header
+                                    CompoundGroupView(
+                                        group: group,
+                                        reviewQueue: reviewQueue
+                                    )
+                                } else if let item = group.items.first {
+                                    // Single item (non-compound)
+                                    CustomizationReviewCard(
+                                        item: item,
+                                        isCompoundMember: false,
+                                        onApprove: { reviewQueue.setAction(for: item.id, action: .approved) },
+                                        onReject: { feedback in
+                                            if let feedback = feedback, !feedback.isEmpty {
+                                                reviewQueue.setAction(for: item.id, action: .rejectedWithComment(feedback))
+                                            } else {
+                                                reviewQueue.setAction(for: item.id, action: .rejected)
+                                            }
+                                        },
+                                        onEdit: { content in
+                                            reviewQueue.setEditedContent(for: item.id, content: content)
+                                        },
+                                        onEditArray: { children in
+                                            reviewQueue.setEditedChildren(for: item.id, children: children)
+                                        },
+                                        onUseOriginal: {
+                                            reviewQueue.setAction(for: item.id, action: .useOriginal)
+                                        },
+                                        onUnapprove: {
+                                            reviewQueue.unapprove(itemId: item.id)
+                                        }
+                                    )
                                 }
-                            )
+                            }
                         }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
                     }
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
             }
 
             Divider()
@@ -245,17 +267,85 @@ struct CustomizationReviewQueueView: View {
                 reviewQueue.approveAll()
             }
             .buttonStyle(.bordered)
-            .disabled(reviewQueue.pendingItems.isEmpty)
+            .disabled(reviewQueue.pendingItems.isEmpty || isProcessing)
 
             if phaseNumber >= totalPhases {
                 Button("Complete Review") {
                     onComplete()
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(!reviewQueue.allItemsApproved)
+                .disabled(!reviewQueue.allItemsApproved || isProcessing)
             }
         }
         .padding(16)
+    }
+
+    // MARK: - Inline Reasoning Views
+
+    /// Full-size reasoning display shown when queue is empty and processing.
+    private func inlineReasoningView(manager: ReasoningStreamManager) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                Image(systemName: "brain.head.profile")
+                    .font(.system(size: 16))
+                    .foregroundStyle(.purple)
+                Text("Reasoning")
+                    .font(.system(.subheadline, design: .rounded, weight: .semibold))
+                    .foregroundStyle(.purple)
+                Spacer()
+                if manager.isStreaming {
+                    ProgressView()
+                        .controlSize(.small)
+                }
+            }
+
+            ScrollViewReader { proxy in
+                ScrollView {
+                    Text(manager.reasoningText)
+                        .font(.system(.caption, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .id("reasoningBottom")
+                }
+                .onChange(of: manager.reasoningText) {
+                    withAnimation(.easeOut(duration: 0.1)) {
+                        proxy.scrollTo("reasoningBottom", anchor: .bottom)
+                    }
+                }
+            }
+        }
+        .padding(16)
+        .background(.purple.opacity(0.03))
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(.purple.opacity(0.15), lineWidth: 1)
+        )
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+    }
+
+    /// Compact reasoning strip shown above the scroll view when items are arriving.
+    private func compactReasoningIndicator(manager: ReasoningStreamManager) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "brain.head.profile")
+                .font(.system(size: 12))
+                .foregroundStyle(.purple)
+            Text(manager.reasoningText.suffix(120))
+                .font(.system(.caption2, design: .monospaced))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .truncationMode(.head)
+            Spacer()
+            if manager.isStreaming {
+                ProgressView()
+                    .controlSize(.mini)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 6)
+        .background(.purple.opacity(0.03))
     }
 
     // MARK: - Computed Properties

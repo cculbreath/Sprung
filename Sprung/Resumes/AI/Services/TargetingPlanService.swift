@@ -14,7 +14,7 @@ import SwiftyJSON
 import SwiftOpenAI
 
 /// Service that generates a strategic targeting plan for resume customization.
-/// Runs a single LLM call with abbreviated KC summaries and job context to
+/// Runs a single LLM call with full KC narratives and job context to
 /// produce holistic guidance that coordinates all parallel field generators.
 @Observable
 @MainActor
@@ -28,13 +28,17 @@ final class TargetingPlanService {
     ///   - context: The customization context containing KCs, skills, job description, etc.
     ///   - llmFacade: The LLM facade for API calls.
     ///   - modelId: The model ID to use (from user settings, never hardcoded).
+    ///   - reasoning: Optional reasoning config to enable extended thinking with streaming.
+    ///   - reasoningStreamManager: Optional manager to display live reasoning tokens in the UI.
     /// - Returns: A populated TargetingPlan with strategic guidance.
     /// - Note: On LLM failure, returns a minimal default plan rather than throwing,
     ///   since this is a quality enhancement that should not block downstream work.
     func generateTargetingPlan(
         context: CustomizationContext,
         llmFacade: LLMFacade,
-        modelId: String
+        modelId: String,
+        reasoning: OpenRouterReasoning? = nil,
+        reasoningStreamManager: ReasoningStreamManager? = nil
     ) async throws -> TargetingPlan {
         guard !modelId.isEmpty else {
             throw ModelConfigurationError.modelNotConfigured(
@@ -45,6 +49,23 @@ final class TargetingPlanService {
 
         let prompt = buildStrategicPrompt(context: context)
 
+        // When reasoning is provided, use streaming to surface live thinking tokens
+        if let reasoning {
+            do {
+                return try await generateWithStreaming(
+                    prompt: prompt,
+                    llmFacade: llmFacade,
+                    modelId: modelId,
+                    reasoning: reasoning,
+                    reasoningStreamManager: reasoningStreamManager
+                )
+            } catch {
+                // Fallback: model may lack reasoning support — try non-streaming
+                Logger.warning("[TargetingPlan] Streaming with reasoning failed: \(error.localizedDescription). Falling back to non-streaming.", category: .ai)
+            }
+        }
+
+        // Non-streaming path (default or fallback)
         do {
             let plan = try await llmFacade.executeStructuredWithSchema(
                 prompt: prompt,
@@ -61,6 +82,48 @@ final class TargetingPlanService {
         }
     }
 
+    // MARK: - Streaming Execution
+
+    private func generateWithStreaming(
+        prompt: String,
+        llmFacade: LLMFacade,
+        modelId: String,
+        reasoning: OpenRouterReasoning,
+        reasoningStreamManager: ReasoningStreamManager?
+    ) async throws -> TargetingPlan {
+        let handle = try await llmFacade.executeStructuredStreaming(
+            prompt: prompt,
+            modelId: modelId,
+            as: TargetingPlan.self,
+            reasoning: reasoning,
+            jsonSchema: CustomizationSchemas.targetingPlan
+        )
+
+        var accumulatedJSON = ""
+
+        for try await chunk in handle.stream {
+            // Route reasoning tokens to the stream manager for live display
+            if let reasoningText = chunk.allReasoningText, !reasoningText.isEmpty {
+                await reasoningStreamManager?.appendReasoning(reasoningText)
+            }
+
+            // Accumulate content (the JSON response)
+            if let content = chunk.content {
+                accumulatedJSON += content
+            }
+        }
+
+        // Decode the accumulated JSON into TargetingPlan
+        guard let data = accumulatedJSON.data(using: .utf8), !accumulatedJSON.isEmpty else {
+            Logger.error("[TargetingPlan] Streaming produced empty response", category: .ai)
+            return TargetingPlan.minimal()
+        }
+
+        let plan = try JSONDecoder().decode(TargetingPlan.self, from: data)
+        Logger.info("[TargetingPlan] Streamed plan with \(plan.emphasisThemes.count) themes, \(plan.workEntryGuidance.count) work entries, \(plan.lateralConnections.count) lateral connections", category: .ai)
+        return plan
+    }
+
     // MARK: - Prompt Construction
 
     private func buildStrategicPrompt(context: CustomizationContext) -> String {
@@ -69,8 +132,8 @@ final class TargetingPlanService {
         // System role and instructions
         sections.append(buildSystemInstructions())
 
-        // Abbreviated KC summaries (breadth over depth)
-        sections.append(buildAbbreviatedKCSummaries(context: context))
+        // Full KC narratives for informed strategic planning
+        sections.append(buildKCSummaries(context: context))
 
         // Job description with extracted requirements
         sections.append(buildJobSection(context: context))
@@ -130,6 +193,31 @@ final class TargetingPlanService {
         resume tell? "A systems thinker who bridges research and practice" is \
         a narrative. "Has many skills" is not.
 
+        ## Output Field Mapping
+
+        Your JSON response populates these fields. Every array MUST contain entries — \
+        an empty targeting plan is useless to downstream generators.
+
+        - **narrativeArc** (step 7): 2-3 sentence overarching story this resume tells \
+        for this specific role. Be concrete and specific to this candidate+job pairing.
+        - **emphasisThemes** (step 1): The 3-5 most compelling angles as short phrases.
+        - **kcSectionMapping** (step 2): For EACH knowledge card provided, assign it to \
+        the resume section ("work", "projects", "skills", "summary", or "education") \
+        where its evidence is most powerful. Include cardId (the UUID), cardTitle, \
+        recommendedSection, and a brief rationale.
+        - **workEntryGuidance** (step 3): For each work entry in the resume structure, \
+        specify the framing angle to lead with, aspects to emphasize, aspects to \
+        de-emphasize, and which knowledge card UUIDs provide evidence.
+        - **lateralConnections** (step 4): Non-obvious skill transfers. Reference the \
+        source knowledge card UUID and title, the target job requirement, and your reasoning.
+        - **prioritizedSkills** (step 5): Skills from the skill bank ordered by importance \
+        for this application. Include at least 10-15 top skills.
+        - **identifiedGaps** (step 6): Honest gaps between the candidate's profile and \
+        the job requirements. Describe each gap and suggest a framing strategy.
+        - **kcRelevanceTiers**: Classify every knowledge card UUID into one of three tiers: \
+        "primary" (directly relevant), "supporting" (transferable skills), or \
+        "background" (breadth context only).
+
         ## Anti-Patterns to AVOID:
 
         - Generic "leadership and technical skills" framing that could apply to anyone
@@ -137,13 +225,14 @@ final class TargetingPlanService {
         - Ignoring the candidate's actual strengths in favor of keyword matching
         - Suggesting the candidate is something they're not
         - Surface-level keyword mapping without strategic insight
+        - Returning empty arrays or placeholder strings — every field must have substantive content
         """
     }
 
-    private func buildAbbreviatedKCSummaries(context: CustomizationContext) -> String {
-        var lines = ["## Knowledge Cards (Abbreviated for Strategic Overview)"]
+    private func buildKCSummaries(context: CustomizationContext) -> String {
+        var lines = ["## Knowledge Cards (Full Narratives)"]
         lines.append("")
-        lines.append("These summaries provide breadth. Downstream generators will have full detail.")
+        lines.append("Each card contains the candidate's full narrative. Use these to understand depth and make strategic decisions.")
 
         // Use allCards so the planner sees the full picture
         let cards = context.allCards.isEmpty ? context.knowledgeCards : context.allCards
@@ -162,26 +251,21 @@ final class TargetingPlanService {
             }
             lines.append(meta.joined(separator: " | "))
 
-            // Top 3 technologies
+            // All technologies
             let techs = card.technologies
             if !techs.isEmpty {
-                let topTechs = Array(techs.prefix(3))
-                let suffix = techs.count > 3 ? " (+\(techs.count - 3) more)" : ""
-                lines.append("Technologies: \(topTechs.joined(separator: ", "))\(suffix)")
+                lines.append("Technologies: \(techs.joined(separator: ", "))")
             }
 
-            // 1-sentence summary (~150 chars of narrative)
+            // Full narrative
             if !card.narrative.isEmpty {
-                let summary = String(card.narrative.prefix(150))
-                let truncated = summary.count < card.narrative.count ? summary + "..." : summary
-                lines.append("Summary: \(truncated)")
+                lines.append("Narrative: \(card.narrative)")
             }
 
-            // Top 2 outcomes if available
+            // All outcomes
             let cardOutcomes = card.outcomes
             if !cardOutcomes.isEmpty {
-                let topOutcomes = Array(cardOutcomes.prefix(2))
-                lines.append("Key Outcomes: \(topOutcomes.joined(separator: "; "))")
+                lines.append("Key Outcomes: \(cardOutcomes.joined(separator: "; "))")
             }
         }
 

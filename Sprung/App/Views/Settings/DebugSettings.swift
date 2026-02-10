@@ -34,10 +34,27 @@ struct DebugSettingsView: View {
         )
     }
 
+    private var logLLMTranscriptsBinding: Binding<Bool> {
+        Binding(
+            get: { debugSettings.logLLMTranscripts },
+            set: { debugSettings.logLLMTranscripts = $0 }
+        )
+    }
+
+    private var reasoningEffortBinding: Binding<DebugSettingsStore.ReasoningEffortLevel> {
+        Binding(
+            get: { debugSettings.customizationReasoningEffort },
+            set: { debugSettings.customizationReasoningEffort = $0 }
+        )
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Toggle("Save debug files to Downloads", isOn: saveDebugPromptsBinding)
                 .help("When enabled, key debug transcripts and payloads are written to ~/Downloads for later analysis.")
+
+            Toggle("Log LLM transcripts to Downloads", isOn: logLLMTranscriptsBinding)
+                .help("When enabled, appends full request/response text for every LLM call to ~/Downloads/Sprung_<date>_llm_transcript.txt.")
 
             Toggle("Show debug button in onboarding interview", isOn: showDebugButtonBinding)
                 .help("When enabled, shows the ladybug button in the bottom-right corner of the onboarding interview window for viewing event logs.")
@@ -50,6 +67,18 @@ struct DebugSettingsView: View {
                 }
                 .pickerStyle(.menu)
                 Text("Controls diagnostic output verbosity. Debug files can include sensitive request payloads.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                Picker("Customization Reasoning", selection: reasoningEffortBinding) {
+                    ForEach(DebugSettingsStore.ReasoningEffortLevel.allCases) { level in
+                        Text(level.title).tag(level)
+                    }
+                }
+                .pickerStyle(.menu)
+                Text("Enables extended thinking during resume customization. Shows live reasoning in the review queue. On Opus 4.6, thinking depth is adaptive regardless of effort level.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }

@@ -15,31 +15,25 @@ final class StreamingExecutor {
     }
     func applyReasoning(_ reasoning: OpenRouterReasoning?, to parameters: inout ChatCompletionParameters) {
         guard let reasoning else { return }
-        let hasOverride =
-            reasoning.maxTokens != nil ||
-            (reasoning.exclude != nil && reasoning.exclude != false)
-        if hasOverride {
-            parameters.reasoningEffort = nil
-            // Build reasoning dictionary for OpenRouter
-            var reasoningDict: [String: Any] = [:]
-            if let effort = reasoning.effort {
-                reasoningDict["effort"] = effort
-            }
-            if let exclude = reasoning.exclude {
-                reasoningDict["exclude"] = exclude
-            }
-            if let maxTokens = reasoning.maxTokens {
-                reasoningDict["max_tokens"] = maxTokens
-            }
-            parameters.reasoning = reasoningDict
-            let effortDescription = reasoning.effort ?? "<nil>"
-            let excludeDescription = String(describing: reasoning.exclude)
-            let maxTokensDescription = String(describing: reasoning.maxTokens)
-            Logger.debug("🧠 Configured reasoning override: effort=\(effortDescription), exclude=\(excludeDescription), max_tokens=\(maxTokensDescription)")
-        } else {
-            parameters.reasoning = nil
-            parameters.reasoningEffort = reasoning.effort
+        // Always use the reasoning dict format with enabled: true.
+        // The simple reasoningEffort param doesn't work for Opus 4.6 (which
+        // requires the reasoning object with enabled: true for adaptive thinking).
+        parameters.reasoningEffort = nil
+        var reasoningDict: [String: Any] = ["enabled": true]
+        if let effort = reasoning.effort {
+            reasoningDict["effort"] = effort
         }
+        if let exclude = reasoning.exclude {
+            reasoningDict["exclude"] = exclude
+        }
+        if let maxTokens = reasoning.maxTokens {
+            reasoningDict["max_tokens"] = maxTokens
+        }
+        parameters.reasoning = reasoningDict
+        let effortDescription = reasoning.effort ?? "<nil>"
+        let excludeDescription = String(describing: reasoning.exclude)
+        let maxTokensDescription = String(describing: reasoning.maxTokens)
+        Logger.debug("🧠 Configured reasoning: enabled=true, effort=\(effortDescription), exclude=\(excludeDescription), max_tokens=\(maxTokensDescription)")
     }
     func stream(
         parameters: ChatCompletionParameters,

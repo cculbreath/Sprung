@@ -322,4 +322,10 @@ class ReasoningStreamManager {
         self.isStreaming = false
         self.isVisible = true
     }
+
+    /// Append reasoning text from a streaming chunk.
+    /// Safe to call from any async context — hops to MainActor.
+    func appendReasoning(_ text: String) {
+        reasoningText += text
+    }
 }

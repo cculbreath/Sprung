@@ -6,6 +6,39 @@ import Foundation
 import Observation
 @Observable
 final class DebugSettingsStore {
+
+    /// Controls extended thinking depth for resume customization LLM calls.
+    /// On Opus 4.6, adaptive thinking always activates when enabled (effort is ignored).
+    /// On older/non-Anthropic models, effort maps to the provider's native reasoning param.
+    /// `.off` disables reasoning entirely.
+    enum ReasoningEffortLevel: Int, CaseIterable, Identifiable {
+        case off = 0
+        case low = 1
+        case medium = 2
+        case high = 3
+
+        var id: Int { rawValue }
+
+        var title: String {
+            switch self {
+            case .off: return "Off"
+            case .low: return "Low"
+            case .medium: return "Medium"
+            case .high: return "High"
+            }
+        }
+
+        /// Returns the effort string for OpenRouter, or nil when off.
+        var effortString: String? {
+            switch self {
+            case .off: return nil
+            case .low: return "low"
+            case .medium: return "medium"
+            case .high: return "high"
+            }
+        }
+    }
+
     enum LogLevelSetting: Int, CaseIterable, Identifiable {
         case quiet = 0
         case info = 1
@@ -71,12 +104,26 @@ final class DebugSettingsStore {
             defaults.set(showOnboardingDebugButton, forKey: Keys.showOnboardingDebugButton)
         }
     }
+    var logLLMTranscripts: Bool {
+        didSet {
+            defaults.set(logLLMTranscripts, forKey: Keys.logLLMTranscripts)
+        }
+    }
+
+    var customizationReasoningEffort: ReasoningEffortLevel {
+        didSet {
+            defaults.set(customizationReasoningEffort.rawValue, forKey: Keys.customizationReasoningEffort)
+        }
+    }
+
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         let storedLevel = LogLevelSetting(rawValue: defaults.integer(forKey: Keys.debugLogLevel)) ?? .info
         self.logLevelSetting = storedLevel
         self.saveDebugPrompts = defaults.bool(forKey: Keys.saveDebugPrompts)
         self.showOnboardingDebugButton = defaults.object(forKey: Keys.showOnboardingDebugButton) as? Bool ?? true
+        self.logLLMTranscripts = defaults.bool(forKey: Keys.logLLMTranscripts)
+        self.customizationReasoningEffort = ReasoningEffortLevel(rawValue: defaults.integer(forKey: Keys.customizationReasoningEffort)) ?? .off
         // Apply persisted settings to the logging facade on initialization.
         Logger.updateMinimumLevel(storedLevel.loggerLevel)
         Logger.updateFileLogging(isEnabled: saveDebugPrompts)
@@ -86,5 +133,7 @@ final class DebugSettingsStore {
         static let debugLogLevel = "debugLogLevel"
         static let saveDebugPrompts = "saveDebugPrompts"
         static let showOnboardingDebugButton = "showOnboardingDebugButton"
+        static let logLLMTranscripts = "logLLMTranscripts"
+        static let customizationReasoningEffort = "customizationReasoningEffort"
     }
 }

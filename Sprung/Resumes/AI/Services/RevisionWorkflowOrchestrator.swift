@@ -61,6 +61,8 @@ class RevisionWorkflowOrchestrator {
     private var phase1DecisionsContext: String?
     /// Cached customization context for Phase 2
     private var cachedContext: CustomizationContext?
+    /// Reasoning config for extended thinking (nil when reasoning is off)
+    private var cachedReasoning: OpenRouterReasoning?
 
     /// Count of fields customized across all phases (for coherence threshold)
     private var totalCustomizedFieldCount: Int = 0
@@ -176,13 +178,31 @@ class RevisionWorkflowOrchestrator {
             cacheService.appendClarifyingQA(qa)
         }
 
-        // 4. Generate TargetingPlan via TargetingPlanService
+        // 4. Build reasoning config from user setting
+        let reasoningEffortRaw = UserDefaults.standard.integer(forKey: "customizationReasoningEffort")
+        let reasoningLevel = DebugSettingsStore.ReasoningEffortLevel(rawValue: reasoningEffortRaw) ?? .off
+        if let effortString = reasoningLevel.effortString {
+            self.cachedReasoning = OpenRouterReasoning(effort: effortString, includeReasoning: true)
+            Logger.info("[Orchestrator] Reasoning enabled: effort=\(effortString)", category: .ai)
+        } else {
+            self.cachedReasoning = nil
+        }
+
+        // 5. Generate TargetingPlan via TargetingPlanService
         Logger.info("Generating strategic targeting plan...", category: .ai)
+        if cachedReasoning != nil {
+            reasoningStreamManager.startReasoning(modelName: modelId)
+        }
         let targetingPlan = try await targetingPlanService.generateTargetingPlan(
             context: context,
             llmFacade: llm,
-            modelId: modelId
+            modelId: modelId,
+            reasoning: cachedReasoning,
+            reasoningStreamManager: cachedReasoning != nil ? reasoningStreamManager : nil
         )
+        if cachedReasoning != nil {
+            reasoningStreamManager.stopStream()
+        }
         self.cachedTargetingPlan = targetingPlan
         Logger.info("Targeting plan generated: \(targetingPlan.emphasisThemes.count) themes, \(targetingPlan.workEntryGuidance.count) work entries", category: .ai)
 
@@ -303,13 +323,28 @@ class RevisionWorkflowOrchestrator {
         let toolConfig = buildToolConfiguration(modelId: modelId, resume: resume)
         self.cachedToolConfig = toolConfig
 
+        // Clear reasoning state from targeting plan phase before parallel execution
+        if cachedReasoning != nil {
+            reasoningStreamManager.clear()
+            reasoningStreamManager.isVisible = false
+        }
+
+        // Build reasoning callback for parallel tasks
+        let reasoning = cachedReasoning
+        let streamManager = reasoningStreamManager
+        let reasoningCallback: (@Sendable (UUID, String) async -> Void)? = reasoning != nil ? { _, text in
+            await streamManager.appendReasoning(text)
+        } : nil
+
         // Execute tasks in parallel and stream results into queue
         let stream = await executor.execute(
             tasks: tasks,
             llmFacade: llm,
             modelId: modelId,
             preamble: preamble,
-            toolConfig: toolConfig
+            toolConfig: toolConfig,
+            reasoning: reasoning,
+            onReasoningChunk: reasoningCallback
         )
 
         // Stream results into the review queue
@@ -441,13 +476,22 @@ class RevisionWorkflowOrchestrator {
             phase: item.task.phase
         )
 
+        // Build reasoning callback for regeneration
+        let reasoning = cachedReasoning
+        let streamManager = reasoningStreamManager
+        let reasoningCallback: (@Sendable (UUID, String) async -> Void)? = reasoning != nil ? { _, text in
+            await streamManager.appendReasoning(text)
+        } : nil
+
         // Execute single task via parallelExecutor.executeSingle()
         let result = await executor.executeSingle(
             task: regenerationTask,
             llmFacade: llm,
             modelId: modelId,
             preamble: preamble,
-            toolConfig: cachedToolConfig
+            toolConfig: cachedToolConfig,
+            reasoning: reasoning,
+            onReasoningChunk: reasoningCallback
         )
 
         switch result.result {
@@ -535,12 +579,21 @@ class RevisionWorkflowOrchestrator {
             phase: compoundTask.phase
         )
 
+        // Build reasoning callback for compound regeneration
+        let reasoning = cachedReasoning
+        let streamManager = reasoningStreamManager
+        let reasoningCallback: (@Sendable (UUID, String) async -> Void)? = reasoning != nil ? { _, text in
+            await streamManager.appendReasoning(text)
+        } : nil
+
         let result = await executor.executeSingle(
             task: regenerationTask,
             llmFacade: llm,
             modelId: modelId,
             preamble: preamble,
-            toolConfig: cachedToolConfig
+            toolConfig: cachedToolConfig,
+            reasoning: reasoning,
+            onReasoningChunk: reasoningCallback
         )
 
         switch result.result {
@@ -761,6 +814,7 @@ class RevisionWorkflowOrchestrator {
         cachedTargetingPlan = nil
         phase1DecisionsContext = nil
         cachedContext = nil
+        cachedReasoning = nil
         totalCustomizedFieldCount = 0
         coherenceReport = nil
         isRunningCoherencePass = false

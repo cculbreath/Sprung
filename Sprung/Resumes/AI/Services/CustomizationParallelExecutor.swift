@@ -121,13 +121,17 @@ actor CustomizationParallelExecutor {
     ///   - modelId: The model ID to use
     ///   - preamble: The preamble to prepend to each task prompt
     ///   - toolConfig: Optional tool configuration for tool-enabled execution
+    ///   - reasoning: Optional reasoning config for extended thinking
+    ///   - onReasoningChunk: Callback for reasoning text deltas (taskId, text)
     /// - Returns: AsyncStream of task results
     func execute(
         tasks: [RevisionTask],
         llmFacade: LLMFacade,
         modelId: String,
         preamble: String,
-        toolConfig: ToolConfiguration? = nil
+        toolConfig: ToolConfiguration? = nil,
+        reasoning: OpenRouterReasoning? = nil,
+        onReasoningChunk: (@Sendable (UUID, String) async -> Void)? = nil
     ) -> AsyncStream<RevisionTaskResult> {
         AsyncStream { continuation in
             Task {
@@ -146,7 +150,9 @@ actor CustomizationParallelExecutor {
                                 llmFacade: llmFacade,
                                 modelId: modelId,
                                 preamble: preamble,
-                                toolConfig: toolConfig
+                                toolConfig: toolConfig,
+                                reasoning: reasoning,
+                                onReasoningChunk: onReasoningChunk
                             )
                         }
                     }
@@ -168,7 +174,9 @@ actor CustomizationParallelExecutor {
         llmFacade: LLMFacade,
         modelId: String,
         preamble: String,
-        toolConfig: ToolConfiguration? = nil
+        toolConfig: ToolConfiguration? = nil,
+        reasoning: OpenRouterReasoning? = nil,
+        onReasoningChunk: (@Sendable (UUID, String) async -> Void)? = nil
     ) async -> RevisionTaskResult {
         await waitForSlot()
         defer {
@@ -180,7 +188,9 @@ actor CustomizationParallelExecutor {
             llmFacade: llmFacade,
             modelId: modelId,
             preamble: preamble,
-            toolConfig: toolConfig
+            toolConfig: toolConfig,
+            reasoning: reasoning,
+            onReasoningChunk: onReasoningChunk
         )
     }
 
@@ -191,13 +201,25 @@ actor CustomizationParallelExecutor {
         llmFacade: LLMFacade,
         modelId: String,
         preamble: String,
-        toolConfig: ToolConfiguration? = nil
+        toolConfig: ToolConfiguration? = nil,
+        reasoning: OpenRouterReasoning? = nil,
+        onReasoningChunk: (@Sendable (UUID, String) async -> Void)? = nil
     ) async -> RevisionTaskResult {
         do {
             let fullPrompt = buildFullPrompt(preamble: preamble, task: task)
 
             if task.nodeType == .compound {
                 // Compound task: parse as CompoundRevisionResponse
+                if let reasoning, toolConfig == nil {
+                    return try await executeCompoundTaskStreaming(
+                        task: task,
+                        fullPrompt: fullPrompt,
+                        llmFacade: llmFacade,
+                        modelId: modelId,
+                        reasoning: reasoning,
+                        onReasoningChunk: onReasoningChunk
+                    )
+                }
                 return try await executeCompoundTask(
                     task: task,
                     fullPrompt: fullPrompt,
@@ -208,7 +230,7 @@ actor CustomizationParallelExecutor {
             }
 
             if let toolConfig {
-                // Tool-enabled path: conversation loop with tool calls
+                // Tool-enabled path: conversation loop with tool calls (skip reasoning)
                 let response = try await executeWithToolLoop(
                     prompt: fullPrompt,
                     llmFacade: llmFacade,
@@ -219,26 +241,112 @@ actor CustomizationParallelExecutor {
                     taskId: task.id,
                     result: .success(response)
                 )
-            } else {
-                // Non-tool path: single-shot structured output
-                let response = try await llmFacade.executeStructuredWithSchema(
-                    prompt: fullPrompt,
+            }
+
+            // Streaming path with reasoning
+            if let reasoning {
+                return try await executeWithStreaming(
+                    task: task,
+                    fullPrompt: fullPrompt,
+                    llmFacade: llmFacade,
                     modelId: modelId,
-                    as: ProposedRevisionNode.self,
-                    schema: CustomizationSchemas.proposedRevisionNode,
-                    schemaName: "proposed_revision_node"
-                )
-                return RevisionTaskResult(
-                    taskId: task.id,
-                    result: .success(response)
+                    reasoning: reasoning,
+                    onReasoningChunk: onReasoningChunk
                 )
             }
+
+            // Non-tool, non-reasoning path: single-shot structured output
+            let response = try await llmFacade.executeStructuredWithSchema(
+                prompt: fullPrompt,
+                modelId: modelId,
+                as: ProposedRevisionNode.self,
+                schema: CustomizationSchemas.proposedRevisionNode,
+                schemaName: "proposed_revision_node"
+            )
+            return RevisionTaskResult(
+                taskId: task.id,
+                result: .success(response)
+            )
         } catch {
             return RevisionTaskResult(
                 taskId: task.id,
                 result: .failure(error)
             )
         }
+    }
+
+    // MARK: - Streaming Execution
+
+    /// Execute a single task with streaming to capture reasoning tokens.
+    private func executeWithStreaming(
+        task: RevisionTask,
+        fullPrompt: String,
+        llmFacade: LLMFacade,
+        modelId: String,
+        reasoning: OpenRouterReasoning,
+        onReasoningChunk: (@Sendable (UUID, String) async -> Void)?
+    ) async throws -> RevisionTaskResult {
+        let handle = try await llmFacade.executeStructuredStreaming(
+            prompt: fullPrompt,
+            modelId: modelId,
+            as: ProposedRevisionNode.self,
+            reasoning: reasoning,
+            jsonSchema: CustomizationSchemas.proposedRevisionNode
+        )
+
+        var accumulatedJSON = ""
+        for try await chunk in handle.stream {
+            if let reasoningText = chunk.allReasoningText, !reasoningText.isEmpty {
+                await onReasoningChunk?(task.id, reasoningText)
+            }
+            if let content = chunk.content {
+                accumulatedJSON += content
+            }
+        }
+
+        guard let data = accumulatedJSON.data(using: .utf8), !accumulatedJSON.isEmpty else {
+            throw LLMError.clientError("Streaming produced empty response for task \(task.revNode.displayName)")
+        }
+
+        let response = try JSONDecoder().decode(ProposedRevisionNode.self, from: data)
+        return RevisionTaskResult(taskId: task.id, result: .success(response))
+    }
+
+    /// Execute a compound task with streaming to capture reasoning tokens.
+    private func executeCompoundTaskStreaming(
+        task: RevisionTask,
+        fullPrompt: String,
+        llmFacade: LLMFacade,
+        modelId: String,
+        reasoning: OpenRouterReasoning,
+        onReasoningChunk: (@Sendable (UUID, String) async -> Void)?
+    ) async throws -> RevisionTaskResult {
+        let handle = try await llmFacade.executeStructuredStreaming(
+            prompt: fullPrompt,
+            modelId: modelId,
+            as: CompoundRevisionResponse.self,
+            reasoning: reasoning,
+            jsonSchema: CustomizationSchemas.compoundRevisionResponse
+        )
+
+        var accumulatedJSON = ""
+        for try await chunk in handle.stream {
+            if let reasoningText = chunk.allReasoningText, !reasoningText.isEmpty {
+                await onReasoningChunk?(task.id, reasoningText)
+            }
+            if let content = chunk.content {
+                accumulatedJSON += content
+            }
+        }
+
+        guard let data = accumulatedJSON.data(using: .utf8), !accumulatedJSON.isEmpty else {
+            throw LLMError.clientError("Streaming produced empty response for compound task \(task.revNode.displayName)")
+        }
+
+        let compoundResponse = try JSONDecoder().decode(CompoundRevisionResponse.self, from: data)
+        let results = compoundResponse.compoundFields
+        let primary = results.first ?? ProposedRevisionNode()
+        return RevisionTaskResult(taskId: task.id, result: .success(primary), compoundResults: results)
     }
 
     /// Execute a compound task that produces multiple field revisions.
@@ -460,7 +568,9 @@ extension CustomizationParallelExecutor {
         llmFacade: LLMFacade,
         modelId: String,
         preamble: String,
-        toolConfig: ToolConfiguration? = nil
+        toolConfig: ToolConfiguration? = nil,
+        reasoning: OpenRouterReasoning? = nil,
+        onReasoningChunk: (@Sendable (UUID, String) async -> Void)? = nil
     ) async -> [UUID: Result<ProposedRevisionNode, Error>] {
         var results: [UUID: Result<ProposedRevisionNode, Error>] = [:]
 
@@ -469,7 +579,9 @@ extension CustomizationParallelExecutor {
             llmFacade: llmFacade,
             modelId: modelId,
             preamble: preamble,
-            toolConfig: toolConfig
+            toolConfig: toolConfig,
+            reasoning: reasoning,
+            onReasoningChunk: onReasoningChunk
         )
 
         for await taskResult in stream {
