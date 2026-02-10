@@ -332,9 +332,14 @@ class RevisionWorkflowOrchestrator {
         // Build reasoning callback for parallel tasks
         let reasoning = cachedReasoning
         let streamManager = reasoningStreamManager
-        let reasoningCallback: (@Sendable (UUID, String) async -> Void)? = reasoning != nil ? { _, text in
-            await streamManager.appendReasoning(text)
-        } : nil
+        let reasoningCallback: (@Sendable (UUID, String) async -> Void)?
+        if reasoning != nil {
+            reasoningCallback = { _, text in
+                await streamManager.appendReasoning(text)
+            }
+        } else {
+            reasoningCallback = nil
+        }
 
         // Execute tasks in parallel and stream results into queue
         let stream = await executor.execute(
@@ -479,9 +484,14 @@ class RevisionWorkflowOrchestrator {
         // Build reasoning callback for regeneration
         let reasoning = cachedReasoning
         let streamManager = reasoningStreamManager
-        let reasoningCallback: (@Sendable (UUID, String) async -> Void)? = reasoning != nil ? { _, text in
-            await streamManager.appendReasoning(text)
-        } : nil
+        let reasoningCallback: (@Sendable (UUID, String) async -> Void)?
+        if reasoning != nil {
+            reasoningCallback = { _, text in
+                await streamManager.appendReasoning(text)
+            }
+        } else {
+            reasoningCallback = nil
+        }
 
         // Execute single task via parallelExecutor.executeSingle()
         let result = await executor.executeSingle(
@@ -582,9 +592,14 @@ class RevisionWorkflowOrchestrator {
         // Build reasoning callback for compound regeneration
         let reasoning = cachedReasoning
         let streamManager = reasoningStreamManager
-        let reasoningCallback: (@Sendable (UUID, String) async -> Void)? = reasoning != nil ? { _, text in
-            await streamManager.appendReasoning(text)
-        } : nil
+        let reasoningCallback: (@Sendable (UUID, String) async -> Void)?
+        if reasoning != nil {
+            reasoningCallback = { _, text in
+                await streamManager.appendReasoning(text)
+            }
+        } else {
+            reasoningCallback = nil
+        }
 
         let result = await executor.executeSingle(
             task: regenerationTask,
