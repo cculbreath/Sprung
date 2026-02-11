@@ -93,6 +93,7 @@ struct SprungApp: App {
                     appDelegate.titleSetStore = appDependencies.titleSetStore
                     appDelegate.candidateDossierStore = appDependencies.candidateDossierStore
                     appDelegate.jobAppStore = appDependencies.jobAppStore
+                    appDelegate.templateStore = appDependencies.templateStore
                     appDelegate.backgroundActivityTracker = appDependencies.backgroundActivityTracker
                 }
         }

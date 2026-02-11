@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 import Observation
 import SwiftOpenAI
@@ -85,7 +86,10 @@ class ResumeRevisionAgent {
     private(set) var currentQuestion: String?
     private(set) var turnCount: Int = 0
     private(set) var currentAction: String = ""
+    private(set) var latestPDFData: Data?
     private var isCancelled = false
+    private var consecutiveNoToolTurns = 0
+    private var shouldInterruptStream = false
 
     // Continuations for human-in-the-loop tools
     private var proposalContinuation: CheckedContinuation<ProposalResponse, Never>?
@@ -94,6 +98,9 @@ class ResumeRevisionAgent {
 
     // Conversation state (Anthropic messages)
     private var conversationMessages: [AnthropicMessage] = []
+
+    // Queued user messages (injected between turns)
+    private var pendingUserMessages: [String] = []
 
     // Limits
     private let maxTurns = 50
@@ -195,6 +202,20 @@ class ResumeRevisionAgent {
                 currentAction = "Turn \(turnCount): Calling LLM..."
                 Logger.info("RevisionAgent: Turn \(turnCount) of \(maxTurns)", category: .ai)
 
+                // Inject any queued user messages before calling the LLM
+                if !pendingUserMessages.isEmpty {
+                    let combined = pendingUserMessages.joined(separator: "\n\n")
+                    pendingUserMessages.removeAll()
+                    // Ensure conversation ends with a user message (Anthropic requirement)
+                    if conversationMessages.last?.role == "user" {
+                        // Merge into the last user message
+                        let lastIndex = conversationMessages.count - 1
+                        conversationMessages[lastIndex] = AnthropicMessage.user(combined)
+                    } else {
+                        conversationMessages.append(AnthropicMessage.user(combined))
+                    }
+                }
+
                 // Call Anthropic
                 let parameters = AnthropicMessageParameter(
                     model: modelId,
@@ -209,13 +230,26 @@ class ResumeRevisionAgent {
                 let stream = try await facade.anthropicMessagesStream(parameters: parameters)
 
                 // Process stream
+                shouldInterruptStream = false
                 var processor = RevisionStreamProcessor()
                 var assistantTextBlocks: [AnthropicContentBlock] = []
                 var toolCallBlocks: [AnthropicContentBlock] = []
                 var pendingToolCalls: [RevisionStreamProcessor.ToolCallInfo] = []
+                var streamWasInterrupted = false
+
+                // Per-turn timeout: cancel stream if no events for 2 minutes
+                let turnTimeoutSeconds: TimeInterval = 180
+                let turnTimeoutTask = Task { @MainActor [weak self] in
+                    try await Task.sleep(for: .seconds(turnTimeoutSeconds))
+                    self?.shouldInterruptStream = true
+                    Logger.warning("RevisionAgent: Turn \(turnCount) stream timed out after \(Int(turnTimeoutSeconds))s", category: .ai)
+                }
 
                 for try await event in stream {
-                    guard !isCancelled else { break }
+                    if isCancelled || shouldInterruptStream {
+                        streamWasInterrupted = shouldInterruptStream && !isCancelled
+                        break
+                    }
 
                     let domainEvents = processor.process(event)
                     for domainEvent in domainEvents {
@@ -230,7 +264,6 @@ class ResumeRevisionAgent {
                             pendingToolCalls.append(RevisionStreamProcessor.ToolCallInfo(
                                 id: id, name: name, arguments: arguments
                             ))
-                            // Parse arguments to [String: Any] for the message
                             let inputDict = parseToolArguments(arguments)
                             toolCallBlocks.append(.toolUse(AnthropicToolUseBlock(
                                 id: id, name: name, input: inputDict
@@ -242,10 +275,21 @@ class ResumeRevisionAgent {
                     }
                 }
 
+                turnTimeoutTask.cancel()
+                shouldInterruptStream = false
+
                 guard !isCancelled else {
                     status = .cancelled
                     try? workspaceService.deleteWorkspace()
                     return
+                }
+
+                // If the stream was interrupted (user message or timeout), discard
+                // any partial tool calls — they may be incomplete JSON. Keep text only.
+                if streamWasInterrupted {
+                    Logger.info("RevisionAgent: Stream interrupted on turn \(turnCount), discarding \(toolCallBlocks.count) partial tool calls", category: .ai)
+                    toolCallBlocks.removeAll()
+                    pendingToolCalls.removeAll()
                 }
 
                 // Build and append assistant message to conversation
@@ -258,13 +302,34 @@ class ResumeRevisionAgent {
                     conversationMessages.append(assistantMessage)
                 }
 
-                // If no tool calls, prompt to continue
+                // If stream was interrupted (user message or timeout) with no
+                // complete tool calls, just loop back so the pending message or
+                // a retry gets injected at the top of the next turn.
+                if pendingToolCalls.isEmpty && streamWasInterrupted {
+                    Logger.info("RevisionAgent: Stream interrupted with no tool calls, continuing to next turn", category: .ai)
+                    continue
+                }
+
+                // If no tool calls and we weren't interrupted,
+                // nudge once then treat as done
                 if pendingToolCalls.isEmpty {
+                    consecutiveNoToolTurns += 1
+                    if consecutiveNoToolTurns >= 2 {
+                        Logger.info("RevisionAgent: LLM produced no tool calls for \(consecutiveNoToolTurns) turns, treating as complete", category: .ai)
+                        messages.append(RevisionMessage(
+                            role: .assistant,
+                            content: "Revision session complete."
+                        ))
+                        status = .completed
+                        try? workspaceService.deleteWorkspace()
+                        return
+                    }
                     conversationMessages.append(AnthropicMessage.user(
-                        "Please continue with your analysis or call complete_revision if you're done."
+                        "If you have finished all changes, please call `complete_revision` with a summary. Otherwise, continue with your next action."
                     ))
                     continue
                 }
+                consecutiveNoToolTurns = 0
 
                 // Check for completion tool
                 if let completionCall = pendingToolCalls.first(where: { $0.name == CompleteRevisionTool.name }) {
@@ -360,6 +425,48 @@ class ResumeRevisionAgent {
         completionContinuation = nil
     }
 
+    /// Queue a free-form user message to be injected into the conversation between turns.
+    /// Also interrupts a stalled stream so the message gets delivered promptly.
+    func sendUserMessage(_ text: String) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        pendingUserMessages.append(trimmed)
+        messages.append(RevisionMessage(role: .user, content: trimmed))
+        // Reset the no-tool counter since the user is actively engaging
+        consecutiveNoToolTurns = 0
+        // Interrupt the current stream so the message gets injected on the next turn
+        shouldInterruptStream = true
+    }
+
+    /// Accept the current workspace state and create a new resume from it.
+    func acceptCurrentState() {
+        // If waiting on completion tool, approve it
+        if completionContinuation != nil {
+            respondToCompletion(true)
+            return
+        }
+        // Otherwise, directly build the resume from current workspace state
+        Task {
+            do {
+                let revisedNodes = try workspaceService.importRevisedTreeNodes()
+                let revisedFontSizes = try workspaceService.importRevisedFontSizes()
+                let _ = workspaceService.buildNewResume(
+                    from: resume,
+                    revisedNodes: revisedNodes,
+                    revisedFontSizes: revisedFontSizes,
+                    context: modelContext
+                )
+                Logger.info("RevisionAgent: User accepted current state directly", category: .ai)
+                status = .completed
+                try? workspaceService.deleteWorkspace()
+            } catch {
+                Logger.error("RevisionAgent: Failed to build resume from current state: \(error)", category: .ai)
+                status = .failed(error.localizedDescription)
+            }
+        }
+        isCancelled = true
+    }
+
     func cancel() {
         isCancelled = true
         // Resume any waiting continuations
@@ -380,7 +487,6 @@ class ResumeRevisionAgent {
             AnthropicSchemaConverter.anthropicTool(from: GlobSearchTool.self),
             AnthropicSchemaConverter.anthropicTool(from: GrepSearchTool.self),
             AnthropicSchemaConverter.anthropicTool(from: WriteJsonFileTool.self),
-            AnthropicSchemaConverter.anthropicTool(from: RenderResumeTool.self),
             AnthropicSchemaConverter.anthropicTool(from: ProposeChangesTool.self),
             AnthropicSchemaConverter.anthropicTool(from: AskUserTool.self),
             AnthropicSchemaConverter.anthropicTool(from: CompleteRevisionTool.self)
@@ -421,10 +527,9 @@ class ResumeRevisionAgent {
             case WriteJsonFileTool.name:
                 let params = try JSONDecoder().decode(WriteJsonFileTool.Parameters.self, from: argsData)
                 let result = try WriteJsonFileTool.execute(parameters: params, repoRoot: workspacePath)
-                return "{\"success\": true, \"path\": \"\(result.path)\", \"itemCount\": \(result.itemCount)}"
-
-            case RenderResumeTool.name:
-                return await executeRenderResume()
+                // Auto-render after every JSON write so the PDF preview stays current
+                let renderInfo = await autoRenderResume()
+                return "{\"success\": true, \"path\": \"\(result.path)\", \"itemCount\": \(result.itemCount), \"pageCount\": \(renderInfo.pageCount), \"renderSuccess\": \(renderInfo.success)}"
 
             case ProposeChangesTool.name:
                 let params = try JSONDecoder().decode(ProposeChangesTool.Parameters.self, from: argsData)
@@ -443,19 +548,24 @@ class ResumeRevisionAgent {
         }
     }
 
-    // MARK: - Render Resume
+    // MARK: - Auto-Render
 
-    private func executeRenderResume() async -> String {
+    private struct RenderInfo {
+        let success: Bool
+        let pageCount: Int
+    }
+
+    /// Re-render the resume PDF from current workspace state and publish to the preview pane.
+    /// Called automatically after every `write_json_file`.
+    private func autoRenderResume() async -> RenderInfo {
         guard let workspacePath = workspaceService.workspacePath else {
-            return "Error: Workspace not initialized"
+            return RenderInfo(success: false, pageCount: 0)
         }
 
         do {
-            // Read revised treenodes and font sizes from workspace
             let revisedNodes = try workspaceService.importRevisedTreeNodes()
             let revisedFontSizes = try workspaceService.importRevisedFontSizes()
 
-            // Build a temporary resume with revised nodes to render
             let tempResume = workspaceService.buildNewResume(
                 from: resume,
                 revisedNodes: revisedNodes,
@@ -463,26 +573,26 @@ class ResumeRevisionAgent {
                 context: modelContext
             )
 
-            // Render PDF
             let slug = resume.template?.slug ?? "default"
             let pdfData = try await pdfGenerator.generatePDF(for: tempResume, template: slug)
 
-            // Write to workspace
+            // Write to workspace (so read_file can access it too)
             let pdfPath = workspacePath.appendingPathComponent("resume.pdf")
             try pdfData.write(to: pdfPath)
 
-            // Count pages (rough estimate: PDF pages via CGPDFDocument)
             let pageCount = countPDFPages(pdfData)
 
-            // Clean up temp resume from context
+            // Publish to preview pane
+            latestPDFData = pdfData
+
+            // Clean up temp resume
             modelContext.delete(tempResume)
 
-            Logger.info("RevisionAgent: Rendered PDF (\(pdfData.count) bytes, \(pageCount) pages)", category: .ai)
-
-            return "{\"success\": true, \"pageCount\": \(pageCount), \"pdfPath\": \"resume.pdf\"}"
+            Logger.info("RevisionAgent: Auto-rendered PDF (\(pdfData.count) bytes, \(pageCount) pages)", category: .ai)
+            return RenderInfo(success: true, pageCount: pageCount)
         } catch {
-            Logger.error("RevisionAgent: PDF render failed: \(error.localizedDescription)", category: .ai)
-            return "{\"success\": false, \"error\": \"\(error.localizedDescription)\"}"
+            Logger.error("RevisionAgent: Auto-render failed: \(error.localizedDescription)", category: .ai)
+            return RenderInfo(success: false, pageCount: 0)
         }
     }
 
@@ -618,8 +728,7 @@ class ResumeRevisionAgent {
         case ListDirectoryTool.name: return "Listing directory"
         case GlobSearchTool.name: return "Searching files"
         case GrepSearchTool.name: return "Searching content"
-        case WriteJsonFileTool.name: return "Writing JSON file"
-        case RenderResumeTool.name: return "Rendering resume"
+        case WriteJsonFileTool.name: return "Writing JSON & rendering"
         case ProposeChangesTool.name: return "Proposing changes"
         case AskUserTool.name: return "Asking question"
         case CompleteRevisionTool.name: return "Completing revision"

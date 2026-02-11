@@ -28,6 +28,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var coverRefStore: CoverRefStore?
     var knowledgeCardStore: KnowledgeCardStore?
     var skillStore: SkillStore?
+    var templateStore: TemplateStore?
+    var resumeRevisionWindow: NSWindow?
     var titleSetStore: TitleSetStore?
     var candidateDossierStore: CandidateDossierStore?
     var jobAppStore: JobAppStore?
@@ -56,6 +58,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             self,
             selector: #selector(handleShowSeedGeneration(_:)),
             name: .showSeedGeneration,
+            object: nil
+        )
+
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleShowResumeRevision(_:)),
+            name: .polishResume,
             object: nil
         )
     }
@@ -256,6 +265,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             templateEditorWindow = nil
         } else if notification.object as? NSWindow == experienceEditorWindow {
             experienceEditorWindow = nil
+        } else if notification.object as? NSWindow == resumeRevisionWindow {
+            resumeRevisionWindow = nil
         }
     }
     @objc func showTemplateEditorWindow() {
@@ -571,6 +582,66 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             )
         }
         experienceEditorWindow?.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    @MainActor @objc private func handleShowResumeRevision(_ notification: Notification) {
+        showResumeRevisionWindow()
+    }
+
+    @MainActor func showResumeRevisionWindow() {
+        guard let jobAppStore,
+              let selectedResume = jobAppStore.selectedApp?.selectedRes else {
+            Logger.warning("No resume selected for revision", category: .ui)
+            return
+        }
+
+        if let window = resumeRevisionWindow, !window.isVisible {
+            resumeRevisionWindow = nil
+        }
+        if resumeRevisionWindow == nil {
+            let revisionView = ResumeRevisionView(resume: selectedResume)
+            let hostingView: NSHostingView<AnyView>
+            if let modelContainer,
+               let appEnvironment,
+               let templateStore,
+               let knowledgeCardStore,
+               let skillStore,
+               let coverRefStore {
+                hostingView = NSHostingView(rootView: AnyView(
+                    revisionView
+                        .modelContainer(modelContainer)
+                        .environment(appEnvironment.llmFacade)
+                        .environment(templateStore)
+                        .environment(appEnvironment.applicantProfileStore)
+                        .environment(knowledgeCardStore)
+                        .environment(skillStore)
+                        .environment(coverRefStore)
+                ))
+            } else {
+                Logger.error("Missing dependencies for resume revision window", category: .ui)
+                return
+            }
+            resumeRevisionWindow = NSWindow(
+                contentRect: NSRect(x: 0, y: 0, width: 1300, height: 800),
+                styleMask: [.titled, .closable, .miniaturizable, .resizable],
+                backing: .buffered,
+                defer: false
+            )
+            resumeRevisionWindow?.title = "Resume Revision"
+            resumeRevisionWindow?.tabbingMode = .disallowed
+            resumeRevisionWindow?.contentView = hostingView
+            resumeRevisionWindow?.isReleasedWhenClosed = false
+            resumeRevisionWindow?.center()
+            resumeRevisionWindow?.minSize = NSSize(width: 1100, height: 650)
+            NotificationCenter.default.addObserver(
+                self,
+                selector: #selector(windowWillClose(_:)),
+                name: NSWindow.willCloseNotification,
+                object: resumeRevisionWindow
+            )
+        }
+        resumeRevisionWindow?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
 

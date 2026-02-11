@@ -134,7 +134,7 @@ struct UnifiedToolbar: CustomizableToolbarContent {
 
             ToolbarItem(id: "polishResume", placement: .secondaryAction, showsByDefault: false) {
                 Button(action: {
-                    sheets.showResumeRevision = true
+                    NotificationCenter.default.post(name: .polishResume, object: nil)
                 }, label: {
                     Label("Polish Resume", systemImage: "sparkles")
                         .font(.system(size: 14, weight: .light))

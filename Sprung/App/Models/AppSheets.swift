@@ -20,8 +20,6 @@ struct AppSheets {
     var showCoverLetterInspector = false
     // Setup wizard (first-run configuration)
     var showSetupWizard = false
-    // Resume revision agent
-    var showResumeRevision = false
     // Job capture from URL scheme (sprung://capture-job?url=...)
     var capturedJobURL: String?
 }
@@ -133,12 +131,6 @@ struct AppSheetsModifier: ViewModifier {
             .sheet(isPresented: $refPopup) {
                 ResRefView()
                     .padding()
-            }
-            .sheet(isPresented: $sheets.showResumeRevision) {
-                if let selectedResume = jobAppStore.selectedApp?.selectedRes {
-                    ResumeRevisionView(resume: selectedResume)
-                        .frame(minWidth: 900, minHeight: 600)
-                }
             }
             .sheet(isPresented: $sheets.showSetupWizard) {
                 SetupWizardView {

@@ -11,8 +11,11 @@ enum ResumeRevisionAgentPrompts {
         ## Your Workspace
 
         You have a sandboxed filesystem workspace containing:
-        - `resume.pdf` — The fully rendered resume (read-only visual reference)
-        - `treenodes/` — Editable JSON files, one per section, containing the resume's modifiable content
+        - `resume.pdf` — The fully rendered resume (read-only visual reference). \
+        This PDF is automatically re-rendered whenever you write a JSON file, so it always \
+        reflects the latest state.
+        - `treenodes/` — Editable JSON files, one per section, containing ONLY the resume nodes \
+        you are allowed to modify. Non-editable content is visible in the PDF but not exposed here.
         - `fontsizenodes.json` — Editable JSON file controlling font sizes for each resume element
         - `job_description.txt` — The target job description
         - `knowledge_cards/` — Background context cards (read-only reference, .txt)
@@ -27,6 +30,11 @@ enum ResumeRevisionAgentPrompts {
 
         - You may modify files in `treenodes/` and `fontsizenodes.json` using `write_json_file`.
         - All other files are READ-ONLY reference material.
+        - The treenode JSON files contain ONLY the nodes the user has chosen to open for editing. \
+        All other resume content visible in the PDF is **locked** and cannot be changed. \
+        Focus your revisions exclusively on the provided editable nodes.
+        - If you notice typos, factual errors, or other urgent issues in locked content, \
+        use `ask_user` to flag them — but do not attempt to fix them yourself.
         - Each treenode JSON file is an array of node objects with this structure:
           ```json
           {
@@ -63,11 +71,12 @@ enum ResumeRevisionAgentPrompts {
         that could strengthen the resume.
         3. **Propose Changes**: Use `propose_changes` to present your revision plan to the user. \
         Wait for their response before writing any files.
-        4. **Apply Changes**: If accepted, write modified treenode files (and optionally `fontsizenodes.json`) using `write_json_file`.
-        5. **Re-render**: Call `render_resume` to generate the updated PDF and check the page count.
-        6. **Iterate**: If the page count exceeds the target or the user provides feedback, \
-        adjust and re-render. Use `ask_user` for clarification if needed.
-        7. **Complete**: When satisfied, call `complete_revision` with a summary of all changes.
+        4. **Apply Changes**: If accepted, write modified treenode files (and optionally \
+        `fontsizenodes.json`) using `write_json_file`. The resume PDF is re-rendered automatically \
+        after each write — check the tool result for the updated page count.
+        5. **Iterate**: If the page count exceeds the target or the user provides feedback, \
+        adjust and write again. Use `ask_user` for clarification if needed.
+        6. **Complete**: When satisfied, call `complete_revision` with a summary of all changes.
 
         ## Quality Guidelines
 
@@ -93,7 +102,7 @@ enum ResumeRevisionAgentPrompts {
             ## Page Target
 
             The resume MUST fit within \(pageCount) page\(pageCount == 1 ? "" : "s"). \
-            After each round of edits, call `render_resume` to verify the page count. \
+            After each round of edits, check the page count returned by `write_json_file`. \
             If it exceeds \(pageCount), prioritize trimming lower-impact content.
             """
         }
@@ -104,7 +113,7 @@ enum ResumeRevisionAgentPrompts {
 
         - Call tools in parallel when they are independent (e.g., reading multiple files).
         - Always propose changes before writing files.
-        - Always re-render after writing treenode files to verify the result.
+        - Each `write_json_file` call automatically re-renders the PDF and returns the page count.
         """
 
         return prompt
@@ -114,7 +123,7 @@ enum ResumeRevisionAgentPrompts {
         jobDescription: String,
         writingSamplesAvailable: Bool
     ) -> String {
-        var message = """
+        let message = """
         Please review my resume and suggest improvements tailored to the following job.
 
         The resume PDF is attached above as a document. Start by examining it along with \

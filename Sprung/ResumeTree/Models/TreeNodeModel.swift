@@ -916,6 +916,7 @@ extension TreeNode {
 
     /// Convert TreeNode to revision-format dictionary for the revision agent workspace.
     /// Includes: id, name, value, myIndex, isTitleNode, children — omits editor-only fields.
+    /// All exported nodes are editable; non-editable nodes are excluded at the export layer.
     func toRevisionDictionary() -> [String: Any] {
         var dict: [String: Any] = [
             "id": id,

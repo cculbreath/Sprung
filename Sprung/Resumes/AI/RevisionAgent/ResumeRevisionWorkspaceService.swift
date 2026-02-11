@@ -17,6 +17,10 @@ final class ResumeRevisionWorkspaceService {
     /// Workspace directory path
     private(set) var workspacePath: URL?
 
+    /// IDs of nodes that were marked editable at export time.
+    /// Used to enforce that only AI-selected nodes are modified on import.
+    private(set) var editableNodeIDs: Set<String> = []
+
     // MARK: - Computed Paths
 
     private var treenodesPath: URL? { workspacePath?.appendingPathComponent("treenodes") }
@@ -91,18 +95,20 @@ final class ResumeRevisionWorkspaceService {
 
         var sectionMeta: [WorkspaceManifest.SectionInfo] = []
 
+        editableNodeIDs = []
+
         // Walk top-level section children of root
         for section in root.orderedChildren {
-            let modifiableNodes = collectModifiableNodes(from: section)
-            guard !modifiableNodes.isEmpty else { continue }
+            let editableRoots = collectEditableRoots(from: section)
+            guard !editableRoots.isEmpty else { continue }
 
             let sectionName = section.name.isEmpty ? section.displayLabel : section.name
             let sanitized = sectionName.lowercased()
                 .replacingOccurrences(of: " ", with: "_")
                 .filter { $0.isLetter || $0.isNumber || $0 == "_" }
 
-            // Serialize modifiable subtree
-            let nodeArray = modifiableNodes.map { $0.toRevisionDictionary() }
+            // Serialize only the editable subtrees
+            let nodeArray = editableRoots.map { $0.toRevisionDictionary() }
             let jsonData = try JSONSerialization.data(withJSONObject: nodeArray, options: [.prettyPrinted, .sortedKeys])
             let filePath = treenodesDir.appendingPathComponent("\(sanitized).json")
             try jsonData.write(to: filePath)
@@ -110,7 +116,7 @@ final class ResumeRevisionWorkspaceService {
             sectionMeta.append(WorkspaceManifest.SectionInfo(
                 name: sectionName,
                 file: "treenodes/\(sanitized).json",
-                nodeCount: modifiableNodes.count
+                nodeCount: editableRoots.count
             ))
         }
 
@@ -138,20 +144,36 @@ final class ResumeRevisionWorkspaceService {
         return manifest
     }
 
-    /// Collect nodes that are AI-modifiable within a section subtree.
-    private func collectModifiableNodes(from section: TreeNode) -> [TreeNode] {
-        var result: [TreeNode] = []
-        collectModifiableNodesRecursive(node: section, result: &result)
-        return result.isEmpty ? [] : [section] // Export entire section if it has modifiable content
+    /// Find the AI-editable root nodes within a section (nodes with `.aiToReplace` status).
+    /// Only these subtrees are exported — non-editable nodes are excluded entirely.
+    /// Records all editable node IDs for import-time enforcement.
+    private func collectEditableRoots(from section: TreeNode) -> [TreeNode] {
+        var roots: [TreeNode] = []
+        findEditableRoots(node: section, result: &roots)
+        guard !roots.isEmpty else { return [] }
+        // Record all editable IDs (roots + their entire subtrees)
+        for root in roots {
+            recordEditableIDs(node: root)
+        }
+        return roots
     }
 
-    private func collectModifiableNodesRecursive(node: TreeNode, result: inout [TreeNode]) {
-        if node.status == .aiToReplace || node.isInheritedAISelection || node.hasAncestorWithAIStatus {
+    /// Walk the tree to find nodes directly marked `.aiToReplace` — these are the editable subtree roots.
+    private func findEditableRoots(node: TreeNode, result: inout [TreeNode]) {
+        if node.status == .aiToReplace {
             result.append(node)
-            return
+            return // Don't recurse further — entire subtree is editable
         }
         for child in node.orderedChildren {
-            collectModifiableNodesRecursive(node: child, result: &result)
+            findEditableRoots(node: child, result: &result)
+        }
+    }
+
+    /// Record a node and all its descendants as editable.
+    private func recordEditableIDs(node: TreeNode) {
+        editableNodeIDs.insert(node.id)
+        for child in node.orderedChildren {
+            recordEditableIDs(node: child)
         }
     }
 
@@ -436,6 +458,7 @@ final class ResumeRevisionWorkspaceService {
     }
 
     /// Apply revised node dictionaries to a section node in the cloned tree.
+    /// Only modifies nodes whose IDs are in `editableNodeIDs` (or new nodes added by the agent).
     private func applyRevisedNodes(
         _ revisions: [[String: Any]],
         to sectionNode: TreeNode,
@@ -446,21 +469,26 @@ final class ResumeRevisionWorkspaceService {
             guard let nodeId = revision["id"] as? String else { continue }
 
             if nodeId.hasPrefix("new-") {
-                // New node — create and add
+                // New node — create and add (allowed: agent may add content)
                 let newNode = createTreeNodeFromDictionary(revision, resume: resume, context: context)
                 sectionNode.addChild(newNode)
             } else if let existing = findNodeById(nodeId, in: sectionNode) {
-                // Existing node — update value and children
-                if let value = revision["value"] as? String {
-                    existing.value = value
+                // Only apply value changes to editable nodes
+                let isEditable = editableNodeIDs.contains(nodeId)
+                if isEditable {
+                    if let value = revision["value"] as? String {
+                        existing.value = value
+                    }
+                    if let myIndex = revision["myIndex"] as? Int {
+                        existing.myIndex = myIndex
+                    }
+                    if let isTitleNode = revision["isTitleNode"] as? Bool {
+                        existing.isTitleNode = isTitleNode
+                    }
+                } else {
+                    Logger.debug("RevisionAgent: Skipped edit to non-editable node '\(nodeId)' (\(existing.name))", category: .ai)
                 }
-                if let myIndex = revision["myIndex"] as? Int {
-                    existing.myIndex = myIndex
-                }
-                if let isTitleNode = revision["isTitleNode"] as? Bool {
-                    existing.isTitleNode = isTitleNode
-                }
-                // Recursively update children if provided
+                // Always recurse into children — some children may be editable even if parent isn't
                 if let children = revision["children"] as? [[String: Any]] {
                     applyRevisedNodes(children, to: existing, resume: resume, context: context)
                 }

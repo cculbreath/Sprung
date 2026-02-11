@@ -1,10 +1,10 @@
 import SwiftUI
 import SwiftData
+import PDFKit
 
 /// Main container view for the resume revision agent session.
 /// Presents a split layout: PDF preview on the left, chat stream on the right.
 struct ResumeRevisionView: View {
-    @Environment(\.dismiss) private var dismiss
     @Environment(LLMFacade.self) private var llmFacade
     @Environment(TemplateStore.self) private var templateStore
     @Environment(ApplicantProfileStore.self) private var applicantProfileStore
@@ -17,41 +17,45 @@ struct ResumeRevisionView: View {
 
     @State private var agent: ResumeRevisionAgent?
     @State private var pdfData: Data?
+    @State private var pdfController = PDFPreviewController()
     @State private var errorMessage: String?
     @State private var showError = false
 
     var body: some View {
-        VStack(spacing: 0) {
-            // Toolbar
-            if let agent = agent {
-                RevisionToolbar(
-                    status: agent.status,
-                    currentAction: agent.currentAction,
-                    onCancel: { handleCancel() },
-                    onAccept: { dismiss() }
-                )
+        HSplitView {
+            // Left pane: PDF preview
+            pdfPreviewPane
+                .frame(minWidth: 480, idealWidth: 620)
+
+            // Right pane: Chat stream
+            VStack(spacing: 0) {
+                // Toolbar header
+                if let agent = agent {
+                    RevisionToolbar(
+                        status: agent.status,
+                        currentAction: agent.currentAction,
+                        onCancel: { handleCancel() },
+                        onAccept: { closeWindow() }
+                    )
+                }
+
                 Divider()
-            }
 
-            // Main content
-            HStack(spacing: 0) {
-                // Left pane: PDF preview
-                pdfPreviewPane
-                    .frame(minWidth: 400, idealWidth: 500, maxWidth: 600)
-
-                Divider()
-
-                // Right pane: Chat stream
+                // Chat
                 chatPane
-                    .frame(minWidth: 400, maxWidth: .infinity)
             }
+            .frame(minWidth: 380, idealWidth: 480)
         }
-        .frame(minWidth: 900, minHeight: 600)
         .task {
             await startAgent()
         }
+        .onChange(of: agent?.latestPDFData) { _, newData in
+            if let newData {
+                pdfData = newData
+            }
+        }
         .alert("Revision Error", isPresented: $showError) {
-            Button("OK") { dismiss() }
+            Button("OK") { closeWindow() }
         } message: {
             Text(errorMessage ?? "An unknown error occurred")
         }
@@ -63,7 +67,14 @@ struct ResumeRevisionView: View {
     private var pdfPreviewPane: some View {
         Group {
             if let pdfData = pdfData {
-                PDFPreviewView(data: pdfData)
+                PDFPreviewView(
+                    pdfData: pdfData,
+                    overlayDocument: nil,
+                    overlayPageIndex: 0,
+                    overlayOpacity: 0,
+                    overlayColor: .clear,
+                    controller: pdfController
+                )
             } else {
                 VStack(spacing: 12) {
                     ProgressView()
@@ -92,6 +103,12 @@ struct ResumeRevisionView: View {
                 },
                 onQuestionResponse: { answer in
                     agent.respondToQuestion(answer)
+                },
+                onUserMessage: { text in
+                    agent.sendUserMessage(text)
+                },
+                onAcceptCurrentState: {
+                    agent.acceptCurrentState()
                 }
             )
         } else {
@@ -161,69 +178,10 @@ struct ResumeRevisionView: View {
 
     private func handleCancel() {
         agent?.cancel()
-        dismiss()
-    }
-}
-
-// MARK: - PDF Preview (NSView wrapper)
-
-private struct PDFPreviewView: NSViewRepresentable {
-    let data: Data
-
-    func makeNSView(context: Context) -> NSScrollView {
-        let scrollView = NSScrollView()
-        scrollView.hasVerticalScroller = true
-        scrollView.hasHorizontalScroller = true
-        scrollView.autohidesScrollers = true
-
-        let imageView = NSImageView()
-        imageView.imageScaling = .scaleProportionallyUpOrDown
-        imageView.imageAlignment = .alignTop
-        scrollView.documentView = imageView
-
-        updateImage(imageView)
-
-        return scrollView
+        closeWindow()
     }
 
-    func updateNSView(_ nsView: NSScrollView, context: Context) {
-        if let imageView = nsView.documentView as? NSImageView {
-            updateImage(imageView)
-        }
-    }
-
-    private func updateImage(_ imageView: NSImageView) {
-        guard let provider = CGDataProvider(data: data as CFData),
-              let document = CGPDFDocument(provider),
-              let page = document.page(at: 1) else {
-            return
-        }
-
-        let pageRect = page.getBoxRect(.mediaBox)
-        let scale: CGFloat = 2.0
-        let width = pageRect.width * scale
-        let height = pageRect.height * scale
-
-        let colorSpace = CGColorSpaceCreateDeviceRGB()
-        guard let context = CGContext(
-            data: nil,
-            width: Int(width),
-            height: Int(height),
-            bitsPerComponent: 8,
-            bytesPerRow: 0,
-            space: colorSpace,
-            bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue
-        ) else { return }
-
-        context.setFillColor(NSColor.white.cgColor)
-        context.fill(CGRect(x: 0, y: 0, width: width, height: height))
-        context.scaleBy(x: scale, y: scale)
-        context.drawPDFPage(page)
-
-        if let cgImage = context.makeImage() {
-            let nsImage = NSImage(cgImage: cgImage, size: NSSize(width: pageRect.width, height: pageRect.height))
-            imageView.image = nsImage
-            imageView.frame = NSRect(x: 0, y: 0, width: pageRect.width, height: pageRect.height)
-        }
+    private func closeWindow() {
+        NSApp.keyWindow?.performClose(nil)
     }
 }
