@@ -15,6 +15,8 @@ struct BatchCoverLetterView: View {
     @Environment(OpenRouterService.self) private var openRouterService: OpenRouterService
     @Environment(ApplicantProfileStore.self) private var applicantProfileStore: ApplicantProfileStore
     @Environment(CoverRefStore.self) private var coverRefStore: CoverRefStore
+    @Environment(KnowledgeCardStore.self) private var knowledgeCardStore: KnowledgeCardStore
+    @Environment(CandidateDossierStore.self) private var candidateDossierStore: CandidateDossierStore
     // Live SwiftData query to automatically refresh on model changes
     @Query(sort: \CoverRef.name) private var allCoverRefs: [CoverRef]
     @State private var mode: BatchMode = .generate
@@ -28,8 +30,8 @@ struct BatchCoverLetterView: View {
     @State private var completedOperations: Int = 0
     @State private var errorMessage: String?
     // Source management states
-    @State private var includeResumeRefs: Bool = true
-    @State private var selectedBackgroundFacts: Set<String> = []
+    @State private var knowledgeCardInclusion: KnowledgeCardInclusion = .all
+    @State private var selectedKnowledgeCardIds: Set<String> = []
     @State private var selectedWritingSamples: Set<String> = []
     let availableRevisions: [CoverLetterPrompts.EditorPrompts] = [.improve, .zinsser, .mimic]
     var body: some View {
@@ -150,8 +152,8 @@ struct BatchCoverLetterView: View {
     }
     private var sourceManagementSection: some View {
         CoverRefSelectionManagerView(
-            includeResumeRefs: $includeResumeRefs,
-            selectedBackgroundFacts: $selectedBackgroundFacts,
+            knowledgeCardInclusion: $knowledgeCardInclusion,
+            selectedKnowledgeCardIds: $selectedKnowledgeCardIds,
             selectedWritingSamples: $selectedWritingSamples,
             showGroupBox: true
         )
@@ -342,12 +344,22 @@ struct BatchCoverLetterView: View {
                         }
                         return
                     }
+                    // Resolve knowledge cards based on inclusion mode
+                    let resolvedCards: [KnowledgeCard] = {
+                        switch knowledgeCardInclusion {
+                        case .all: return knowledgeCardStore.knowledgeCards
+                        case .selected: return knowledgeCardStore.knowledgeCards.filter { selectedKnowledgeCardIds.contains($0.id.uuidString) }
+                        case .none: return []
+                        }
+                    }()
+                    let dossierContext = candidateDossierStore.exportForCoverLetter()
                     // Create a base cover letter with the selected sources
                     let baseCoverLetter = CoverLetter(
                         enabledRefs: getSelectedCoverRefs(),
                         jobApp: app
                     )
-                    baseCoverLetter.includeResumeRefs = includeResumeRefs
+                    baseCoverLetter.knowledgeCardInclusion = knowledgeCardInclusion
+                    baseCoverLetter.selectedKnowledgeCardIds = selectedKnowledgeCardIds
                     baseCoverLetter.content = "" // Will be generated
                     // Debug: Verify jobApp relationship is set
                     Logger.debug("🔍 Created baseCoverLetter with jobApp: \(baseCoverLetter.jobApp?.id.uuidString ?? "nil")")
@@ -357,6 +369,8 @@ struct BatchCoverLetterView: View {
                         jobApp: app,
                         resume: resume,
                         models: Array(selectedModels),
+                        knowledgeCards: resolvedCards,
+                        dossierContext: dossierContext,
                         revisions: Array(selectedRevisions),
                         revisionModel: revisionModel,
                         onProgress: { completed, total in
@@ -405,14 +419,14 @@ struct BatchCoverLetterView: View {
         }
     }
     private func loadDefaultSelections() {
-        // Pre-select enabled by default refs
-        let backgroundFacts = allCoverRefs.filter { $0.type == .backgroundFact }
+        // Pre-select enabled by default writing samples
         let writingSamples = allCoverRefs.filter { $0.type == .writingSample }
-        for ref in backgroundFacts where ref.enabledByDefault {
-            selectedBackgroundFacts.insert(ref.id.description)
-        }
         for ref in writingSamples where ref.enabledByDefault {
             selectedWritingSamples.insert(ref.id.description)
+        }
+        // Pre-select all knowledge cards for "Selected" mode
+        for card in knowledgeCardStore.knowledgeCards {
+            selectedKnowledgeCardIds.insert(card.id.uuidString)
         }
     }
     private func canStartGeneration() -> Bool {
@@ -424,17 +438,7 @@ struct BatchCoverLetterView: View {
         }
     }
     private func getSelectedCoverRefs() -> [CoverRef] {
-        var refs: [CoverRef] = []
-        // Add selected background facts
-        let backgroundFacts = allCoverRefs.filter { $0.type == .backgroundFact }
-        for ref in backgroundFacts where selectedBackgroundFacts.contains(ref.id.description) {
-            refs.append(ref)
-        }
-        // Add selected writing samples
         let writingSamples = allCoverRefs.filter { $0.type == .writingSample }
-        for ref in writingSamples where selectedWritingSamples.contains(ref.id.description) {
-            refs.append(ref)
-        }
-        return refs
+        return writingSamples.filter { selectedWritingSamples.contains($0.id.description) }
     }
 }

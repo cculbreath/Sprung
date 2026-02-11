@@ -1,5 +1,11 @@
 import Foundation
 import SwiftData
+/// Knowledge card inclusion mode for cover letter generation
+enum KnowledgeCardInclusion: String, CaseIterable {
+    case all = "All"
+    case selected = "Selected"
+    case none = "None"
+}
 /// Assessment data for multi-model cover letter evaluation
 struct AssessmentData: Codable {
     var voteCount: Int = 0
@@ -44,7 +50,10 @@ class CoverLetter: Identifiable, Hashable {
     var name: String = ""
     var content: String = ""
     var generated: Bool = false
-    var includeResumeRefs: Bool = false
+    /// Knowledge card inclusion mode used for generation
+    var knowledgeCardInclusionRaw: String = KnowledgeCardInclusion.all.rawValue
+    /// Selected knowledge card IDs when inclusion mode is .selected (JSON-encoded array of UUID strings)
+    var encodedSelectedKnowledgeCardIds: Data?
     // The AI model used to generate this cover letter
     var generationModel: String?
     var encodedEnabledRefs: Data? // Store as Data
@@ -58,12 +67,25 @@ class CoverLetter: Identifiable, Hashable {
     var encodedCommitteeFeedback: Data? // Stores CommitteeFeedbackSummary as JSON
     /// Generation metadata: sources used at time of generation (stored as encoded data)
     var encodedGenerationSources: Data? // Stores [CoverRef] as JSON
-    /// Generation metadata: resume background state at time of generation
-    var generationUsedResumeRefs: Bool = false
     var modDate: String {
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "hh:mm a 'on' MM/dd/yy"
         return dateFormatter.string(from: moddedDate)
+    }
+    /// Knowledge card inclusion mode (computed from raw string storage)
+    var knowledgeCardInclusion: KnowledgeCardInclusion {
+        get { KnowledgeCardInclusion(rawValue: knowledgeCardInclusionRaw) ?? .all }
+        set { knowledgeCardInclusionRaw = newValue.rawValue }
+    }
+    /// Selected knowledge card IDs when using .selected mode
+    var selectedKnowledgeCardIds: Set<String> {
+        get {
+            guard let data = encodedSelectedKnowledgeCardIds else { return [] }
+            return Set((try? JSONDecoder().decode([String].self, from: data)) ?? [])
+        }
+        set {
+            encodedSelectedKnowledgeCardIds = try? JSONEncoder().encode(Array(newValue))
+        }
     }
     // Computed properties to decode arrays
     var enabledRefs: [CoverRef] {
@@ -168,10 +190,6 @@ class CoverLetter: Identifiable, Hashable {
     ) {
         encodedEnabledRefs = try? JSONEncoder().encode(enabledRefs)
         self.jobApp = jobApp ?? nil
-    }
-    var backgroundItemsString: String {
-        return enabledRefs.filter { $0.type == CoverRefType.backgroundFact }
-            .map { $0.content }.joined(separator: "\n\n")
     }
     /// 1-based index of this cover letter within its job application (ordered by creation date)
     /// This remains dynamic and is used for assigning the *initial* "Option X" label.

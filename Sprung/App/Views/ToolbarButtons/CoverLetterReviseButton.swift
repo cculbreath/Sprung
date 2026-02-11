@@ -57,7 +57,8 @@ struct CoverLetterReviseButton: View {
                     enabledRefs: coverLetter.enabledRefs,
                     jobApp: coverLetter.jobApp
                 )
-                targetLetter.includeResumeRefs = coverLetter.includeResumeRefs
+                targetLetter.knowledgeCardInclusion = coverLetter.knowledgeCardInclusion
+                targetLetter.selectedKnowledgeCardIds = coverLetter.selectedKnowledgeCardIds
                 targetLetter.content = coverLetter.content
                 targetLetter.generated = false
                 targetLetter.editorPrompt = operation

@@ -54,6 +54,8 @@ class BatchCoverLetterGenerator {
         jobApp: JobApp,
         resume: Resume,
         models: [String],
+        knowledgeCards: [KnowledgeCard],
+        dossierContext: String?,
         revisions: [CoverLetterPrompts.EditorPrompts],
         revisionModel: String,
         onProgress: @escaping (Int, Int) async -> Void
@@ -93,6 +95,8 @@ class BatchCoverLetterGenerator {
                             jobApp: jobApp,
                             resume: resume,
                             model: model,
+                            knowledgeCards: knowledgeCards,
+                            dossierContext: dossierContext,
                             revision: nil
                         )
                         return GenerationResult(success: true, model: model, generatedLetter: coverLetter)
@@ -148,6 +152,8 @@ class BatchCoverLetterGenerator {
                                     jobApp: jobApp,
                                     resume: resume,
                                     model: modelToUseForRevisions,
+                                    knowledgeCards: knowledgeCards,
+                                    dossierContext: dossierContext,
                                     revision: revision
                                 )
                                 return GenerationResult(success: true, model: modelToUseForRevisions)
@@ -249,6 +255,8 @@ class BatchCoverLetterGenerator {
         jobApp: JobApp,
         resume: Resume,
         model: String,
+        knowledgeCards: [KnowledgeCard] = [],
+        dossierContext: String? = nil,
         revision: CoverLetterPrompts.EditorPrompts?
     ) async throws -> CoverLetter {
         // Debug: Verify jobApp parameter is provided
@@ -261,10 +269,10 @@ class BatchCoverLetterGenerator {
             // For revisions, use clean model name + revision type
             letterName = "\(modelName) - \(revision.operation.rawValue)"
         } else {
-            // For base generations, include resume background indicator if enabled
+            // For base generations, include knowledge card indicator if enabled
             var baseName = modelName
-            if baseCoverLetter.includeResumeRefs {
-                baseName += " with Res BG"
+            if baseCoverLetter.knowledgeCardInclusion != .none {
+                baseName += " with KC"
             }
             letterName = baseName
         }
@@ -283,6 +291,8 @@ class BatchCoverLetterGenerator {
                 exportCoordinator: exportCoordinator,
                 applicantProfile: applicantProfile,
                 writersVoice: coverRefStore.writersVoice,
+                knowledgeCards: knowledgeCards,
+                dossierContext: dossierContext,
                 saveDebugPrompt: UserDefaults.standard.bool(forKey: "saveDebugPrompts")
             )
             let userMessage = await query.revisionPrompt(
@@ -315,10 +325,12 @@ class BatchCoverLetterGenerator {
                 exportCoordinator: exportCoordinator,
                 applicantProfile: applicantProfile,
                 writersVoice: coverRefStore.writersVoice,
+                knowledgeCards: knowledgeCards,
+                dossierContext: dossierContext,
                 saveDebugPrompt: UserDefaults.standard.bool(forKey: "saveDebugPrompts")
             )
             let systemPrompt = query.systemPrompt(for: model)
-            let userMessage = await query.generationPrompt(includeResumeRefs: baseCoverLetter.includeResumeRefs)
+            let userMessage = await query.generationPrompt()
             // Check if this is an o1 model that doesn't support system messages
             let isO1Model = coverLetterService.isReasoningModel(model)
             usesReasoningModelForNewLetter = isO1Model
@@ -346,7 +358,8 @@ class BatchCoverLetterGenerator {
             enabledRefs: baseCoverLetter.enabledRefs,
             jobApp: jobApp
         )
-        newLetter.includeResumeRefs = baseCoverLetter.includeResumeRefs
+        newLetter.knowledgeCardInclusion = baseCoverLetter.knowledgeCardInclusion
+        newLetter.selectedKnowledgeCardIds = baseCoverLetter.selectedKnowledgeCardIds
         newLetter.content = content
         newLetter.generated = true
         newLetter.moddedDate = Date()
@@ -356,10 +369,8 @@ class BatchCoverLetterGenerator {
         // Store generation metadata - for revisions, preserve original generation sources
         if revision != nil {
             newLetter.generationSources = baseCoverLetter.generationSources.isEmpty ? baseCoverLetter.enabledRefs : baseCoverLetter.generationSources
-            newLetter.generationUsedResumeRefs = baseCoverLetter.generationUsedResumeRefs
         } else {
             newLetter.generationSources = baseCoverLetter.enabledRefs
-            newLetter.generationUsedResumeRefs = baseCoverLetter.includeResumeRefs
         }
         // Set the final name - always use "Option X" format for consistency
         let nextOptionLetter = newLetter.getNextOptionLetter()

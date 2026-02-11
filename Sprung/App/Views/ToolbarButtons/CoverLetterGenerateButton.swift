@@ -4,6 +4,8 @@ struct CoverLetterGenerateButton: View {
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
     @Environment(CoverLetterStore.self) private var coverLetterStore: CoverLetterStore
     @Environment(CoverLetterService.self) private var coverLetterService: CoverLetterService
+    @Environment(KnowledgeCardStore.self) private var knowledgeCardStore: KnowledgeCardStore
+    @Environment(CandidateDossierStore.self) private var candidateDossierStore: CandidateDossierStore
     @State private var showCoverLetterModelSheet = false
     @State private var selectedCoverLetterModel = ""
     var body: some View {
@@ -30,7 +32,7 @@ struct CoverLetterGenerateButton: View {
             if let jobApp = jobAppStore.selectedApp {
                 GenerateCoverLetterView(
                     jobApp: jobApp,
-                    onGenerate: { modelId, selectedRefs, includeResumeRefs in
+                    onGenerate: { modelId, selectedRefs, kcInclusion, selectedCardIds in
                         selectedCoverLetterModel = modelId
                         showCoverLetterModelSheet = false
                         coverLetterStore.isGeneratingCoverLetter = true
@@ -38,7 +40,8 @@ struct CoverLetterGenerateButton: View {
                             await generateCoverLetter(
                                 modelId: modelId,
                                 selectedRefs: selectedRefs,
-                                includeResumeRefs: includeResumeRefs
+                                knowledgeCardInclusion: kcInclusion,
+                                selectedKnowledgeCardIds: selectedCardIds
                             )
                         }
                     }
@@ -51,12 +54,26 @@ struct CoverLetterGenerateButton: View {
         }
     }
     @MainActor
-    private func generateCoverLetter(modelId: String, selectedRefs: [CoverRef], includeResumeRefs: Bool) async {
+    private func generateCoverLetter(
+        modelId: String,
+        selectedRefs: [CoverRef],
+        knowledgeCardInclusion: KnowledgeCardInclusion,
+        selectedKnowledgeCardIds: Set<String>
+    ) async {
         guard let jobApp = jobAppStore.selectedApp,
               let resume = jobApp.selectedRes else {
             coverLetterStore.isGeneratingCoverLetter = false
             return
         }
+        // Resolve knowledge cards based on inclusion mode
+        let resolvedCards: [KnowledgeCard] = {
+            switch knowledgeCardInclusion {
+            case .all: return knowledgeCardStore.knowledgeCards
+            case .selected: return knowledgeCardStore.knowledgeCards.filter { selectedKnowledgeCardIds.contains($0.id.uuidString) }
+            case .none: return []
+            }
+        }()
+        let dossierContext = candidateDossierStore.exportForCoverLetter()
         do {
             try await coverLetterService.generateNewCoverLetter(
                 jobApp: jobApp,
@@ -64,7 +81,10 @@ struct CoverLetterGenerateButton: View {
                 modelId: modelId,
                 coverLetterStore: coverLetterStore,
                 selectedRefs: selectedRefs,
-                includeResumeRefs: includeResumeRefs
+                knowledgeCards: resolvedCards,
+                knowledgeCardInclusion: knowledgeCardInclusion,
+                selectedKnowledgeCardIds: selectedKnowledgeCardIds,
+                dossierContext: dossierContext
             )
             coverLetterStore.isGeneratingCoverLetter = false
         } catch {

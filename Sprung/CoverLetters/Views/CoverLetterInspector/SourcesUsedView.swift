@@ -14,50 +14,19 @@ struct SourcesUsedView: View {
                 .foregroundColor(.secondary)
                 .textCase(.uppercase)
             VStack(alignment: .leading, spacing: 12) {
-                // Resume background toggle status
-                let usedResumeRefs = coverLetter.generated ? coverLetter.generationUsedResumeRefs : coverLetter.includeResumeRefs
+                // Knowledge card inclusion status
+                let kcInclusion = coverLetter.knowledgeCardInclusion
                 HStack(spacing: 8) {
-                    Image(systemName: usedResumeRefs ? "checkmark.circle.fill" : "xmark.circle")
-                        .foregroundColor(usedResumeRefs ? .green : .secondary)
+                    Image(systemName: kcInclusion != .none ? "checkmark.circle.fill" : "xmark.circle")
+                        .foregroundColor(kcInclusion != .none ? .green : .secondary)
                         .font(.system(size: 12))
-                        .glassEffect(.regular.tint(usedResumeRefs ? .green.opacity(0.3) : .clear), in: .circle)
-                    Text("Resume Background")
+                        .glassEffect(.regular.tint(kcInclusion != .none ? .green.opacity(0.3) : .clear), in: .circle)
+                    Text("Knowledge Cards (\(kcInclusion.rawValue))")
                         .font(.system(size: 11, weight: .medium))
                         .foregroundColor(.primary)
                 }
-                // Background facts
-                let sourcesToShow = coverLetter.generated ? coverLetter.generationSources : coverLetter.enabledRefs
-                let backgroundFacts = sourcesToShow.filter { $0.type == .backgroundFact }
-                if !backgroundFacts.isEmpty {
-                    VStack(alignment: .leading, spacing: 6) {
-                        HStack {
-                            Text("Background Facts")
-                                .font(.system(size: 11, weight: .medium))
-                                .foregroundColor(.primary)
-                            Text("(\(backgroundFacts.count))")
-                                .font(.system(size: 10))
-                                .foregroundColor(.secondary)
-                        }
-                        VStack(alignment: .leading, spacing: 4) {
-                            ForEach(backgroundFacts, id: \.id) { ref in
-                                HStack(alignment: .top, spacing: 8) {
-                                    Circle()
-                                        .fill(Color.blue)
-                                        .frame(width: 4, height: 4)
-                                        .padding(.top, 5)
-                                        .glassEffect(.regular.tint(.blue), in: .circle)
-                                    Text(ref.name)
-                                        .font(.system(size: 10))
-                                        .foregroundColor(.secondary)
-                                        .fixedSize(horizontal: false, vertical: true)
-                                    Spacer(minLength: 0)
-                                }
-                            }
-                        }
-                        .padding(.leading, 8)
-                    }
-                }
                 // Writing samples
+                let sourcesToShow = coverLetter.generated ? coverLetter.generationSources : coverLetter.enabledRefs
                 let writingSamples = sourcesToShow.filter { $0.type == .writingSample }
                 if !writingSamples.isEmpty {
                     VStack(alignment: .leading, spacing: 6) {
@@ -88,7 +57,7 @@ struct SourcesUsedView: View {
                         .padding(.leading, 8)
                     }
                 }
-                if backgroundFacts.isEmpty && writingSamples.isEmpty && !usedResumeRefs {
+                if writingSamples.isEmpty && kcInclusion == .none {
                     Text("No additional sources used")
                         .font(.system(size: 10))
                         .foregroundColor(.secondary)

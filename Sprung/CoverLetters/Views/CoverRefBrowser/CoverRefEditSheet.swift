@@ -1,15 +1,15 @@
 import SwiftUI
 
-/// Edit sheet for CoverRef items (background facts and writing samples).
+/// Edit sheet for CoverRef items (writing samples and voice primers).
 struct CoverRefEditSheet: View {
     let card: CoverRef?
-    var defaultType: CoverRefType = .backgroundFact
+    var defaultType: CoverRefType = .writingSample
     let onSave: (CoverRef) -> Void
     let onCancel: () -> Void
 
     @State private var name: String = ""
     @State private var content: String = ""
-    @State private var type: CoverRefType = .backgroundFact
+    @State private var type: CoverRefType = .writingSample
     @State private var enabledByDefault: Bool = false
 
     var body: some View {
@@ -32,8 +32,8 @@ struct CoverRefEditSheet: View {
                         Text("Type")
                             .font(.subheadline.weight(.medium))
                         Picker("Type", selection: $type) {
-                            Text("Background Fact").tag(CoverRefType.backgroundFact)
                             Text("Writing Sample").tag(CoverRefType.writingSample)
+                            Text("Voice Primer").tag(CoverRefType.voicePrimer)
                         }
                         .pickerStyle(.segmented)
                     }

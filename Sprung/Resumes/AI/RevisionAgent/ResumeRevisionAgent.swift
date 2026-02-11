@@ -1,3 +1,4 @@
+import AppKit
 import CoreGraphics
 import Foundation
 import Observation
@@ -89,7 +90,7 @@ class ResumeRevisionAgent {
     private(set) var latestPDFData: Data?
     private var isCancelled = false
     private var consecutiveNoToolTurns = 0
-    private var shouldInterruptStream = false
+    private var activeStreamTask: Task<StreamResult, Error>?
 
     // Continuations for human-in-the-loop tools
     private var proposalContinuation: CheckedContinuation<ProposalResponse, Never>?
@@ -227,56 +228,93 @@ class ResumeRevisionAgent {
                     toolChoice: .auto
                 )
 
+                let turnStart = ContinuousClock.now
+                logTurnRequest(turn: turnCount, messageCount: conversationMessages.count)
                 let stream = try await facade.anthropicMessagesStream(parameters: parameters)
 
-                // Process stream
-                shouldInterruptStream = false
-                var processor = RevisionStreamProcessor()
-                var assistantTextBlocks: [AnthropicContentBlock] = []
-                var toolCallBlocks: [AnthropicContentBlock] = []
-                var pendingToolCalls: [RevisionStreamProcessor.ToolCallInfo] = []
-                var streamWasInterrupted = false
+                // Process stream in a child task so it can be cancelled by
+                // sendUserMessage() or the per-turn timeout.
+                let streamTask = Task { @MainActor [weak self] () -> StreamResult in
+                    guard let self else { return StreamResult() }
+                    var processor = RevisionStreamProcessor()
+                    var result = StreamResult()
 
-                // Per-turn timeout: cancel stream if no events for 2 minutes
-                let turnTimeoutSeconds: TimeInterval = 180
-                let turnTimeoutTask = Task { @MainActor [weak self] in
-                    try await Task.sleep(for: .seconds(turnTimeoutSeconds))
-                    self?.shouldInterruptStream = true
-                    Logger.warning("RevisionAgent: Turn \(turnCount) stream timed out after \(Int(turnTimeoutSeconds))s", category: .ai)
-                }
+                    for try await event in stream {
+                        try Task.checkCancellation()
 
-                for try await event in stream {
-                    if isCancelled || shouldInterruptStream {
-                        streamWasInterrupted = shouldInterruptStream && !isCancelled
-                        break
-                    }
+                        let domainEvents = processor.process(event)
+                        for domainEvent in domainEvents {
+                            switch domainEvent {
+                            case .textDelta(let text):
+                                self.appendOrUpdateAssistantMessage(text)
 
-                    let domainEvents = processor.process(event)
-                    for domainEvent in domainEvents {
-                        switch domainEvent {
-                        case .textDelta(let text):
-                            appendOrUpdateAssistantMessage(text)
+                            case .textFinalized(let fullText):
+                                result.textBlocks.append(.text(AnthropicTextBlock(text: fullText)))
 
-                        case .textFinalized(let fullText):
-                            assistantTextBlocks.append(.text(AnthropicTextBlock(text: fullText)))
+                            case .toolCallReady(let id, let name, let arguments):
+                                result.toolCalls.append(RevisionStreamProcessor.ToolCallInfo(
+                                    id: id, name: name, arguments: arguments
+                                ))
+                                let inputDict = self.parseToolArguments(arguments)
+                                result.toolCallBlocks.append(.toolUse(AnthropicToolUseBlock(
+                                    id: id, name: name, input: inputDict
+                                )))
 
-                        case .toolCallReady(let id, let name, let arguments):
-                            pendingToolCalls.append(RevisionStreamProcessor.ToolCallInfo(
-                                id: id, name: name, arguments: arguments
-                            ))
-                            let inputDict = parseToolArguments(arguments)
-                            toolCallBlocks.append(.toolUse(AnthropicToolUseBlock(
-                                id: id, name: name, input: inputDict
-                            )))
-
-                        case .messageComplete:
-                            break
+                            case .messageComplete:
+                                break
+                            }
                         }
                     }
+
+                    return result
+                }
+                activeStreamTask = streamTask
+
+                // Per-turn timeout: cancel stream if stalled for 3 minutes
+                let turnTimeoutTask = Task { @MainActor in
+                    try await Task.sleep(for: .seconds(180))
+                    streamTask.cancel()
+                    Logger.warning("RevisionAgent: Turn \(turnCount) stream timed out", category: .ai)
+                }
+
+                var streamResult: StreamResult
+                var streamWasInterrupted = false
+
+                do {
+                    streamResult = try await streamTask.value
+                } catch is CancellationError {
+                    // Stream was interrupted by user message, timeout, or cancel
+                    streamResult = StreamResult()
+                    streamWasInterrupted = !isCancelled
+                    if streamWasInterrupted {
+                        Logger.info("RevisionAgent: Stream interrupted on turn \(turnCount)", category: .ai)
+                    }
+                } catch {
+                    // Stream threw a real error — treat as interrupted
+                    streamResult = StreamResult()
+                    streamWasInterrupted = true
+                    Logger.error("RevisionAgent: Stream error on turn \(turnCount): \(error.localizedDescription)", category: .ai)
                 }
 
                 turnTimeoutTask.cancel()
-                shouldInterruptStream = false
+                activeStreamTask = nil
+
+                // Log response to transcript
+                let turnDuration = turnStart.duration(to: .now)
+                let turnMs = Int(turnDuration.components.seconds * 1000 + turnDuration.components.attoseconds / 1_000_000_000_000_000)
+                logTurnResponse(
+                    turn: turnCount,
+                    messageCount: conversationMessages.count,
+                    toolNames: tools.map { tool in
+                        switch tool {
+                        case .function(let f): return f.name
+                        case .serverTool(let s): return s.name ?? s.type
+                        }
+                    },
+                    result: streamResult,
+                    interrupted: streamWasInterrupted,
+                    durationMs: turnMs
+                )
 
                 guard !isCancelled else {
                     status = .cancelled
@@ -284,10 +322,11 @@ class ResumeRevisionAgent {
                     return
                 }
 
-                // If the stream was interrupted (user message or timeout), discard
-                // any partial tool calls — they may be incomplete JSON. Keep text only.
+                // Interrupted streams may have partial tool calls — discard them
+                let assistantTextBlocks = streamResult.textBlocks
+                var toolCallBlocks = streamResult.toolCallBlocks
+                var pendingToolCalls = streamResult.toolCalls
                 if streamWasInterrupted {
-                    Logger.info("RevisionAgent: Stream interrupted on turn \(turnCount), discarding \(toolCallBlocks.count) partial tool calls", category: .ai)
                     toolCallBlocks.removeAll()
                     pendingToolCalls.removeAll()
                 }
@@ -351,7 +390,7 @@ class ResumeRevisionAgent {
                 }
 
                 // Execute tool calls and collect results
-                var toolResults: [AnthropicContentBlock] = []
+                var toolResultBlocks: [AnthropicContentBlock] = []
 
                 for toolCall in pendingToolCalls {
                     currentAction = "Turn \(turnCount): \(toolDisplayName(toolCall.name))"
@@ -360,21 +399,23 @@ class ResumeRevisionAgent {
                         content: toolDisplayName(toolCall.name)
                     ))
 
-                    let resultString = await executeTool(
+                    let result = await executeTool(
                         name: toolCall.name,
                         arguments: toolCall.arguments
                     )
 
-                    toolResults.append(.toolResult(AnthropicToolResultBlock(
+                    toolResultBlocks.append(.toolResult(AnthropicToolResultBlock(
                         toolUseId: toolCall.id,
-                        content: resultString
+                        content: result.text
                     )))
+                    // Append any rendered page images after the tool result
+                    toolResultBlocks.append(contentsOf: result.imageBlocks)
                 }
 
-                // Append tool results as a single user message
+                // Append tool results (and any attached images) as a single user message
                 let toolResultMessage = AnthropicMessage(
                     role: "user",
-                    content: .blocks(toolResults)
+                    content: .blocks(toolResultBlocks)
                 )
                 conversationMessages.append(toolResultMessage)
             }
@@ -426,7 +467,7 @@ class ResumeRevisionAgent {
     }
 
     /// Queue a free-form user message to be injected into the conversation between turns.
-    /// Also interrupts a stalled stream so the message gets delivered promptly.
+    /// Also cancels the active stream so the message gets delivered promptly.
     func sendUserMessage(_ text: String) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
@@ -434,8 +475,8 @@ class ResumeRevisionAgent {
         messages.append(RevisionMessage(role: .user, content: trimmed))
         // Reset the no-tool counter since the user is actively engaging
         consecutiveNoToolTurns = 0
-        // Interrupt the current stream so the message gets injected on the next turn
-        shouldInterruptStream = true
+        // Cancel the active stream so the agent loop advances to the next turn
+        activeStreamTask?.cancel()
     }
 
     /// Accept the current workspace state and create a new resume from it.
@@ -450,13 +491,13 @@ class ResumeRevisionAgent {
             do {
                 let revisedNodes = try workspaceService.importRevisedTreeNodes()
                 let revisedFontSizes = try workspaceService.importRevisedFontSizes()
-                let _ = workspaceService.buildNewResume(
+                let newResume = workspaceService.buildNewResume(
                     from: resume,
                     revisedNodes: revisedNodes,
                     revisedFontSizes: revisedFontSizes,
                     context: modelContext
                 )
-                Logger.info("RevisionAgent: User accepted current state directly", category: .ai)
+                await activateNewResume(newResume)
                 status = .completed
                 try? workspaceService.deleteWorkspace()
             } catch {
@@ -469,6 +510,7 @@ class ResumeRevisionAgent {
 
     func cancel() {
         isCancelled = true
+        activeStreamTask?.cancel()
         // Resume any waiting continuations
         proposalContinuation?.resume(returning: .rejected)
         proposalContinuation = nil
@@ -493,11 +535,26 @@ class ResumeRevisionAgent {
         ]
     }
 
+    // MARK: - Stream Result
+
+    /// Result from executing a tool, with optional image attachments.
+    private struct ToolExecutionResult {
+        let text: String
+        var imageBlocks: [AnthropicContentBlock] = []
+    }
+
+    /// Accumulated output from a single stream processing turn.
+    private struct StreamResult {
+        var textBlocks: [AnthropicContentBlock] = []
+        var toolCallBlocks: [AnthropicContentBlock] = []
+        var toolCalls: [RevisionStreamProcessor.ToolCallInfo] = []
+    }
+
     // MARK: - Tool Execution
 
-    private func executeTool(name: String, arguments: String) async -> String {
+    private func executeTool(name: String, arguments: String) async -> ToolExecutionResult {
         guard let workspacePath = workspaceService.workspacePath else {
-            return "Error: Workspace not initialized"
+            return ToolExecutionResult(text: "Error: Workspace not initialized")
         }
 
         do {
@@ -507,44 +564,47 @@ class ResumeRevisionAgent {
             case ReadFileTool.name:
                 let params = try JSONDecoder().decode(ReadFileTool.Parameters.self, from: argsData)
                 let result = try ReadFileTool.execute(parameters: params, repoRoot: workspacePath)
-                return formatReadResult(result)
+                return ToolExecutionResult(text: formatReadResult(result))
 
             case ListDirectoryTool.name:
                 let params = try JSONDecoder().decode(ListDirectoryTool.Parameters.self, from: argsData)
                 let result = try ListDirectoryTool.execute(parameters: params, repoRoot: workspacePath)
-                return result.formattedTree
+                return ToolExecutionResult(text: result.formattedTree)
 
             case GlobSearchTool.name:
                 let params = try JSONDecoder().decode(GlobSearchTool.Parameters.self, from: argsData)
                 let result = try GlobSearchTool.execute(parameters: params, repoRoot: workspacePath)
-                return formatGlobResult(result)
+                return ToolExecutionResult(text: formatGlobResult(result))
 
             case GrepSearchTool.name:
                 let params = try JSONDecoder().decode(GrepSearchTool.Parameters.self, from: argsData)
                 let result = try GrepSearchTool.execute(parameters: params, repoRoot: workspacePath)
-                return formatGrepResult(result)
+                return ToolExecutionResult(text: formatGrepResult(result))
 
             case WriteJsonFileTool.name:
                 let params = try JSONDecoder().decode(WriteJsonFileTool.Parameters.self, from: argsData)
                 let result = try WriteJsonFileTool.execute(parameters: params, repoRoot: workspacePath)
                 // Auto-render after every JSON write so the PDF preview stays current
                 let renderInfo = await autoRenderResume()
-                return "{\"success\": true, \"path\": \"\(result.path)\", \"itemCount\": \(result.itemCount), \"pageCount\": \(renderInfo.pageCount), \"renderSuccess\": \(renderInfo.success)}"
+                let text = "{\"success\": true, \"path\": \"\(result.path)\", \"itemCount\": \(result.itemCount), \"pageCount\": \(renderInfo.pageCount), \"renderSuccess\": \(renderInfo.success)}"
+                // Attach rendered PDF page images so the agent can visually inspect the result
+                let imageBlocks = renderInfo.pdfData.map { renderPDFPageImages($0) } ?? []
+                return ToolExecutionResult(text: text, imageBlocks: imageBlocks)
 
             case ProposeChangesTool.name:
                 let params = try JSONDecoder().decode(ProposeChangesTool.Parameters.self, from: argsData)
-                return await executeProposal(params)
+                return ToolExecutionResult(text: await executeProposal(params))
 
             case AskUserTool.name:
                 let params = try JSONDecoder().decode(AskUserTool.Parameters.self, from: argsData)
-                return await executeAskUser(params)
+                return ToolExecutionResult(text: await executeAskUser(params))
 
             default:
-                return "Unknown tool: \(name)"
+                return ToolExecutionResult(text: "Unknown tool: \(name)")
             }
         } catch {
             Logger.error("RevisionAgent tool error (\(name)): \(error.localizedDescription)", category: .ai)
-            return "Error: \(error.localizedDescription)"
+            return ToolExecutionResult(text: "Error: \(error.localizedDescription)")
         }
     }
 
@@ -553,13 +613,14 @@ class ResumeRevisionAgent {
     private struct RenderInfo {
         let success: Bool
         let pageCount: Int
+        let pdfData: Data?
     }
 
     /// Re-render the resume PDF from current workspace state and publish to the preview pane.
     /// Called automatically after every `write_json_file`.
     private func autoRenderResume() async -> RenderInfo {
         guard let workspacePath = workspaceService.workspacePath else {
-            return RenderInfo(success: false, pageCount: 0)
+            return RenderInfo(success: false, pageCount: 0, pdfData: nil)
         }
 
         do {
@@ -589,10 +650,10 @@ class ResumeRevisionAgent {
             modelContext.delete(tempResume)
 
             Logger.info("RevisionAgent: Auto-rendered PDF (\(pdfData.count) bytes, \(pageCount) pages)", category: .ai)
-            return RenderInfo(success: true, pageCount: pageCount)
+            return RenderInfo(success: true, pageCount: pageCount, pdfData: pdfData)
         } catch {
             Logger.error("RevisionAgent: Auto-render failed: \(error.localizedDescription)", category: .ai)
-            return RenderInfo(success: false, pageCount: 0)
+            return RenderInfo(success: false, pageCount: 0, pdfData: nil)
         }
     }
 
@@ -602,6 +663,60 @@ class ResumeRevisionAgent {
             return 0
         }
         return document.numberOfPages
+    }
+
+    /// Render each page of a PDF to a JPEG image and return as Anthropic image content blocks.
+    private func renderPDFPageImages(_ pdfData: Data) -> [AnthropicContentBlock] {
+        guard let provider = CGDataProvider(data: pdfData as CFData),
+              let document = CGPDFDocument(provider) else {
+            return []
+        }
+
+        var blocks: [AnthropicContentBlock] = []
+        let scale: CGFloat = 2.0 // 2x for readable text
+
+        for pageIndex in 1...document.numberOfPages {
+            guard let page = document.page(at: pageIndex) else { continue }
+            let mediaBox = page.getBoxRect(.mediaBox)
+            let width = Int(mediaBox.width * scale)
+            let height = Int(mediaBox.height * scale)
+
+            guard let colorSpace = CGColorSpace(name: CGColorSpace.sRGB),
+                  let context = CGContext(
+                      data: nil,
+                      width: width,
+                      height: height,
+                      bitsPerComponent: 8,
+                      bytesPerRow: 0,
+                      space: colorSpace,
+                      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+                  ) else { continue }
+
+            // White background
+            context.setFillColor(CGColor(red: 1, green: 1, blue: 1, alpha: 1))
+            context.fill(CGRect(x: 0, y: 0, width: width, height: height))
+
+            // Scale and draw
+            context.scaleBy(x: scale, y: scale)
+            context.drawPDFPage(page)
+
+            guard let cgImage = context.makeImage() else { continue }
+
+            let nsImage = NSImage(cgImage: cgImage, size: NSSize(width: width, height: height))
+            guard let tiffData = nsImage.tiffRepresentation,
+                  let bitmap = NSBitmapImageRep(data: tiffData),
+                  let jpegData = bitmap.representation(using: .jpeg, properties: [.compressionFactor: 0.8]) else {
+                continue
+            }
+
+            let base64 = jpegData.base64EncodedString()
+            let imageSource = AnthropicImageSource(mediaType: "image/jpeg", data: base64)
+            let imageBlock = AnthropicImageBlock(source: imageSource)
+            blocks.append(.image(imageBlock))
+        }
+
+        Logger.info("RevisionAgent: Rendered \(blocks.count) PDF page image(s) for agent preview", category: .ai)
+        return blocks
     }
 
     // MARK: - Human-in-the-Loop Tools
@@ -666,11 +781,23 @@ class ResumeRevisionAgent {
                 revisedFontSizes: revisedFontSizes,
                 context: modelContext
             )
-            Logger.info("RevisionAgent: Built new resume from revised state", category: .ai)
-            _ = newResume // Inserted into modelContext by buildNewResume
+            await activateNewResume(newResume)
         }
 
         return accepted
+    }
+
+    /// Generate PDF for the new resume and switch the editor to it.
+    private func activateNewResume(_ newResume: Resume) async {
+        let slug = resume.template?.slug ?? "default"
+        do {
+            let pdfData = try await pdfGenerator.generatePDF(for: newResume, template: slug)
+            newResume.pdfData = pdfData
+        } catch {
+            Logger.error("RevisionAgent: Failed to generate PDF for new resume: \(error)", category: .ai)
+        }
+        resume.jobApp?.selectedRes = newResume
+        Logger.info("RevisionAgent: Activated new resume in editor", category: .ai)
     }
 
     // MARK: - Message Helpers
@@ -734,5 +861,71 @@ class ResumeRevisionAgent {
         case CompleteRevisionTool.name: return "Completing revision"
         default: return name
         }
+    }
+
+    // MARK: - Transcript Logging
+
+    /// Log the outgoing request before the stream starts.
+    private func logTurnRequest(turn: Int, messageCount: Int) {
+        // Summarize the last message (most recent context sent to LLM)
+        let lastMessageSummary: String
+        if let last = conversationMessages.last {
+            switch last.content {
+            case .text(let text):
+                lastMessageSummary = "[\(last.role)] \(String(text.prefix(500)))"
+            case .blocks(let blocks):
+                let blockSummaries = blocks.prefix(5).map { block -> String in
+                    switch block {
+                    case .text(let tb): return "text(\(String(tb.text.prefix(200))))"
+                    case .toolResult(let tr): return "tool_result(\(tr.toolUseId): \(String(tr.content.prefix(150))))"
+                    case .toolUse(let tu): return "tool_use(\(tu.name))"
+                    case .image: return "image"
+                    case .document: return "document"
+                    }
+                }
+                let extra = blocks.count > 5 ? " + \(blocks.count - 5) more" : ""
+                lastMessageSummary = "[\(last.role)] \(blockSummaries.joined(separator: ", "))\(extra)"
+            }
+        } else {
+            lastMessageSummary = "(empty)"
+        }
+
+        LLMTranscriptLogger.logStreamingRequest(
+            method: "ResumeRevisionAgent turn \(turn) REQUEST",
+            modelId: modelId,
+            backend: "Anthropic",
+            prompt: "Messages: \(messageCount) | Last: \(lastMessageSummary)"
+        )
+    }
+
+    /// Log the response after the stream completes (or is interrupted).
+    private func logTurnResponse(
+        turn: Int,
+        messageCount: Int,
+        toolNames: [String],
+        result: StreamResult,
+        interrupted: Bool,
+        durationMs: Int
+    ) {
+        let responseText = result.textBlocks.compactMap { block -> String? in
+            if case .text(let tb) = block { return tb.text }
+            return nil
+        }.joined()
+
+        let toolCallSummaries = result.toolCalls.map { call in
+            "\(call.name)(\(String(call.arguments.prefix(200))))"
+        }
+
+        let status = interrupted ? " [INTERRUPTED]" : ""
+        LLMTranscriptLogger.logToolCall(
+            method: "ResumeRevisionAgent turn \(turn) RESPONSE\(status)",
+            modelId: modelId,
+            backend: "Anthropic",
+            messageCount: messageCount,
+            toolNames: toolNames,
+            responseContent: responseText.isEmpty ? nil : responseText,
+            responseToolCalls: toolCallSummaries,
+            durationMs: durationMs
+        )
     }
 }

@@ -916,7 +916,7 @@ extension TreeNode {
 
     /// Convert TreeNode to revision-format dictionary for the revision agent workspace.
     /// Includes: id, name, value, myIndex, isTitleNode, children — omits editor-only fields.
-    /// All exported nodes are editable; non-editable nodes are excluded at the export layer.
+    /// Skips children with `.excludedFromGroup` status (user excluded them from AI review).
     func toRevisionDictionary() -> [String: Any] {
         var dict: [String: Any] = [
             "id": id,
@@ -925,8 +925,9 @@ extension TreeNode {
             "myIndex": myIndex,
             "isTitleNode": isTitleNode
         ]
-        if let children = children, !children.isEmpty {
-            dict["children"] = orderedChildren.map { $0.toRevisionDictionary() }
+        let exportableChildren = orderedChildren.filter { $0.status != .excludedFromGroup }
+        if !exportableChildren.isEmpty {
+            dict["children"] = exportableChildren.map { $0.toRevisionDictionary() }
         } else {
             dict["children"] = [] as [[String: Any]]
         }

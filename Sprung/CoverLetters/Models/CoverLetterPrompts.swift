@@ -33,20 +33,9 @@ enum CoverLetterPrompts {
         customFeedbackString: String? = ""
     ) -> String {
         let app = coverLetter.jobApp
-        let formatter = DateFormatter()
-        formatter.dateStyle = .long // Automatically formats as "January 1, 2025"
-        var resRefString = ""
         var prompt = ""
         switch mode {
         case .generate:
-            if coverLetter.includeResumeRefs {
-                let resRefs = resume.enabledSources
-                if resRefs.isEmpty {
-                    resRefString = ""
-                } else {
-                    resRefString = resRefs.map { $0.title + ":\n" + $0.narrative + "\n\n" }.joined()
-                }
-            }
             prompt = """
             You are an expert career advisor and professional writer specializing in crafting exceptional and memorable cover letters. \
             Your task is to create an extraordinarily well-written and memorable cover letter for \(applicant.name)'s application to be hired as a \(app?.jobPosition ?? "") at \(app?.companyName ?? "").
@@ -60,15 +49,12 @@ enum CoverLetterPrompts {
             - **Single Line Spacing:** Use single line spacing with proper paragraph breaks.
             - **Format:** The letter should use block-format paragraphs with no indentation, and just a single new line at the end of each paragraph. \
             Do not add extra blank lines between paragraphs.
-            \(applicant.name) has provided the following background information regarding their current job search that may be useful in composing the draft cover letter:
             \(applicant.name)'s contact information:
             \(applicant.name)
             \(applicant.address)
             \(applicant.city), \(applicant.state) \(applicant.zip)
             \(applicant.email)
             \(applicant.websites)
-            \(applicant.name) provided these additional notes that should be used to draft the cover letter:
-            \(coverLetter.backgroundItemsString)
             **Full Job Listing:**
             \(app?.jobListingString ?? "")
             **Text Version of Résumé to be Submitted with Application:**
@@ -78,13 +64,6 @@ enum CoverLetterPrompts {
             **WRITING SAMPLES TO EMULATE:**
             \(writersVoice)
             """
-            if coverLetter.includeResumeRefs {
-                prompt += """
-                ** Extended Summary of Experience and Technical Skills **
-                \(applicant.name) has also included these background documents to provide a more detailed summary of his experience and technical skills for additional context for the cover letter draft:
-                \(resRefString)
-                """
-            }
         case .revise:
             prompt = """
                 Upon reading your latest draft, \(applicant.name) has provided the following feedback:

@@ -10,18 +10,15 @@ import SwiftData
 /// Used in both Generate Cover Letter and Batch Generate Cover Letter sheets
 struct CoverRefSelectionManagerView: View {
     @Environment(CoverRefStore.self) var coverRefStore: CoverRefStore
+    @Environment(KnowledgeCardStore.self) var knowledgeCardStore: KnowledgeCardStore
     // Live SwiftData query to automatically refresh on model changes
     @Query(sort: \CoverRef.name) private var allCoverRefs: [CoverRef]
-    @Binding var includeResumeRefs: Bool
-    @Binding var selectedBackgroundFacts: Set<String>
+    @Binding var knowledgeCardInclusion: KnowledgeCardInclusion
+    @Binding var selectedKnowledgeCardIds: Set<String>
     @Binding var selectedWritingSamples: Set<String>
     @State private var showAddSheet = false
-    @State private var newRefType: CoverRefType = .backgroundFact
     @State private var showBrowser = false
     var showGroupBox: Bool = true
-    private var backgroundFacts: [CoverRef] {
-        allCoverRefs.filter { $0.type == .backgroundFact }
-    }
     private var writingSamples: [CoverRef] {
         allCoverRefs.filter { $0.type == .writingSample }
     }
@@ -37,15 +34,51 @@ struct CoverRefSelectionManagerView: View {
     @ViewBuilder
     private var content: some View {
         VStack(alignment: .leading, spacing: 16) {
-            // Include Resume Background toggle
-            Toggle("Include Resume Background", isOn: $includeResumeRefs)
-                .toggleStyle(.checkbox)
-
+            // Knowledge Cards inclusion picker
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Knowledge Cards")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+                Picker("Knowledge Cards", selection: $knowledgeCardInclusion) {
+                    ForEach(KnowledgeCardInclusion.allCases, id: \.self) { mode in
+                        Text(mode.rawValue).tag(mode)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                // Show individual card selection when "Selected" is chosen
+                if knowledgeCardInclusion == .selected {
+                    let cards = knowledgeCardStore.knowledgeCards
+                    if cards.isEmpty {
+                        Text("No knowledge cards available")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.vertical, 4)
+                    } else {
+                        VStack(alignment: .leading, spacing: 4) {
+                            ForEach(cards, id: \.id) { card in
+                                KnowledgeCardCheckRow(
+                                    card: card,
+                                    isSelected: selectedKnowledgeCardIds.contains(card.id.uuidString),
+                                    onToggle: { isSelected in
+                                        if isSelected {
+                                            selectedKnowledgeCardIds.insert(card.id.uuidString)
+                                        } else {
+                                            selectedKnowledgeCardIds.remove(card.id.uuidString)
+                                        }
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
             // Browse All button
             Button(action: { showBrowser = true }) {
                 HStack {
                     Image(systemName: "rectangle.stack")
-                    Text("Browse All References")
+                    Text("Browse Writing References")
                     Spacer()
                     Text("\(allCoverRefs.count)")
                         .font(.caption)
@@ -56,48 +89,6 @@ struct CoverRefSelectionManagerView: View {
                 }
             }
             .buttonStyle(.bordered)
-
-            // Background Facts Section
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Text("Background Facts")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                    Spacer()
-                    Button(action: {
-                        newRefType = .backgroundFact
-                        showAddSheet = true
-                    }, label: {
-                        Image(systemName: "plus.circle")
-                            .foregroundColor(.accentColor)
-                    })
-                    .buttonStyle(.plain)
-                }
-                if backgroundFacts.isEmpty {
-                    Text("No background facts added yet")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.vertical, 4)
-                } else {
-                    ForEach(backgroundFacts, id: \.id) { ref in
-                        CheckableRefRow(
-                            ref: ref,
-                            isSelected: selectedBackgroundFacts.contains(ref.id.description),
-                            onToggle: { isSelected in
-                                if isSelected {
-                                    selectedBackgroundFacts.insert(ref.id.description)
-                                } else {
-                                    selectedBackgroundFacts.remove(ref.id.description)
-                                }
-                            },
-                            onDelete: {
-                                deleteRef(ref)
-                            }
-                        )
-                    }
-                }
-            }
             // Writing Samples Section
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
@@ -106,7 +97,6 @@ struct CoverRefSelectionManagerView: View {
                         .foregroundColor(.secondary)
                     Spacer()
                     Button(action: {
-                        newRefType = .writingSample
                         showAddSheet = true
                     }, label: {
                         Image(systemName: "plus.circle")
@@ -142,9 +132,8 @@ struct CoverRefSelectionManagerView: View {
         }
         .sheet(isPresented: $showAddSheet) {
             AddCoverRefSheet(
-                refType: newRefType,
                 onAdd: { name, content in
-                    addNewRef(name: name, content: content, type: newRefType)
+                    addNewRef(name: name, content: content)
                 }
             )
         }
@@ -169,31 +158,62 @@ struct CoverRefSelectionManagerView: View {
         }
     }
     private func deleteRef(_ ref: CoverRef) {
-        // Remove from selections
-        selectedBackgroundFacts.remove(ref.id.description)
         selectedWritingSamples.remove(ref.id.description)
-        // Delete from store
         coverRefStore.deleteCoverRef(ref)
     }
-    private func addNewRef(name: String, content: String, type: CoverRefType) {
+    private func addNewRef(name: String, content: String) {
         let newRef = CoverRef(
             name: name,
             content: content,
             enabledByDefault: false,
-            type: type
+            type: .writingSample
         )
         coverRefStore.addCoverRef(newRef)
-        // Auto-select the new ref
-        if type == .backgroundFact {
-            selectedBackgroundFacts.insert(newRef.id.description)
-        } else {
-            selectedWritingSamples.insert(newRef.id.description)
+        selectedWritingSamples.insert(newRef.id.description)
+    }
+}
+/// A row showing a checkable knowledge card
+struct KnowledgeCardCheckRow: View {
+    let card: KnowledgeCard
+    let isSelected: Bool
+    let onToggle: (Bool) -> Void
+    @State private var isHovering = false
+    var body: some View {
+        Button(action: {
+            onToggle(!isSelected)
+        }, label: {
+            HStack(spacing: 8) {
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                    .foregroundColor(isSelected ? .accentColor : .secondary)
+                    .font(.system(size: 18))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(card.title)
+                        .font(.body)
+                        .foregroundColor(.primary)
+                        .lineLimit(1)
+                    if let type = card.cardType {
+                        Text(type.rawValue.capitalized)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+                Spacer()
+            }
+        })
+        .buttonStyle(.plain)
+        .padding(.vertical, 4)
+        .padding(.horizontal, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 6)
+                .fill(Color.gray.opacity(isHovering ? 0.1 : 0))
+        )
+        .onHover { hovering in
+            isHovering = hovering
         }
     }
 }
 // MARK: - Add Cover Ref Sheet
 struct AddCoverRefSheet: View {
-    let refType: CoverRefType
     let onAdd: (String, String) -> Void
     @State private var name = ""
     @State private var content = ""
@@ -220,7 +240,7 @@ struct AddCoverRefSheet: View {
                 Spacer()
             }
             .padding()
-            .navigationTitle("Add \(refType == .backgroundFact ? "Background Fact" : "Writing Sample")")
+            .navigationTitle("Add Writing Sample")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {

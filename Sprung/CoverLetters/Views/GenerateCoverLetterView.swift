@@ -9,13 +9,14 @@ import SwiftData
 /// A unified view for generating cover letters that combines model selection with source management
 struct GenerateCoverLetterView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(KnowledgeCardStore.self) var knowledgeCardStore: KnowledgeCardStore
     let jobApp: JobApp
-    let onGenerate: (String, [CoverRef], Bool) -> Void
+    let onGenerate: (String, [CoverRef], KnowledgeCardInclusion, Set<String>) -> Void
     // Live SwiftData query to automatically refresh on model changes
     @Query(sort: \CoverRef.name) private var allCoverRefs: [CoverRef]
     @AppStorage("preferredCoverLetterModel") private var selectedModel: String = ""
-    @State private var includeResumeRefs: Bool = true
-    @State private var selectedBackgroundFacts: Set<String> = []
+    @State private var knowledgeCardInclusion: KnowledgeCardInclusion = .all
+    @State private var selectedKnowledgeCardIds: Set<String> = []
     @State private var selectedWritingSamples: Set<String> = []
     var body: some View {
         VStack(spacing: 0) {
@@ -48,8 +49,8 @@ struct GenerateCoverLetterView: View {
                 VStack(spacing: 20) {
                     // Source Management using shared component
                     CoverRefSelectionManagerView(
-                        includeResumeRefs: $includeResumeRefs,
-                        selectedBackgroundFacts: $selectedBackgroundFacts,
+                        knowledgeCardInclusion: $knowledgeCardInclusion,
+                        selectedKnowledgeCardIds: $selectedKnowledgeCardIds,
                         selectedWritingSamples: $selectedWritingSamples,
                         showGroupBox: false
                     )
@@ -69,10 +70,9 @@ struct GenerateCoverLetterView: View {
                 Button("Generate") {
                     if !selectedModel.isEmpty {
                         let selectedRefs = allCoverRefs.filter { ref in
-                            selectedBackgroundFacts.contains(ref.id.description) ||
                             selectedWritingSamples.contains(ref.id.description)
                         }
-                        onGenerate(selectedModel, selectedRefs, includeResumeRefs)
+                        onGenerate(selectedModel, selectedRefs, knowledgeCardInclusion, selectedKnowledgeCardIds)
                         dismiss()
                     }
                 }
@@ -89,15 +89,14 @@ struct GenerateCoverLetterView: View {
         }
     }
     private func loadDefaultSelections() {
-        // Use the selected model from the dropdown - it will default to the preferred model
-        // Pre-select enabled by default refs
-        let backgroundFacts = allCoverRefs.filter { $0.type == .backgroundFact }
+        // Pre-select enabled by default writing samples
         let writingSamples = allCoverRefs.filter { $0.type == .writingSample }
-        for ref in backgroundFacts where ref.enabledByDefault {
-            selectedBackgroundFacts.insert(ref.id.description)
-        }
         for ref in writingSamples where ref.enabledByDefault {
             selectedWritingSamples.insert(ref.id.description)
+        }
+        // Pre-select all knowledge cards for "Selected" mode
+        for card in knowledgeCardStore.knowledgeCards {
+            selectedKnowledgeCardIds.insert(card.id.uuidString)
         }
     }
 }

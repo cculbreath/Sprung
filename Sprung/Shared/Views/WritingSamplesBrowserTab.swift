@@ -13,12 +13,12 @@ struct WritingSamplesBrowserTab: View {
     @State private var showDeleteConfirmation = false
     @State private var cardToDelete: CoverRef?
     @State private var showAddSheet = false
-    @State private var newCardType: CoverRefType = .backgroundFact
+    @State private var newCardType: CoverRefType = .writingSample
 
     enum SampleTypeFilter: String, CaseIterable {
         case all = "All"
-        case backgroundFacts = "Background Facts"
         case writingSamples = "Writing Samples"
+        case voicePrimers = "Voice Primers"
     }
 
     private var filteredCards: [CoverRef] {
@@ -26,10 +26,10 @@ struct WritingSamplesBrowserTab: View {
 
         switch selectedFilter {
         case .all: break
-        case .backgroundFacts:
-            result = result.filter { $0.type == .backgroundFact }
         case .writingSamples:
             result = result.filter { $0.type == .writingSample }
+        case .voicePrimers:
+            result = result.filter { $0.type == .voicePrimer }
         }
 
         if !searchText.isEmpty {
@@ -121,25 +121,15 @@ struct WritingSamplesBrowserTab: View {
 
             Spacer()
 
-            Menu {
-                Button(action: {
-                    newCardType = .backgroundFact
-                    showAddSheet = true
-                }) {
-                    Label("Background Fact", systemImage: "info.circle")
-                }
-                Button(action: {
-                    newCardType = .writingSample
-                    showAddSheet = true
-                }) {
-                    Label("Writing Sample", systemImage: "doc.text")
-                }
-            } label: {
+            Button(action: {
+                newCardType = .writingSample
+                showAddSheet = true
+            }) {
                 Image(systemName: "plus.circle.fill")
                     .font(.title3)
                     .foregroundStyle(.blue)
             }
-            .menuStyle(.borderlessButton)
+            .buttonStyle(.plain)
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 8)
@@ -174,8 +164,8 @@ struct WritingSamplesBrowserTab: View {
     private func countFor(_ filter: SampleTypeFilter) -> Int {
         switch filter {
         case .all: return cards.count
-        case .backgroundFacts: return cards.filter { $0.type == .backgroundFact }.count
         case .writingSamples: return cards.filter { $0.type == .writingSample }.count
+        case .voicePrimers: return cards.filter { $0.type == .voicePrimer }.count
         }
     }
 }

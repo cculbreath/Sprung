@@ -122,7 +122,7 @@ struct RevisionChatView: View {
                     .font(.title2)
             }
             .buttonStyle(.plain)
-            .foregroundStyle(chatInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? .tertiary : .accentColor)
+            .foregroundStyle(chatInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? Color.secondary : Color.accentColor)
             .disabled(chatInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
 
             if isRunning {

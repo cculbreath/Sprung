@@ -43,8 +43,7 @@ class JobRecommendationService {
                 throw JobRecommendationError.noResumeOrBackgroundInfo
             }
             // Check if we actually have background content available
-            let hasBackgroundContent = (includeResumeBackground && hasResumeBackgroundContent(from: jobApps)) ||
-                                     (includeCoverLetterBackground && hasCoverLetterBackgroundContent(from: jobApps))
+            let hasBackgroundContent = includeResumeBackground && hasResumeBackgroundContent(from: jobApps)
             if !hasBackgroundContent {
                 throw JobRecommendationError.noResumeOrBackgroundInfo
             }
@@ -114,7 +113,7 @@ class JobRecommendationService {
         let resumeText = resume.flatMap { resumeContextString(for: $0) } ?? ""
         // Build background documentation
         let backgroundDocs = includeResumeBackground ? buildBackgroundDocs(from: resume) : ""
-        let coverLetterBackgroundDocs = includeCoverLetterBackground ? buildCoverLetterBackgroundDocs(from: newJobApps) : ""
+        let coverLetterBackgroundDocs = ""
         // Create JSON array of job listings
         var jobsArray: [[String: Any]] = []
         for app in newJobApps {
@@ -220,32 +219,10 @@ class JobRecommendationService {
             return enabledSources.map { $0.title + ":\n" + $0.narrative + "\n\n" }.joined()
         }
     }
-    /// Build cover letter background facts from job applications
-    private func buildCoverLetterBackgroundDocs(from jobApps: [JobApp]) -> String {
-        var backgroundFacts: [String] = []
-        for jobApp in jobApps {
-            for coverLetter in jobApp.coverLetters {
-                let facts = coverLetter.backgroundItemsString
-                if !facts.isEmpty {
-                    backgroundFacts.append(facts)
-                }
-            }
-        }
-        return backgroundFacts.joined(separator: "\n\n")
-    }
     /// Check if job apps have resume background content
     private func hasResumeBackgroundContent(from jobApps: [JobApp]) -> Bool {
         for jobApp in jobApps {
             for resume in jobApp.resumes where !resume.enabledSources.isEmpty {
-                return true
-            }
-        }
-        return false
-    }
-    /// Check if job apps have cover letter background content
-    private func hasCoverLetterBackgroundContent(from jobApps: [JobApp]) -> Bool {
-        for jobApp in jobApps {
-            for coverLetter in jobApp.coverLetters where !coverLetter.backgroundItemsString.isEmpty {
                 return true
             }
         }

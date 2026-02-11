@@ -151,13 +151,14 @@ struct BestCoverLetterResponse: Codable {
         let truncated = truncateContext(string, maxBytes: Self.maxResumeContextBytes)
         return truncated + "\n\n/* truncated resume context to fit cover letter prompt */"
     }
-    var backgroundDocs: String {
-        let bgrefs = resume.enabledSources
-        if bgrefs.isEmpty {
+    let knowledgeCards: [KnowledgeCard]
+    let dossierContext: String?
+
+    var knowledgeCardDocs: String {
+        if knowledgeCards.isEmpty {
             return ""
-        } else {
-            return bgrefs.map { $0.title + ":\n" + $0.narrative + "\n\n" }.joined()
         }
+        return knowledgeCards.map { $0.title + ":\n" + $0.narrative + "\n\n" }.joined()
     }
     let writersVoice: String
     private func truncateContext(_ string: String, maxBytes: Int) -> String {
@@ -188,12 +189,16 @@ struct BestCoverLetterResponse: Codable {
         exportCoordinator: ResumeExportCoordinator,
         applicantProfile: ApplicantProfile,
         writersVoice: String,
+        knowledgeCards: [KnowledgeCard] = [],
+        dossierContext: String? = nil,
         saveDebugPrompt: Bool = false
     ) {
         self.coverLetter = coverLetter
         self.resume = resume
         self.jobApp = jobApp
         self.writersVoice = writersVoice
+        self.knowledgeCards = knowledgeCards
+        self.dossierContext = dossierContext
         self.saveDebugPrompt = saveDebugPrompt
         self.exportCoordinator = exportCoordinator
         applicant = Applicant(profile: applicantProfile)
@@ -213,10 +218,10 @@ struct BestCoverLetterResponse: Codable {
     // MARK: - Cover Letter Prompts
     /// Generate prompt for cover letter generation
     @MainActor
-    func generationPrompt(includeResumeRefs: Bool = true) async -> String {
+    func generationPrompt() async -> String {
         // Ensure resume text is fresh
         try? await exportCoordinator.ensureFreshRenderedText(for: resume)
-        let prompt = """
+        var sections = """
         ================================================================================
         COVER LETTER GENERATION REQUEST
         ================================================================================
@@ -226,10 +231,23 @@ struct BestCoverLetterResponse: Codable {
         \(jobListing)
         RESUME CONTEXT:
         \(resumeText)
-        \(includeResumeRefs ? """
-        BACKGROUND DOCUMENTS:
-        \(backgroundDocs)
-        """ : "")
+        """
+        if !knowledgeCardDocs.isEmpty {
+            sections += """
+
+            BACKGROUND DOCUMENTS:
+            \(knowledgeCardDocs)
+            """
+        }
+        if let dossier = dossierContext, !dossier.isEmpty {
+            sections += """
+
+            CANDIDATE CONTEXT:
+            \(dossier)
+            """
+        }
+        sections += """
+
         WRITING STYLE REFERENCE:
         \(writersVoice)
         INSTRUCTIONS:
@@ -242,6 +260,7 @@ struct BestCoverLetterResponse: Codable {
         Return only the body text of the cover letter without salutation or closing.
         ================================================================================
         """
+        let prompt = sections
         if saveDebugPrompt {
             savePromptToDownloads(content: prompt, fileName: "coverLetterGenerationPrompt.txt")
         }

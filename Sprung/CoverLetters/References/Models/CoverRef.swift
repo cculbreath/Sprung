@@ -8,7 +8,6 @@ import SwiftData
 import SwiftyJSON
 enum CoverRefType: String, Codable {
     case writingSample
-    case backgroundFact
     case voicePrimer  // Voice characteristics extracted from writing samples
 }
 @Model

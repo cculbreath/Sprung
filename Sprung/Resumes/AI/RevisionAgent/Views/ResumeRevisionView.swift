@@ -1,6 +1,6 @@
 import SwiftUI
 import SwiftData
-import PDFKit
+    import PDFKit
 
 /// Main container view for the resume revision agent session.
 /// Presents a split layout: PDF preview on the left, chat stream on the right.
@@ -17,7 +17,11 @@ struct ResumeRevisionView: View {
 
     @State private var agent: ResumeRevisionAgent?
     @State private var pdfData: Data?
-    @State private var pdfController = PDFPreviewController()
+    @State private var pdfController: PDFPreviewController = {
+        let c = PDFPreviewController()
+        c.fitWidth = true
+        return c
+    }()
     @State private var errorMessage: String?
     @State private var showError = false
 

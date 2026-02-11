@@ -21,11 +21,27 @@ final class PDFPreviewController {
             updatePagingState()
         }
     }
+    /// When true, the initial scale fits the page width instead of the full page.
+    var fitWidth: Bool = false
+    private var hasAppliedFitWidth = false
+
     func attach(_ pdfView: PDFView) {
         if self.pdfView !== pdfView {
             self.pdfView = pdfView
+            hasAppliedFitWidth = false
         }
         updatePagingState()
+    }
+
+    func applyFitWidthIfNeeded() {
+        guard fitWidth, !hasAppliedFitWidth,
+              let pdfView, let page = pdfView.document?.page(at: 0) else { return }
+        let pageWidth = page.bounds(for: pdfView.displayBox).width
+        let viewWidth = pdfView.bounds.width - 20 // account for insets
+        guard pageWidth > 0, viewWidth > 0 else { return }
+        pdfView.autoScales = false
+        pdfView.scaleFactor = viewWidth / pageWidth
+        hasAppliedFitWidth = true
     }
     func zoomIn() {
         pdfView?.zoomIn(nil)
@@ -82,6 +98,10 @@ struct PDFPreviewView: NSViewRepresentable {
             nsView.document = PDFDocument(data: pdfData)
         }
         controller.updatePagingState()
+        // Defer fit-width so the view has its final layout size
+        DispatchQueue.main.async {
+            controller.applyFitWidthIfNeeded()
+        }
     }
     private func mergedDocument() -> PDFDocument? {
         guard let overlayDocument,

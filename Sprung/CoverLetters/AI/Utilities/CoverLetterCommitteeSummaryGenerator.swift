@@ -232,6 +232,7 @@ class CoverLetterCommitteeSummaryGenerator {
         summaryPrompt += "{\n"
         summaryPrompt += "  \"letterAnalyses\": [\n"
         summaryPrompt += "    {\n"
+        summaryPrompt += "      \"letterId\": \"UUID of the letter being analyzed\",\n"
         summaryPrompt += "      \"summaryOfModelAnalysis\": \"Comprehensive summary of what models said about this letter\",\n"
         summaryPrompt += "      \"pointsAwarded\": [\n"
         summaryPrompt += "        {\"model\": \"Model name\", \"points\": 0}\n"
@@ -254,6 +255,10 @@ class CoverLetterCommitteeSummaryGenerator {
                     items: JSONSchema(
                         type: .object,
                         properties: [
+                            "letterId": JSONSchema(
+                                type: .string,
+                                description: "UUID of the letter being analyzed"
+                            ),
                             "summaryOfModelAnalysis": JSONSchema(
                                 type: .string,
                                 description: "Comprehensive summary of model feedback for this letter"
@@ -295,7 +300,7 @@ class CoverLetterCommitteeSummaryGenerator {
                                 )
                             )
                         ],
-                        required: ["summaryOfModelAnalysis", "pointsAwarded", "modelVotes"],
+                        required: ["letterId", "summaryOfModelAnalysis", "pointsAwarded", "modelVotes"],
                         additionalProperties: false
                     )
                 )

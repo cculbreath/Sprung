@@ -16,8 +16,6 @@ struct CoverRefCardView: View {
 
     private var typeColor: Color {
         switch coverRef.type {
-        case .backgroundFact:
-            return .blue
         case .writingSample:
             return .purple
         case .voicePrimer:
@@ -27,8 +25,6 @@ struct CoverRefCardView: View {
 
     private var typeIcon: String {
         switch coverRef.type {
-        case .backgroundFact:
-            return "info.circle.fill"
         case .writingSample:
             return "doc.text.fill"
         case .voicePrimer:
@@ -38,8 +34,6 @@ struct CoverRefCardView: View {
 
     private var typeLabel: String {
         switch coverRef.type {
-        case .backgroundFact:
-            return "Background Fact"
         case .writingSample:
             return "Writing Sample"
         case .voicePrimer:

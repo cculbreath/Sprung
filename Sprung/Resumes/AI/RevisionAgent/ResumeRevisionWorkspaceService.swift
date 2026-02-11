@@ -144,25 +144,33 @@ final class ResumeRevisionWorkspaceService {
         return manifest
     }
 
-    /// Find the AI-editable root nodes within a section (nodes with `.aiToReplace` status).
-    /// Only these subtrees are exported — non-editable nodes are excluded entirely.
+    /// Find the AI-editable root nodes within a section.
+    /// Catches two patterns:
+    ///   1. Solo nodes with `status == .aiToReplace`
+    ///   2. Collection nodes with `bundledAttributes` or `enumeratedAttributes`
     /// Records all editable node IDs for import-time enforcement.
     private func collectEditableRoots(from section: TreeNode) -> [TreeNode] {
         var roots: [TreeNode] = []
         findEditableRoots(node: section, result: &roots)
         guard !roots.isEmpty else { return [] }
-        // Record all editable IDs (roots + their entire subtrees)
+        // Record all editable IDs (roots + their entire subtrees, excluding group-excluded nodes)
         for root in roots {
             recordEditableIDs(node: root)
         }
         return roots
     }
 
-    /// Walk the tree to find nodes directly marked `.aiToReplace` — these are the editable subtree roots.
+    /// Walk the tree to find AI-editable subtree roots.
+    /// Solo nodes: `status == .aiToReplace` with no attribute review modes.
+    /// Collection nodes: `hasAttributeReviewModes` (bundled/enumerated attributes).
     private func findEditableRoots(node: TreeNode, result: inout [TreeNode]) {
         if node.status == .aiToReplace {
             result.append(node)
-            return // Don't recurse further — entire subtree is editable
+            return // Entire subtree is editable
+        }
+        if node.hasAttributeReviewModes {
+            result.append(node)
+            return // Entire collection subtree is editable
         }
         for child in node.orderedChildren {
             findEditableRoots(node: child, result: &result)
@@ -170,7 +178,9 @@ final class ResumeRevisionWorkspaceService {
     }
 
     /// Record a node and all its descendants as editable.
+    /// Skips children with `.excludedFromGroup` status (user excluded them from AI review).
     private func recordEditableIDs(node: TreeNode) {
+        guard node.status != .excludedFromGroup else { return }
         editableNodeIDs.insert(node.id)
         for child in node.orderedChildren {
             recordEditableIDs(node: child)
@@ -397,6 +407,10 @@ final class ResumeRevisionWorkspaceService {
             }
 
             applyRevisedNodes(nodes, to: sectionNode, resume: newResume, context: context)
+
+            // Remove editable nodes the agent deleted (omitted from the revision JSON)
+            let retainedIDs = collectAllRevisionIDs(from: nodes)
+            pruneAbsentEditableNodes(from: sectionNode, retainedIDs: retainedIDs, context: context)
         }
 
         // Apply revised font sizes
@@ -537,6 +551,53 @@ final class ResumeRevisionWorkspaceService {
             }
         }
         return nil
+    }
+
+    /// Recursively collect all node IDs present in a revision dictionary tree.
+    private func collectAllRevisionIDs(from revisions: [[String: Any]]) -> Set<String> {
+        var ids = Set<String>()
+        for revision in revisions {
+            if let id = revision["id"] as? String, !id.hasPrefix("new-") {
+                ids.insert(id)
+            }
+            if let children = revision["children"] as? [[String: Any]] {
+                ids.formUnion(collectAllRevisionIDs(from: children))
+            }
+        }
+        return ids
+    }
+
+    /// Walk a subtree and remove any editable node whose ID is absent from the revision JSON.
+    /// This handles the case where the agent deleted a node by omitting it from the JSON.
+    private func pruneAbsentEditableNodes(
+        from node: TreeNode,
+        retainedIDs: Set<String>,
+        context: ModelContext
+    ) {
+        guard let children = node.children else { return }
+
+        let toRemove = children.filter { child in
+            editableNodeIDs.contains(child.id) && !retainedIDs.contains(child.id)
+        }
+
+        for child in toRemove {
+            node.children?.removeAll { $0.id == child.id }
+            deleteSubtree(child, context: context)
+            Logger.info("RevisionAgent: Pruned absent editable node '\(child.name)' (\(child.id))", category: .ai)
+        }
+
+        // Recurse into surviving children
+        for child in node.orderedChildren {
+            pruneAbsentEditableNodes(from: child, retainedIDs: retainedIDs, context: context)
+        }
+    }
+
+    /// Delete a node and all its descendants from the model context.
+    private func deleteSubtree(_ node: TreeNode, context: ModelContext) {
+        for child in node.children ?? [] {
+            deleteSubtree(child, context: context)
+        }
+        context.delete(node)
     }
 
     // MARK: - Errors

@@ -74,7 +74,7 @@ struct WritingContextBrowserTab: View {
                 HStack(spacing: 6) {
                     typeChip(nil, label: "All", count: allRefs.count)
                     typeChip(.writingSample, label: "Writing Samples", count: allRefs.filter { $0.type == .writingSample }.count)
-                    typeChip(.backgroundFact, label: "Background Facts", count: allRefs.filter { $0.type == .backgroundFact }.count)
+                    typeChip(.voicePrimer, label: "Voice Primers", count: allRefs.filter { $0.type == .voicePrimer }.count)
                 }
             }
         }

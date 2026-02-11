@@ -37,14 +37,20 @@ final class CoverLetterService {
     ///   - modelId: The model ID to use for generation
     ///   - coverLetterStore: The store to create the cover letter in
     ///   - selectedRefs: The selected cover references to include
-    ///   - includeResumeRefs: Whether to include resume background references
+    ///   - knowledgeCards: Knowledge cards to include in the prompt
+    ///   - knowledgeCardInclusion: The knowledge card inclusion mode
+    ///   - selectedKnowledgeCardIds: IDs of selected knowledge cards
+    ///   - dossierContext: Optional candidate dossier context
     func generateNewCoverLetter(
         jobApp: JobApp,
         resume: Resume,
         modelId: String,
         coverLetterStore: CoverLetterStore,
         selectedRefs: [CoverRef],
-        includeResumeRefs: Bool
+        knowledgeCards: [KnowledgeCard],
+        knowledgeCardInclusion: KnowledgeCardInclusion,
+        selectedKnowledgeCardIds: Set<String>,
+        dossierContext: String?
     ) async throws {
         // Create a new cover letter
         let newCoverLetter = coverLetterStore.create(jobApp: jobApp)
@@ -52,11 +58,11 @@ final class CoverLetterService {
         newCoverLetter.content = ""
         newCoverLetter.setEditableName("Generating...")
         newCoverLetter.generated = false
-        newCoverLetter.includeResumeRefs = includeResumeRefs
+        newCoverLetter.knowledgeCardInclusion = knowledgeCardInclusion
+        newCoverLetter.selectedKnowledgeCardIds = selectedKnowledgeCardIds
         newCoverLetter.enabledRefs = selectedRefs
         // Store generation metadata (snapshot of sources and settings at generation time)
         newCoverLetter.generationSources = selectedRefs
-        newCoverLetter.generationUsedResumeRefs = includeResumeRefs
         // Set it as the selected cover letter
         jobApp.selectedCover = newCoverLetter
         do {
@@ -65,7 +71,8 @@ final class CoverLetterService {
                 coverLetter: newCoverLetter,
                 resume: resume,
                 modelId: modelId,
-                includeResumeRefs: includeResumeRefs
+                knowledgeCards: knowledgeCards,
+                dossierContext: dossierContext
             )
             Logger.debug("✅ Cover letter generated successfully")
         } catch {
@@ -79,13 +86,15 @@ final class CoverLetterService {
     ///   - coverLetter: The cover letter to generate content for
     ///   - resume: The resume to use for context
     ///   - modelId: The model ID to use for generation
-    ///   - includeResumeRefs: Whether to include resume references
+    ///   - knowledgeCards: Knowledge cards to include in the prompt
+    ///   - dossierContext: Optional candidate dossier context
     /// - Returns: The generated cover letter content
     func generateCoverLetter(
         coverLetter: CoverLetter,
         resume: Resume,
         modelId: String,
-        includeResumeRefs: Bool = true
+        knowledgeCards: [KnowledgeCard] = [],
+        dossierContext: String? = nil
     ) async throws -> String {
         let llm = llmFacade
         // Ensure cover letter has an associated job application
@@ -105,11 +114,13 @@ final class CoverLetterService {
             exportCoordinator: exportCoordinator,
             applicantProfile: applicantProfileStore.currentProfile(),
             writersVoice: coverRefStore.writersVoice,
+            knowledgeCards: knowledgeCards,
+            dossierContext: dossierContext,
             saveDebugPrompt: UserDefaults.standard.bool(forKey: "saveDebugPrompts")
         )
         // Build system and user prompts
         let systemPrompt = query.systemPrompt(for: modelId)
-        let userMessage = await query.generationPrompt(includeResumeRefs: includeResumeRefs)
+        let userMessage = await query.generationPrompt()
         // Check if this is an o1 model that doesn't support system messages
         let isO1Model = isReasoningModel(modelId)
         let response: String
@@ -279,8 +290,8 @@ final class CoverLetterService {
             }
             // Create a descriptive suffix with model and resume background info
             var nameSuffix = formattedModel
-            if coverLetter.includeResumeRefs {
-                nameSuffix += " with Res BG"
+            if coverLetter.knowledgeCardInclusion != .none {
+                nameSuffix += " with KC"
             }
             // Set the full name with the "Option X: description" format
             coverLetter.name = "Option \(optionLetter): \(nameSuffix)"
