@@ -10,9 +10,9 @@ import PDFKit
 // Removed SwiftUI import; not needed in PDF generator
 enum CoverLetterPDFGenerator {
     static func generatePDF(from coverLetter: CoverLetter, applicant: Applicant) -> Data {
-        let text = buildLetterText(from: coverLetter, applicant: applicant)
         // Get signature image from the applicant profile
         let signatureImage = getSignatureImage(from: applicant)
+        let text = buildLetterText(from: coverLetter, applicant: applicant)
         // Use a better PDF generation approach that guarantees vector text
         let pdfData = createPaginatedPDFFromString(
             text,
@@ -35,6 +35,8 @@ enum CoverLetterPDFGenerator {
     private static func buildLetterText(from cover: CoverLetter, applicant: Applicant) -> String {
         // Extract just the body of the letter
         let letterContent = extractLetterBody(from: cover.content, applicantName: applicant.name)
+        // When a signature image will be overlaid, insert a blank spacer line
+        // between "Best Regards," and the name to reserve vertical space
         // Create explicit signature block with tighter contact info spacing
         let signatureBlock = """
         Best Regards,
@@ -261,7 +263,8 @@ enum CoverLetterPDFGenerator {
     private static func buildAttributedString(
         text: String,
         fontSize: CGFloat,
-        baseLineSpacing: CGFloat
+        baseLineSpacing: CGFloat,
+        hasSignatureImage: Bool = false
     ) -> NSMutableAttributedString {
         let paragraphStyle = NSMutableParagraphStyle()
         paragraphStyle.lineSpacing = baseLineSpacing
@@ -276,6 +279,9 @@ enum CoverLetterPDFGenerator {
         let attributedString = NSMutableAttributedString(string: text, attributes: attributes)
         applyLinkStyling(to: attributedString, font: font)
         applyContactLineSpacing(to: attributedString, paragraphStyle: paragraphStyle, baseLineSpacing: baseLineSpacing)
+        if hasSignatureImage {
+            applySignatureSpacing(to: attributedString, paragraphStyle: paragraphStyle)
+        }
         return attributedString
     }
     private static func applyLinkStyling(to attributedString: NSMutableAttributedString, font: NSFont) {
@@ -340,6 +346,23 @@ enum CoverLetterPDFGenerator {
             attributedString.addAttribute(.paragraphStyle, value: emailPS, range: emailRange)
         }
     }
+    /// Adds extra paragraph spacing after the "Best Regards," line to make room
+    /// for the signature image overlay without needing spacer lines in the text.
+    private static func applySignatureSpacing(
+        to attributedString: NSMutableAttributedString,
+        paragraphStyle: NSMutableParagraphStyle
+    ) {
+        let nsString = attributedString.string as NSString
+        let fullRange = NSRange(location: 0, length: nsString.length)
+        nsString.enumerateSubstrings(in: fullRange, options: .byParagraphs) { substring, substringRange, _, _ in
+            guard let trimmed = substring?.trimmingCharacters(in: .whitespacesAndNewlines) else { return }
+            if trimmed.hasPrefix("Best Regards") || trimmed.hasPrefix("Best regards") {
+                let sigPS = (paragraphStyle.copy() as? NSMutableParagraphStyle) ?? NSMutableParagraphStyle()
+                sigPS.paragraphSpacing = 32.0
+                attributedString.addAttribute(.paragraphStyle, value: sigPS, range: substringRange)
+            }
+        }
+    }
     // MARK: - Signature Positioning
     private struct SignatureLineIndices {
         var regardsLineIndex: Int?
@@ -389,44 +412,25 @@ enum CoverLetterPDFGenerator {
         textRect: CGRect,
         signatureHeight: CGFloat
     ) -> CGFloat {
-        var signatureY: CGFloat = textRect.origin.y + 100
-        // Initial calculation based on regards/name positioning
-        if let nameIdx = indices.nameLineIndex, nameIdx < origins.count {
-            if let regardsIdx = indices.regardsLineIndex, regardsIdx < origins.count {
-                if nameIdx > regardsIdx + 1 {
-                    signatureY = (origins[regardsIdx].y + origins[nameIdx].y) / 2
-                } else {
-                    signatureY = origins[nameIdx].y + 20
-                }
-            } else {
-                signatureY = origins[nameIdx].y + 20
-            }
-        } else if let regardsIdx = indices.regardsLineIndex, regardsIdx < origins.count {
-            signatureY = origins[regardsIdx].y - 35
-        }
-        // Refine positioning based on line relationships
+        // Best case: both regards and name lines found.
+        // Place signature between them, biased toward regards (higher on page).
         if let regardsIdx = indices.regardsLineIndex, let nameIdx = indices.nameLineIndex,
            regardsIdx < origins.count, nameIdx < origins.count {
             let regardsY = origins[regardsIdx].y
-            signatureY = regardsY + (nameIdx == regardsIdx + 1 ? 5 : 2)
-        } else if let regardsIdx = indices.regardsLineIndex, regardsIdx < origins.count {
-            signatureY = origins[regardsIdx].y + 5
-        } else if let nameIdx = indices.nameLineIndex, nameIdx < origins.count {
-            signatureY = origins[nameIdx].y + 45
+            let nameY = origins[nameIdx].y
+            // Place signature in the upper portion of the gap between regards and name
+            return nameY + (regardsY - nameY) * 0.85 + 8
         }
-        // Adjust for contact info overlap
-        let hasContactLines = indices.contactInfoLineIndex != nil || indices.emailLineIndex != nil
-        if hasContactLines, let contactIdx = indices.contactInfoLineIndex, contactIdx < origins.count {
-            let contactY = origins[contactIdx].y
-            if abs(signatureY - contactY) < signatureHeight {
-                if let nameIdx = indices.nameLineIndex, nameIdx < origins.count {
-                    signatureY = origins[nameIdx].y + 26
-                } else if let regardsIdx = indices.regardsLineIndex, regardsIdx < origins.count {
-                    signatureY = origins[regardsIdx].y - 26
-                }
-            }
+        // Only regards found — place below it
+        if let regardsIdx = indices.regardsLineIndex, regardsIdx < origins.count {
+            return origins[regardsIdx].y - 35
         }
-        return signatureY
+        // Only name found — place above it
+        if let nameIdx = indices.nameLineIndex, nameIdx < origins.count {
+            return origins[nameIdx].y + 45
+        }
+        // Last resort
+        return textRect.origin.y + 100
     }
     private static func drawSignature(
         _ signatureImage: NSImage,
@@ -463,7 +467,7 @@ enum CoverLetterPDFGenerator {
         registerFuturaFont()
         let config = PDFLayoutConfig.standard
         let layout = determineOptimalLayout(for: text, config: config)
-        let attributedString = buildAttributedString(text: text, fontSize: layout.fontSize, baseLineSpacing: config.baseLineSpacing)
+        let attributedString = buildAttributedString(text: text, fontSize: layout.fontSize, baseLineSpacing: config.baseLineSpacing, hasSignatureImage: signatureImage != nil)
         // Setup PDF context
         let data = NSMutableData()
         let pdfMetaData = [

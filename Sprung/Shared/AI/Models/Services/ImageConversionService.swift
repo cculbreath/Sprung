@@ -25,6 +25,24 @@ class ImageConversionService {
         return convertPageToBase64Image(pdfPage)
     }
 
+    /// Converts all pages of a PDF to PNG image data
+    /// - Parameter pdfData: PDF data to convert
+    /// - Returns: Array of PNG image data for each page, or nil if conversion failed
+    func convertPDFToAllPageImages(pdfData: Data) -> [Data]? {
+        guard let pdfDocument = PDFDocument(data: pdfData), pdfDocument.pageCount > 0 else {
+            return nil
+        }
+        var pages: [Data] = []
+        for i in 0..<pdfDocument.pageCount {
+            guard let page = pdfDocument.page(at: i),
+                  let imageData = convertPageToImageData(page) else {
+                return nil
+            }
+            pages.append(imageData)
+        }
+        return pages.isEmpty ? nil : pages
+    }
+
     /// Converts a single PDF page to base64 encoded PNG
     private func convertPageToBase64Image(_ pdfPage: PDFPage) -> String? {
         guard let pngData = convertPageToImageData(pdfPage) else {

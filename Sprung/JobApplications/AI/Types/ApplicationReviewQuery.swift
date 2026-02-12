@@ -50,7 +50,7 @@ import Foundation
         let bgDocs = resume.enabledSources.map { "\($0.title):\n\($0.narrative)\n\n" }.joined()
         prompt = prompt.replacingOccurrences(of: "{backgroundDocs}", with: bgDocs)
         // Include image sentence
-        let imageText = includeImage ? "I've also attached an image so you can assess its overall professionalism and design." : ""
+        let imageText = includeImage ? "I've also attached rasterized resume page image(s) so you can assess the visual layout, typography, and overall design professionalism." : ""
         prompt = prompt.replacingOccurrences(of: "{includeImage}", with: imageText)
         return prompt
     }

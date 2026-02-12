@@ -106,5 +106,7 @@ technical-debt.md
 .sandboxHome/
 LLM Docs/
 buildServer.json
+.sourcekit-lsp/
+.bundle/
 
 round2/

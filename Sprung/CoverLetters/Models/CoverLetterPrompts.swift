@@ -30,9 +30,11 @@ enum CoverLetterPrompts {
         mode: CoverAiMode,
         applicant: Applicant,
         writersVoice: String,
-        customFeedbackString: String? = ""
+        customFeedbackString: String? = "",
+        editorPrompt: EditorPrompts? = nil
     ) -> String {
         let app = coverLetter.jobApp
+        let activeEditorPrompt = editorPrompt ?? coverLetter.editorPrompt
         var prompt = ""
         switch mode {
         case .generate:
@@ -74,12 +76,12 @@ enum CoverLetterPrompts {
         case .rewrite:
             prompt = """
                 My initial draft of a cover letter to accompany my application to be hired as a  \(app?.jobPosition ?? "") at \(app?.companyName ?? "") is included below.
-                \(coverLetter.editorPrompt.rawValue)
+                \(activeEditorPrompt.rawValue)
             Cover Letter initial draft:
             \(coverLetter.content)
             """
             // For mimic revisions, add the writing samples context
-            if coverLetter.editorPrompt == .mimic {
+            if activeEditorPrompt == .mimic {
                 prompt = """
                     \(applicant.name) has written an initial draft of a cover letter to accompany their application to be hired as a \(app?.jobPosition ?? "") at \(app?.companyName ?? "").
                     \(applicant.name) has also included writing samples from cover letters they wrote for earlier applications that they are particularly satisfied with. \

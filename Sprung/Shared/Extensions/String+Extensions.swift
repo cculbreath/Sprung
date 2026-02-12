@@ -4,11 +4,18 @@ import SwiftUI
 extension String {
     /// Decodes common HTML entities without altering existing whitespace.
     func decodingHTMLEntities() -> String {
-        if let decoded = CFXMLCreateStringByUnescapingEntities(nil, self as CFString, nil) {
-            let result = decoded as String
-            return result.replacingOccurrences(of: "\u{00A0}", with: " ")
-        }
-        return self
+        var result = self
+        // Named entities (order matters: decode &amp; last to avoid double-decoding)
+        result = result.replacingOccurrences(of: "&lt;", with: "<")
+        result = result.replacingOccurrences(of: "&gt;", with: ">")
+        result = result.replacingOccurrences(of: "&quot;", with: "\"")
+        result = result.replacingOccurrences(of: "&apos;", with: "'")
+        result = result.replacingOccurrences(of: "&#39;", with: "'")
+        result = result.replacingOccurrences(of: "&nbsp;", with: " ")
+        result = result.replacingOccurrences(of: "&amp;", with: "&")
+        // Non-breaking space unicode
+        result = result.replacingOccurrences(of: "\u{00A0}", with: " ")
+        return result
     }
     /// Returns the string trimmed of surrounding whitespace and newlines.
     func trimmed() -> String {

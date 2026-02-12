@@ -61,7 +61,16 @@ final class ResumeExportCoordinator {
         exportingResumeIDs.remove(resume.id)
     }
     /// Performs an immediate export and waits for completion.
+    /// Skips the expensive PDF+text render if the resume already has rendered text
+    /// and no edits are pending, avoiding redundant work during batch operations.
     func ensureFreshRenderedText(for resume: Resume) async throws {
+        let hasPendingChanges = pendingWorkItems[resume.id] != nil
+
+        // Skip if text is already rendered and no edits are pending
+        if !hasPendingChanges && !resume.textResume.isEmpty {
+            return
+        }
+
         cancelPendingExport(for: resume)
         exportingResumeIDs.insert(resume.id)
         defer { exportingResumeIDs.remove(resume.id) }

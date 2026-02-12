@@ -291,7 +291,8 @@ struct BestCoverLetterResponse: Codable {
                 mode: .rewrite,
                 applicant: applicant,
                 writersVoice: writersVoice,
-                customFeedbackString: feedback
+                customFeedbackString: feedback,
+                editorPrompt: editorPrompt
             )
         }
         if saveDebugPrompt {

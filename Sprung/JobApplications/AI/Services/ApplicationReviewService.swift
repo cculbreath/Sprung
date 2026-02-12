@@ -69,10 +69,9 @@ class ApplicationReviewService: @unchecked Sendable {
         let shouldIncludeImage = (reviewType != .custom) || (customOptions?.includeResumeImage ?? false)
         var imageData: [Data] = []
         if shouldIncludeImage, let pdfData = resume.pdfData {
-            // Convert PDF to PNG image format
-            if let base64Image = ImageConversionService.shared.convertPDFToBase64Image(pdfData: pdfData),
-               let pngData = Data(base64Encoded: base64Image) {
-                imageData = [pngData]
+            // Rasterize all PDF pages to PNG images
+            if let pageImages = ImageConversionService.shared.convertPDFToAllPageImages(pdfData: pdfData) {
+                imageData = pageImages
             } else {
                 Logger.error("ApplicationReviewService: Failed to convert PDF to image format")
                 onComplete(.failure(NSError(domain: "ApplicationReviewService", code: 1008, userInfo: [NSLocalizedDescriptionKey: "Failed to convert PDF to image format"])))
