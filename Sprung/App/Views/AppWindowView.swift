@@ -51,12 +51,38 @@ struct AppWindowView: View {
         ))
     }
     private var tabView: some View {
-        TabView(selection: $selectedTab) {
-            JobAppDetailView(tab: $selectedTab, buttons: $listingButtons)
-                .tabItem {
-                    Label(TabList.listing.rawValue, systemImage: "newspaper")
+        VStack(spacing: 0) {
+            tabPickerBar
+            tabContent
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+
+    private var tabPickerBar: some View {
+        HStack {
+            Spacer()
+            Picker("", selection: $selectedTab) {
+                ForEach(TabList.visibleCases, id: \.self) { tab in
+                    Text(tab.rawValue).tag(tab)
                 }
-                .tag(TabList.listing)
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .fixedSize()
+            Spacer()
+        }
+        .padding(.vertical, 6)
+        .overlay(alignment: .bottom) {
+            Rectangle().fill(Color(.separatorColor)).frame(height: 1)
+        }
+    }
+
+    @ViewBuilder
+    private var tabContent: some View {
+        switch selectedTab {
+        case .listing:
+            JobAppDetailView(tab: $selectedTab, buttons: $listingButtons)
+        case .resume:
             ResumeSplitView(
                 isWide: .constant(true),
                 tab: $selectedTab,
@@ -64,21 +90,12 @@ struct AppWindowView: View {
                 sheets: $sheets,
                 clarifyingQuestions: $clarifyingQuestions
             )
-                .tabItem {
-                    Label(TabList.resume.rawValue, systemImage: "person.crop.rectangle.stack")
-                }
-                .tag(TabList.resume)
+        case .coverLetter:
             CoverLetterView(showCoverLetterInspector: $sheets.showCoverLetterInspector)
-                .tabItem {
-                    Label(TabList.coverLetter.rawValue, systemImage: "person.2.crop.square.stack")
-                }
-                .tag(TabList.coverLetter)
-                .disabled(!(jobAppStore.selectedApp?.hasAnyRes ?? false))
+        case .submitApp:
             ResumeExportView()
-                .tabItem {
-                    Label(TabList.submitApp.rawValue, systemImage: "paperplane")
-                }
-                .tag(TabList.submitApp)
+        case .none:
+            EmptyView()
         }
     }
     // MARK: - Toolbar Action Methods

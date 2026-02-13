@@ -41,9 +41,6 @@ struct ResumeSplitView: View {
 
     private func resumeEditorContent(selApp: JobApp, selRes: Resume) -> some View {
         VStack(spacing: 0) {
-            ResumeBannerView(jobApp: selApp)
-                .frame(height: 32)
-
             HStack(spacing: 0) {
                 // Editor column
                 ResumeDetailView(
@@ -69,6 +66,9 @@ struct ResumeSplitView: View {
                         .transition(.move(edge: .trailing).combined(with: .opacity))
                 }
             }
+
+            ResumeBannerView(jobApp: selApp)
+                .frame(height: 32)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .animation(.easeInOut(duration: 0.2), value: pdfPreviewVisible)
@@ -113,9 +113,6 @@ struct ResumeSplitView: View {
         let templates = templateStore.templates()
 
         return VStack(spacing: 0) {
-            ResumeBannerView(jobApp: selApp)
-                .frame(height: 32)
-
             VStack(spacing: 20) {
                 Text("No Resume Available")
                     .font(.title)
@@ -174,6 +171,9 @@ struct ResumeSplitView: View {
                         ?? templates.first?.id
                 }
             }
+
+            ResumeBannerView(jobApp: selApp)
+                .frame(height: 32)
         }
     }
 

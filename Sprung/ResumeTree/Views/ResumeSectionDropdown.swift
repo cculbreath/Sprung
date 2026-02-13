@@ -50,7 +50,7 @@ struct ResumeSectionDropdown: View {
                         }
                     } label: {
                         Image(systemName: "chevron.backward.circle.fill")
-                            .font(.system(size: 18))
+                            .font(.system(size: 14))
                             .foregroundStyle(canGoPrevious ? .secondary : .quaternary)
                     }
                     .buttonStyle(.plain)
@@ -68,7 +68,7 @@ struct ResumeSectionDropdown: View {
                         }
                     } label: {
                         Image(systemName: "chevron.forward.circle.fill")
-                            .font(.system(size: 18))
+                            .font(.system(size: 14))
                             .foregroundStyle(canGoNext ? .secondary : .quaternary)
                     }
                     .buttonStyle(.plain)
@@ -84,8 +84,8 @@ struct ResumeSectionDropdown: View {
                     Spacer()
                 }
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
         }
     }
 
@@ -480,11 +480,11 @@ private struct SectionPickerButton: View {
                 Image(systemName: "chevron.up.chevron.down")
                     .font(.system(size: 10))
                     .foregroundStyle(.secondary)
-                    .offset(x: 16)
+                    .offset(x: 12)
             }
-            .padding(.horizontal, 12)
-            .padding(.trailing, 16) // room for chevron
-            .padding(.vertical, 6)
+            .padding(.horizontal, 8)
+            .padding(.trailing, 12) // room for chevron
+            .padding(.vertical, 4)
             .background(Color.primary.opacity(0.05))
             .clipShape(Capsule())
         }
