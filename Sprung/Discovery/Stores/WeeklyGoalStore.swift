@@ -12,9 +12,11 @@ import Foundation
 @MainActor
 final class WeeklyGoalStore: SwiftDataStore {
     unowned let modelContext: ModelContext
+    private let jobAppStore: JobAppStore
 
-    init(context: ModelContext) {
+    init(context: ModelContext, jobAppStore: JobAppStore) {
         modelContext = context
+        self.jobAppStore = jobAppStore
     }
 
     var allGoals: [WeeklyGoal] {
@@ -81,13 +83,38 @@ final class WeeklyGoalStore: SwiftDataStore {
         }
     }
 
-    // MARK: - Progress Updates
+    // MARK: - Application Count (Data-Driven)
 
-    func incrementApplications() {
-        let goal = currentWeek()
-        goal.applicationActual += 1
-        saveContext()
+    /// Count applications submitted during the current ISO week by querying JobApp.appliedDate
+    func applicationsSubmittedThisWeek() -> Int {
+        let (weekStart, weekEnd) = currentWeekRange()
+        return jobAppStore.jobApps.filter { jobApp in
+            guard let appliedDate = jobApp.appliedDate else { return false }
+            return appliedDate >= weekStart && appliedDate < weekEnd
+        }.count
     }
+
+    /// Count applications submitted during a specific week (for historical queries)
+    func applicationsSubmittedInWeek(_ weekStart: Date) -> Int {
+        let calendar = Calendar.current
+        guard let weekEnd = calendar.date(byAdding: .weekOfYear, value: 1, to: weekStart) else { return 0 }
+        return jobAppStore.jobApps.filter { jobApp in
+            guard let appliedDate = jobApp.appliedDate else { return false }
+            return appliedDate >= weekStart && appliedDate < weekEnd
+        }.count
+    }
+
+    /// Current week's start and end dates (ISO calendar)
+    private func currentWeekRange() -> (start: Date, end: Date) {
+        let calendar = Calendar.current
+        let weekStart = calendar.date(
+            from: calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: Date())
+        ) ?? Date()
+        let weekEnd = calendar.date(byAdding: .weekOfYear, value: 1, to: weekStart) ?? Date()
+        return (weekStart, weekEnd)
+    }
+
+    // MARK: - Progress Updates
 
     func incrementEventsAttended() {
         let goal = currentWeek()
@@ -129,11 +156,11 @@ final class WeeklyGoalStore: SwiftDataStore {
         Array(allGoals.prefix(count))
     }
 
-    /// Average application rate over recent weeks
+    /// Average application rate over recent weeks (data-driven from JobApp.appliedDate)
     func averageApplicationRate(weeks: Int = 4) -> Double {
         let recent = recentGoals(count: weeks)
         guard !recent.isEmpty else { return 0 }
-        let total = recent.reduce(0) { $0 + $1.applicationActual }
+        let total = recent.reduce(0) { $0 + applicationsSubmittedInWeek($1.weekStartDate) }
         return Double(total) / Double(recent.count)
     }
 
@@ -146,9 +173,9 @@ final class WeeklyGoalStore: SwiftDataStore {
     }
 
     /// Reset current week's progress (keeps targets)
+    /// Note: applicationActual is no longer stored — it's computed from JobApp.appliedDate
     func resetCurrentWeek() {
         let goal = currentWeek()
-        goal.applicationActual = 0
         goal.eventsAttendedActual = 0
         goal.newContactsActual = 0
         goal.followUpsSentActual = 0

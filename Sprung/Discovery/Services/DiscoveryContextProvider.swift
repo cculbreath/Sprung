@@ -115,7 +115,7 @@ final class DiscoveryContextProviderImpl: DiscoveryContextProvider, @unchecked S
             // Weekly progress
             let goal = coordinator.weeklyGoalStore.currentWeek()
             var progressJson = JSON()
-            progressJson["applications_actual"].int = goal.applicationActual
+            progressJson["applications_actual"].int = coordinator.weeklyGoalStore.applicationsSubmittedThisWeek()
             progressJson["applications_target"].int = goal.applicationTarget
             progressJson["events_actual"].int = goal.eventsAttendedActual
             progressJson["events_target"].int = goal.eventsAttendedTarget
@@ -410,7 +410,7 @@ final class DiscoveryContextProviderImpl: DiscoveryContextProvider, @unchecked S
             for goal in goals {
                 var json = JSON()
                 json["week_start"].string = ISO8601DateFormatter().string(from: goal.weekStartDate)
-                json["applications"].int = goal.applicationActual
+                json["applications"].int = coordinator.weeklyGoalStore.applicationsSubmittedInWeek(goal.weekStartDate)
                 json["application_target"].int = goal.applicationTarget
                 json["events"].int = goal.eventsAttendedActual
                 json["contacts"].int = goal.newContactsActual
@@ -440,7 +440,7 @@ final class DiscoveryContextProviderImpl: DiscoveryContextProvider, @unchecked S
 
             let summary = coordinator.thisWeeksSummary()
             var json = JSON()
-            json["applications_submitted"].int = summary.goal.applicationActual
+            json["applications_submitted"].int = coordinator.weeklyGoalStore.applicationsSubmittedThisWeek()
             json["application_target"].int = summary.goal.applicationTarget
             json["events_attended"].int = summary.goal.eventsAttendedActual
             json["new_contacts"].int = summary.goal.newContactsActual
@@ -471,7 +471,10 @@ final class DiscoveryContextProviderImpl: DiscoveryContextProvider, @unchecked S
 
             let goal = coordinator.weeklyGoalStore.currentWeek()
             var json = JSON()
-            json["application_progress"].double = goal.applicationProgress
+            let appCount = coordinator.weeklyGoalStore.applicationsSubmittedThisWeek()
+            json["application_progress"].double = goal.applicationTarget > 0
+                ? min(1.0, Double(appCount) / Double(goal.applicationTarget))
+                : 0
             json["networking_progress"].double = goal.networkingProgress
             json["time_progress"].double = goal.timeProgress
             json["days_remaining_in_week"].int = {

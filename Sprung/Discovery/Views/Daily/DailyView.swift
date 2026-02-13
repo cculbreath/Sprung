@@ -160,7 +160,7 @@ struct DailyView: View {
             // Weekly progress summary
             VStack(alignment: .trailing) {
                 let goal = coordinator.weeklyGoalStore.currentWeek()
-                Text("This week: \(goal.applicationActual)/\(goal.applicationTarget) apps")
+                Text("This week: \(coordinator.weeklyGoalStore.applicationsSubmittedThisWeek())/\(goal.applicationTarget) apps")
                     .font(.subheadline)
                 if goal.eventsAttendedTarget > 0 {
                     Text("\(goal.eventsAttendedActual)/\(goal.eventsAttendedTarget) events")
@@ -315,9 +315,6 @@ struct DailyView: View {
             isRegenerating: regeneratingCategory == .apply,
             onComplete: { task in
                 coordinator.dailyTaskStore.complete(task)
-                if task.taskType == .submitApplication {
-                    coordinator.weeklyGoalStore.incrementApplications()
-                }
             },
             onRegenerate: { startRegeneration(for: .apply) }
         )
@@ -372,7 +369,7 @@ struct DailyView: View {
             HStack(spacing: 20) {
                 ProgressIndicator(
                     label: "Applications",
-                    current: goal.applicationActual,
+                    current: coordinator.weeklyGoalStore.applicationsSubmittedThisWeek(),
                     target: goal.applicationTarget,
                     color: .blue
                 )

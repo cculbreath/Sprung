@@ -7,7 +7,7 @@
 </p>
 
 <p align="center">
-  <a href="https://www.apple.com/macos/sonoma"><img src="https://img.shields.io/badge/macOS-14.0%2B-blue.svg" alt="macOS"></a>
+  <a href="https://www.apple.com/macos/sequoia"><img src="https://img.shields.io/badge/macOS-14.0%2B-blue.svg" alt="macOS"></a>
   <a href="https://swift.org"><img src="https://img.shields.io/badge/Swift-5.9+-orange.svg" alt="Swift"></a>
   <a href="https://developer.apple.com/xcode/swiftui/"><img src="https://img.shields.io/badge/SwiftUI-5.0-purple.svg" alt="SwiftUI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License"></a>
@@ -15,211 +15,153 @@
 
 ---
 
-Sprung is a native macOS copilot for job hunting. It keeps your data local, builds a structured knowledge base about your experience, and uses multiple AI backends to tailor resumes, cover letters, and application packets without generic templates.
+Sprung is a native macOS application that streamlines job searching. It keeps your data local, builds a structured knowledge base about your experience through an AI-guided interview, and uses multiple LLM backends to generate tailored resumes, cover letters, and application materials.
 
-## Highlights
+> **Status:** Actively developed. The application is functional end-to-end but not yet distributed as a signed release. Clone and build from source to try it.
 
-### AI Onboarding Interview (OpenAI Responses API)
-- **Phase 1 – Core facts**: Collects contact info, profile photo, skeleton timeline, and which resume sections to enable.
-- **Phase 2 – Deep dive**: Drives an evidence-first workflow to generate detailed knowledge cards (500–2000+ words) per role/skill, including Git repo analysis and artifact requests.
-- **Phase 3 – Writing corpus**: Captures writing samples, style notes, and finalizes a candidate dossier for downstream drafting.
-- **Document & repo ingestion**: Processes PDFs/Docs/TXT with Gemini-backed extraction, imports LinkedIn/portfolio content, and scans Git repos for accomplishments.
-- **Event-driven, stateful orchestration**: Uses developer messages + `previous_response_id` for persistent context; tools are routed through an event bus and coordinator (see `.arch-spec.md`).
+<!-- screenshots -->
+
+## Features
+
+### AI Onboarding Interview
+An interactive, multi-phase interview builds a structured profile of your career history:
+
+- **Phase 1 — Core facts**: Contact info, profile photo, work timeline, and resume section selection.
+- **Phase 2 — Deep dive**: Evidence-first generation of detailed knowledge cards (500–2,000+ words) per role or skill area, including Git repository analysis and artifact ingestion.
+- **Phase 3 — Writing corpus**: Captures writing samples, stylistic preferences, and produces a candidate dossier for downstream drafting.
+- **Document and repo ingestion**: Processes PDFs, Word documents, and plain text with Gemini-backed extraction. Imports LinkedIn and portfolio content. Scans Git repositories for accomplishments.
 
 ### Resume Workspace
-- **Tree-based editor**: Structured, array-based JSON model with drag-and-drop nodes and live PDF preview.
-- **AI revision flows**: Customize via one-click revisions or clarifying-question workflows; reasoning overlay shows model thinking for supported models.
-- **Experience defaults editor**: Curate reusable sections (summary, skills, work, projects, education) before they flow into resumes.
-- **Versioning + overflow fixes**: Create role-specific variants and auto-fix length overflows.
-
-### Templates & Export
-- **Mustache templates**: HTML/CSS-based themes with live preview and quick actions; default templates auto-imported if none exist.
-- **Output options**: Native PDF generation, plain text, structured JSON, and text rendering for LLM prompts.
-- **Template editor**: Built-in code editor and preview; templates stored locally for full control.
-- **Template editor UI**: Manage manifests, duplicate/import/export themes, and tweak HTML/CSS live before exporting resumes and cover letters.
+- **Tree-based editor** with drag-and-drop nodes, structured array-based data, and live PDF preview.
+- **AI revision flows**: One-click revisions, clarifying-question workflows, overflow fixing, and a reasoning overlay for supported models.
+- **Experience defaults editor** for curating reusable sections (summary, skills, work, projects, education) that seed new resumes.
+- **Versioning**: Create role-specific resume variants from a shared baseline.
 
 ### Cover Letters
-- **Job-aware drafting**: Uses the selected job app + resume + knowledge cards (ResRefs) and cover references (CoverRefs).
-- **Multi-model committee**: Generate across models, tally votes/scores, and summarize model reasoning to pick a winner.
-- **Inspector & revisions**: View sources, models, and committee feedback; iterate revisions on the same conversation.
-- **Batch + export + TTS**: Batch generation, PDF rendering, and streaming text-to-speech via OpenAI + chunked audio playback.
+- **Job-aware drafting** using the selected job posting, resume, knowledge cards, and cover references.
+- **Multi-model committee**: Generate drafts across models, tally votes and scores, and review model reasoning to select a winner.
+- **Inspector and revisions**: View sources, model feedback, and iterate on the same conversation thread.
+- **Batch generation and export**: Generate multiple drafts in parallel, render to PDF, and preview with streaming text-to-speech.
 
 ### Job Applications
-- **Kanban-style tracker**: Status groups for New, In Progress, Unsubmitted, Submitted, Interview Pending, Follow Up Required, Offer/Closed/Rejected.
-- **Parsing & scraping**: Paste a job URL to scrape LinkedIn, Indeed, or Apple listings (SwiftSoup + WebView fallback with Cloudflare handling).
-- **Packet review**: LLM review of resume + cover letter (with optional rendered PDF image) for a given posting.
-- **Job recommendations**: Rank new listings against your resume/background facts to decide what to apply to next.
-- **Context linking**: Attach specific resume and cover-letter versions plus notes and interview feedback to each job.
-
-### Knowledge Cards & References
-- **ResRefs**: Knowledge cards with metadata (type, organization, time period, sources) created during onboarding or manually. Toggle inclusion per resume or use globally from the interactive card deck browser.
-- **CoverRefs**: Writing samples and background facts for cover letters, including dossier entries from onboarding.
-- **Artifact pipeline**: Document and repo ingestion feed artifacts → knowledge cards → resumes and covers.
+- **Kanban-style tracker** with status groups: New, In Progress, Unsubmitted, Submitted, Interview Pending, Follow Up Required, Offer, Closed, and Rejected.
+- **URL scraping**: Paste a job URL to parse listings from LinkedIn, Indeed, Apple Careers, and other sites (SwiftSoup with WebView fallback for JavaScript-rendered pages).
+- **Packet review**: LLM-driven analysis of your resume and cover letter against the job posting.
+- **Job recommendations**: Rank new listings against your background to prioritize applications.
 
 ### Discovery (Job Search Operations)
-- **Daily task management**: AI-generated daily job search tasks based on user goals and current progress. Focus area customization (balanced, applications-heavy, networking-heavy) with time tracking and idle detection.
-- **Job source discovery**: AI-powered discovery of job boards and career websites via web search. URL validation, visit tracking, and categorization (job boards, recruiter sites, company career pages).
-- **Networking event pipeline**: AI discovery and evaluation of professional events with recommendation levels. Pre-event prep (elevator pitch, talking points, company research) and post-event debrief capture (contacts, ratings, follow-ups).
-- **Professional networking CRM**: Contact database with relationship warmth levels (cold/warm/hot), interaction history, relationship health assessment, and AI-powered outreach message drafting.
-- **Job search coaching**: Automated three-phase coaching sessions—check-in questions, personalized activity review, and actionable recommendations. Integrates with all job search activity data and supports research tools (knowledge cards, job descriptions, resumes).
-- **Weekly goals & reflection**: Goal setting for applications, networking events, contacts, and time investment with progress tracking and AI-generated weekly reflections.
+- **Daily task management**: AI-generated task lists based on your goals and current progress, with focus area customization and time tracking.
+- **Job source discovery**: AI-powered identification and categorization of job boards, recruiter sites, and company career pages.
+- **Networking event pipeline**: Discover and evaluate professional events, generate pre-event prep materials, and capture post-event debriefs.
+- **Professional networking CRM**: Contact database with relationship warmth tracking, interaction history, health assessment, and AI-drafted outreach messages.
+- **Coaching sessions**: Automated three-phase sessions — check-in, personalized activity review, and actionable recommendations.
+- **Weekly goals and reflection**: Set targets for applications, networking, and time investment with progress tracking and AI-generated reflections.
 
-### Audio & Reasoning
-- **Reasoning stream overlay**: Displays model reasoning tokens for supported OpenRouter models during long-running flows.
-- **Streaming TTS**: Pause/resume/stop controls with buffering safeguards using `swift-chunked-audio-player`.
+### Templates and Export
+- **Mustache-based templates**: HTML/CSS themes with live preview and quick actions.
+- **Output formats**: Native PDF, plain text, structured JSON, and text rendering for LLM prompts.
+- **Built-in template editor**: Edit HTML/CSS with live preview; templates are stored locally for full control.
 
-### Data, Security, and Debugging
-- **Local-first storage**: All data lives in SwiftData with migration support; no cloud sync.
-- **Keychain-backed API keys**: OpenAI, OpenRouter, and Gemini keys are stored securely and never written in plaintext.
-- **Debug tooling**: Toggle verbose logging, save prompts, and export onboarding logs (`Sprung/Onboarding/Logs/consolelog.txt`, `event-dump.txt`, `openai-log-output.txt`) from the debug panel.
-- **Factory reset**: Settings include a danger-zone reset to wipe SwiftData stores and onboarding artifacts.
+### Knowledge Cards and References
+- **ResRefs**: Knowledge cards with metadata (type, organization, time period, sources) created during onboarding or added manually. Toggle inclusion per resume or browse the interactive card deck.
+- **CoverRefs**: Writing samples and background facts for cover letter generation, including dossier entries from onboarding.
 
 ## Architecture
 
-### App-wide layering
 ```
-SwiftUI Views (split view, inspectors, sheets)
-        ↓  @Observable bindings (stores + view models)
-AppEnvironment container (DI for stores/services)
-        ↓
-Domain Stores (SwiftData-backed: resumes, cover letters, job apps, templates, refs, profiles)
-        ↓
-Services (LLMFacade, export/renderers, scraping, TTS, template loader)
-        ↓
-SwiftData persistence + Keychain (API keys) + local templates/assets
-        ↓
-External providers (OpenAI Responses/TTS, OpenRouter models, Gemini extraction)
-```
-
-- **SwiftUI + @Observable**: Views bind directly to stores/view models (e.g., `JobAppStore`, `CoverLetterStore`, `ResumeReviseViewModel`) supplied via `AppEnvironment`.
-- **DI container**: `AppDependencies` builds long-lived stores/services per scene, avoiding singletons.
-- **Unified LLM layer**: `LLMFacade` routes requests to OpenRouter for general workflows and to OpenAI for onboarding/TTS; model pickers surface capabilities (reasoning, images).
-- **Persistence**: SwiftData models for resumes, cover letters, job apps, knowledge cards (ResRefs), cover refs, templates, and onboarding sessions; API keys are Keychain-backed.
-- **Export/rendering**: Resume/Cover PDF generation via Mustache/GRMustache, text renderers for prompts, and chunked-audio playback for TTS.
-- **Scraping/ingestion**: SwiftSoup/WebView fetchers for job postings; Gemini-backed document extraction; Git ingestion for accomplishments.
-
-### Onboarding interview architecture
-The onboarding interview uses a stricter event-driven stack (documented in `.arch-spec.md`):
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                        SwiftUI Views                        │
-│                    (@Observable binding)                    │
-└─────────────────────────┬───────────────────────────────────┘
-                          │
-┌─────────────────────────▼───────────────────────────────────┐
-│                    EventCoordinator                         │
-│            (AsyncStream pub/sub messaging)                  │
-└─────────────────────────┬───────────────────────────────────┘
-                          │
-┌─────────────────────────▼───────────────────────────────────┐
-│                    StateCoordinator                         │
-│              (Actor - single source of truth)               │
-└─────────────────────────┬───────────────────────────────────┘
-                          │
-┌─────────────────────────▼───────────────────────────────────┐
-│                       SwiftData                             │
-│                   (Persistent storage)                      │
-└─────────────────────────────────────────────────────────────┘
+SwiftUI Views
+    ↓  @Observable bindings
+AppEnvironment (dependency injection container)
+    ↓
+Domain Stores (SwiftData-backed)
+    ↓
+Services (LLMFacade, export, scraping, TTS, templates)
+    ↓
+SwiftData + Keychain + local assets
+    ↓
+External providers (Anthropic, OpenRouter, OpenAI TTS, Google Gemini)
 ```
 
-- **StateCoordinator/EventCoordinator**: Owns interview state, tools, and phase transitions; all tool calls and developer messages flow through the event bus.
-- **Tools/ingestion kernels**: Document extraction, Git analysis, artifact tracking, and knowledge card creation run through the coordinator/tool router.
-- **LLM adapter**: Uses the OpenAI Responses API with persistent `developer` messages and `previous_response_id`; `instructions` is intentionally `nil`.
+- **SwiftUI + @Observable**: Views bind to stores and view models injected through `AppEnvironment`.
+- **Dependency injection**: `AppDependencies` constructs long-lived services per scene — no singletons.
+- **Unified LLM layer**: `LLMFacade` routes requests to the appropriate backend; model pickers surface capabilities (reasoning, image support).
+- **Persistence**: SwiftData models with Keychain-backed API key storage.
+- **Export pipeline**: Mustache template rendering to PDF via Chrome Headless Shell, with text renderers for LLM prompts.
 
 ## Project Structure
 
 ```
 Sprung/
-├── App/                # Entry point, app environment, settings, windows, toolbar
-├── Onboarding/         # Interview engine (state/event coordinators, phases, tools, ingestion services)
-├── Discovery/          # Job search ops (coaching, daily tasks, sources, events, contacts, CRM)
-├── Resumes/            # Resume models, AI revision flows, split editor, inspectors
-├── ResumeTree/         # Tree-based resume data + draggable node UI
-├── CoverLetters/       # Generation, committee voting, inspector, PDF/TTS, references
-├── JobApplications/    # Kanban list, scraping, application review, clarifying questions
+├── App/                # Entry point, environment, settings, windows, toolbar
+├── Onboarding/         # Interview engine (state/event coordinators, phases, tools)
+├── Discovery/          # Job search ops (coaching, tasks, sources, events, CRM)
+├── Resumes/            # Resume models, AI revision flows, split editor
+├── ResumeTree/         # Tree-based resume data and drag-drop node UI
+├── CoverLetters/       # Generation, committee voting, inspector, PDF, TTS
+├── JobApplications/    # Kanban tracker, scraping, application review
 ├── Experience/         # Experience defaults editor and section renderers
 ├── Templates/          # Mustache templates, manifests, template editor
-├── ResRefs/            # Knowledge card models and sliding source list
-├── DataManagers/       # SwiftData stores (resumes, covers, jobs, profiles, refs)
-├── Export/             # PDF/text generators and export UI
-├── Shared/             # LLM facade, logging, utilities, model pickers, TTS helpers
-└── Resources/          # Static assets (images, HTML fragments, etc.)
+├── ResRefs/            # Knowledge card models and card browser
+├── DataManagers/       # SwiftData stores
+├── Export/             # PDF and text generators
+├── Shared/             # LLM facade, logging, utilities, model pickers, TTS
+└── Resources/          # Static assets and default templates
 ```
 
-## LLM & Provider Support
+## LLM Provider Support
 
-- **Onboarding**: Uses the in-repo OpenAI adapter (Responses API with tool calling). `instructions` is intentionally `nil`; developer messages carry persistent context.
-- **Discovery**: Dual backend—OpenAI for web search operations (job sources, networking events) with structured output; OpenRouter for coaching and general LLM tasks with tool calling and conversation history.
-- **Resume/Cover/Job tools**: Unified LLM facade primarily backed by OpenRouter (GPT-4o, Claude 3.5, Gemini 1.5, o1/o3, etc.). Model pickers surface available options and capabilities (reasoning support, images).
-- **Document extraction**: Defaults to Gemini (`google/gemini-2.0-flash-001`) with configurable model ID in Settings.
-- **Text-to-speech**: OpenAI TTS with streaming playback.
-- API keys are required for OpenAI (onboarding + TTS + Discovery web search), OpenRouter (general LLM tasks + Discovery coaching), and Gemini (PDF/doc extraction).
+| Area | Provider | Purpose |
+|------|----------|---------|
+| Onboarding interview | Anthropic Claude | Multi-turn interview with tool calling |
+| Onboarding interview | Google Gemini | Document and artifact extraction |
+| Resume, cover letter, job review | OpenRouter | Model selection across GPT, Claude, Gemini, etc. |
+| Discovery coaching | OpenRouter | Coaching sessions with conversation history |
+| Discovery web search | OpenAI | Structured output for source and event discovery |
+| Text-to-speech | OpenAI | Streaming TTS with chunked audio playback |
+
+API keys are required for Anthropic (onboarding), OpenAI (TTS + Discovery web search), OpenRouter (general LLM tasks), and Gemini (document extraction). All keys are stored in the macOS Keychain.
 
 ## Getting Started
 
 ### Prerequisites
 - macOS 14.0 (Sonoma) or later
 - Xcode 15+
-- API keys for: OpenAI (required for onboarding + TTS), OpenRouter (general LLM calls), Gemini (document extraction)
+- API keys: Anthropic, OpenAI, OpenRouter, and Google Gemini
 
-### Install & Run
-1) Clone:
+### Build and Run
 ```bash
 git clone https://github.com/cculbreath/Sprung.git
 cd Sprung
-```
-2) Download Chrome Headless Shell (required for PDF generation):
-```bash
-./Scripts/download-chromium.sh
-```
-3) Open the project:
-```bash
+./Scripts/download-chromium.sh   # Chrome Headless Shell for PDF generation
 open Sprung.xcodeproj
 ```
-4) Resolve packages if Xcode does not auto-resolve: `File → Packages → Resolve Package Versions`.
-5) Build:
-```bash
-xcodebuild -project Sprung.xcodeproj -scheme Sprung build 2>&1 | grep -Ei "(error:|warning:|failed|succeeded)" | head -20
-```
-6) Launch and open **Settings** (`Cmd + ,`):
-   - Enter OpenAI, OpenRouter, and Gemini keys (stored in macOS Keychain).
-   - Pick default onboarding, PDF extraction, and Git ingest models; adjust reasoning effort and overflow-fix attempts.
-7) If prompted, open the Template Editor to create/import a Mustache template (templates are required for exports).
 
-### Common Build Commands
-- Quick check:
-```bash
-xcodebuild -project Sprung.xcodeproj -scheme Sprung build 2>&1 | grep -Ei "(error:|warning:|failed|succeeded)" | head -20
-```
-- Release build:
-```bash
-xcodebuild -project Sprung.xcodeproj -scheme Sprung -configuration Release build 2>&1 | grep -Ei "(error:|warning:|failed|succeeded)" | head -20
-```
-- Clean build:
-```bash
-xcodebuild -project Sprung.xcodeproj -scheme Sprung clean build
-```
-- Resolve packages:
-```bash
-xcodebuild -resolvePackageDependencies -project Sprung.xcodeproj
-```
+1. Resolve packages if Xcode does not do so automatically: **File → Packages → Resolve Package Versions**.
+2. Build and run (`Cmd + R`).
+3. Open **Settings** (`Cmd + ,`) and enter your API keys. Select models for onboarding, document extraction, and general tasks.
+4. If prompted, open the Template Editor to create or import a Mustache template (required for PDF export).
 
 ## Dependencies
 
 | Package | Purpose |
-| --- | --- |
-| [SwiftOpenAI (custom fork)](https://github.com/jamesrochabrun/SwiftOpenAI) | OpenAI Responses + tool calling, TTS |
-| [SwiftSoup](https://github.com/scinfu/SwiftSoup) | Job posting scraping and HTML parsing |
-| [GRMustache.swift](https://github.com/groue/GRMustache.swift) | Mustache templating for resume/cover exports |
-| [SwiftyJSON](https://github.com/SwiftyJSON/SwiftyJSON) | Dynamic JSON handling for resumes and onboarding artifacts |
-| [swift-collections](https://github.com/apple/swift-collections) | Deques/ordered sets used across stores |
+|---------|---------|
+| [SwiftOpenAI (fork)](https://github.com/cculbreath/SwiftOpenAI-ttsfork) | OpenAI TTS and streaming support |
+| [SwiftSoup](https://github.com/scinfu/SwiftSoup) | HTML parsing for job posting scraping |
+| [GRMustache.swift](https://github.com/groue/GRMustache.swift) | Mustache templating for resume and cover letter export |
+| [SwiftyJSON](https://github.com/SwiftyJSON/SwiftyJSON) | Dynamic JSON handling for LLM interchange |
+| [swift-collections](https://github.com/apple/swift-collections) | Ordered collections used across stores |
 | [swift-chunked-audio-player](https://github.com/cculbreath/swift-chunked-audio-player) | Streaming audio playback for TTS |
-| [ViewInspector](https://github.com/nalexn/ViewInspector) | UI testing utilities (not currently exercised) |
+
+## Related Repositories
+
+| Repository | Description |
+|------------|-------------|
+| [SwiftOpenAI-ttsfork](https://github.com/cculbreath/SwiftOpenAI-ttsfork) | Customized SwiftOpenAI fork with TTS streaming support |
+| [swift-chunked-audio-player](https://github.com/cculbreath/swift-chunked-audio-player) | Chunked audio player for streaming TTS playback |
 
 ## Contributing
 
-Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for details. There is no automated test suite today—please verify builds locally before opening a PR.
+Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines. There is no automated test suite — please verify builds locally before opening a pull request.
 
 ## License
 

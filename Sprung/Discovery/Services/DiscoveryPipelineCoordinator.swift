@@ -34,7 +34,7 @@ final class DiscoveryPipelineCoordinator {
         self.jobAppStore = jobAppStore
         self.dailyTaskStore = DailyTaskStore(context: modelContext)
         self.timeEntryStore = TimeEntryStore(context: modelContext)
-        self.weeklyGoalStore = WeeklyGoalStore(context: modelContext)
+        self.weeklyGoalStore = WeeklyGoalStore(context: modelContext, jobAppStore: jobAppStore)
         self.calendarService = CalendarIntegrationService()
     }
 

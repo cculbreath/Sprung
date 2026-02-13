@@ -312,7 +312,6 @@ class WeeklyGoal: Identifiable {
 
     // Application targets
     var applicationTarget: Int = 5
-    var applicationActual: Int = 0
 
     // Networking targets
     var eventsAttendedTarget: Int = 1
@@ -339,11 +338,6 @@ class WeeklyGoal: Identifiable {
         self.weekStartDate = weekStartDate
     }
 
-    var applicationProgress: Double {
-        guard applicationTarget > 0 else { return 0 }
-        return min(1.0, Double(applicationActual) / Double(applicationTarget))
-    }
-
     var networkingProgress: Double {
         let total = eventsAttendedTarget + newContactsTarget + followUpsSentTarget
         guard total > 0 else { return 0 }
@@ -358,7 +352,6 @@ class WeeklyGoal: Identifiable {
     }
 
     // Convenience aliases for cleaner access
-    var applicationsSubmitted: Int { applicationActual }
     var applicationsTarget: Int { applicationTarget }
     var eventsAttended: Int { eventsAttendedActual }
     var eventsTarget: Int { eventsAttendedTarget }

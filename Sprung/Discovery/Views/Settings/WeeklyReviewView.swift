@@ -93,7 +93,7 @@ struct WeeklyReviewView: View {
                 ], spacing: 16) {
                     GoalProgressCard(
                         title: "Applications",
-                        current: goal.applicationsSubmitted,
+                        current: coordinator.weeklyGoalStore.applicationsSubmittedThisWeek(),
                         target: goal.applicationsTarget,
                         icon: "doc.text",
                         color: .blue
@@ -269,9 +269,10 @@ struct WeeklyReviewView: View {
         var insights: [String] = []
 
         if let goal = currentGoal {
-            if goal.applicationsSubmitted >= goal.applicationsTarget {
+            let appsSubmitted = coordinator.weeklyGoalStore.applicationsSubmittedThisWeek()
+            if appsSubmitted >= goal.applicationsTarget {
                 insights.append("Met application target - great consistency!")
-            } else if goal.applicationsSubmitted > 0 {
+            } else if appsSubmitted > 0 {
                 insights.append("Made progress on applications but didn't hit target.")
             }
 
