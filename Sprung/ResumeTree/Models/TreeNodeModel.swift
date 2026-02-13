@@ -130,7 +130,11 @@ enum LeafStatus: String, Codable, Hashable {
         var count = 0
 
         // Container enumerate: each child is a revnode (skip excluded)
-        if enumeratedAttributes?.contains("*") == true {
+        // Only for flat containers (entries without sub-attributes).
+        // Object collections with ["*"] are handled by the iterate block below.
+        let isContainerEnumerate = enumeratedAttributes?.contains("*") == true
+        let isObjectCollection = orderedChildren.first.map { !$0.orderedChildren.isEmpty } ?? false
+        if isContainerEnumerate && !isObjectCollection {
             count += orderedChildren.filter { $0.status != .excludedFromGroup }.count
         }
         // Bundle attributes: 1 revnode per attribute, or M for nested arrays with [] suffix
@@ -155,22 +159,41 @@ enum LeafStatus: String, Codable, Hashable {
 
         // Iterate attributes: N revnodes per attribute (1 per entry) or N×M for nested arrays
         if let enumerated = enumeratedAttributes, !enumerated.isEmpty {
-            // Filter out container enumerate marker "*"
-            let iterateAttrs = enumerated.filter { $0 != "*" }
-            for attr in iterateAttrs {
-                if attr.hasSuffix("[]") {
-                    // Nested array iterate (e.g., "keywords[]"): count actual children in each entry (skip excluded)
-                    let baseAttr = String(attr.dropLast(2))
-                    for entry in orderedChildren {
-                        if let attrNode = entry.orderedChildren.first(where: {
-                            ($0.name.isEmpty ? $0.displayLabel : $0.name) == baseAttr
-                        }) {
-                            count += attrNode.orderedChildren.filter { $0.status != .excludedFromGroup }.count
-                        }
+            // Expand "*" for object collections (same logic as PhaseReviewManager)
+            var iterateAttrs: [String]
+            if enumerated == ["*"] {
+                if let firstEntry = orderedChildren.first, !firstEntry.orderedChildren.isEmpty {
+                    // Object collection: all attributes → multi-attribute iterate
+                    iterateAttrs = firstEntry.orderedChildren.compactMap {
+                        let n = $0.name.isEmpty ? $0.displayLabel : $0.name
+                        return n.isEmpty ? nil : n
                     }
                 } else {
-                    // Simple iterate (e.g., "keywords"): 1 revnode per entry
-                    count += orderedChildren.count
+                    iterateAttrs = [] // Flat → counted by container enumerate block above
+                }
+            } else {
+                iterateAttrs = enumerated.filter { $0 != "*" }
+            }
+
+            // Group simple vs nested-array attrs
+            let simpleAttrs = iterateAttrs.filter { !$0.hasSuffix("[]") }
+            let nestedAttrs = iterateAttrs.filter { $0.hasSuffix("[]") }
+
+            // Simple attrs: count entries ONCE regardless of how many attrs
+            // (they merge into one compound RevNode per entry)
+            if !simpleAttrs.isEmpty {
+                count += orderedChildren.filter { $0.status != .excludedFromGroup }.count
+            }
+
+            // Nested array attrs: existing per-child counting
+            for attr in nestedAttrs {
+                let baseAttr = String(attr.dropLast(2))
+                for entry in orderedChildren {
+                    if let attrNode = entry.orderedChildren.first(where: {
+                        ($0.name.isEmpty ? $0.displayLabel : $0.name) == baseAttr
+                    }) {
+                        count += attrNode.orderedChildren.filter { $0.status != .excludedFromGroup }.count
+                    }
                 }
             }
         }

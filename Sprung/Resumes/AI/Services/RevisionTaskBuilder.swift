@@ -39,11 +39,16 @@ final class RevisionTaskBuilder {
         knowledgeCards: [KnowledgeCard] = [],
         textResumeSnapshot: String? = nil
     ) -> [RevisionTask] {
-        // Separate specialized nodes from compound-eligible nodes
+        // Separate specialized, multi-attribute, and compound-eligible nodes
         var specializedTasks: [RevisionTask] = []
         var compoundCandidates: [ExportedReviewNode] = []
+        var multiAttributeCandidates: [ExportedReviewNode] = []
 
         for revNode in revNodes {
+            if revNode.isMultiAttributeIterate {
+                multiAttributeCandidates.append(revNode)
+                continue
+            }
             let nodeType = detectNodeType(for: revNode)
             if nodeType != .generic {
                 // Specialized nodes (skills, keywords, titles) get their own tasks
@@ -65,6 +70,46 @@ final class RevisionTaskBuilder {
                 ))
             } else {
                 compoundCandidates.append(revNode)
+            }
+        }
+
+        // Force compound grouping for multi-attribute iterate nodes (grouped by parent path)
+        let multiAttrGroups = buildCompoundGroups(from: multiAttributeCandidates)
+        for group in multiAttrGroups {
+            if group.count > 1 {
+                let compoundPrompt = generateCompoundPrompt(
+                    for: group,
+                    targetingPlan: targetingPlan,
+                    phase1Decisions: phase1Decisions,
+                    knowledgeCards: knowledgeCards,
+                    textResumeSnapshot: textResumeSnapshot
+                )
+                let compoundNode = buildCompoundNode(from: group)
+                specializedTasks.append(RevisionTask(
+                    revNode: compoundNode,
+                    taskPrompt: compoundPrompt,
+                    nodeType: .compound,
+                    phase: phase
+                ))
+            } else if let single = group.first {
+                // Single field in a multi-attribute group (edge case: other attrs in different phase)
+                let nodeType = detectNodeType(for: single)
+                let taskPrompt = generatePrompt(
+                    for: single,
+                    nodeType: nodeType,
+                    skills: skills,
+                    titleSets: titleSets,
+                    targetingPlan: targetingPlan,
+                    phase1Decisions: phase1Decisions,
+                    knowledgeCards: knowledgeCards,
+                    textResumeSnapshot: textResumeSnapshot
+                )
+                specializedTasks.append(RevisionTask(
+                    revNode: single,
+                    taskPrompt: taskPrompt,
+                    nodeType: nodeType,
+                    phase: phase
+                ))
             }
         }
 

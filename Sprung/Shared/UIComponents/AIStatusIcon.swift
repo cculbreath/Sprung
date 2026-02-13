@@ -13,6 +13,7 @@ import SwiftUI
 enum AIIconMode: Equatable {
     case iteratedCollection      // film.stack, indigo - Collection with [] iterate
     case iteratedMember          // inset.filled.bottomhalf.rectangle, indigo (hierarchical)
+    case iterateBundledMember    // custom.bundled.member, indigo - Bundled with other attrs in iterate context
     case bundledCollection       // circle.hexagongrid.circle, purple - Collection with .* bundle
     case bundledMember           // custom.bundled.member, purple - Child in bundled collection
     case excludedBundledMember   // custom.bundled.member.disabled, gray - Excluded from bundle review
@@ -24,6 +25,7 @@ enum AIIconMode: Equatable {
         switch self {
         case .iteratedCollection: return "film.stack"
         case .iteratedMember: return "inset.filled.bottomhalf.rectangle"
+        case .iterateBundledMember: return "custom.bundled.member"
         case .bundledCollection: return "circle.hexagongrid.circle"
         case .bundledMember: return "custom.bundled.member"
         case .excludedBundledMember: return "custom.bundled.member.disabled"
@@ -35,7 +37,7 @@ enum AIIconMode: Equatable {
 
     var color: Color {
         switch self {
-        case .iteratedCollection, .iteratedMember: return .indigo
+        case .iteratedCollection, .iteratedMember, .iterateBundledMember: return .indigo
         case .bundledCollection, .bundledMember: return .purple
         case .excludedBundledMember, .excludedIteratedMember: return .secondary
         case .unset: return .primary
@@ -46,6 +48,7 @@ enum AIIconMode: Equatable {
     var usesHierarchical: Bool {
         switch self {
         case .iteratedMember: return true
+        case .iterateBundledMember: return false
         default: return false
         }
     }
@@ -53,7 +56,7 @@ enum AIIconMode: Equatable {
     /// Whether this is a custom symbol from the asset catalog (not SF Symbols)
     var isCustomSymbol: Bool {
         switch self {
-        case .bundledMember, .excludedBundledMember, .excludedIteratedMember: return true
+        case .iterateBundledMember, .bundledMember, .excludedBundledMember, .excludedIteratedMember: return true
         default: return false
         }
     }
@@ -62,6 +65,7 @@ enum AIIconMode: Equatable {
         switch self {
         case .iteratedCollection: return "Iterate: N reviews (one per entry)"
         case .iteratedMember: return "Included in iterate review (per entry)"
+        case .iterateBundledMember: return "Bundled with other attributes in per-entry review"
         case .bundledCollection: return "Bundle: All entries combined into 1 review"
         case .bundledMember: return "Included in bundle review (all combined)"
         case .excludedBundledMember: return "Excluded from bundle review"
@@ -445,6 +449,26 @@ struct AIIconModeResolver {
         resolve(for: node).primary
     }
 
+    // MARK: - Multi-Attribute Iterate Resolution
+
+    /// Resolve iterate attributes for a collection, expanding "*" wildcard for object collections.
+    /// Returns nil if no iterate attributes, or the expanded list with isMultiAttribute flag.
+    private static func resolvedIterateAttrs(for collection: TreeNode) -> (attrs: [String], isMulti: Bool)? {
+        guard let enumerated = collection.enumeratedAttributes, !enumerated.isEmpty else { return nil }
+        if enumerated == ["*"] {
+            // Check if object collection (entries have sub-attributes)
+            guard let firstEntry = collection.orderedChildren.first,
+                  !firstEntry.orderedChildren.isEmpty else { return nil } // flat → not multi-attribute
+            let attrs = firstEntry.orderedChildren.compactMap {
+                let n = $0.name.isEmpty ? $0.displayLabel : $0.name
+                return n.isEmpty ? nil : n
+            }
+            return attrs.count > 1 ? (attrs, true) : (attrs, false)
+        }
+        let attrs = enumerated.filter { $0 != "*" }
+        return attrs.isEmpty ? nil : (attrs, attrs.count > 1)
+    }
+
     // MARK: - Dual Container Detection
 
     /// A container that is both a member (referenced in grandparent's AI config)
@@ -468,7 +492,13 @@ struct AIIconModeResolver {
         let memberMode: AIIconMode
         if grandparent.enumeratedAttributes?.contains(name) == true ||
            grandparent.enumeratedAttributes?.contains(nameWithSuffix) == true {
-            memberMode = .iteratedMember
+            // Check for multi-attribute iterate: 2nd+ attrs get bundled member icon
+            if let resolved = resolvedIterateAttrs(for: grandparent),
+               resolved.isMulti, resolved.attrs.first != name {
+                memberMode = .iterateBundledMember
+            } else {
+                memberMode = .iteratedMember
+            }
         } else if grandparent.bundledAttributes?.contains(name) == true ||
                   grandparent.bundledAttributes?.contains(nameWithSuffix) == true {
             memberMode = .bundledMember
@@ -538,7 +568,13 @@ struct AIIconModeResolver {
                 return isExcluded ? .excludedBundledMember : .bundledMember
             }
             if collection.enumeratedAttributes?.contains(nodeName) == true {
-                return isExcluded ? .excludedIteratedMember : .iteratedMember
+                if isExcluded { return .excludedIteratedMember }
+                // Check for multi-attribute iterate: 2nd+ attrs get bundled member icon
+                if let resolved = resolvedIterateAttrs(for: collection),
+                   resolved.isMulti, resolved.attrs.first != nodeName {
+                    return .iterateBundledMember
+                }
+                return .iteratedMember
             }
         }
 

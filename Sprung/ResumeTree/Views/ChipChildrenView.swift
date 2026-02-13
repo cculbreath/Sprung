@@ -645,7 +645,7 @@ private struct ChipView: View {
 
     /// Whether this chip is a member of a group review (bundled or iterated)
     private var isGroupMember: Bool {
-        iconMode == .bundledMember || iconMode == .iteratedMember ||
+        iconMode == .bundledMember || iconMode == .iteratedMember || iconMode == .iterateBundledMember ||
         iconMode == .excludedBundledMember || iconMode == .excludedIteratedMember
     }
 

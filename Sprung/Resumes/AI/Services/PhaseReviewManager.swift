@@ -135,27 +135,56 @@ class PhaseReviewManager {
             }
 
             if let enumerated = node.enumeratedAttributes, !enumerated.isEmpty {
-                for attr in enumerated {
-                    // Skip container enumerate marker
-                    guard attr != "*" else { continue }
-                    let pattern = "\(currentPath)[].\(attr)"
-                    if !processedPaths.contains(pattern) {
+                // Expand "*" wildcard for object collections
+                var iterateAttrs: [String]
+                if enumerated == ["*"] {
+                    if let firstEntry = node.orderedChildren.first, !firstEntry.orderedChildren.isEmpty {
+                        // Object collection: expand to all attribute names
+                        iterateAttrs = firstEntry.orderedChildren.compactMap {
+                            let n = $0.name.isEmpty ? $0.displayLabel : $0.name
+                            return n.isEmpty ? nil : n
+                        }
+                    } else {
+                        iterateAttrs = [] // Flat container: handled by container enumerate block below
+                    }
+                } else {
+                    iterateAttrs = enumerated.filter { $0 != "*" }
+                }
+
+                // Group by phase, then export
+                let attrsByPhase = Dictionary(grouping: iterateAttrs) { phaseFor(section: currentSection, attr: $0) }
+
+                for (phase, attrs) in attrsByPhase {
+                    let isMultiAttr = attrs.count > 1
+                    if isMultiAttr {
+                        Logger.debug("[buildReviewRounds] Multi-attribute iterate: \(currentPath)[\(attrs.joined(separator: ", "))]")
+                    }
+                    for attr in attrs {
+                        let pattern = "\(currentPath)[].\(attr)"
+                        guard !processedPaths.contains(pattern) else { continue }
                         processedPaths.insert(pattern)
-                        let nodes = TreeNode.exportNodesMatchingPath(pattern, from: rootNode)
-                        let phase = phaseFor(section: currentSection, attr: attr)
+                        var nodes = TreeNode.exportNodesMatchingPath(pattern, from: rootNode)
+                        if isMultiAttr {
+                            nodes = nodes.map { $0.withMultiAttributeFlag() }
+                        }
                         addToPhase(nodes, phase: phase, pattern: pattern)
                     }
                 }
             }
 
             // Check for container enumerate (enumeratedAttributes contains "*")
+            // Only applies to flat containers (entries without sub-attributes).
+            // Object collections with ["*"] are expanded by the iterate block above.
             if node.enumeratedAttributes?.contains("*") == true {
-                let pattern = "\(currentPath)[]"
-                if !processedPaths.contains(pattern) {
-                    processedPaths.insert(pattern)
-                    let nodes = TreeNode.exportNodesMatchingPath(pattern, from: rootNode)
-                    let phase = phaseFor(section: currentSection, attr: "*")
-                    addToPhase(nodes, phase: phase, pattern: pattern)
+                let isObjectCollection = node.orderedChildren.first.map { !$0.orderedChildren.isEmpty } ?? false
+                if !isObjectCollection {
+                    let pattern = "\(currentPath)[]"
+                    if !processedPaths.contains(pattern) {
+                        processedPaths.insert(pattern)
+                        let nodes = TreeNode.exportNodesMatchingPath(pattern, from: rootNode)
+                        let phase = phaseFor(section: currentSection, attr: "*")
+                        addToPhase(nodes, phase: phase, pattern: pattern)
+                    }
                 }
             }
 

@@ -161,6 +161,7 @@ struct ExportedReviewNode: Codable, Equatable, Identifiable {
     let childCount: Int         // Count of children (0 for scalars)
     let isBundled: Bool         // True if this is a bundled node from * pattern
     let sourceNodeIds: [String]? // Original node IDs when bundled (for applying changes back)
+    let isMultiAttributeIterate: Bool // True if part of a multi-attribute iterate group
 
     var isContainer: Bool { childCount > 0 }
 
@@ -172,7 +173,8 @@ struct ExportedReviewNode: Codable, Equatable, Identifiable {
         childValues: [String]? = nil,
         childCount: Int = 0,
         isBundled: Bool = false,
-        sourceNodeIds: [String]? = nil
+        sourceNodeIds: [String]? = nil,
+        isMultiAttributeIterate: Bool = false
     ) {
         self.id = id
         self.path = path
@@ -182,6 +184,22 @@ struct ExportedReviewNode: Codable, Equatable, Identifiable {
         self.childCount = childCount
         self.isBundled = isBundled
         self.sourceNodeIds = sourceNodeIds
+        self.isMultiAttributeIterate = isMultiAttributeIterate
+    }
+
+    /// Returns a copy with the multi-attribute iterate flag set to true
+    func withMultiAttributeFlag() -> ExportedReviewNode {
+        ExportedReviewNode(
+            id: id,
+            path: path,
+            displayName: displayName,
+            value: value,
+            childValues: childValues,
+            childCount: childCount,
+            isBundled: isBundled,
+            sourceNodeIds: sourceNodeIds,
+            isMultiAttributeIterate: true
+        )
     }
 }
 
