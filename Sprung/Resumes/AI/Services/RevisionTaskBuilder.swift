@@ -39,12 +39,17 @@ final class RevisionTaskBuilder {
         knowledgeCards: [KnowledgeCard] = [],
         textResumeSnapshot: String? = nil
     ) -> [RevisionTask] {
-        // Separate specialized, multi-attribute, and compound-eligible nodes
+        // Separate section-bundle members, multi-attribute iterate, specialized, and compound-eligible nodes
         var specializedTasks: [RevisionTask] = []
         var compoundCandidates: [ExportedReviewNode] = []
         var multiAttributeCandidates: [ExportedReviewNode] = []
+        var sectionBundleCandidates: [ExportedReviewNode] = []
 
         for revNode in revNodes {
+            if revNode.isSectionBundleMember {
+                sectionBundleCandidates.append(revNode)
+                continue
+            }
             if revNode.isMultiAttributeIterate {
                 multiAttributeCandidates.append(revNode)
                 continue
@@ -71,6 +76,27 @@ final class RevisionTaskBuilder {
             } else {
                 compoundCandidates.append(revNode)
             }
+        }
+
+        // Group section-bundle nodes by key → one compound per section
+        let sectionGroups = Dictionary(grouping: sectionBundleCandidates) {
+            $0.sectionBundleKey ?? "unknown"
+        }
+        for (_, group) in sectionGroups {
+            let prompt = generateSectionCompoundPrompt(
+                for: group,
+                skills: skills,
+                targetingPlan: targetingPlan,
+                phase1Decisions: phase1Decisions,
+                textResumeSnapshot: textResumeSnapshot
+            )
+            let compoundNode = buildCompoundNode(from: group)
+            specializedTasks.append(RevisionTask(
+                revNode: compoundNode,
+                taskPrompt: prompt,
+                nodeType: .compound,
+                phase: phase
+            ))
         }
 
         // Force compound grouping for multi-attribute iterate nodes (grouped by parent path)
@@ -418,6 +444,122 @@ final class RevisionTaskBuilder {
         but prefer adapting existing templates over generating from scratch.
 
         \(bulletList)
+        """
+    }
+
+    // MARK: - Section Compound Prompt Generation
+
+    /// Generate a section-level compound prompt for multi-attribute bundle groups.
+    /// Groups nodes by parent path (entry) and presents the full section structure
+    /// so the LLM revises all entries with all their attributes coherently.
+    private func generateSectionCompoundPrompt(
+        for group: [ExportedReviewNode],
+        skills: [Skill],
+        targetingPlan: TargetingPlan?,
+        phase1Decisions: String?,
+        textResumeSnapshot: String? = nil
+    ) -> String {
+        let phase1Section = phase1DecisionsSection(phase1Decisions)
+
+        // Determine the section name from the sectionBundleKey or paths
+        let sectionKey = group.first?.sectionBundleKey ?? parentPath(for: group[0].path)
+        let sectionName = sectionKey.split(separator: ".").last.map(String.init)?.capitalized ?? sectionKey.capitalized
+
+        // Group nodes by parent path (entry) to present structured entries
+        let entryGroups = Dictionary(grouping: group) { parentPath(for: $0.path) }
+        let sortedEntryKeys = entryGroups.keys.sorted()
+
+        // Build entry descriptions
+        var entrySections: [String] = []
+        for (index, entryKey) in sortedEntryKeys.enumerated() {
+            guard let entryNodes = entryGroups[entryKey] else { continue }
+            // Use the first node's parent context as the entry label
+            let entryLabel = entryKey.split(separator: ".").dropFirst().first.map(String.init) ?? "Entry \(index + 1)"
+            var lines: [String] = ["### Entry \(index + 1): \"\(entryLabel)\""]
+            for node in entryNodes {
+                let fieldName = node.path.split(separator: ".").last.map(String.init) ?? node.displayName
+                if node.isContainer, let children = node.childValues {
+                    lines.append("- \(fieldName) (id: \(node.id)): \(children.joined(separator: ", "))")
+                } else {
+                    lines.append("- \(fieldName) (id: \(node.id)): \(node.value)")
+                }
+            }
+            entrySections.append(lines.joined(separator: "\n"))
+        }
+
+        // Include skill bank reference for skills sections
+        let pathLower = sectionKey.lowercased()
+        var skillBankSection = ""
+        if pathLower.contains("skills") && !skills.isEmpty {
+            skillBankSection = "\n## Available Skills from Skill Bank\n\n\(formatSkillBank(skills))\n"
+        }
+
+        // Build targeting guidance
+        var targetingSection = ""
+        if let plan = targetingPlan {
+            if !plan.narrativeArc.isEmpty {
+                targetingSection += "\n**Narrative Arc:** \(plan.narrativeArc)"
+            }
+            if !plan.emphasisThemes.isEmpty {
+                targetingSection += "\n**Emphasis Themes:** \(plan.emphasisThemes.joined(separator: "; "))"
+            }
+            if !plan.prioritizedSkills.isEmpty {
+                targetingSection += "\n**Prioritized Skills:** \(plan.prioritizedSkills.prefix(5).joined(separator: ", "))"
+            }
+        }
+
+        let nodeIds = group.map { "\"\($0.id)\"" }.joined(separator: ", ")
+        let fieldPaths = group.map { "\"\($0.path)\"" }.joined(separator: ", ")
+
+        return """
+        ## Task: Revise \(sectionName) Section as a Coherent Unit
+
+        Review and revise all entries in the \(sectionName) section together to ensure cross-entry coherence.
+        Each entry has multiple attributes that must remain associated — do not mix attributes between entries.
+
+        ## Current Section Data
+
+        \(entrySections.joined(separator: "\n\n"))
+        \(skillBankSection)
+        \(targetingSection.isEmpty ? "" : "\n## Strategic Guidance\n\(targetingSection)\n")
+        \(resumeContextSection(textResumeSnapshot))
+
+        ## Requirements
+
+        1. **Preserve entry-attribute associations** — each entry's fields must stay coherent (e.g., a skill category's name and keywords must match)
+        2. **Ground every claim in Knowledge Card evidence** — do not fabricate facts, metrics, or capabilities
+        3. **Match the candidate's authentic voice** — study writing samples in the preamble
+        4. **Ensure cross-entry coherence** — entries should complement each other without redundancy
+
+        ## FORBIDDEN
+
+        - Fabricated metrics, percentages, or numbers not in Knowledge Cards
+        - Generic resume phrases: "spearheaded", "leveraged", "drove results", "proven track record"
+        - Mixing attributes between entries (e.g., putting Entry 1's keywords under Entry 2's name)
+
+        ## Output Format
+
+        Return a JSON object with this structure:
+        {
+          "compoundFields": [
+            {
+              "id": "<node id>",
+              "path": "<node path>",
+              "oldValue": "<current value>",
+              "newValue": "<revised value>",
+              "valueChanged": true,
+              "why": "<explanation>",
+              "nodeType": "scalar" or "list",
+              "newValueArray": ["item1", "item2"] // only for list nodes
+            }
+          ]
+        }
+
+        Node IDs in order: [\(nodeIds)]
+        Node paths in order: [\(fieldPaths)]
+
+        If no changes are needed for a field, set "valueChanged" to false and copy the current value.
+        \(phase1Section)
         """
     }
 

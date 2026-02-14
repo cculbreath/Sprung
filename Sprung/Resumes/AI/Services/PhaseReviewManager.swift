@@ -14,12 +14,16 @@
 // ExperienceDefaultsToTree.applyDefaultAIFields() parses manifest patterns
 // and sets TreeNode state:
 //
-// | Pattern           | TreeNode Effect                                      |
-// |-------------------|------------------------------------------------------|
-// | skills.*.name     | skills.bundledAttributes = ["name"]                  |
-// | skills[].keywords | skills.enumeratedAttributes = ["keywords"]           |
-// | custom.jobTitles  | jobTitles.status = .aiToReplace (solo container)     |
-// | custom.objective  | objective.status = .aiToReplace (scalar)             |
+// | Pattern                    | TreeNode Effect                                      |
+// |----------------------------|------------------------------------------------------|
+// | skills.*.name              | skills.bundledAttributes = ["name"]                  |
+// | skills.*.(name, keywords)  | skills.bundledAttributes = ["name", "keywords"]      |
+// |                            | → section-level compound: individual nodes grouped   |
+// | skills[].keywords          | skills.enumeratedAttributes = ["keywords"]           |
+// | skills[name, keywords]     | skills.enumeratedAttributes = ["name", "keywords"]   |
+// |                            | → per-entry compounds (multi-attr iterate)           |
+// | custom.jobTitles           | jobTitles.status = .aiToReplace (solo container)     |
+// | custom.objective           | objective.status = .aiToReplace (scalar)             |
 //
 // Each TreeNode stores:
 // - `bundledAttributes: [String]?` -- Attributes bundled into 1 RevNode (Phase 1)
@@ -29,8 +33,9 @@
 // buildReviewRounds() walks the tree and reads TreeNode state:
 //
 // 1. For nodes with `bundledAttributes`:
-//    -> Generate pattern like "skills.*.name"
-//    -> Export via TreeNode.exportNodesMatchingPath() -> Phase 1 RevNodes
+//    -> Single attr: Generate pattern like "skills.*.name" -> 1 bundled RevNode
+//    -> Multi attr: Generate patterns like "skills[].name", "skills[].keywords"
+//       -> Individual RevNodes tagged with sectionBundleKey -> section compound
 //
 // 2. For nodes with `enumeratedAttributes`:
 //    -> Generate pattern like "skills[].keywords"
@@ -119,17 +124,44 @@ class PhaseReviewManager {
 
             // Check for collection patterns (bundled/enumerated attributes)
             if let bundled = node.bundledAttributes, !bundled.isEmpty {
-                for attr in bundled {
-                    // "*" means "bundle all direct children" (flat containers like jobTitles)
-                    // Named attrs mean "bundle this field across entries" (e.g., skills.*.name)
-                    let pattern = attr == "*"
-                        ? "\(currentPath).*"
-                        : "\(currentPath).*.\(attr)"
-                    if !processedPaths.contains(pattern) {
+                let simpleAttrs = bundled.filter { $0 != "*" && !$0.hasSuffix("[]") }
+                let isMultiAttrBundle = simpleAttrs.count > 1
+
+                if isMultiAttrBundle {
+                    // Multi-attribute bundle → export individual nodes for section-level compound.
+                    // All attributes share the same phase (use first attr's phase).
+                    let phase = phaseFor(section: currentSection, attr: simpleAttrs[0])
+                    for attr in simpleAttrs {
+                        let pattern = "\(currentPath)[].\(attr)"  // [] gives individual nodes
+                        guard !processedPaths.contains(pattern) else { continue }
                         processedPaths.insert(pattern)
-                        let nodes = TreeNode.exportNodesMatchingPath(pattern, from: rootNode)
-                        let phase = phaseFor(section: currentSection, attr: attr)
+                        var nodes = TreeNode.exportNodesMatchingPath(pattern, from: rootNode)
+                        nodes = nodes.map { $0.withSectionBundleTag(key: currentPath) }
                         addToPhase(nodes, phase: phase, pattern: pattern)
+                    }
+                    // Handle any nested array attrs (e.g., "keywords[]") separately — existing bundle behavior
+                    let nestedAttrs = bundled.filter { $0.hasSuffix("[]") }
+                    for attr in nestedAttrs {
+                        let pattern = "\(currentPath).*.\(attr)"
+                        if !processedPaths.contains(pattern) {
+                            processedPaths.insert(pattern)
+                            let nodes = TreeNode.exportNodesMatchingPath(pattern, from: rootNode)
+                            let phase = phaseFor(section: currentSection, attr: attr)
+                            addToPhase(nodes, phase: phase, pattern: pattern)
+                        }
+                    }
+                } else {
+                    // Single attribute (or "*"): existing bundle behavior — 1 bundled ExportedReviewNode
+                    for attr in bundled {
+                        let pattern = attr == "*"
+                            ? "\(currentPath).*"
+                            : "\(currentPath).*.\(attr)"
+                        if !processedPaths.contains(pattern) {
+                            processedPaths.insert(pattern)
+                            let nodes = TreeNode.exportNodesMatchingPath(pattern, from: rootNode)
+                            let phase = phaseFor(section: currentSection, attr: attr)
+                            addToPhase(nodes, phase: phase, pattern: pattern)
+                        }
                     }
                 }
             }
@@ -196,8 +228,8 @@ class PhaseReviewManager {
             if isAIMarked && !processedPaths.contains(currentPath) {
                 processedPaths.insert(currentPath)
                 let nodes = TreeNode.exportNodesMatchingPath(currentPath, from: rootNode)
-                // AI-marked nodes default to phase 2
-                addToPhase(nodes, phase: 2, pattern: currentPath)
+                let phase = phaseFor(section: currentSection, attr: nodeName)
+                addToPhase(nodes, phase: phase, pattern: currentPath)
             }
 
             // Recurse into children

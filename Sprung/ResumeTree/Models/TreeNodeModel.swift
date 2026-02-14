@@ -137,22 +137,36 @@ enum LeafStatus: String, Codable, Hashable {
         if isContainerEnumerate && !isObjectCollection {
             count += orderedChildren.filter { $0.status != .excludedFromGroup }.count
         }
-        // Bundle attributes: 1 revnode per attribute, or M for nested arrays with [] suffix
+        // Bundle attributes: 1 revnode per attribute (single-attr), or entries × attrs (multi-attr)
         else if let bundled = bundledAttributes, !bundled.isEmpty {
-            for attr in bundled {
-                if attr.hasSuffix("[]") {
-                    // Nested array bundle with [] (e.g., "keywords[]"): count all children across entries (skip excluded)
-                    let baseAttr = String(attr.dropLast(2))
-                    for entry in orderedChildren {
-                        if let attrNode = entry.orderedChildren.first(where: {
-                            ($0.name.isEmpty ? $0.displayLabel : $0.name) == baseAttr
-                        }) {
-                            count += attrNode.orderedChildren.filter { $0.status != .excludedFromGroup }.count
-                        }
-                    }
-                } else {
-                    // Simple bundle: 1 revnode regardless of entry count
+            let namedAttrs = bundled.filter { $0 != "*" && !$0.hasSuffix("[]") }
+            let nestedAttrs = bundled.filter { $0.hasSuffix("[]") }
+
+            if namedAttrs.count > 1 {
+                // Multi-attribute bundle: count entries × attributes (section compound review items)
+                let entryCount = orderedChildren.filter { $0.status != .excludedFromGroup }.count
+                count += entryCount * namedAttrs.count
+            } else {
+                // Single named attribute: 1 bundled revnode
+                for _ in namedAttrs {
                     count += 1
+                }
+            }
+
+            // "*" wildcard: 1 bundled revnode for all direct children
+            if bundled.contains("*") {
+                count += 1
+            }
+
+            // Nested array attrs: existing per-child counting
+            for attr in nestedAttrs {
+                let baseAttr = String(attr.dropLast(2))
+                for entry in orderedChildren {
+                    if let attrNode = entry.orderedChildren.first(where: {
+                        ($0.name.isEmpty ? $0.displayLabel : $0.name) == baseAttr
+                    }) {
+                        count += attrNode.orderedChildren.filter { $0.status != .excludedFromGroup }.count
+                    }
                 }
             }
         }

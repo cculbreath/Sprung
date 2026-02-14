@@ -106,66 +106,87 @@ struct NodeGroupPhasePanelPopover: View {
     }
 
     /// Load node groups from the resume tree based on configured AI attributes.
-    /// Uses `bundledAttributes` and `enumeratedAttributes` properties on collection nodes.
-    /// Phase assignments: key exists in phaseAssignments = phase 1, absent = phase 2 (default)
+    /// Walks the tree the same way PhaseReviewManager.processNode does so every
+    /// RevNode that will be generated also appears here for phase assignment.
     private func loadNodeGroups() {
         guard let rootNode = resume.rootNode else { return }
 
         var groups: [NodeGroup] = []
+        var addedKeys = Set<String>()
         let phase1Keys = Set(resume.phaseAssignments.keys)
 
-        // Traverse sections to find collections with AI attributes configured
-        for sectionNode in rootNode.orderedChildren {
-            let rawSectionName = sectionNode.name.isEmpty ? sectionNode.value : sectionNode.name
-            guard !rawSectionName.isEmpty else { continue }
-            let sectionName = rawSectionName.capitalized  // Match manifest key format
+        func addGroup(section: String, attr: String, displayAttr: String? = nil) {
+            let groupKey = "\(section)-\(attr)"
+            guard !addedKeys.contains(groupKey) else { return }
+            addedKeys.insert(groupKey)
+            let phase = phase1Keys.contains(groupKey) ? 1 : 2
+            groups.append(NodeGroup(
+                id: groupKey,
+                sectionName: section,
+                attributeName: displayAttr ?? attr,
+                phase: phase
+            ))
+        }
 
-            // Check for bundled attributes (Together mode)
-            if let bundled = sectionNode.bundledAttributes {
-                for attrName in bundled {
-                    let groupKey = "\(sectionName)-\(attrName)"
-                    let phase = phase1Keys.contains(groupKey) ? 1 : 2
-                    groups.append(NodeGroup(
-                        id: groupKey,
-                        sectionName: sectionName,
-                        attributeName: attrName,
-                        phase: phase
-                    ))
+        func walkNode(_ node: TreeNode, sectionName: String) {
+            let nodeName = node.name.isEmpty ? node.value : node.name
+            let currentSection = (sectionName.isEmpty ? nodeName : sectionName).capitalized
+
+            // Bundled attributes
+            if let bundled = node.bundledAttributes, !bundled.isEmpty {
+                let namedAttrs = bundled.filter { $0 != "*" && !$0.hasSuffix("[]") }
+                if namedAttrs.count > 1 {
+                    // Multi-attribute bundle: show ONE combined entry sharing a phase
+                    let combinedDisplay = namedAttrs.joined(separator: " + ")
+                    addGroup(section: currentSection, attr: namedAttrs[0], displayAttr: combinedDisplay)
+                } else {
+                    for attr in bundled {
+                        addGroup(section: currentSection, attr: attr)
+                    }
                 }
             }
 
-            // Check for enumerated attributes (Separately mode)
-            if let enumerated = sectionNode.enumeratedAttributes {
-                for attrName in enumerated {
-                    // Skip container enumerate marker
-                    guard attrName != "*" else { continue }
-                    let groupKey = "\(sectionName)-\(attrName)"
-                    // Skip if already added from bundled
-                    guard !groups.contains(where: { $0.id == groupKey }) else { continue }
-                    let phase = phase1Keys.contains(groupKey) ? 1 : 2
-                    groups.append(NodeGroup(
-                        id: groupKey,
-                        sectionName: sectionName,
-                        attributeName: attrName,
-                        phase: phase
-                    ))
+            // Enumerated attributes — expand ["*"] for object collections
+            if let enumerated = node.enumeratedAttributes, !enumerated.isEmpty {
+                if enumerated == ["*"] {
+                    let isObjectCollection = node.orderedChildren.first.map { !$0.orderedChildren.isEmpty } ?? false
+                    if isObjectCollection {
+                        // Object collection: expand wildcard to individual attribute names
+                        if let firstEntry = node.orderedChildren.first {
+                            for child in firstEntry.orderedChildren {
+                                let attrName = child.name.isEmpty ? child.displayLabel : child.name
+                                guard !attrName.isEmpty else { continue }
+                                addGroup(section: currentSection, attr: attrName)
+                            }
+                        }
+                    } else {
+                        // Flat container enumerate
+                        addGroup(section: currentSection, attr: "*", displayAttr: "(all items)")
+                    }
+                } else {
+                    for attr in enumerated where attr != "*" {
+                        addGroup(section: currentSection, attr: attr)
+                    }
                 }
             }
 
-            // Check for container enumerate (e.g., jobTitles with "*")
-            if sectionNode.enumeratedAttributes?.contains("*") == true {
-                let groupKey = "\(sectionName)-*"
-                let phase = phase1Keys.contains(groupKey) ? 1 : 2
-                groups.append(NodeGroup(
-                    id: groupKey,
-                    sectionName: sectionName,
-                    attributeName: "(all items)",
-                    phase: phase
-                ))
+            // Solo nodes (aiToReplace with no bundle/enumerate)
+            if node.status == .aiToReplace &&
+               node.bundledAttributes == nil &&
+               node.enumeratedAttributes == nil {
+                addGroup(section: currentSection, attr: nodeName)
+            }
+
+            // Recurse
+            for child in node.orderedChildren {
+                walkNode(child, sectionName: currentSection)
             }
         }
 
-        // Sort by section, then attribute
+        for section in rootNode.orderedChildren {
+            walkNode(section, sectionName: "")
+        }
+
         nodeGroups = groups.sorted { ($0.sectionName, $0.attributeName) < ($1.sectionName, $1.attributeName) }
     }
 }
