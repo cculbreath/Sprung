@@ -5,7 +5,8 @@ struct RevisionToolbar: View {
     let status: RevisionAgentStatus
     let currentAction: String
     let onCancel: () -> Void
-    let onAccept: () -> Void
+    let onSave: () -> Void
+    let onClose: () -> Void
 
     var body: some View {
         HStack(spacing: 12) {
@@ -30,18 +31,22 @@ struct RevisionToolbar: View {
 
             // Actions
             switch status {
-            case .completed:
-                Button("Done") { onAccept() }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.regular)
-
             case .running:
                 Button("Cancel") { onCancel() }
                     .buttonStyle(.bordered)
                     .controlSize(.regular)
 
+                Button("Save") { onSave() }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.regular)
+
+            case .completed:
+                Button("Close") { onClose() }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.regular)
+
             case .failed:
-                Button("Close") { onAccept() }
+                Button("Close") { onClose() }
                     .buttonStyle(.bordered)
                     .controlSize(.regular)
 

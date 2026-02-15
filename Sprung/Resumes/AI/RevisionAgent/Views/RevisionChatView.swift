@@ -9,7 +9,8 @@ struct RevisionChatView: View {
     let onProposalResponse: (ProposalResponse) -> Void
     let onQuestionResponse: (String) -> Void
     let onUserMessage: (String) -> Void
-    let onAcceptCurrentState: () -> Void
+    let onInterruptWithMessage: (String) -> Void
+    let onCancelStream: () -> Void
 
     @State private var questionAnswer: String = ""
     @State private var chatInput: String = ""
@@ -113,10 +114,18 @@ struct RevisionChatView: View {
                                 .strokeBorder(Color(nsColor: .separatorColor), lineWidth: 0.5)
                         )
                 )
-                .onSubmit { submitMessage() }
+                .onSubmit { submitMessage(interrupt: false) }
+                .onKeyPress(.escape) {
+                    if isRunning {
+                        onCancelStream()
+                        return .handled
+                    }
+                    return .ignored
+                }
 
+            // Send button — click queues, Option-click interrupts
             Button {
-                submitMessage()
+                submitMessage(interrupt: false)
             } label: {
                 Image(systemName: "arrow.up.circle.fill")
                     .font(.title2)
@@ -124,26 +133,22 @@ struct RevisionChatView: View {
             .buttonStyle(.plain)
             .foregroundStyle(chatInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? Color.secondary : Color.accentColor)
             .disabled(chatInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-
-            if isRunning {
-                Button("Accept") {
-                    onAcceptCurrentState()
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(.green)
-                .controlSize(.regular)
-            }
+            .help("Send at next turn boundary (⏎). Hold ⌥ to interrupt now.")
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
         .background(.bar)
     }
 
-    private func submitMessage() {
+    private func submitMessage(interrupt: Bool) {
         let text = chatInput.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
         chatInput = ""
-        onUserMessage(text)
+        if interrupt {
+            onInterruptWithMessage(text)
+        } else {
+            onUserMessage(text)
+        }
     }
 
     // MARK: - Message Row

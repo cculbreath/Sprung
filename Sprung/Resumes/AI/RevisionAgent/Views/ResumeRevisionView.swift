@@ -39,7 +39,8 @@ struct ResumeRevisionView: View {
                         status: agent.status,
                         currentAction: agent.currentAction,
                         onCancel: { handleCancel() },
-                        onAccept: { closeWindow() }
+                        onSave: { agent.acceptCurrentState() },
+                        onClose: { closeWindow() }
                     )
                 }
 
@@ -111,8 +112,11 @@ struct ResumeRevisionView: View {
                 onUserMessage: { text in
                     agent.sendUserMessage(text)
                 },
-                onAcceptCurrentState: {
-                    agent.acceptCurrentState()
+                onInterruptWithMessage: { text in
+                    agent.interruptWithMessage(text)
+                },
+                onCancelStream: {
+                    agent.cancelActiveStream()
                 }
             )
         } else {

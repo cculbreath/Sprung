@@ -89,8 +89,16 @@ class ResumeRevisionAgent {
     private(set) var currentAction: String = ""
     private(set) var latestPDFData: Data?
     private var isCancelled = false
+    /// When true, the main loop's cancellation path builds a new resume from
+    /// the workspace before deleting it — avoiding the race where a separate
+    /// Task tried to read from an already-deleted workspace.
+    private var shouldBuildResumeOnExit = false
     private var consecutiveNoToolTurns = 0
     private var activeStreamTask: Task<StreamResult, Error>?
+    /// Wall-clock deadline for the session. Reset whenever the user responds to
+    /// a human-in-the-loop prompt (proposal, question, completion) so idle time
+    /// waiting for user input doesn't count toward the timeout.
+    private var timeoutDeadline: Date = .distantFuture
 
     // Continuations for human-in-the-loop tools
     private var proposalContinuation: CheckedContinuation<ProposalResponse, Never>?
@@ -137,6 +145,7 @@ class ResumeRevisionAgent {
         messages = []
         conversationMessages = []
         isCancelled = false
+        shouldBuildResumeOnExit = false
 
         do {
             // 1. Create workspace and export materials
@@ -186,16 +195,26 @@ class ResumeRevisionAgent {
             let tools = buildAnthropicTools()
 
             // 5. Agent loop
-            let startTime = Date()
+            timeoutDeadline = Date().addingTimeInterval(timeoutSeconds)
 
             while turnCount < maxTurns {
                 guard !isCancelled else {
-                    status = .cancelled
+                    if shouldBuildResumeOnExit {
+                        do {
+                            try await buildAndActivateResumeFromWorkspace()
+                            status = .completed
+                        } catch {
+                            Logger.error("RevisionAgent: Failed to build resume on accept: \(error)", category: .ai)
+                            status = .failed(error.localizedDescription)
+                        }
+                    } else {
+                        status = .cancelled
+                    }
                     try? workspaceService.deleteWorkspace()
                     return
                 }
 
-                if Date().timeIntervalSince(startTime) > timeoutSeconds {
+                if Date() > timeoutDeadline {
                     throw RevisionAgentError.timeout
                 }
 
@@ -209,13 +228,38 @@ class ResumeRevisionAgent {
                     pendingUserMessages.removeAll()
                     // Ensure conversation ends with a user message (Anthropic requirement)
                     if conversationMessages.last?.role == "user" {
-                        // Merge into the last user message
+                        // Append to existing user message — don't replace, because
+                        // the existing message may contain tool_result blocks that
+                        // must be preserved for API alternation requirements.
                         let lastIndex = conversationMessages.count - 1
-                        conversationMessages[lastIndex] = AnthropicMessage.user(combined)
+                        let existing = conversationMessages[lastIndex]
+                        let userTextBlock = AnthropicContentBlock.text(AnthropicTextBlock(text: combined))
+                        switch existing.content {
+                        case .text(let text):
+                            conversationMessages[lastIndex] = AnthropicMessage(
+                                role: "user",
+                                content: .blocks([
+                                    .text(AnthropicTextBlock(text: text)),
+                                    userTextBlock
+                                ])
+                            )
+                        case .blocks(var blocks):
+                            blocks.append(userTextBlock)
+                            conversationMessages[lastIndex] = AnthropicMessage(
+                                role: "user",
+                                content: .blocks(blocks)
+                            )
+                        }
                     } else {
                         conversationMessages.append(AnthropicMessage.user(combined))
                     }
                 }
+
+                // Repair any orphaned tool_use blocks before calling the API.
+                // When the user sends a chat message mid-stream, the stream is
+                // cancelled and tool results may never be generated, leaving
+                // tool_use IDs without matching tool_result blocks.
+                repairOrphanedToolUse()
 
                 // Call Anthropic
                 let parameters = AnthropicMessageParameter(
@@ -317,7 +361,17 @@ class ResumeRevisionAgent {
                 )
 
                 guard !isCancelled else {
-                    status = .cancelled
+                    if shouldBuildResumeOnExit {
+                        do {
+                            try await buildAndActivateResumeFromWorkspace()
+                            status = .completed
+                        } catch {
+                            Logger.error("RevisionAgent: Failed to build resume on accept: \(error)", category: .ai)
+                            status = .failed(error.localizedDescription)
+                        }
+                    } else {
+                        status = .cancelled
+                    }
                     try? workspaceService.deleteWorkspace()
                     return
                 }
@@ -389,8 +443,11 @@ class ResumeRevisionAgent {
                     continue
                 }
 
-                // Execute tool calls and collect results
+                // Execute tool calls and collect results.
+                // Anthropic requires all tool_result blocks before any other
+                // content types in the user message, so we collect them separately.
                 var toolResultBlocks: [AnthropicContentBlock] = []
+                var hadWriteCall = false
 
                 for toolCall in pendingToolCalls {
                     currentAction = "Turn \(turnCount): \(toolDisplayName(toolCall.name))"
@@ -406,16 +463,28 @@ class ResumeRevisionAgent {
 
                     toolResultBlocks.append(.toolResult(AnthropicToolResultBlock(
                         toolUseId: toolCall.id,
-                        content: result.text
+                        content: result.text,
+                        isError: result.isError
                     )))
-                    // Append any rendered page images after the tool result
-                    toolResultBlocks.append(contentsOf: result.imageBlocks)
+
+                    if toolCall.name == WriteJsonFileTool.name {
+                        hadWriteCall = true
+                    }
                 }
 
-                // Append tool results (and any attached images) as a single user message
+                // After all tools complete, render page images ONCE for the LLM.
+                // Each write_json_file already updated the preview pane; this
+                // single render avoids sending N duplicate image sets.
+                var trailingImageBlocks: [AnthropicContentBlock] = []
+                if hadWriteCall, let pdfData = latestPDFData {
+                    trailingImageBlocks = renderPDFPageImages(pdfData)
+                }
+
+                // All tool_result blocks first, then images
+                let userBlocks = toolResultBlocks + trailingImageBlocks
                 let toolResultMessage = AnthropicMessage(
                     role: "user",
-                    content: .blocks(toolResultBlocks)
+                    content: .blocks(userBlocks)
                 )
                 conversationMessages.append(toolResultMessage)
             }
@@ -424,7 +493,17 @@ class ResumeRevisionAgent {
             throw RevisionAgentError.maxTurnsExceeded
 
         } catch {
-            if !isCancelled {
+            if shouldBuildResumeOnExit {
+                do {
+                    try await buildAndActivateResumeFromWorkspace()
+                    status = .completed
+                    try? workspaceService.deleteWorkspace()
+                    return
+                } catch {
+                    Logger.error("RevisionAgent: Failed to build resume on accept (catch path): \(error)", category: .ai)
+                    status = .failed(error.localizedDescription)
+                }
+            } else if !isCancelled {
                 status = .failed(error.localizedDescription)
             }
             try? workspaceService.deleteWorkspace()
@@ -435,7 +514,10 @@ class ResumeRevisionAgent {
     // MARK: - User Response Methods
 
     func respondToProposal(_ response: ProposalResponse) {
+        guard let cont = proposalContinuation else { return }
         currentProposal = nil
+        proposalContinuation = nil
+        timeoutDeadline = Date().addingTimeInterval(timeoutSeconds)
         let responseText: String
         switch response {
         case .accepted:
@@ -446,66 +528,94 @@ class ResumeRevisionAgent {
             responseText = feedback
         }
         messages.append(RevisionMessage(role: .user, content: responseText))
-        proposalContinuation?.resume(returning: response)
-        proposalContinuation = nil
+        cont.resume(returning: response)
     }
 
     func respondToQuestion(_ answer: String) {
+        guard let cont = questionContinuation else { return }
         currentQuestion = nil
-        messages.append(RevisionMessage(role: .user, content: answer))
-        questionContinuation?.resume(returning: answer)
         questionContinuation = nil
+        timeoutDeadline = Date().addingTimeInterval(timeoutSeconds)
+        messages.append(RevisionMessage(role: .user, content: answer))
+        cont.resume(returning: answer)
     }
 
     func respondToCompletion(_ accepted: Bool) {
+        guard let cont = completionContinuation else { return }
+        completionContinuation = nil
+        timeoutDeadline = Date().addingTimeInterval(timeoutSeconds)
         messages.append(RevisionMessage(
             role: .user,
             content: accepted ? "Revision accepted" : "Revision rejected"
         ))
-        completionContinuation?.resume(returning: accepted)
-        completionContinuation = nil
+        cont.resume(returning: accepted)
     }
 
-    /// Queue a free-form user message to be injected into the conversation between turns.
-    /// Also cancels the active stream so the message gets delivered promptly.
+    /// Queue a free-form user message to be delivered at the next turn boundary.
+    /// The active stream continues undisturbed; the message is injected before
+    /// the next LLM call once the current turn completes naturally.
+    ///
+    /// If the agent is blocked on a human-in-the-loop continuation (proposal,
+    /// question, or completion acceptance), the chat message unblocks it:
+    /// - **Completion**: rejected so the loop continues with the user's new request.
+    /// - **Proposal**: treated as modification feedback.
+    /// - **Question**: treated as the answer.
+    /// We resume the continuation directly (not via the `respond*` helpers) to
+    /// avoid appending duplicate UI messages.
     func sendUserMessage(_ text: String) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         pendingUserMessages.append(trimmed)
         messages.append(RevisionMessage(role: .user, content: trimmed))
-        // Reset the no-tool counter since the user is actively engaging
         consecutiveNoToolTurns = 0
-        // Cancel the active stream so the agent loop advances to the next turn
+
+        if let cont = completionContinuation {
+            // Reject — the user wants more changes.
+            completionContinuation = nil
+            timeoutDeadline = Date().addingTimeInterval(timeoutSeconds)
+            cont.resume(returning: false)
+        } else if let cont = proposalContinuation {
+            currentProposal = nil
+            proposalContinuation = nil
+            timeoutDeadline = Date().addingTimeInterval(timeoutSeconds)
+            cont.resume(returning: .modified(feedback: trimmed))
+        } else if let cont = questionContinuation {
+            currentQuestion = nil
+            questionContinuation = nil
+            timeoutDeadline = Date().addingTimeInterval(timeoutSeconds)
+            cont.resume(returning: trimmed)
+        }
+    }
+
+    /// Queue a message AND immediately cancel the active stream so the agent
+    /// processes it on the very next loop iteration. Use this when the user
+    /// wants to interrupt work-in-progress (e.g., Shift+Enter or "Send Now").
+    func interruptWithMessage(_ text: String) {
+        sendUserMessage(text)
+        cancelActiveStream()
+    }
+
+    /// Cancel the active LLM stream without queuing a message.
+    /// Mapped to ESC key — stops the current turn but keeps queued messages.
+    func cancelActiveStream() {
         activeStreamTask?.cancel()
     }
 
     /// Accept the current workspace state and create a new resume from it.
+    /// If a completion continuation is active (the agent called complete_revision),
+    /// we resume it. Otherwise we flag the main loop to build the resume from the
+    /// workspace during its cancellation exit — this avoids the race where a
+    /// separate Task tried to read from an already-deleted workspace.
     func acceptCurrentState() {
         // If waiting on completion tool, approve it
         if completionContinuation != nil {
             respondToCompletion(true)
             return
         }
-        // Otherwise, directly build the resume from current workspace state
-        Task {
-            do {
-                let revisedNodes = try workspaceService.importRevisedTreeNodes()
-                let revisedFontSizes = try workspaceService.importRevisedFontSizes()
-                let newResume = workspaceService.buildNewResume(
-                    from: resume,
-                    revisedNodes: revisedNodes,
-                    revisedFontSizes: revisedFontSizes,
-                    context: modelContext
-                )
-                await activateNewResume(newResume)
-                status = .completed
-                try? workspaceService.deleteWorkspace()
-            } catch {
-                Logger.error("RevisionAgent: Failed to build resume from current state: \(error)", category: .ai)
-                status = .failed(error.localizedDescription)
-            }
-        }
+        // Signal the main loop to build the resume from workspace before cleanup
+        shouldBuildResumeOnExit = true
         isCancelled = true
+        activeStreamTask?.cancel()
     }
 
     func cancel() {
@@ -537,10 +647,10 @@ class ResumeRevisionAgent {
 
     // MARK: - Stream Result
 
-    /// Result from executing a tool, with optional image attachments.
+    /// Result from executing a tool.
     private struct ToolExecutionResult {
         let text: String
-        var imageBlocks: [AnthropicContentBlock] = []
+        var isError: Bool = false
     }
 
     /// Accumulated output from a single stream processing turn.
@@ -584,12 +694,11 @@ class ResumeRevisionAgent {
             case WriteJsonFileTool.name:
                 let params = try JSONDecoder().decode(WriteJsonFileTool.Parameters.self, from: argsData)
                 let result = try WriteJsonFileTool.execute(parameters: params, repoRoot: workspacePath)
-                // Auto-render after every JSON write so the PDF preview stays current
+                // Auto-render for the live preview pane (no images for LLM yet —
+                // a single set of page images is appended after all tools complete)
                 let renderInfo = await autoRenderResume()
                 let text = "{\"success\": true, \"path\": \"\(result.path)\", \"itemCount\": \(result.itemCount), \"pageCount\": \(renderInfo.pageCount), \"renderSuccess\": \(renderInfo.success)}"
-                // Attach rendered PDF page images so the agent can visually inspect the result
-                let imageBlocks = renderInfo.pdfData.map { renderPDFPageImages($0) } ?? []
-                return ToolExecutionResult(text: text, imageBlocks: imageBlocks)
+                return ToolExecutionResult(text: text)
 
             case ProposeChangesTool.name:
                 let params = try JSONDecoder().decode(ProposeChangesTool.Parameters.self, from: argsData)
@@ -600,11 +709,11 @@ class ResumeRevisionAgent {
                 return ToolExecutionResult(text: await executeAskUser(params))
 
             default:
-                return ToolExecutionResult(text: "Unknown tool: \(name)")
+                return ToolExecutionResult(text: "Unknown tool: \(name)", isError: true)
             }
         } catch {
             Logger.error("RevisionAgent tool error (\(name)): \(error.localizedDescription)", category: .ai)
-            return ToolExecutionResult(text: "Error: \(error.localizedDescription)")
+            return ToolExecutionResult(text: "Error: \(error.localizedDescription)", isError: true)
         }
     }
 
@@ -772,19 +881,27 @@ class ResumeRevisionAgent {
         }
 
         if accepted {
-            // Build final resume from workspace state
-            let revisedNodes = try workspaceService.importRevisedTreeNodes()
-            let revisedFontSizes = try workspaceService.importRevisedFontSizes()
-            let newResume = workspaceService.buildNewResume(
-                from: resume,
-                revisedNodes: revisedNodes,
-                revisedFontSizes: revisedFontSizes,
-                context: modelContext
-            )
-            await activateNewResume(newResume)
+            try await buildAndActivateResumeFromWorkspace()
         }
 
         return accepted
+    }
+
+    /// Build a new resume from the current workspace state and activate it.
+    /// Used by the main loop's cancellation guard, the catch path, and handleCompleteRevision.
+    /// Explicitly saves the model context so the main window's context picks up
+    /// the new resume — the revision window has its own context from `.modelContainer(...)`.
+    private func buildAndActivateResumeFromWorkspace() async throws {
+        let revisedNodes = try workspaceService.importRevisedTreeNodes()
+        let revisedFontSizes = try workspaceService.importRevisedFontSizes()
+        let newResume = workspaceService.buildNewResume(
+            from: resume,
+            revisedNodes: revisedNodes,
+            revisedFontSizes: revisedFontSizes,
+            context: modelContext
+        )
+        await activateNewResume(newResume)
+        try modelContext.save()
     }
 
     /// Generate PDF for the new resume and switch the editor to it.
@@ -798,6 +915,97 @@ class ResumeRevisionAgent {
         }
         resume.jobApp?.selectedRes = newResume
         Logger.info("RevisionAgent: Activated new resume in editor", category: .ai)
+    }
+
+    // MARK: - Conversation Repair
+
+    /// Scan conversation for assistant messages containing tool_use blocks whose
+    /// IDs are not answered by a tool_result in the immediately following user message.
+    /// Inject synthetic "cancelled" tool_result blocks so the API accepts the history.
+    private func repairOrphanedToolUse() {
+        var repaired = false
+        var i = 0
+        while i < conversationMessages.count {
+            let msg = conversationMessages[i]
+            guard msg.role == "assistant" else { i += 1; continue }
+
+            // Collect tool_use IDs from this assistant message
+            let toolUseIds: [String]
+            switch msg.content {
+            case .text:
+                i += 1; continue
+            case .blocks(let blocks):
+                toolUseIds = blocks.compactMap { block in
+                    if case .toolUse(let tu) = block { return tu.id }
+                    return nil
+                }
+            }
+            guard !toolUseIds.isEmpty else { i += 1; continue }
+
+            // Gather tool_result IDs from the next user message (if it exists)
+            let answeredIds: Set<String>
+            if i + 1 < conversationMessages.count,
+               conversationMessages[i + 1].role == "user" {
+                switch conversationMessages[i + 1].content {
+                case .text:
+                    answeredIds = []
+                case .blocks(let blocks):
+                    answeredIds = Set(blocks.compactMap { block in
+                        if case .toolResult(let tr) = block { return tr.toolUseId }
+                        return nil
+                    })
+                }
+            } else {
+                answeredIds = []
+            }
+
+            let orphaned = toolUseIds.filter { !answeredIds.contains($0) }
+            guard !orphaned.isEmpty else { i += 1; continue }
+
+            // Build synthetic tool_result blocks for orphaned IDs
+            let syntheticBlocks: [AnthropicContentBlock] = orphaned.map { id in
+                .toolResult(AnthropicToolResultBlock(
+                    toolUseId: id,
+                    content: "{\"cancelled\": true, \"reason\": \"Request interrupted by user\"}",
+                    isError: true
+                ))
+            }
+
+            if i + 1 < conversationMessages.count,
+               conversationMessages[i + 1].role == "user" {
+                // Prepend synthetic results into the existing user message
+                switch conversationMessages[i + 1].content {
+                case .text(let text):
+                    var blocks = syntheticBlocks
+                    blocks.append(.text(AnthropicTextBlock(text: text)))
+                    conversationMessages[i + 1] = AnthropicMessage(
+                        role: "user", content: .blocks(blocks)
+                    )
+                case .blocks(var blocks):
+                    blocks.insert(contentsOf: syntheticBlocks, at: 0)
+                    conversationMessages[i + 1] = AnthropicMessage(
+                        role: "user", content: .blocks(blocks)
+                    )
+                }
+            } else {
+                // No user message follows — insert one with the synthetic results
+                conversationMessages.insert(
+                    AnthropicMessage(role: "user", content: .blocks(syntheticBlocks)),
+                    at: i + 1
+                )
+            }
+
+            Logger.warning(
+                "RevisionAgent: Repaired \(orphaned.count) orphaned tool_use ID(s) at message \(i)",
+                category: .ai
+            )
+            repaired = true
+            i += 2 // skip both the assistant and the (now-repaired) user message
+        }
+
+        if repaired {
+            Logger.info("RevisionAgent: Conversation repaired before API call", category: .ai)
+        }
     }
 
     // MARK: - Message Helpers
