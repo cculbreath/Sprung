@@ -267,29 +267,17 @@ actor CustomizationParallelExecutor {
             }
 
             // Non-tool, non-reasoning path: single-shot structured output via messages
-            if let systemPrompt {
-                let response = try await executeStructuredWithMessages(
-                    userPrompt: userPrompt,
-                    systemPrompt: systemPrompt,
-                    llmFacade: llmFacade,
-                    modelId: modelId,
-                    schema: CustomizationSchemas.proposedRevisionNode,
-                    schemaName: "proposed_revision_node",
-                    type: ProposedRevisionNode.self
-                )
-                return RevisionTaskResult(
-                    taskId: task.id,
-                    result: .success(response)
-                )
+            guard let systemPrompt else {
+                throw LLMError.clientError("System prompt required for structured execution")
             }
-
-            // Legacy single-prompt path (no system prompt split)
-            let response = try await llmFacade.executeStructuredWithSchema(
-                prompt: userPrompt,
+            let response = try await executeStructuredWithMessages(
+                userPrompt: userPrompt,
+                systemPrompt: systemPrompt,
+                llmFacade: llmFacade,
                 modelId: modelId,
-                as: ProposedRevisionNode.self,
                 schema: CustomizationSchemas.proposedRevisionNode,
-                schemaName: "proposed_revision_node"
+                schemaName: "proposed_revision_node",
+                type: ProposedRevisionNode.self
             )
             return RevisionTaskResult(
                 taskId: task.id,

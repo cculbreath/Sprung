@@ -109,21 +109,26 @@ struct CustomizationContext {
         applicantProfileStore: ApplicantProfileStore,
         candidateDossierStore: CandidateDossierStore? = nil
     ) -> CustomizationContext {
-        // Get approved skills
         let approvedSkills = skillStore.approvedSkills
-
-        // Get title sets from guidance store
         let titleSets = guidanceStore.titleSets()
-
-        // Get all approved knowledge cards
         let allApprovedCards = knowledgeCardStore.approvedCards
-
-        // Get applicant profile
         let profile = applicantProfileStore.currentProfile()
         let profileDraft = ApplicantProfileDraft(profile: profile)
-
-        // Get job description from resume's job application
         let jobDescription = resume.jobApp?.jobListingString ?? ""
+
+        // Validate required data — log warnings for missing inputs that will degrade quality
+        if jobDescription.isEmpty {
+            Logger.warning("CustomizationContext: No job description — customization will lack targeting", category: .ai)
+        }
+        if allApprovedCards.isEmpty {
+            Logger.warning("CustomizationContext: No knowledge cards — customization will lack background context", category: .ai)
+        }
+        if approvedSkills.isEmpty {
+            Logger.warning("CustomizationContext: No approved skills — skill sections won't be customized", category: .ai)
+        }
+        if profileDraft.name.isEmpty {
+            Logger.warning("CustomizationContext: No applicant name in profile", category: .ai)
+        }
 
         // Parse relevantCardIds from the job app (stored as [String] of UUID strings)
         let parsedRelevantIds: Set<UUID>
