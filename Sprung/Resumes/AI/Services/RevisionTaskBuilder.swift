@@ -29,16 +29,16 @@ final class RevisionTaskBuilder {
     /// - Returns: Array of revision tasks with appropriate prompts
     func buildTasks(
         from revNodes: [ExportedReviewNode],
-        resume: Resume,
-        jobDescription: String,
-        skills: [Skill],
-        titleSets: [TitleSet],
+        context: CustomizationContext,
         phase: Int,
         targetingPlan: TargetingPlan? = nil,
         phase1Decisions: String? = nil,
-        knowledgeCards: [KnowledgeCard] = [],
         textResumeSnapshot: String? = nil
     ) -> [RevisionTask] {
+        let resume = context.resume
+        let skills = context.skills
+        let titleSets = context.titleSets
+        let knowledgeCards = context.knowledgeCards
         // Build work entry name index for targeting plan matching
         let workEntryNames = extractWorkEntryNames(from: resume)
         // Separate multi-attribute iterate, specialized, and compound-eligible nodes

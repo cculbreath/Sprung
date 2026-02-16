@@ -307,14 +307,10 @@ class RevisionWorkflowOrchestrator {
         // Build tasks for this phase with targeting plan and Phase 1 decisions
         let tasks = builder.buildTasks(
             from: nodes,
-            resume: resume,
-            jobDescription: context.jobDescription,
-            skills: context.skills,
-            titleSets: context.titleSets,
+            context: context,
             phase: phase,
             targetingPlan: cachedTargetingPlan,
             phase1Decisions: autoDecisionsContext,
-            knowledgeCards: context.knowledgeCards,
             textResumeSnapshot: textResumeSnapshot
         )
 
@@ -424,13 +420,9 @@ class RevisionWorkflowOrchestrator {
 
         let tasks = builder.buildTasks(
             from: nodes,
-            resume: resume,
-            jobDescription: context.jobDescription,
-            skills: context.skills,
-            titleSets: context.titleSets,
+            context: context,
             phase: 1,
             targetingPlan: cachedTargetingPlan,
-            knowledgeCards: context.knowledgeCards,
             textResumeSnapshot: textResumeSnapshot
         )
 
@@ -649,14 +641,10 @@ class RevisionWorkflowOrchestrator {
         // Rebuild as compound tasks (should produce 1 compound task from the group)
         let tasks = builder.buildTasks(
             from: originalNodes,
-            resume: resume,
-            jobDescription: context.jobDescription,
-            skills: context.skills,
-            titleSets: context.titleSets,
+            context: context,
             phase: groupItems[0].task.phase,
             targetingPlan: cachedTargetingPlan,
             phase1Decisions: autoDecisionsContext,
-            knowledgeCards: context.knowledgeCards,
             textResumeSnapshot: textResumeSnapshot
         )
 
