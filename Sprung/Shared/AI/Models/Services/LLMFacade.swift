@@ -65,6 +65,10 @@ final class LLMFacade {
     private var conversationServices: [Backend: LLMConversationService] = [:]
 
     // Extracted components
+    private static func jsonLogString<T: Encodable>(_ value: T) -> String {
+        (try? JSONEncoder().encode(value)).flatMap { String(data: $0, encoding: .utf8) } ?? String(describing: value)
+    }
+
     private let streamingManager = LLMFacadeStreamingManager()
     private let capabilityValidator: LLMFacadeCapabilityValidator
     private let specializedAPIs = LLMFacadeSpecializedAPIs()
@@ -176,7 +180,7 @@ final class LLMFacade {
             let altClient = try resolveClient(for: backend)
             result = try await altClient.executeStructured(prompt: prompt, modelId: modelId, as: type)
         }
-        let jsonString = (try? JSONEncoder().encode(result)).flatMap { String(data: $0, encoding: .utf8) } ?? String(describing: result)
+        let jsonString = Self.jsonLogString(result)
         LLMTranscriptLogger.logStructuredCall(
             method: "executeStructured", modelId: modelId, backend: backend.displayName,
             prompt: prompt, responseType: String(describing: T.self), responseJSON: jsonString, durationMs: elapsedMs(from: start)
@@ -200,7 +204,7 @@ final class LLMFacade {
             let altClient = try resolveClient(for: backend)
             result = try await altClient.executeStructuredWithImages(prompt: prompt, modelId: modelId, images: images, as: type)
         }
-        let jsonString = (try? JSONEncoder().encode(result)).flatMap { String(data: $0, encoding: .utf8) } ?? String(describing: result)
+        let jsonString = Self.jsonLogString(result)
         LLMTranscriptLogger.logStructuredCall(
             method: "executeStructuredWithImages", modelId: modelId, backend: backend.displayName,
             prompt: "[+\(images.count) images] \(prompt)", responseType: String(describing: T.self), responseJSON: jsonString, durationMs: elapsedMs(from: start)
@@ -225,7 +229,7 @@ final class LLMFacade {
             let altClient = try resolveClient(for: backend)
             result = try await altClient.executeStructuredWithSchema(prompt: prompt, modelId: modelId, as: type, schema: schema, schemaName: schemaName)
         }
-        let jsonString = (try? JSONEncoder().encode(result)).flatMap { String(data: $0, encoding: .utf8) } ?? String(describing: result)
+        let jsonString = Self.jsonLogString(result)
         LLMTranscriptLogger.logStructuredCall(
             method: "executeStructuredWithSchema(\(schemaName))", modelId: modelId, backend: backend.displayName,
             prompt: prompt, responseType: String(describing: T.self), responseJSON: jsonString, durationMs: elapsedMs(from: start)
@@ -286,7 +290,7 @@ final class LLMFacade {
                 backend: backend
             )
         }
-        let jsonString = (try? JSONEncoder().encode(result)).flatMap { String(data: $0, encoding: .utf8) } ?? String(describing: result)
+        let jsonString = Self.jsonLogString(result)
         LLMTranscriptLogger.logStructuredCall(
             method: "executeStructuredWithDictionarySchema(\(schemaName))", modelId: modelId, backend: backend.displayName,
             prompt: prompt, responseType: String(describing: T.self), responseJSON: jsonString, durationMs: elapsedMs(from: start)
@@ -320,7 +324,7 @@ final class LLMFacade {
                 as: type
             )
         }
-        let jsonString = (try? JSONEncoder().encode(result)).flatMap { String(data: $0, encoding: .utf8) } ?? String(describing: result)
+        let jsonString = Self.jsonLogString(result)
         LLMTranscriptLogger.logStructuredCall(
             method: "executeFlexibleJSON", modelId: modelId, backend: backend.displayName,
             prompt: prompt, responseType: String(describing: T.self), responseJSON: jsonString, durationMs: elapsedMs(from: start)
@@ -540,7 +544,7 @@ final class LLMFacade {
             images: images,
             jsonSchema: jsonSchema
         )
-        let jsonString = (try? JSONEncoder().encode(result)).flatMap { String(data: $0, encoding: .utf8) } ?? String(describing: result)
+        let jsonString = Self.jsonLogString(result)
         LLMTranscriptLogger.logStructuredCall(
             method: "continueConversationStructured", modelId: modelId, backend: backend.displayName,
             prompt: "ConversationId: \(conversationId)\nUser: \(userMessage)", responseType: String(describing: T.self), responseJSON: jsonString, durationMs: elapsedMs(from: start)
@@ -963,7 +967,7 @@ final class LLMFacade {
             filename: filename,
             modelId: modelId
         )
-        let jsonString = (try? JSONEncoder().encode(result)).flatMap { String(data: $0, encoding: .utf8) } ?? String(describing: result)
+        let jsonString = Self.jsonLogString(result)
         LLMTranscriptLogger.logGeminiCall(
             method: "generateDocumentSummary", modelId: modelId ?? "(default)",
             prompt: "Summarize: \(filename)", attachmentInfo: "Text content: \(content.count) chars",

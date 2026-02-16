@@ -41,6 +41,11 @@ struct CustomizationPromptContext {
 
     /// The job application being customized for
     let jobApp: JobApp
+
+    /// Best available card pool: allCards when available, otherwise knowledgeCards
+    var effectiveCards: [KnowledgeCard] {
+        allCards.isEmpty ? knowledgeCards : allCards
+    }
 }
 
 /// Service for building cacheable prompt preambles for resume customization.
@@ -123,18 +128,17 @@ final class CustomizationPromptCacheService {
         var sections: [String] = []
 
         // Knowledge card summaries (tiered by relevance)
-        let cardsForSection = context.allCards.isEmpty ? context.knowledgeCards : context.allCards
-        if !cardsForSection.isEmpty {
+        let cards = context.effectiveCards
+        if !cards.isEmpty {
             sections.append(buildKnowledgeCardSection(
-                allCards: cardsForSection,
+                allCards: cards,
                 relevantCardIds: context.relevantCardIds
             ))
         }
 
         // Skill bank
         if !context.skills.isEmpty {
-            let cardPool = context.allCards.isEmpty ? context.knowledgeCards : context.allCards
-            sections.append(buildSkillBankSection(context.skills, knowledgeCards: cardPool))
+            sections.append(buildSkillBankSection(context.skills, knowledgeCards: cards))
         }
 
         // Title set library

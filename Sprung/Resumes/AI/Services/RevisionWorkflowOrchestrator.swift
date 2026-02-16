@@ -299,10 +299,7 @@ class RevisionWorkflowOrchestrator {
         )
 
         // Build split preamble: core (system message, cacheable) + variable (user message, per-task)
-        let corePreamble = cacheService.buildCorePreamble(context: promptContext)
-        let variableContext = cacheService.buildVariableContext(context: promptContext)
-        self.cachedCorePreamble = corePreamble
-        self.cachedPreamble = corePreamble + "\n\n---\n\n" + variableContext
+        let variableContext = buildAndCachePreamble(context: promptContext)
 
         // Build text resume snapshot for cross-section context
         let textResumeSnapshot = ResumeTextSnapshotBuilder.buildSnapshot(resume: resume)
@@ -328,10 +325,7 @@ class RevisionWorkflowOrchestrator {
         self.cachedToolConfig = toolConfig
 
         // Clear reasoning state from targeting plan phase before parallel execution
-        if cachedReasoning != nil {
-            reasoningStreamManager.clear()
-            reasoningStreamManager.isVisible = false
-        }
+        clearReasoningStateIfNeeded()
 
         // Build reasoning callback for parallel tasks — route each task's
         // reasoning into its own section so parallel streams don't interleave.
@@ -355,7 +349,7 @@ class RevisionWorkflowOrchestrator {
             llmFacade: llm,
             modelId: modelId,
             preamble: variableContext,
-            systemPrompt: corePreamble,
+            systemPrompt: cachedCorePreamble,
             toolConfig: toolConfig,
             reasoning: reasoning,
             onReasoningChunk: reasoningCallback
@@ -424,10 +418,7 @@ class RevisionWorkflowOrchestrator {
         )
 
         // Build split preamble: core (system message) + variable (user message)
-        let corePreamble = cacheService.buildCorePreamble(context: promptContext)
-        let variableContext = cacheService.buildVariableContext(context: promptContext)
-        self.cachedCorePreamble = corePreamble
-        self.cachedPreamble = corePreamble + "\n\n---\n\n" + variableContext
+        let variableContext = buildAndCachePreamble(context: promptContext)
 
         let textResumeSnapshot = ResumeTextSnapshotBuilder.buildSnapshot(resume: resume)
 
@@ -446,10 +437,7 @@ class RevisionWorkflowOrchestrator {
         Logger.info("Auto pre-step: executing \(tasks.count) tasks", category: .ai)
 
         // Clear reasoning state before parallel execution
-        if cachedReasoning != nil {
-            reasoningStreamManager.clear()
-            reasoningStreamManager.isVisible = false
-        }
+        clearReasoningStateIfNeeded()
 
         // Execute and collect results with split preamble
         let results = await executor.executeAll(
@@ -457,7 +445,7 @@ class RevisionWorkflowOrchestrator {
             llmFacade: llm,
             modelId: modelId,
             preamble: variableContext,
-            systemPrompt: corePreamble,
+            systemPrompt: cachedCorePreamble,
             reasoning: cachedReasoning
         )
 
@@ -906,6 +894,24 @@ class RevisionWorkflowOrchestrator {
         workflowState.setProcessingRevisions(false)
         workflowState.markWorkflowCompleted(reset: true)
         delegate?.hideParallelReviewQueue()
+    }
+
+    // MARK: - Preamble Building
+
+    /// Build and cache the split preamble (core system prompt + variable user context).
+    /// Returns the variable context string for use in user messages.
+    @discardableResult
+    private func buildAndCachePreamble(context: CustomizationPromptContext) -> String {
+        let corePreamble = cacheService.buildCorePreamble(context: context)
+        let variableContext = cacheService.buildVariableContext(context: context)
+        self.cachedCorePreamble = corePreamble
+        self.cachedPreamble = corePreamble + "\n\n---\n\n" + variableContext
+        return variableContext
+    }
+
+    /// Clear reasoning state before starting a new parallel execution phase.
+    private func clearReasoningStateIfNeeded() {
+        clearReasoningStateIfNeeded()
     }
 
     // MARK: - Tool Configuration
