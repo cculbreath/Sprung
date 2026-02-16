@@ -531,6 +531,7 @@ final class CustomizationReviewQueue {
         if lastRegenerationError?.itemId == itemId { lastRegenerationError = nil }
         if let index = items.firstIndex(where: { $0.id == itemId }) {
             items[index].editedContent = content
+            items[index].editedChildren = nil
             items[index].userAction = .edited
         }
     }
@@ -540,6 +541,7 @@ final class CustomizationReviewQueue {
         if lastRegenerationError?.itemId == itemId { lastRegenerationError = nil }
         if let index = items.firstIndex(where: { $0.id == itemId }) {
             items[index].editedChildren = children
+            items[index].editedContent = nil
             items[index].userAction = .edited
         }
     }

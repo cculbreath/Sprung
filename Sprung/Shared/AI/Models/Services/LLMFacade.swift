@@ -54,6 +54,10 @@ final class LLMFacade {
             if lower.hasPrefix("anthropic/") || lower.hasPrefix("claude-") {
                 return .anthropic
             }
+            if lower.hasPrefix("openai/") || lower.hasPrefix("google/") || lower.hasPrefix("meta-llama/") || lower.hasPrefix("mistralai/") || lower.hasPrefix("deepseek/") {
+                return .openRouter
+            }
+            Logger.warning("Unknown model prefix for '\(modelId)', routing to OpenRouter", category: .ai)
             return .openRouter
         }
     }

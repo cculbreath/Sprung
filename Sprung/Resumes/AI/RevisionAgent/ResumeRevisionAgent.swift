@@ -305,8 +305,6 @@ class ResumeRevisionAgent {
                                     id: id, name: name, input: inputDict
                                 )))
 
-                            case .messageComplete:
-                                break
                             }
                         }
                     }

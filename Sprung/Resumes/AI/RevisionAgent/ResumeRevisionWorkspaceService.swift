@@ -500,7 +500,7 @@ final class ResumeRevisionWorkspaceService {
                         existing.isTitleNode = isTitleNode
                     }
                 } else {
-                    Logger.debug("RevisionAgent: Skipped edit to non-editable node '\(nodeId)' (\(existing.name))", category: .ai)
+                    Logger.warning("RevisionAgent: Skipped edit to non-editable node '\(nodeId)' (\(existing.name))", category: .ai)
                 }
                 // Always recurse into children — some children may be editable even if parent isn't
                 if let children = revision["children"] as? [[String: Any]] {

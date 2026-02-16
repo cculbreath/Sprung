@@ -8,7 +8,6 @@ enum RevisionStreamEvent {
     case textDelta(String)
     case textFinalized(String)
     case toolCallReady(id: String, name: String, arguments: String)
-    case messageComplete(inputTokens: Int, outputTokens: Int)
 }
 
 // MARK: - Stream Processor
@@ -19,8 +18,6 @@ struct RevisionStreamProcessor {
     private var accumulatedText: String = ""
     private var currentToolCall: PartialToolCall?
     private var pendingToolCalls: [ToolCallInfo] = []
-    private var inputTokens: Int = 0
-    private var outputTokens: Int = 0
 
     struct ToolCallInfo {
         let id: String
@@ -41,12 +38,6 @@ struct RevisionStreamProcessor {
             accumulatedText = ""
             pendingToolCalls = []
             currentToolCall = nil
-            if let input = startEvent.message.usage.inputTokens {
-                inputTokens = input
-            }
-            if let output = startEvent.message.usage.outputTokens {
-                outputTokens = output
-            }
             return []
 
         case .contentBlockStart(let blockStart):
@@ -80,10 +71,7 @@ struct RevisionStreamProcessor {
             }
             return []
 
-        case .messageDelta(let messageDelta):
-            if let usage = messageDelta.usage, let output = usage.outputTokens {
-                outputTokens = output
-            }
+        case .messageDelta:
             return []
 
         case .messageStop:
@@ -100,11 +88,6 @@ struct RevisionStreamProcessor {
                     arguments: toolCall.arguments
                 ))
             }
-
-            events.append(.messageComplete(
-                inputTokens: inputTokens,
-                outputTokens: outputTokens
-            ))
 
             // Reset
             accumulatedText = ""

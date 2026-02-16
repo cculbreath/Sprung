@@ -67,8 +67,8 @@ struct CustomizationContext {
     /// The job description text from the job application
     let jobDescription: String
 
-    /// Clarifying Q&A pairs (mutable for workflow updates)
-    var clarifyingQA: [(question: ClarifyingQuestion, answer: QuestionAnswer)]?
+    /// Clarifying Q&A pairs
+    let clarifyingQA: [(question: ClarifyingQuestion, answer: QuestionAnswer)]?
 
     // MARK: - Computed Properties
 
