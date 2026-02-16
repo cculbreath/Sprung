@@ -200,18 +200,7 @@ class ResumeRevisionAgent {
 
             while turnCount < maxTurns {
                 guard !isCancelled else {
-                    if shouldBuildResumeOnExit {
-                        do {
-                            try await buildAndActivateResumeFromWorkspace()
-                            status = .completed
-                        } catch {
-                            Logger.error("RevisionAgent: Failed to build resume on accept: \(error)", category: .ai)
-                            status = .failed(error.localizedDescription)
-                        }
-                    } else {
-                        status = .cancelled
-                    }
-                    try? workspaceService.deleteWorkspace()
+                    await handleExitCleanup()
                     return
                 }
 
@@ -360,18 +349,7 @@ class ResumeRevisionAgent {
                 )
 
                 guard !isCancelled else {
-                    if shouldBuildResumeOnExit {
-                        do {
-                            try await buildAndActivateResumeFromWorkspace()
-                            status = .completed
-                        } catch {
-                            Logger.error("RevisionAgent: Failed to build resume on accept: \(error)", category: .ai)
-                            status = .failed(error.localizedDescription)
-                        }
-                    } else {
-                        status = .cancelled
-                    }
-                    try? workspaceService.deleteWorkspace()
+                    await handleExitCleanup()
                     return
                 }
 
@@ -492,21 +470,8 @@ class ResumeRevisionAgent {
             throw RevisionAgentError.maxTurnsExceeded
 
         } catch {
-            if shouldBuildResumeOnExit {
-                do {
-                    try await buildAndActivateResumeFromWorkspace()
-                    status = .completed
-                    try? workspaceService.deleteWorkspace()
-                    return
-                } catch {
-                    Logger.error("RevisionAgent: Failed to build resume on accept (catch path): \(error)", category: .ai)
-                    status = .failed(error.localizedDescription)
-                }
-            } else if !isCancelled {
-                status = .failed(error.localizedDescription)
-            }
-            try? workspaceService.deleteWorkspace()
-            throw error
+            let built = await handleExitCleanup()
+            if !built { throw error }
         }
     }
 
@@ -898,8 +863,29 @@ class ResumeRevisionAgent {
         return accepted
     }
 
+    /// Handle cleanup when the agent loop exits early (cancellation or error).
+    /// Builds the resume if `shouldBuildResumeOnExit` is set, then deletes workspace.
+    /// Returns `true` if the resume was successfully built and activated.
+    @discardableResult
+    private func handleExitCleanup() async -> Bool {
+        var built = false
+        if shouldBuildResumeOnExit {
+            do {
+                try await buildAndActivateResumeFromWorkspace()
+                status = .completed
+                built = true
+            } catch {
+                Logger.error("RevisionAgent: Failed to build resume on exit: \(error)", category: .ai)
+                status = .failed(error.localizedDescription)
+            }
+        } else if !isCancelled {
+            status = .cancelled
+        }
+        try? workspaceService.deleteWorkspace()
+        return built
+    }
+
     /// Build a new resume from the current workspace state and activate it.
-    /// Used by the main loop's cancellation guard, the catch path, and handleCompleteRevision.
     ///
     /// CRITICAL ORDERING: All synchronous work (node import, resume creation,
     /// selection, and modelContext.save()) happens BEFORE any async work (PDF
