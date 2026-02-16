@@ -580,12 +580,11 @@ final class CustomizationPromptCacheService {
     /// Multiple cards can reference the same document, so values are arrays.
     private func buildDocumentIdToCardTitleLookup(_ cards: [KnowledgeCard]) -> [String: [String]] {
         var lookup: [String: [String]] = [:]
+        var seen: [String: Set<String>] = [:]
         for card in cards {
             for anchor in card.evidenceAnchors {
-                var titles = lookup[anchor.documentId, default: []]
-                if !titles.contains(card.title) {
-                    titles.append(card.title)
-                    lookup[anchor.documentId] = titles
+                if seen[anchor.documentId, default: []].insert(card.title).inserted {
+                    lookup[anchor.documentId, default: []].append(card.title)
                 }
             }
         }

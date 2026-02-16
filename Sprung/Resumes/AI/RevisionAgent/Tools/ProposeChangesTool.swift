@@ -95,12 +95,13 @@ enum ProposalResponse {
             {"decision": "rejected", "feedback": ""}
             """
         case .modified(let feedback):
-            let escaped = feedback
-                .replacingOccurrences(of: "\\", with: "\\\\")
-                .replacingOccurrences(of: "\"", with: "\\\"")
-                .replacingOccurrences(of: "\n", with: "\\n")
+            let payload: [String: String] = ["decision": "modified", "feedback": feedback]
+            if let data = try? JSONSerialization.data(withJSONObject: payload),
+               let json = String(data: data, encoding: .utf8) {
+                return json
+            }
             return """
-            {"decision": "modified", "feedback": "\(escaped)"}
+            {"decision": "modified", "feedback": ""}
             """
         }
     }

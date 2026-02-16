@@ -866,7 +866,12 @@ class ResumeRevisionAgent {
             questionContinuation = continuation
         }
 
-        return "{\"answer\": \"\(answer.replacingOccurrences(of: "\"", with: "\\\"").replacingOccurrences(of: "\n", with: "\\n"))\"}"
+        let payload = ["answer": answer]
+        if let data = try? JSONSerialization.data(withJSONObject: payload),
+           let json = String(data: data, encoding: .utf8) {
+            return json
+        }
+        return "{\"answer\": \"\"}"
     }
 
     private func handleCompleteRevision(arguments: String) async throws -> Bool {

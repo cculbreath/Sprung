@@ -505,12 +505,8 @@ final class CustomizationReviewQueue {
                 rejectionHistory: updatedHistory
             )
 
-            // Update original item to no longer be regenerating
-            if let index = items.firstIndex(where: { $0.id == item.id }) {
-                items[index].isRegenerating = false
-            }
-
-            // Add the new item
+            // Remove the superseded item and add the new one
+            items.removeAll { $0.id == item.id }
             items.append(newItem)
             Logger.info("Regeneration complete for: \(item.task.revNode.displayName)", category: .ai)
         } else {

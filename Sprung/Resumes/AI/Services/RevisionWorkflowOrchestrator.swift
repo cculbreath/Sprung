@@ -771,7 +771,10 @@ class RevisionWorkflowOrchestrator {
 
     /// Apply all approved items and close the workflow
     func applyApprovedAndClose(resume: Resume, context: ModelContext) {
-        guard let queue = reviewQueue else { return }
+        guard let queue = reviewQueue else {
+            Logger.error("No review queue available for apply", category: .ai)
+            return
+        }
 
         let approvedItems = queue.approvedItems
         for item in approvedItems {
@@ -902,6 +905,10 @@ class RevisionWorkflowOrchestrator {
     /// Returns the variable context string for use in user messages.
     @discardableResult
     private func buildAndCachePreamble(context: CustomizationPromptContext) -> String {
+        guard let cacheService = promptCacheService else {
+            Logger.error("No prompt cache service available", category: .ai)
+            return ""
+        }
         let corePreamble = cacheService.buildCorePreamble(context: context)
         let variableContext = cacheService.buildVariableContext(context: context)
         self.cachedCorePreamble = corePreamble
@@ -911,7 +918,10 @@ class RevisionWorkflowOrchestrator {
 
     /// Clear reasoning state before starting a new parallel execution phase.
     private func clearReasoningStateIfNeeded() {
-        clearReasoningStateIfNeeded()
+        if cachedReasoning != nil {
+            reasoningStreamManager.clear()
+            reasoningStreamManager.isVisible = false
+        }
     }
 
     // MARK: - Tool Configuration
@@ -1083,14 +1093,17 @@ class RevisionWorkflowOrchestrator {
         Logger.info("Applied bundled changes (\(valuesToApply.count) values) for: \(item.task.revNode.displayName)")
     }
 
+    /// Cached regex for stripping bullet/number prefixes from list items
+    private static let bulletPrefixPattern = try! NSRegularExpression(pattern: "^[•\\-\\*\\d\\.\\)]+\\s*")
+
     /// Parse array values from a string (handles comma-separated or newline-separated lists)
     private func parseArrayFromString(_ text: String) -> [String] {
         // Try newline-separated first (for bullet lists)
         let lines = text.components(separatedBy: .newlines)
             .map { line in
-                // Remove bullet points, dashes, numbers
-                line.trimmingCharacters(in: .whitespaces)
-                    .replacingOccurrences(of: "^[•\\-\\*\\d\\.\\)]+\\s*", with: "", options: .regularExpression)
+                let trimmed = line.trimmingCharacters(in: .whitespaces)
+                let range = NSRange(trimmed.startIndex..., in: trimmed)
+                return Self.bulletPrefixPattern.stringByReplacingMatches(in: trimmed, range: range, withTemplate: "")
             }
             .filter { !$0.isEmpty }
 
