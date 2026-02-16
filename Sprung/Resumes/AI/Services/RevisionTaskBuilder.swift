@@ -1036,10 +1036,10 @@ final class RevisionTaskBuilder {
 
     /// Match a review node's category name to a skill category string.
     private func matchCategory(from revNode: ExportedReviewNode, skills: [Skill]) -> String? {
-        let name = extractCategoryName(from: revNode).lowercased()
+        let name = extractCategoryName(from: revNode)
         let allCategories = SkillCategoryUtils.sortedCategories(from: skills)
         return allCategories.first {
-            name.contains($0.lowercased()) || $0.lowercased().contains(name)
+            $0.caseInsensitiveCompare(name) == .orderedSame
         }
     }
 

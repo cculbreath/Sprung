@@ -25,7 +25,7 @@ actor ParallelLLMExecutor {
     // MARK: - State
 
     private var runningCount = 0
-    private var continuations: [UUID: CheckedContinuation<Void, Never>] = [:]
+    private var waitQueue: [(id: UUID, continuation: CheckedContinuation<Void, Never>)] = []
 
     // MARK: - Init
 
@@ -57,26 +57,25 @@ actor ParallelLLMExecutor {
                         await self.waitForSlot()
 
                         group.addTask {
-                            defer {
-                                Task { await self.releaseSlot() }
-                            }
-
+                            let result: TaskExecutionResult
                             do {
                                 let content = try await generator.execute(
                                     task: task,
                                     context: context,
                                     config: config
                                 )
-                                return TaskExecutionResult(
+                                result = TaskExecutionResult(
                                     taskId: task.id,
                                     result: .success(content)
                                 )
                             } catch {
-                                return TaskExecutionResult(
+                                result = TaskExecutionResult(
                                     taskId: task.id,
                                     result: .failure(error)
                                 )
                             }
+                            await self.releaseSlot()
+                            return result
                         }
                     }
 
@@ -99,47 +98,59 @@ actor ParallelLLMExecutor {
         config: GeneratorExecutionConfig
     ) async -> TaskExecutionResult {
         await waitForSlot()
-        defer {
-            Task { self.releaseSlot() }
-        }
 
+        let result: TaskExecutionResult
         do {
             let content = try await generator.execute(
                 task: task,
                 context: context,
                 config: config
             )
-            return TaskExecutionResult(
+            result = TaskExecutionResult(
                 taskId: task.id,
                 result: .success(content)
             )
         } catch {
-            return TaskExecutionResult(
+            result = TaskExecutionResult(
                 taskId: task.id,
                 result: .failure(error)
             )
         }
+        await releaseSlot()
+        return result
     }
 
     // MARK: - Concurrency Control
 
     private func waitForSlot() async {
-        if runningCount >= maxConcurrent {
-            await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-                let id = UUID()
-                continuations[id] = continuation
-            }
+        if runningCount < maxConcurrent {
+            runningCount += 1
+            return
         }
-        runningCount += 1
+        let id = UUID()
+        await withTaskCancellationHandler {
+            await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+                waitQueue.append((id: id, continuation: continuation))
+            }
+        } onCancel: {
+            Task { await self.cancelWaiter(id: id) }
+        }
+    }
+
+    private func cancelWaiter(id: UUID) {
+        if let index = waitQueue.firstIndex(where: { $0.id == id }) {
+            let entry = waitQueue.remove(at: index)
+            entry.continuation.resume()
+        }
     }
 
     private func releaseSlot() {
-        runningCount -= 1
-
-        // Resume a waiting task if any
-        if let (id, continuation) = continuations.first {
-            continuations.removeValue(forKey: id)
-            continuation.resume()
+        if let next = waitQueue.first {
+            waitQueue.removeFirst()
+            next.continuation.resume()
+        } else {
+            guard runningCount > 0 else { return }
+            runningCount -= 1
         }
     }
 

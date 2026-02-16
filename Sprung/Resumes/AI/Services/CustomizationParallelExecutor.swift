@@ -105,7 +105,7 @@ actor CustomizationParallelExecutor {
     // MARK: - State
 
     private var runningCount = 0
-    private var continuations: [UUID: CheckedContinuation<Void, Never>] = [:]
+    private var waitQueue: [(id: UUID, continuation: CheckedContinuation<Void, Never>)] = []
 
     // MARK: - Init
 
@@ -146,11 +146,7 @@ actor CustomizationParallelExecutor {
                         await self.waitForSlot()
 
                         group.addTask {
-                            defer {
-                                Task { await self.releaseSlot() }
-                            }
-
-                            return await self.executeTaskInternal(
+                            let result = await self.executeTaskInternal(
                                 task: task,
                                 llmFacade: llmFacade,
                                 modelId: modelId,
@@ -160,6 +156,8 @@ actor CustomizationParallelExecutor {
                                 reasoning: reasoning,
                                 onReasoningChunk: onReasoningChunk
                             )
+                            await self.releaseSlot()
+                            return result
                         }
                     }
 
@@ -186,11 +184,8 @@ actor CustomizationParallelExecutor {
         onReasoningChunk: (@Sendable (UUID, String) async -> Void)? = nil
     ) async -> RevisionTaskResult {
         await waitForSlot()
-        defer {
-            Task { await self.releaseSlot() }
-        }
 
-        return await executeTaskInternal(
+        let result = await executeTaskInternal(
             task: task,
             llmFacade: llmFacade,
             modelId: modelId,
@@ -200,6 +195,8 @@ actor CustomizationParallelExecutor {
             reasoning: reasoning,
             onReasoningChunk: onReasoningChunk
         )
+        await releaseSlot()
+        return result
     }
 
     // MARK: - Internal Execution
@@ -743,9 +740,8 @@ actor CustomizationParallelExecutor {
                     )
                 } catch {
                     // Network/API error — not a JSON issue, propagate immediately
-                    lastError = error
-                    Logger.warning("[ParallelExecutor] LLM call failed on correction attempt \(attempt): \(error.localizedDescription)", category: .ai)
-                    continue
+                    Logger.error("[ParallelExecutor] LLM call failed on correction attempt \(attempt): \(error.localizedDescription)", category: .ai)
+                    throw error
                 }
 
                 guard let content = response.choices?.first?.message?.content,
@@ -777,26 +773,40 @@ actor CustomizationParallelExecutor {
     // MARK: - Concurrency Control
 
     private func waitForSlot() async {
-        if runningCount >= maxConcurrent {
-            await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-                let id = UUID()
-                continuations[id] = continuation
-            }
+        if runningCount < maxConcurrent {
+            runningCount += 1
+            return
         }
-        runningCount += 1
+        let id = UUID()
+        await withTaskCancellationHandler {
+            await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+                waitQueue.append((id: id, continuation: continuation))
+            }
+        } onCancel: {
+            Task { await self.cancelWaiter(id: id) }
+        }
+        // Slot was handed to us by releaseSlot — runningCount already accounts for it
+    }
+
+    /// Remove a cancelled waiter from the queue without waking it (already resumed by cancellation handler).
+    private func cancelWaiter(id: UUID) {
+        if let index = waitQueue.firstIndex(where: { $0.id == id }) {
+            let entry = waitQueue.remove(at: index)
+            entry.continuation.resume()
+        }
     }
 
     private func releaseSlot() {
-        guard runningCount > 0 else {
-            Logger.warning("releaseSlot called with runningCount at 0", category: .ai)
-            return
-        }
-        runningCount -= 1
-
-        // Resume a waiting task if any
-        if let (id, continuation) = continuations.first {
-            continuations.removeValue(forKey: id)
-            continuation.resume()
+        if let next = waitQueue.first {
+            // Hand the slot directly to the next waiter (runningCount stays the same)
+            waitQueue.removeFirst()
+            next.continuation.resume()
+        } else {
+            guard runningCount > 0 else {
+                Logger.warning("releaseSlot called with runningCount at 0", category: .ai)
+                return
+            }
+            runningCount -= 1
         }
     }
 
