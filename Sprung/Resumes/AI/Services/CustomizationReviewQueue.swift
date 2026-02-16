@@ -156,6 +156,11 @@ struct CompoundReviewGroup: Identifiable {
 @Observable
 @MainActor
 final class CustomizationReviewQueue {
+    /// Maximum number of regeneration attempts before suggesting manual edit
+    private let maxRegenerations = 5
+    /// Timeout for a single regeneration request (seconds)
+    private let regenerationTimeout: TimeInterval = 30
+
     /// All items in the queue
     private(set) var items: [CustomizationReviewItem] = []
 
@@ -347,15 +352,20 @@ final class CustomizationReviewQueue {
 
             let item = items[index]
 
+            // Enforce regeneration depth limit
+            guard item.regenerationCount < maxRegenerations else {
+                Logger.warning("Regeneration limit (\(maxRegenerations)) reached for: \(item.task.revNode.displayName) — suggesting manual edit", category: .ai)
+                lastRegenerationError = (itemId: item.id, displayName: "\(item.task.revNode.displayName) — try editing manually")
+                return
+            }
+
             if let groupId = item.compoundGroupId {
-                // Compound group member: mark all group members as regenerating and trigger group regeneration
                 markCompoundGroupRegenerating(groupId: groupId)
                 Task { [weak self] in
                     guard let self else { return }
                     await self.triggerCompoundRegeneration(groupId: groupId, feedback: feedback)
                 }
             } else {
-                // Standard item: regenerate individually
                 items[index].isRegenerating = true
                 Task { [weak self] in
                     guard let self else { return }
@@ -465,8 +475,22 @@ final class CustomizationReviewQueue {
 
         Logger.info("Triggering regeneration for: \(item.task.revNode.displayName)", category: .ai)
 
-        // Request regeneration
-        if let newRevision = await onRegenerationRequested(item.id, item.revision, feedback) {
+        // Request regeneration with timeout
+        let newRevision: ProposedRevisionNode? = await withTaskGroup(of: ProposedRevisionNode?.self) { group in
+            group.addTask {
+                await onRegenerationRequested(item.id, item.revision, feedback)
+            }
+            group.addTask {
+                try? await Task.sleep(for: .seconds(self.regenerationTimeout))
+                return nil
+            }
+            // Return the first result; if timeout wins, cancel the LLM call
+            let result = await group.next() ?? nil
+            group.cancelAll()
+            return result
+        }
+
+        if let newRevision {
             // Build updated rejection history: carry forward + add current rejection
             let currentRecord = buildRejectionRecord(from: item, feedback: feedback)
             let updatedHistory = item.rejectionHistory + [currentRecord]

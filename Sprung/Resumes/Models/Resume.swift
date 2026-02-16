@@ -110,13 +110,7 @@ class Resume: Identifiable, Hashable {
             return ""
         }
     }
-    func getUpdatableNodes() -> [[String: Any]] {
-        if let node = rootNode {
-            return TreeNode.traverseAndExportNodes(node: node)
-        } else {
-            return [[:]]
-        }
-    }
+
     /// Returns true if there are any nodes marked for AI replacement (aiToReplace status)
     var hasUpdatableNodes: Bool {
         guard let rootNode = rootNode else { return false }

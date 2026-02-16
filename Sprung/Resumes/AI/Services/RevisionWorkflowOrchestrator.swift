@@ -678,15 +678,10 @@ class RevisionWorkflowOrchestrator {
             return nil
         }
 
-        // Build compound rejection history from all group items
-        var compoundHistory: [RejectionRecord] = []
-        for groupItem in groupItems {
-            // Each item carries its own chain; since they're rejected together,
-            // all chains should be the same length. Use the first item's history
-            // and build a combined current record from all fields.
-            compoundHistory = groupItem.rejectionHistory
-            break
-        }
+        // Use the longest rejection history from any group item (all items are
+        // rejected together, but histories may diverge if items were added at
+        // different times)
+        let compoundHistory = groupItems.max(by: { $0.rejectionHistory.count < $1.rejectionHistory.count })?.rejectionHistory ?? []
 
         // Build a combined current rejection record from all group fields
         let combinedProposed = groupItems.map { "\($0.task.revNode.displayName): \($0.revision.newValue)" }.joined(separator: "\n")

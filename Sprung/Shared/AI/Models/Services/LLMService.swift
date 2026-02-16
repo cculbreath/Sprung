@@ -266,8 +266,8 @@ final class OpenRouterServiceBackend {
                                 await self.persistConversation(conversationId: conversationId, messages: updatedMessages)
                             case .success:
                                 break
-                            case .failure:
-                                break
+                            case .failure(let error):
+                                Logger.error("Failed to persist conversation \(conversationId) during streaming: \(error.localizedDescription)", category: .ai)
                             }
                         }
                     }
