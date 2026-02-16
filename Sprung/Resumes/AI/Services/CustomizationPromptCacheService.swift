@@ -63,8 +63,8 @@ final class CustomizationPromptCacheService {
 
     // MARK: - Public API
 
-    /// Build the cacheable preamble from customization context.
-    /// This preamble is shared across all customization tasks.
+    /// Build the full preamble from customization context (legacy single-string mode).
+    /// Contains all context in one string — used when caching is not active.
     /// - Parameter context: The customization context
     /// - Returns: The preamble string to prepend to all prompts
     func buildPreamble(context: CustomizationPromptContext) -> String {
@@ -74,10 +74,22 @@ final class CustomizationPromptCacheService {
             return cached
         }
 
-        // Build new preamble
+        let core = buildCorePreamble(context: context)
+        let variable = buildVariableContext(context: context)
+        let preamble = core + "\n\n---\n\n" + variable
+
+        cachedPreamble = preamble
+        cachedContextHash = contextHash
+        return preamble
+    }
+
+    /// Build the core preamble — identical for all tasks in a workflow run.
+    /// Contains role/constraints, applicant profile, voice, dossier, job description, and Q&A.
+    /// Suitable for placement in the system message with cache_control.
+    func buildCorePreamble(context: CustomizationPromptContext) -> String {
         var sections: [String] = []
 
-        // 1. Role and purpose
+        // 1. Role and purpose + constraints
         sections.append(buildRolePreamble())
 
         // 2. Applicant profile summary
@@ -88,7 +100,29 @@ final class CustomizationPromptCacheService {
             sections.append(context.writersVoice)
         }
 
-        // 4. Knowledge card summaries (tiered by relevance)
+        // 4. Dossier insights
+        if let dossier = context.dossier {
+            sections.append(buildDossierSection(dossier))
+        }
+
+        // 5. Job description
+        sections.append(buildJobDescriptionSection(context.jobApp))
+
+        // 6. Clarifying Q&A (if any)
+        if !clarifyingQA.isEmpty {
+            sections.append(buildClarifyingQASection())
+        }
+
+        return sections.joined(separator: "\n\n---\n\n")
+    }
+
+    /// Build the variable context — varies per task type.
+    /// Contains knowledge cards, skill bank, and title set library.
+    /// Placed in the user message (not cached).
+    func buildVariableContext(context: CustomizationPromptContext) -> String {
+        var sections: [String] = []
+
+        // Knowledge card summaries (tiered by relevance)
         let cardsForSection = context.allCards.isEmpty ? context.knowledgeCards : context.allCards
         if !cardsForSection.isEmpty {
             sections.append(buildKnowledgeCardSection(
@@ -97,34 +131,18 @@ final class CustomizationPromptCacheService {
             ))
         }
 
-        // 5. Skill bank
+        // Skill bank
         if !context.skills.isEmpty {
             let cardPool = context.allCards.isEmpty ? context.knowledgeCards : context.allCards
             sections.append(buildSkillBankSection(context.skills, knowledgeCards: cardPool))
         }
 
-        // 6. Title set library
+        // Title set library
         if !context.titleSets.isEmpty {
             sections.append(buildTitleSetSection(context.titleSets))
         }
 
-        // 7. Dossier insights
-        if let dossier = context.dossier {
-            sections.append(buildDossierSection(dossier))
-        }
-
-        // 8. Job description
-        sections.append(buildJobDescriptionSection(context.jobApp))
-
-        // 9. Clarifying Q&A (if any)
-        if !clarifyingQA.isEmpty {
-            sections.append(buildClarifyingQASection())
-        }
-
-        let preamble = sections.joined(separator: "\n\n---\n\n")
-        cachedPreamble = preamble
-        cachedContextHash = contextHash
-        return preamble
+        return sections.joined(separator: "\n\n---\n\n")
     }
 
     /// Combine preamble with section-specific instructions.
@@ -193,9 +211,10 @@ final class CustomizationPromptCacheService {
         invalidateCache()
     }
 
-    /// Check if this service is configured for Anthropic caching
+    /// Whether prompt caching is supported for the configured backend.
+    /// OpenRouter supports cache_control for Anthropic models via their API.
     var usesCaching: Bool {
-        backend == .anthropic
+        backend == .anthropic || backend == .openRouter
     }
 
     /// Invalidate cached preamble (call when context changes)

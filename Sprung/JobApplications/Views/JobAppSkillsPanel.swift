@@ -49,67 +49,36 @@ struct JobAppSkillsPanel: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // Header
-            panelHeader
-
-            Divider()
-
-            // Skills content with legend at the end
-            ScrollView {
-                VStack(alignment: .leading, spacing: 12) {
-                    if !matchedSkills.isEmpty {
-                        skillsSection(skills: matchedSkills)
-                    }
-
-                    if !recommendedSkills.isEmpty {
-                        skillsSection(skills: recommendedSkills)
-                    }
-
-                    if !unmatchedSkills.isEmpty {
-                        skillsSection(skills: unmatchedSkills)
-                    }
-
-                    if skillEvidence.isEmpty {
-                        Text("No skills extracted yet")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .frame(maxWidth: .infinity, alignment: .center)
-                            .padding(.vertical, 20)
-                    }
-
-                    // Legend at the end of the list
-                    if !skillEvidence.isEmpty {
-                        legendView
-                            .padding(.top, 16)
-                    }
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                if !matchedSkills.isEmpty {
+                    skillsSection(skills: matchedSkills)
                 }
-                .padding(16)
-            }
-        }
-        .background(Color(.controlBackgroundColor).opacity(0.3))
-    }
 
-    private var panelHeader: some View {
-        HStack {
-            Text("Referenced Skills")
-                .font(.headline)
-            Spacer()
-            Button {
-                isEditing.toggle()
-            } label: {
-                HStack(spacing: 4) {
-                    Image(systemName: "pencil")
-                        .font(.system(size: 11))
-                    Text("Edit")
+                if !recommendedSkills.isEmpty {
+                    skillsSection(skills: recommendedSkills)
+                }
+
+                if !unmatchedSkills.isEmpty {
+                    skillsSection(skills: unmatchedSkills)
+                }
+
+                if skillEvidence.isEmpty {
+                    Text("No skills extracted yet")
                         .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .padding(.vertical, 20)
+                }
+
+                // Legend at the end of the list
+                if !skillEvidence.isEmpty {
+                    legendView
+                        .padding(.top, 16)
                 }
             }
-            .buttonStyle(.plain)
-            .foregroundStyle(Color.accentColor)
+            .padding(16)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
     }
 
     private func skillsSection(skills: [JobSkillEvidence]) -> some View {

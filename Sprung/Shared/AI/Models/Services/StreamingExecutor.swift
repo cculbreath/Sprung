@@ -13,6 +13,17 @@ final class StreamingExecutor {
     init(requestExecutor: LLMRequestExecutor) {
         self.requestExecutor = requestExecutor
     }
+    /// Map effort level to a reasoning token budget.
+    /// Opus 4.6 ignores the `effort` field and uses unconstrained adaptive thinking
+    /// unless `max_tokens` is set. Providing a budget keeps thinking bounded while
+    /// still letting the model allocate tokens adaptively within the cap.
+    private static let effortBudgets: [String: Int] = [
+        "minimal": 1024,
+        "low": 4096,
+        "medium": 10000,
+        "high": 25000,
+    ]
+
     func applyReasoning(_ reasoning: OpenRouterReasoning?, to parameters: inout ChatCompletionParameters) {
         guard let reasoning else { return }
         // Always use the reasoning dict format with enabled: true.
@@ -20,20 +31,24 @@ final class StreamingExecutor {
         // requires the reasoning object with enabled: true for adaptive thinking).
         parameters.reasoningEffort = nil
         var reasoningDict: [String: Any] = ["enabled": true]
-        if let effort = reasoning.effort {
-            reasoningDict["effort"] = effort
-        }
         if let exclude = reasoning.exclude {
             reasoningDict["exclude"] = exclude
         }
-        if let maxTokens = reasoning.maxTokens {
-            reasoningDict["max_tokens"] = maxTokens
+        // API only accepts ONE of effort or max_tokens — never both.
+        // Prefer max_tokens (derived from effort budget) because Opus 4.6
+        // ignores the effort field and needs an explicit token cap.
+        let resolvedBudget = reasoning.maxTokens
+            ?? reasoning.effort.flatMap { Self.effortBudgets[$0] }
+        if let budget = resolvedBudget {
+            reasoningDict["max_tokens"] = budget
+        } else if let effort = reasoning.effort {
+            reasoningDict["effort"] = effort
         }
         parameters.reasoning = reasoningDict
         let effortDescription = reasoning.effort ?? "<nil>"
         let excludeDescription = String(describing: reasoning.exclude)
-        let maxTokensDescription = String(describing: reasoning.maxTokens)
-        Logger.debug("🧠 Configured reasoning: enabled=true, effort=\(effortDescription), exclude=\(excludeDescription), max_tokens=\(maxTokensDescription)")
+        let budgetDescription = resolvedBudget.map(String.init) ?? "adaptive (unbounded)"
+        Logger.debug("🧠 Configured reasoning: enabled=true, effort=\(effortDescription), exclude=\(excludeDescription), max_tokens=\(budgetDescription)")
     }
     func stream(
         parameters: ChatCompletionParameters,

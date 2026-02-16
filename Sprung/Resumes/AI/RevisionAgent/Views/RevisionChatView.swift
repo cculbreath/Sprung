@@ -5,9 +5,11 @@ struct RevisionChatView: View {
     let messages: [RevisionMessage]
     let currentProposal: ChangeProposal?
     let currentQuestion: String?
+    let currentCompletionSummary: String?
     let isRunning: Bool
     let onProposalResponse: (ProposalResponse) -> Void
     let onQuestionResponse: (String) -> Void
+    let onCompletionResponse: (Bool) -> Void
     let onUserMessage: (String) -> Void
     let onInterruptWithMessage: (String) -> Void
     let onCancelStream: () -> Void
@@ -44,8 +46,14 @@ struct RevisionChatView: View {
                                 .id("question")
                         }
 
+                        // Completion card
+                        if let summary = currentCompletionSummary {
+                            completionCard(summary)
+                                .id("completion")
+                        }
+
                         // Streaming indicator
-                        if isRunning && currentProposal == nil && currentQuestion == nil {
+                        if isRunning && currentProposal == nil && currentQuestion == nil && currentCompletionSummary == nil {
                             HStack(spacing: 8) {
                                 ProgressView()
                                     .controlSize(.small)
@@ -83,6 +91,13 @@ struct RevisionChatView: View {
                     if shouldAutoScroll {
                         withAnimation(.easeInOut(duration: 0.3)) {
                             scrollProxy.scrollTo("question", anchor: .top)
+                        }
+                    }
+                }
+                .onChange(of: currentCompletionSummary) {
+                    if shouldAutoScroll, currentCompletionSummary != nil {
+                        withAnimation(.easeInOut(duration: 0.3)) {
+                            scrollProxy.scrollTo("completion", anchor: .top)
                         }
                     }
                 }
@@ -239,6 +254,45 @@ struct RevisionChatView: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(questionAnswer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(.background)
+                .shadow(color: .black.opacity(0.08), radius: 4, y: 2)
+        )
+    }
+
+    // MARK: - Completion Card
+
+    @ViewBuilder
+    private func completionCard(_ summary: String) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 8) {
+                Image(systemName: "checkmark.seal.fill")
+                    .foregroundStyle(.green)
+                    .font(.title3)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Revision Complete")
+                        .font(.headline)
+                    Text(summary)
+                        .font(.body)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            HStack(spacing: 10) {
+                Spacer()
+                Button("Continue Editing") {
+                    onCompletionResponse(false)
+                }
+                .buttonStyle(.bordered)
+
+                Button("Accept") {
+                    onCompletionResponse(true)
+                }
+                .buttonStyle(.borderedProminent)
             }
         }
         .padding(12)

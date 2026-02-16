@@ -94,6 +94,11 @@ extension Statuses {
     static var pipelineStatuses: [Statuses] {
         [.new, .queued, .inProgress, .submitted, .interview, .offer, .accepted, .rejected, .withdrawn]
     }
+
+    /// Sidebar display order: active work first, then remaining statuses
+    static var sidebarOrder: [Statuses] {
+        [.accepted, .inProgress, .queued, .new, .submitted, .interview, .offer, .rejected, .withdrawn]
+    }
 }
 @Model class JobApp: Equatable, Identifiable, Hashable {
     @Attribute(.unique) var id: UUID = UUID()

@@ -248,13 +248,13 @@ private struct CoverLetterActionsBar: View {
         (jobAppStore.selectedApp?.coverLetters.filter { $0.generated }.count ?? 0) >= 2
     }
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 8) {
             CoverLetterReviseButton()
             Button(action: {
                 NotificationCenter.default.post(name: .batchCoverLetter, object: nil)
             }, label: {
                 Label("Batch Letter", systemImage: "square.stack.3d.down.right")
-                    .font(.system(size: 14, weight: .light))
+                    .font(.system(size: 11, weight: .regular))
             })
             .buttonStyle(.automatic)
             .help("Batch Cover Letter Operations")
@@ -263,7 +263,7 @@ private struct CoverLetterActionsBar: View {
                 NotificationCenter.default.post(name: .committee, object: nil)
             }, label: {
                 Label("Committee", systemImage: "trophy")
-                    .font(.system(size: 14, weight: .light))
+                    .font(.system(size: 11, weight: .regular))
             })
             .buttonStyle(.automatic)
             .help("Multi-model Choose Best Cover Letter")
@@ -289,10 +289,10 @@ private struct CoverLetterActionsBar: View {
                 }
             }
         }
-        .controlSize(.large)
-        .padding(.horizontal)
-        .padding(.top, 8)
-        .padding(.bottom, 6)
+        .controlSize(.small)
+        .padding(.horizontal, 10)
+        .padding(.top, 6)
+        .padding(.bottom, 4)
     }
 }
 // MARK: - Generate Cover Letter Button Component

@@ -40,6 +40,7 @@ class RevisionWorkflowOrchestrator {
     private let titleSetStore: TitleSetStore?
     private let targetingPlanService: TargetingPlanService
     private let coherencePassService: CoherencePassService
+    private let candidateDossierStore: CandidateDossierStore?
 
     // MARK: - Parallel Workflow Components
     private var promptCacheService: CustomizationPromptCacheService?
@@ -47,24 +48,24 @@ class RevisionWorkflowOrchestrator {
     private(set) var reviewQueue: CustomizationReviewQueue?
     private var taskBuilder: RevisionTaskBuilder?
     private var cachedPreamble: String?
+    /// Core preamble (system message) cached for regeneration — identical across all tasks
+    private var cachedCorePreamble: String?
     private var cachedToolConfig: ToolConfiguration?
 
-    /// Phase 2 nodes deferred until Phase 1 review completes
-    private var pendingPhase2Nodes: [ExportedReviewNode] = []
-    /// Resume reference for Phase 2 continuation
+    /// Resume reference for workflow continuation
     private var currentResume: Resume?
-    /// CoverRefStore reference for Phase 2 continuation
+    /// CoverRefStore reference for workflow continuation
     private var currentCoverRefStore: CoverRefStore?
     /// Cached targeting plan for the entire workflow
     private var cachedTargetingPlan: TargetingPlan?
-    /// Cached Phase 1 decisions context for Phase 2 tasks
-    private var phase1DecisionsContext: String?
-    /// Cached customization context for Phase 2
+    /// Auto pre-step decisions context for review tasks
+    private var autoDecisionsContext: String?
+    /// Cached customization context
     private var cachedContext: CustomizationContext?
     /// Reasoning config for extended thinking (nil when reasoning is off)
     private var cachedReasoning: OpenRouterReasoning?
 
-    /// Count of fields customized across all phases (for coherence threshold)
+    /// Count of fields customized (for coherence threshold)
     private var totalCustomizedFieldCount: Int = 0
 
     // MARK: - Coherence Pass State
@@ -74,16 +75,6 @@ class RevisionWorkflowOrchestrator {
 
     /// Whether the coherence pass is currently running.
     private(set) var isRunningCoherencePass: Bool = false
-
-    /// Whether Phase 2 is still pending
-    var hasPhase2Pending: Bool {
-        !pendingPhase2Nodes.isEmpty
-    }
-
-    /// Current phase number (1 or 2) for UI display
-    private(set) var currentPhaseNumber: Int = 1
-    /// Total phases (1 or 2) for UI display
-    private(set) var totalPhases: Int = 1
 
     // MARK: - Delegate
     weak var delegate: RevisionWorkflowOrchestratorDelegate?
@@ -108,6 +99,7 @@ class RevisionWorkflowOrchestrator {
         titleSetStore: TitleSetStore? = nil,
         targetingPlanService: TargetingPlanService,
         coherencePassService: CoherencePassService,
+        candidateDossierStore: CandidateDossierStore? = nil,
         workflowState: RevisionWorkflowState
     ) {
         self.llm = llm
@@ -124,6 +116,7 @@ class RevisionWorkflowOrchestrator {
         self.titleSetStore = titleSetStore
         self.targetingPlanService = targetingPlanService
         self.coherencePassService = coherencePassService
+        self.candidateDossierStore = candidateDossierStore
         self.workflowState = workflowState
     }
 
@@ -165,12 +158,13 @@ class RevisionWorkflowOrchestrator {
             guidanceStore: guidanceStore,
             knowledgeCardStore: knowledgeCardStore,
             coverRefStore: coverRefStore,
-            applicantProfileStore: applicantProfileStore
+            applicantProfileStore: applicantProfileStore,
+            candidateDossierStore: candidateDossierStore
         )
         self.cachedContext = context
 
-        // 2. Initialize CustomizationPromptCacheService with backend
-        let cacheService = CustomizationPromptCacheService(backend: .openRouter)
+        // 2. Initialize CustomizationPromptCacheService with inferred backend
+        let cacheService = CustomizationPromptCacheService(backend: .infer(from: modelId))
         self.promptCacheService = cacheService
 
         // 3. If clarifyingQA exists, call promptCacheService.appendClarifyingQA()
@@ -206,68 +200,72 @@ class RevisionWorkflowOrchestrator {
         self.cachedTargetingPlan = targetingPlan
         Logger.info("Targeting plan generated: \(targetingPlan.emphasisThemes.count) themes, \(targetingPlan.workEntryGuidance.count) work entries", category: .ai)
 
-        // 5. Get RevNodes from phaseReviewManager.buildReviewRounds() -> (phase1, phase2)
-        let (phase1Nodes, phase2Nodes) = phaseReviewManager.buildReviewRounds(for: resume)
+        // 5. Get review manifest: auto-apply nodes + human review nodes
+        let (autoNodes, reviewNodes) = phaseReviewManager.buildReviewManifest(for: resume)
 
-        Logger.info("Starting parallel workflow - Phase 1: \(phase1Nodes.count), Phase 2: \(phase2Nodes.count)")
+        Logger.info("Starting parallel workflow - Auto: \(autoNodes.count), Review: \(reviewNodes.count)")
 
         // Handle empty-nodes edge case
-        if phase1Nodes.isEmpty && phase2Nodes.isEmpty {
+        if autoNodes.isEmpty && reviewNodes.isEmpty {
             workflowState.markWorkflowCompleted(reset: true)
             return
         }
 
-        // 6. Store Phase 2 nodes for later execution
-        pendingPhase2Nodes = phase2Nodes
         currentResume = resume
         currentCoverRefStore = coverRefStore
 
-        // 7. Set phase tracking
-        currentPhaseNumber = 1
-        totalPhases = (!phase1Nodes.isEmpty && !phase2Nodes.isEmpty) ? 2 : 1
-
-        // 8. Initialize CustomizationReviewQueue and wire up regeneration callbacks
+        // 6. Initialize CustomizationReviewQueue and wire up regeneration callbacks
         let queue = CustomizationReviewQueue()
         self.reviewQueue = queue
         setupParallelRegenerationCallback()
         setupCompoundRegenerationCallback()
 
-        // 9. Execute Phase 1 (or Phase 2 directly if no Phase 1 nodes)
-        if !phase1Nodes.isEmpty {
-            try await executeParallelPhase(
-                nodes: phase1Nodes,
-                phase: 1,
+        // 7. Execute auto pre-step (skill categories, titles) — auto-apply results
+        if !autoNodes.isEmpty {
+            let autoDecisions = try await executeAutoPreStep(
+                nodes: autoNodes,
                 resume: resume,
                 context: context,
                 modelId: modelId
             )
-        } else {
-            // No Phase 1 nodes -- execute Phase 2 directly
-            currentPhaseNumber = 2
-            let captured = pendingPhase2Nodes
-            pendingPhase2Nodes = []
-            try await executeParallelPhase(
-                nodes: captured,
-                phase: 2,
+            self.autoDecisionsContext = autoDecisions
+            Logger.info("Auto pre-step complete: \(autoDecisions.count) chars of decisions context", category: .ai)
+        }
+
+        // 8. Execute all review tasks in parallel
+        var totalTasksAttempted = 0
+        if !reviewNodes.isEmpty {
+            totalTasksAttempted += try await executeParallelPhase(
+                nodes: reviewNodes,
+                phase: 1,
                 resume: resume,
                 context: context,
                 modelId: modelId
             )
         }
 
-        // 10. Phase execution complete -- show review UI
+        // 9. If no review items produced, all tasks failed — surface error
+        if let queue = reviewQueue, queue.activeItems.isEmpty && totalTasksAttempted > 0 {
+            Logger.error("All \(totalTasksAttempted) tasks failed — no review items produced")
+            workflowState.setProcessingRevisions(false)
+            workflowState.markWorkflowCompleted(reset: true)
+            throw RevisionWorkflowError.allTasksFailed(taskCount: totalTasksAttempted, phase: 1)
+        }
+
+        // 10. Show single review pass UI
         workflowState.setProcessingRevisions(false)
         await delegate?.showParallelReviewQueue()
     }
 
-    /// Execute a parallel phase with the given nodes
+    /// Execute a parallel phase with the given nodes. Returns the number of tasks attempted.
+    @discardableResult
     private func executeParallelPhase(
         nodes: [ExportedReviewNode],
         phase: Int,
         resume: Resume,
         context: CustomizationContext,
         modelId: String
-    ) async throws {
+    ) async throws -> Int {
         guard let cacheService = promptCacheService else {
             throw RevisionWorkflowError.missingDependency("CustomizationPromptCacheService")
         }
@@ -300,9 +298,11 @@ class RevisionWorkflowOrchestrator {
             jobApp: resume.jobApp ?? JobApp()
         )
 
-        // Build the preamble (and cache it for regeneration)
-        let preamble = cacheService.buildPreamble(context: promptContext)
-        self.cachedPreamble = preamble
+        // Build split preamble: core (system message, cacheable) + variable (user message, per-task)
+        let corePreamble = cacheService.buildCorePreamble(context: promptContext)
+        let variableContext = cacheService.buildVariableContext(context: promptContext)
+        self.cachedCorePreamble = corePreamble
+        self.cachedPreamble = corePreamble + "\n\n---\n\n" + variableContext
 
         // Build text resume snapshot for cross-section context
         let textResumeSnapshot = ResumeTextSnapshotBuilder.buildSnapshot(resume: resume)
@@ -316,7 +316,7 @@ class RevisionWorkflowOrchestrator {
             titleSets: context.titleSets,
             phase: phase,
             targetingPlan: cachedTargetingPlan,
-            phase1Decisions: phase == 2 ? phase1DecisionsContext : nil,
+            phase1Decisions: autoDecisionsContext,
             knowledgeCards: context.knowledgeCards,
             textResumeSnapshot: textResumeSnapshot
         )
@@ -333,24 +333,29 @@ class RevisionWorkflowOrchestrator {
             reasoningStreamManager.isVisible = false
         }
 
-        // Build reasoning callback for parallel tasks
+        // Build reasoning callback for parallel tasks — route each task's
+        // reasoning into its own section so parallel streams don't interleave.
         let reasoning = cachedReasoning
         let streamManager = reasoningStreamManager
         let reasoningCallback: (@Sendable (UUID, String) async -> Void)?
         if reasoning != nil {
-            reasoningCallback = { _, text in
-                await streamManager.appendReasoning(text)
+            let taskNames = Dictionary(uniqueKeysWithValues: tasks.map { ($0.id, $0.revNode.displayName) })
+            reasoningCallback = { taskId, text in
+                let name = taskNames[taskId] ?? "Task"
+                await streamManager.appendReasoning(text, taskId: taskId, taskName: name)
             }
         } else {
             reasoningCallback = nil
         }
 
-        // Execute tasks in parallel and stream results into queue
+        // Execute tasks in parallel and stream results into queue.
+        // Core preamble goes to system message (cacheable), variable context to user message.
         let stream = await executor.execute(
             tasks: tasks,
             llmFacade: llm,
             modelId: modelId,
-            preamble: preamble,
+            preamble: variableContext,
+            systemPrompt: corePreamble,
             toolConfig: toolConfig,
             reasoning: reasoning,
             onReasoningChunk: reasoningCallback
@@ -377,11 +382,118 @@ class RevisionWorkflowOrchestrator {
                     }
                 }
             case .failure(let error):
-                Logger.error("Task failed: \(error.localizedDescription)", category: .ai)
+                let taskName = tasks.first(where: { $0.id == taskResult.taskId })?.revNode.displayName ?? "unknown"
+                Logger.error("Task '\(taskName)' failed after retries: \(error.localizedDescription)", category: .ai)
             }
         }
 
         Logger.info("Phase \(phase) execution complete: \(reviewQueue?.items.count ?? 0) items in queue", category: .ai)
+        return tasks.count
+    }
+
+    /// Execute auto pre-step nodes (skill categories, titles), auto-apply results,
+    /// and return a decisions context string for downstream review tasks.
+    private func executeAutoPreStep(
+        nodes: [ExportedReviewNode],
+        resume: Resume,
+        context: CustomizationContext,
+        modelId: String
+    ) async throws -> String {
+        guard let cacheService = promptCacheService else {
+            throw RevisionWorkflowError.missingDependency("CustomizationPromptCacheService")
+        }
+
+        if taskBuilder == nil { taskBuilder = RevisionTaskBuilder() }
+        if parallelExecutor == nil { parallelExecutor = CustomizationParallelExecutor(maxConcurrent: 5) }
+
+        guard let builder = taskBuilder, let executor = parallelExecutor else {
+            throw RevisionWorkflowError.missingDependency("RevisionTaskBuilder or CustomizationParallelExecutor")
+        }
+
+        let titleSetRecords = titleSetStore?.allTitleSets ?? []
+        let promptContext = CustomizationPromptContext(
+            applicantProfile: context.applicantProfile,
+            knowledgeCards: context.knowledgeCards,
+            allCards: context.allCards,
+            relevantCardIds: context.relevantCardIds,
+            skills: context.skills,
+            writersVoice: context.writersVoice,
+            dossier: context.dossier,
+            titleSets: titleSetRecords,
+            jobApp: resume.jobApp ?? JobApp()
+        )
+
+        // Build split preamble: core (system message) + variable (user message)
+        let corePreamble = cacheService.buildCorePreamble(context: promptContext)
+        let variableContext = cacheService.buildVariableContext(context: promptContext)
+        self.cachedCorePreamble = corePreamble
+        self.cachedPreamble = corePreamble + "\n\n---\n\n" + variableContext
+
+        let textResumeSnapshot = ResumeTextSnapshotBuilder.buildSnapshot(resume: resume)
+
+        let tasks = builder.buildTasks(
+            from: nodes,
+            resume: resume,
+            jobDescription: context.jobDescription,
+            skills: context.skills,
+            titleSets: context.titleSets,
+            phase: 1,
+            targetingPlan: cachedTargetingPlan,
+            knowledgeCards: context.knowledgeCards,
+            textResumeSnapshot: textResumeSnapshot
+        )
+
+        Logger.info("Auto pre-step: executing \(tasks.count) tasks", category: .ai)
+
+        // Clear reasoning state before parallel execution
+        if cachedReasoning != nil {
+            reasoningStreamManager.clear()
+            reasoningStreamManager.isVisible = false
+        }
+
+        // Execute and collect results with split preamble
+        let results = await executor.executeAll(
+            tasks: tasks,
+            llmFacade: llm,
+            modelId: modelId,
+            preamble: variableContext,
+            systemPrompt: corePreamble,
+            reasoning: cachedReasoning
+        )
+
+        // Build synthetic review items from results and auto-apply
+        var autoAppliedItems: [CustomizationReviewItem] = []
+        for task in tasks {
+            guard let result = results[task.id] else { continue }
+            switch result {
+            case .success(let revision):
+                var item = CustomizationReviewItem(task: task, revision: revision)
+                item.userAction = .approved
+                autoAppliedItems.append(item)
+            case .failure(let error):
+                Logger.warning("Auto pre-step task '\(task.revNode.displayName)' failed: \(error.localizedDescription)", category: .ai)
+            }
+        }
+
+        // Apply to resume tree
+        if let modelContext = currentResume?.modelContext {
+            for item in autoAppliedItems {
+                applyReviewItemToResume(item, resume: resume, context: modelContext)
+            }
+            totalCustomizedFieldCount += autoAppliedItems.count
+
+            do {
+                try modelContext.save()
+            } catch {
+                Logger.error("Failed to save auto pre-step changes: \(error.localizedDescription)")
+            }
+            exportCoordinator.debounceExport(resume: resume)
+        }
+
+        Logger.info("Auto pre-step: applied \(autoAppliedItems.count) changes", category: .ai)
+
+        // Build decisions context string
+        return RevisionTaskBuilder.buildPhase1DecisionsContext(from: autoAppliedItems)
     }
 
     /// Resolve original ExportedReviewNodes for a compound task's source node IDs.
@@ -503,6 +615,7 @@ class RevisionWorkflowOrchestrator {
             llmFacade: llm,
             modelId: modelId,
             preamble: preamble,
+            systemPrompt: cachedCorePreamble,
             toolConfig: cachedToolConfig,
             reasoning: reasoning,
             onReasoningChunk: reasoningCallback
@@ -554,7 +667,7 @@ class RevisionWorkflowOrchestrator {
             titleSets: context.titleSets,
             phase: groupItems[0].task.phase,
             targetingPlan: cachedTargetingPlan,
-            phase1Decisions: phase1DecisionsContext,
+            phase1Decisions: autoDecisionsContext,
             knowledgeCards: context.knowledgeCards,
             textResumeSnapshot: textResumeSnapshot
         )
@@ -614,6 +727,7 @@ class RevisionWorkflowOrchestrator {
             llmFacade: llm,
             modelId: modelId,
             preamble: preamble,
+            systemPrompt: cachedCorePreamble,
             toolConfig: cachedToolConfig,
             reasoning: reasoning,
             onReasoningChunk: reasoningCallback
@@ -636,7 +750,7 @@ class RevisionWorkflowOrchestrator {
         }
     }
 
-    /// Called when the current phase review is complete -- applies approved changes and advances to the next phase or finalizes.
+    /// Called when review is complete — applies approved changes and runs coherence pass or finalizes.
     /// - Parameters:
     ///   - resume: The resume being customized
     ///   - context: The SwiftData model context for saving
@@ -656,78 +770,20 @@ class RevisionWorkflowOrchestrator {
         let appliedCount = approvedItems.filter { $0.shouldApplyRevision }.count
         totalCustomizedFieldCount += appliedCount
 
-        Logger.info("Applied \(approvedItems.count) phase \(currentPhaseNumber) changes to resume")
+        Logger.info("Applied \(approvedItems.count) review changes to resume")
 
         // 2. Save to SwiftData
         do {
             try context.save()
         } catch {
-            Logger.error("Failed to save context after applying phase changes: \(error.localizedDescription)")
+            Logger.error("Failed to save context after applying changes: \(error.localizedDescription)")
         }
 
         // 3. Trigger export
         exportCoordinator.debounceExport(resume: resume)
 
-        // 4. Build Phase 1 decisions context for Phase 2
-        if currentPhaseNumber == 1 && !pendingPhase2Nodes.isEmpty {
-            phase1DecisionsContext = RevisionTaskBuilder.buildPhase1DecisionsContext(from: approvedItems)
-            Logger.info("Built Phase 1 decisions context (\(phase1DecisionsContext?.count ?? 0) chars) for Phase 2", category: .ai)
-        }
-
-        // 5. Advance to Phase 2 if pending, otherwise run coherence pass or finalize
-        if !pendingPhase2Nodes.isEmpty {
-            guard let skillStore else {
-                throw RevisionWorkflowError.missingDependency("SkillStore")
-            }
-            guard let guidanceStore else {
-                throw RevisionWorkflowError.missingDependency("InferenceGuidanceStore")
-            }
-            guard let modelId = workflowState.currentModelId else {
-                throw RevisionWorkflowError.missingDependency("modelId")
-            }
-            guard let coverRefStore = currentCoverRefStore else {
-                throw RevisionWorkflowError.missingDependency("CoverRefStore")
-            }
-
-            currentPhaseNumber = 2
-            queue.clear()
-
-            // Re-derive Phase 2 nodes from updated tree to reflect Phase 1 changes
-            let (_, freshPhase2Nodes) = phaseReviewManager.buildReviewRounds(for: resume)
-            let captured = freshPhase2Nodes
-            pendingPhase2Nodes = []
-
-            // Build fresh context with Phase 1 changes applied
-            let customizationContext = CustomizationContext.build(
-                resume: resume,
-                skillStore: skillStore,
-                guidanceStore: guidanceStore,
-                knowledgeCardStore: knowledgeCardStore,
-                coverRefStore: coverRefStore,
-                applicantProfileStore: applicantProfileStore
-            )
-            self.cachedContext = customizationContext
-
-            workflowState.setProcessingRevisions(true)
-
-            // Re-setup callbacks after queue.clear()
-            setupParallelRegenerationCallback()
-            setupCompoundRegenerationCallback()
-
-            try await executeParallelPhase(
-                nodes: captured,
-                phase: 2,
-                resume: resume,
-                context: customizationContext,
-                modelId: modelId
-            )
-
-            workflowState.setProcessingRevisions(false)
-            await delegate?.showParallelReviewQueue()
-        } else {
-            // All phases complete -- run coherence pass if warranted
-            await runCoherencePassIfNeeded(resume: resume)
-        }
+        // 4. Run coherence pass if warranted, otherwise finalize
+        await runCoherencePassIfNeeded(resume: resume)
     }
 
     /// Apply all approved items and close the workflow
@@ -829,13 +885,10 @@ class RevisionWorkflowOrchestrator {
     /// Reset all cached/stale state at the start of a new workflow run.
     /// Prevents leakage of previous run's decisions, targeting plan, preamble, etc.
     private func resetWorkflowState() {
-        pendingPhase2Nodes = []
         currentResume = nil
         currentCoverRefStore = nil
-        currentPhaseNumber = 1
-        totalPhases = 1
         cachedTargetingPlan = nil
-        phase1DecisionsContext = nil
+        autoDecisionsContext = nil
         cachedContext = nil
         cachedReasoning = nil
         totalCustomizedFieldCount = 0
@@ -848,6 +901,7 @@ class RevisionWorkflowOrchestrator {
         parallelExecutor = nil
         taskBuilder = nil
         cachedPreamble = nil
+        cachedCorePreamble = nil
         cachedToolConfig = nil
     }
 
@@ -922,8 +976,11 @@ class RevisionWorkflowOrchestrator {
     private func applyReviewItemToResume(_ item: CustomizationReviewItem, resume: Resume, context: ModelContext) {
         guard item.shouldApplyRevision else { return }  // Skip useOriginal items
 
-        // Check if this is a bundled/array node
-        if let sourceNodeIds = item.task.revNode.sourceNodeIds, !sourceNodeIds.isEmpty {
+        // Check if this is a serialized object bundle (multi-attribute section)
+        if item.task.revNode.id.hasSuffix("-object"),
+           let sourceNodeIds = item.task.revNode.sourceNodeIds, !sourceNodeIds.isEmpty {
+            applySerializedObjectChanges(item: item, sourceNodeIds: sourceNodeIds, resume: resume, context: context)
+        } else if let sourceNodeIds = item.task.revNode.sourceNodeIds, !sourceNodeIds.isEmpty {
             applyBundledChanges(item: item, sourceNodeIds: sourceNodeIds, resume: resume, context: context)
         } else {
             applySingleChange(item: item, resume: resume, context: context)
@@ -1046,6 +1103,69 @@ class RevisionWorkflowOrchestrator {
             .filter { !$0.isEmpty }
     }
 
+    /// Apply changes from a serialized object bundle (multi-attribute section).
+    ///
+    /// The `newValue` is a JSON array of entry objects (e.g., `[{"name": "...", "keywords": [...]}, ...]`).
+    /// `sourceNodeIds` are ordered: for each entry, one ID per attribute in the original attribute order.
+    /// So for N entries × M attributes: sourceNodeIds[i * M + j] = entry i's attribute j's tree node ID.
+    ///
+    /// Attribute order is encoded in the revNode path: `section.*.(attr1, attr2)`.
+    private func applySerializedObjectChanges(
+        item: CustomizationReviewItem,
+        sourceNodeIds: [String],
+        resume: Resume,
+        context: ModelContext
+    ) {
+        let jsonString = item.editedContent ?? item.revision.newValue
+        guard let jsonData = jsonString.data(using: .utf8),
+              let entries = try? JSONSerialization.jsonObject(with: jsonData) as? [[String: Any]] else {
+            Logger.warning("Failed to parse serialized object JSON for: \(item.task.revNode.displayName)")
+            applyBundledChanges(item: item, sourceNodeIds: sourceNodeIds, resume: resume, context: context)
+            return
+        }
+
+        // Extract attribute order from path: "section.*.(attr1, attr2)" → ["attr1", "attr2"]
+        let attrKeys: [String]
+        let path = item.task.revNode.path
+        if let parenStart = path.firstIndex(of: "("),
+           let parenEnd = path.firstIndex(of: ")") {
+            let attrString = path[path.index(after: parenStart)..<parenEnd]
+            attrKeys = attrString.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+        } else if let firstEntry = entries.first {
+            // Fallback: use first entry's keys sorted alphabetically
+            attrKeys = Array(firstEntry.keys).sorted()
+        } else {
+            return
+        }
+
+        let attrCount = attrKeys.count
+        guard attrCount > 0 else { return }
+
+        // The LLM may add/remove entries — map by position up to sourceNodeIds capacity
+        let maxEntries = sourceNodeIds.count / attrCount
+        for (entryIndex, entry) in entries.prefix(maxEntries).enumerated() {
+            for (attrIndex, attrKey) in attrKeys.enumerated() {
+                let nodeIdIndex = entryIndex * attrCount + attrIndex
+                let nodeId = sourceNodeIds[nodeIdIndex]
+                guard !nodeId.isEmpty,
+                      let treeNode = resume.nodes.first(where: { $0.id == nodeId }) else {
+                    Logger.debug("Skipping empty/missing sourceNodeId at index \(nodeIdIndex)")
+                    continue
+                }
+
+                if let arrayValue = entry[attrKey] as? [String] {
+                    overwriteContainerChildren(container: treeNode, newValues: arrayValue, context: context)
+                } else if let stringValue = entry[attrKey] as? String {
+                    treeNode.value = stringValue
+                    if treeNode.name == "name", let parent = treeNode.parent {
+                        parent.name = stringValue
+                    }
+                }
+            }
+        }
+        Logger.info("Applied serialized object changes (\(min(entries.count, maxEntries)) entries × \(attrCount) attrs) for: \(item.task.revNode.displayName)")
+    }
+
     /// Overwrite a container node's children with new values, adding or removing entries as needed.
     private func overwriteContainerChildren(container: TreeNode, newValues: [String], context: ModelContext) {
         let existing = container.orderedChildren
@@ -1084,11 +1204,14 @@ class RevisionWorkflowOrchestrator {
 
 enum RevisionWorkflowError: LocalizedError {
     case missingDependency(String)
+    case allTasksFailed(taskCount: Int, phase: Int)
 
     var errorDescription: String? {
         switch self {
         case .missingDependency(let name):
             return "Missing required dependency: \(name)"
+        case .allTasksFailed(let taskCount, let phase):
+            return "All \(taskCount) Phase \(phase) tasks failed. Check your API key and network connection."
         }
     }
 }

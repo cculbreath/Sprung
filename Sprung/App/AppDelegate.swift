@@ -35,15 +35,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var jobAppStore: JobAppStore?
     var backgroundActivityWindow: NSWindow?
     var backgroundActivityTracker: BackgroundActivityTracker?
+    var toolbarCoordinator: ToolbarCoordinator?
     func applicationDidFinishLaunching(_: Notification) {
-        // Wait until the app is fully loaded before modifying the menu and toolbar
+        // Wait until the app is fully loaded before modifying the menu
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
             self.setupAppMenu()
-            // Ensure toolbar displays icons and labels and enables customization
-            if let toolbar = NSApp.mainWindow?.toolbar {
-                toolbar.displayMode = .iconAndLabel
-                toolbar.allowsUserCustomization = true
-            }
         }
         // We no longer add a separate Profile main menu to avoid duplication
 
@@ -68,6 +64,38 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             object: nil
         )
     }
+
+    /// Attach a pure AppKit NSToolbar to the main window, bypassing SwiftUI's broken toolbar(id:).
+    @MainActor func setupMainWindowToolbar() {
+        let coordinator = ToolbarCoordinator()
+        coordinator.jobAppStore = self.jobAppStore
+        coordinator.navigationState = self.appEnvironment?.navigationState
+        self.toolbarCoordinator = coordinator
+
+        // Delay slightly so the SwiftUI Window scene has finished creating the NSWindow
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            guard let window = NSApp.windows.first(where: {
+                // The main app window uses an empty title from Window("", id: "myApp")
+                $0.identifier?.rawValue.contains("myApp") == true
+                    || ($0.title.isEmpty && $0.contentView != nil && type(of: $0) != NSPanel.self)
+            }) ?? NSApp.mainWindow else {
+                Logger.warning("⚠️ Could not find main window for toolbar setup", category: .ui)
+                return
+            }
+
+            let toolbar = NSToolbar(identifier: "sprungMainToolbar")
+            toolbar.delegate = coordinator
+            toolbar.allowsUserCustomization = true
+            toolbar.autosavesConfiguration = true
+            toolbar.displayMode = .iconAndLabel
+            coordinator.attach(to: toolbar)
+
+            window.toolbar = toolbar
+            window.toolbarStyle = .expanded
+            Logger.info("✅ AppKit toolbar attached to main window", category: .ui)
+        }
+    }
+
     private func setupAppMenu() {
         guard let mainMenu = NSApp.mainMenu else {
             return

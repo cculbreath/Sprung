@@ -87,9 +87,14 @@ struct LLMRequestBuilder {
         prompt: String,
         modelId: String,
         responseType: T.Type,
-        jsonSchema: JSONSchema? = nil
+        jsonSchema: JSONSchema? = nil,
+        systemPrompt: String? = nil
     ) -> ChatCompletionParameters {
-        let message = LLMMessage.text(role: .user, content: prompt)
+        var messages: [ChatCompletionParameters.Message] = []
+        if let systemPrompt {
+            messages.append(LLMMessage.text(role: .system, content: systemPrompt))
+        }
+        messages.append(LLMMessage.text(role: .user, content: prompt))
         if let schema = jsonSchema {
             let responseFormatSchema = JSONSchemaResponseFormat(
                 name: String(describing: responseType).lowercased(),
@@ -98,14 +103,14 @@ struct LLMRequestBuilder {
             )
             Logger.debug("📝 Using structured output with JSON Schema enforcement")
             return withProviderPreferences(ChatCompletionParameters(
-                messages: [message],
+                messages: messages,
                 model: .custom(modelId),
                 responseFormat: .jsonSchema(responseFormatSchema)
             ), modelId: modelId)
         } else {
             Logger.debug("📝 Using basic JSON object mode (no schema enforcement)")
             return withProviderPreferences(ChatCompletionParameters(
-                messages: [message],
+                messages: messages,
                 model: .custom(modelId),
                 responseFormat: .jsonObject
             ), modelId: modelId)

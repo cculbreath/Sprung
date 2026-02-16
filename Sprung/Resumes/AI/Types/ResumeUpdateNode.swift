@@ -162,8 +162,6 @@ struct ExportedReviewNode: Codable, Equatable, Identifiable {
     let isBundled: Bool         // True if this is a bundled node from * pattern
     let sourceNodeIds: [String]? // Original node IDs when bundled (for applying changes back)
     let isMultiAttributeIterate: Bool // True if part of a multi-attribute iterate group
-    let isSectionBundleMember: Bool   // True if part of a multi-attribute bundle (section compound)
-    let sectionBundleKey: String?     // Section path for grouping (e.g., "skills")
 
     var isContainer: Bool { childCount > 0 }
 
@@ -176,9 +174,7 @@ struct ExportedReviewNode: Codable, Equatable, Identifiable {
         childCount: Int = 0,
         isBundled: Bool = false,
         sourceNodeIds: [String]? = nil,
-        isMultiAttributeIterate: Bool = false,
-        isSectionBundleMember: Bool = false,
-        sectionBundleKey: String? = nil
+        isMultiAttributeIterate: Bool = false
     ) {
         self.id = id
         self.path = path
@@ -189,8 +185,6 @@ struct ExportedReviewNode: Codable, Equatable, Identifiable {
         self.isBundled = isBundled
         self.sourceNodeIds = sourceNodeIds
         self.isMultiAttributeIterate = isMultiAttributeIterate
-        self.isSectionBundleMember = isSectionBundleMember
-        self.sectionBundleKey = sectionBundleKey
     }
 
     /// Returns a copy with the multi-attribute iterate flag set to true
@@ -205,23 +199,6 @@ struct ExportedReviewNode: Codable, Equatable, Identifiable {
             isBundled: isBundled,
             sourceNodeIds: sourceNodeIds,
             isMultiAttributeIterate: true
-        )
-    }
-
-    /// Returns a copy tagged as a section-bundle member for section-level compound grouping
-    func withSectionBundleTag(key: String) -> ExportedReviewNode {
-        ExportedReviewNode(
-            id: id,
-            path: path,
-            displayName: displayName,
-            value: value,
-            childValues: childValues,
-            childCount: childCount,
-            isBundled: isBundled,
-            sourceNodeIds: sourceNodeIds,
-            isMultiAttributeIterate: isMultiAttributeIterate,
-            isSectionBundleMember: true,
-            sectionBundleKey: key
         )
     }
 }

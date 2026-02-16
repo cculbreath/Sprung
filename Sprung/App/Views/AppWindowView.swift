@@ -69,12 +69,11 @@ struct AppWindowView: View {
             .pickerStyle(.segmented)
             .labelsHidden()
             .fixedSize()
+            .controlSize(.small)
+            .font(.system(size: 11))
             Spacer()
         }
-        .padding(.vertical, 6)
-        .overlay(alignment: .bottom) {
-            Rectangle().fill(Color(.separatorColor)).frame(height: 1)
-        }
+        .padding(.vertical, 4)
     }
 
     @ViewBuilder
@@ -93,7 +92,7 @@ struct AppWindowView: View {
         case .coverLetter:
             CoverLetterView(showCoverLetterInspector: $sheets.showCoverLetterInspector)
         case .submitApp:
-            ResumeExportView()
+            ResumeExportView(selectedTab: $selectedTab)
         case .none:
             EmptyView()
         }

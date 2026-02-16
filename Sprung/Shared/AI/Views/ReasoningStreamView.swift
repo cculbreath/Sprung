@@ -292,6 +292,10 @@ class ReasoningStreamManager {
     var isStreaming: Bool = false
     var errorMessage: String? = nil
 
+    /// Per-task reasoning buffers for parallel execution.
+    /// Ordered by first appearance so sections stay stable.
+    private var taskBuffers: [(id: UUID, name: String, text: String)] = []
+
     /// Stop the current stream
     func stopStream() {
         isStreaming = false
@@ -302,6 +306,7 @@ class ReasoningStreamManager {
         modelName = ""
         isStreaming = false
         errorMessage = nil
+        taskBuffers = []
     }
     /// Hides the reasoning interface and clears any accumulated state.
     func hideAndClear() {
@@ -315,6 +320,7 @@ class ReasoningStreamManager {
         self.errorMessage = nil
         self.isVisible = true
         self.isStreaming = true
+        self.taskBuffers = []
     }
     /// Show an error message in the reasoning window
     func showError(_ message: String) {
@@ -323,9 +329,27 @@ class ReasoningStreamManager {
         self.isVisible = true
     }
 
-    /// Append reasoning text from a streaming chunk.
+    /// Append reasoning text from a single-stream (non-parallel) context.
     /// Safe to call from any async context — hops to MainActor.
     func appendReasoning(_ text: String) {
         reasoningText += text
+    }
+
+    /// Append reasoning text from a parallel task, keeping per-task sections separate.
+    /// Each task's reasoning appears under its own header to prevent interleaving.
+    func appendReasoning(_ text: String, taskId: UUID, taskName: String) {
+        if let index = taskBuffers.firstIndex(where: { $0.id == taskId }) {
+            taskBuffers[index].text += text
+        } else {
+            taskBuffers.append((id: taskId, name: taskName, text: text))
+        }
+        rebuildReasoningText()
+    }
+
+    /// Recompose the display text from per-task buffers with section headers.
+    private func rebuildReasoningText() {
+        reasoningText = taskBuffers.map { buffer in
+            "**\(buffer.name)**\n\(buffer.text)"
+        }.joined(separator: "\n\n")
     }
 }

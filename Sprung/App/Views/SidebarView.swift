@@ -34,7 +34,7 @@ struct SidebarView: View {
                 .padding(.top, 8) // This padding acts as a spacer
                 .listRowBackground(Color.clear)
                 .listRowInsets(EdgeInsets())
-                ForEach(Statuses.allCases, id: \.self) { status in
+                ForEach(Statuses.sidebarOrder, id: \.self) { status in
                     let filteredApps = jobApps.filter { $0.status == status }
                     if !filteredApps.isEmpty {
                         JobAppSectionView(
@@ -53,8 +53,9 @@ struct SidebarView: View {
                     }
                 }
             }
-            .listStyle(.sidebar)
+            .listStyle(.inset)
             .scrollContentBackground(.hidden)
+            .environment(\.defaultMinListRowHeight, 20)
             .frame(maxHeight: .infinity) // List takes remaining space
             // Draggable Sliding Source List (conditionally shown)
             if showSlidingList {

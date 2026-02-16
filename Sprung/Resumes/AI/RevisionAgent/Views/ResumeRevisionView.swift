@@ -102,12 +102,16 @@ struct ResumeRevisionView: View {
                 messages: agent.messages,
                 currentProposal: agent.currentProposal,
                 currentQuestion: agent.currentQuestion,
+                currentCompletionSummary: agent.currentCompletionSummary,
                 isRunning: agent.status == .running,
                 onProposalResponse: { response in
                     agent.respondToProposal(response)
                 },
                 onQuestionResponse: { answer in
                     agent.respondToQuestion(answer)
+                },
+                onCompletionResponse: { accepted in
+                    agent.respondToCompletion(accepted)
                 },
                 onUserMessage: { text in
                     agent.sendUserMessage(text)

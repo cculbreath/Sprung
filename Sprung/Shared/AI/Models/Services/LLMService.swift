@@ -138,7 +138,8 @@ final class OpenRouterServiceBackend {
         modelId: String,
         responseType: T.Type,
         reasoning: OpenRouterReasoning? = nil,
-        jsonSchema: JSONSchema? = nil
+        jsonSchema: JSONSchema? = nil,
+        systemPrompt: String? = nil
     ) -> AsyncThrowingStream<LLMStreamChunkDTO, Error> {
         AsyncThrowingStream { continuation in
             Task {
@@ -148,7 +149,8 @@ final class OpenRouterServiceBackend {
                         prompt: prompt,
                         modelId: modelId,
                         responseType: responseType,
-                        jsonSchema: jsonSchema
+                        jsonSchema: jsonSchema,
+                        systemPrompt: systemPrompt
                     )
                     self.streamingExecutor.applyReasoning(reasoning, to: &parameters)
                     parameters.stream = true

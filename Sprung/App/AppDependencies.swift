@@ -168,7 +168,8 @@ final class AppDependencies {
             coverRefStore: coverRefStore,
             guidanceStore: guidanceStore,
             skillStore: skillStore,
-            titleSetStore: titleSetStore
+            titleSetStore: titleSetStore,
+            candidateDossierStore: candidateDossierStore
         )
         self.resumeReviseViewModel = resumeReviseViewModel
         let interviewDataStore = InterviewDataStore()

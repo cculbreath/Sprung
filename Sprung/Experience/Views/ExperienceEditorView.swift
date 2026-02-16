@@ -3,7 +3,6 @@ import SwiftUI
 struct ExperienceEditorView: View {
     @Environment(ExperienceDefaultsStore.self) private var defaultsStore: ExperienceDefaultsStore
     @Environment(AppEnvironment.self) private var appEnvironment: AppEnvironment
-    @Environment(\.dismiss) private var dismiss
     @State private var draft = ExperienceDefaultsDraft()
     @State private var originalDraft = ExperienceDefaultsDraft()
     @State private var isLoading = true
@@ -139,17 +138,14 @@ struct ExperienceEditorView: View {
                 .disabled(isLoading || appEnvironment.launchState.isReadOnly)
                 .help("Import values from an existing resume into Experience Defaults")
 
-                Button("Cancel") {
-                    cancelAndClose()
+                Button("Revert") {
+                    revertChanges()
                 }
                 .disabled(isLoading || hasChanges == false)
 
                 Button("Save") {
                     Task {
-                        let didSave = await saveDraft()
-                        if didSave {
-                            dismiss()
-                        }
+                        await saveDraft()
                     }
                 }
                 .buttonStyle(.borderedProminent)
@@ -207,8 +203,8 @@ struct ExperienceEditorView: View {
         clearEditingEntries()
     }
     @MainActor
-    private func saveDraft() async -> Bool {
-        guard hasChanges else { return true }
+    private func saveDraft() async {
+        guard hasChanges else { return }
         saveState = .saving
         defaultsStore.save(draft: draft)
         // Mark seed as created when user manually saves content
@@ -217,14 +213,12 @@ struct ExperienceEditorView: View {
         hasChanges = false
         saveState = .saved
         clearEditingEntries()
-        return true
     }
-    private func cancelAndClose() {
+    private func revertChanges() {
         draft = originalDraft
         hasChanges = false
         saveState = .idle
         clearEditingEntries()
-        dismiss()
     }
     private func isEditingEntry(_ id: UUID) -> Bool {
         editingEntries.contains(id)

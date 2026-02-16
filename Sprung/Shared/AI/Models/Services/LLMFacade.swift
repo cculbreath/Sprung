@@ -45,6 +45,17 @@ final class LLMFacade {
             case .anthropic: return "Anthropic"
             }
         }
+
+        /// Infer the backend from a model ID prefix.
+        /// Models prefixed with "anthropic/" or "claude-" route to `.anthropic`.
+        /// All other models default to `.openRouter`.
+        static func infer(from modelId: String) -> Backend {
+            let lower = modelId.lowercased()
+            if lower.hasPrefix("anthropic/") || lower.hasPrefix("claude-") {
+                return .anthropic
+            }
+            return .openRouter
+        }
     }
 
     private let client: LLMClient
@@ -323,7 +334,8 @@ final class LLMFacade {
         as type: T.Type,
         reasoning: OpenRouterReasoning? = nil,
         jsonSchema: JSONSchema? = nil,
-        backend: Backend = .openRouter
+        backend: Backend = .openRouter,
+        systemPrompt: String? = nil
     ) async throws -> LLMStreamingHandle {
         guard backend == .openRouter else {
             throw LLMError.clientError("Structured streaming is not supported for backend \(backend.displayName)")
@@ -337,7 +349,8 @@ final class LLMFacade {
             modelId: modelId,
             responseType: type,
             reasoning: reasoning,
-            jsonSchema: jsonSchema
+            jsonSchema: jsonSchema,
+            systemPrompt: systemPrompt
         )
         LLMTranscriptLogger.logStreamingRequest(
             method: "executeStructuredStreaming", modelId: modelId,

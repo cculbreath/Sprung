@@ -68,7 +68,7 @@ struct TTSButton: View {
     var body: some View {
         Button(action: handleClick) {
             Label("TTS", systemImage: buttonIcon)
-                .font(.system(size: 14, weight: .light))
+                .font(.system(size: 11, weight: .regular))
                 .foregroundColor(buttonColor)
         }
         .buttonStyle(.automatic)

@@ -39,17 +39,14 @@ final class RevisionTaskBuilder {
         knowledgeCards: [KnowledgeCard] = [],
         textResumeSnapshot: String? = nil
     ) -> [RevisionTask] {
-        // Separate section-bundle members, multi-attribute iterate, specialized, and compound-eligible nodes
+        // Build work entry name index for targeting plan matching
+        let workEntryNames = extractWorkEntryNames(from: resume)
+        // Separate multi-attribute iterate, specialized, and compound-eligible nodes
         var specializedTasks: [RevisionTask] = []
         var compoundCandidates: [ExportedReviewNode] = []
         var multiAttributeCandidates: [ExportedReviewNode] = []
-        var sectionBundleCandidates: [ExportedReviewNode] = []
 
         for revNode in revNodes {
-            if revNode.isSectionBundleMember {
-                sectionBundleCandidates.append(revNode)
-                continue
-            }
             if revNode.isMultiAttributeIterate {
                 multiAttributeCandidates.append(revNode)
                 continue
@@ -65,7 +62,8 @@ final class RevisionTaskBuilder {
                     targetingPlan: targetingPlan,
                     phase1Decisions: phase1Decisions,
                     knowledgeCards: knowledgeCards,
-                    textResumeSnapshot: textResumeSnapshot
+                    textResumeSnapshot: textResumeSnapshot,
+                    workEntryNames: workEntryNames
                 )
                 specializedTasks.append(RevisionTask(
                     revNode: revNode,
@@ -78,27 +76,6 @@ final class RevisionTaskBuilder {
             }
         }
 
-        // Group section-bundle nodes by key → one compound per section
-        let sectionGroups = Dictionary(grouping: sectionBundleCandidates) {
-            $0.sectionBundleKey ?? "unknown"
-        }
-        for (_, group) in sectionGroups {
-            let prompt = generateSectionCompoundPrompt(
-                for: group,
-                skills: skills,
-                targetingPlan: targetingPlan,
-                phase1Decisions: phase1Decisions,
-                textResumeSnapshot: textResumeSnapshot
-            )
-            let compoundNode = buildCompoundNode(from: group)
-            specializedTasks.append(RevisionTask(
-                revNode: compoundNode,
-                taskPrompt: prompt,
-                nodeType: .compound,
-                phase: phase
-            ))
-        }
-
         // Force compound grouping for multi-attribute iterate nodes (grouped by parent path)
         let multiAttrGroups = buildCompoundGroups(from: multiAttributeCandidates)
         for group in multiAttrGroups {
@@ -108,7 +85,8 @@ final class RevisionTaskBuilder {
                     targetingPlan: targetingPlan,
                     phase1Decisions: phase1Decisions,
                     knowledgeCards: knowledgeCards,
-                    textResumeSnapshot: textResumeSnapshot
+                    textResumeSnapshot: textResumeSnapshot,
+                    workEntryNames: workEntryNames
                 )
                 let compoundNode = buildCompoundNode(from: group)
                 specializedTasks.append(RevisionTask(
@@ -128,7 +106,8 @@ final class RevisionTaskBuilder {
                     targetingPlan: targetingPlan,
                     phase1Decisions: phase1Decisions,
                     knowledgeCards: knowledgeCards,
-                    textResumeSnapshot: textResumeSnapshot
+                    textResumeSnapshot: textResumeSnapshot,
+                    workEntryNames: workEntryNames
                 )
                 specializedTasks.append(RevisionTask(
                     revNode: single,
@@ -151,7 +130,8 @@ final class RevisionTaskBuilder {
                     targetingPlan: targetingPlan,
                     phase1Decisions: phase1Decisions,
                     knowledgeCards: knowledgeCards,
-                    textResumeSnapshot: textResumeSnapshot
+                    textResumeSnapshot: textResumeSnapshot,
+                    workEntryNames: workEntryNames
                 )
                 // Use a synthetic compound node that references all group members
                 let compoundNode = buildCompoundNode(from: group)
@@ -171,7 +151,8 @@ final class RevisionTaskBuilder {
                     targetingPlan: targetingPlan,
                     phase1Decisions: phase1Decisions,
                     knowledgeCards: knowledgeCards,
-                    textResumeSnapshot: textResumeSnapshot
+                    textResumeSnapshot: textResumeSnapshot,
+                    workEntryNames: workEntryNames
                 )
                 compoundTasks.append(RevisionTask(
                     revNode: single,
@@ -267,9 +248,10 @@ final class RevisionTaskBuilder {
         targetingPlan: TargetingPlan? = nil,
         phase1Decisions: String? = nil,
         knowledgeCards: [KnowledgeCard] = [],
-        textResumeSnapshot: String? = nil
+        textResumeSnapshot: String? = nil,
+        workEntryNames: [String] = []
     ) -> String {
-        let targetingSection = buildTargetingSection(for: revNode, plan: targetingPlan)
+        let targetingSection = buildTargetingSection(for: revNode, plan: targetingPlan, workEntryNames: workEntryNames)
         let phase1Section = phase1DecisionsSection(phase1Decisions)
 
         switch nodeType {
@@ -286,7 +268,8 @@ final class RevisionTaskBuilder {
                 phase1Decisions: phase1Decisions,
                 knowledgeCards: knowledgeCards,
                 targetingPlan: targetingPlan,
-                textResumeSnapshot: textResumeSnapshot
+                textResumeSnapshot: textResumeSnapshot,
+                workEntryNames: workEntryNames
             )
         case .compound:
             // Should not reach here -- compound is built via generateCompoundPrompt
@@ -295,7 +278,7 @@ final class RevisionTaskBuilder {
     }
 
     /// Build the targeting plan section for a specific node.
-    private func buildTargetingSection(for revNode: ExportedReviewNode, plan: TargetingPlan?) -> String? {
+    private func buildTargetingSection(for revNode: ExportedReviewNode, plan: TargetingPlan?, workEntryNames: [String] = []) -> String? {
         guard let plan else { return nil }
 
         var sections: [String] = []
@@ -311,19 +294,13 @@ final class RevisionTaskBuilder {
 
         // Work entry guidance for work-related paths
         if pathLower.contains("work") {
-            // Try to match by entry index from path (e.g., "work.0.highlights" -> index 0)
-            for guidance in plan.workEntryGuidance {
-                let entryId = guidance.entryIdentifier.lowercased()
-                // Match if path contains a work index and guidance matches
-                if pathLower.contains("work") {
-                    sections.append("""
-                    **Work Entry: \(guidance.entryIdentifier)**
-                    Lead with: \(guidance.leadAngle)
-                    Emphasize: \(guidance.emphasis.joined(separator: "; "))
-                    De-emphasize: \(guidance.deEmphasis.joined(separator: "; "))
-                    """)
-                    break
-                }
+            if let guidance = matchWorkEntryGuidance(path: revNode.path, plan: plan, workEntryNames: workEntryNames) {
+                sections.append("""
+                **Work Entry: \(guidance.entryIdentifier)**
+                Lead with: \(guidance.leadAngle)
+                Emphasize: \(guidance.emphasis.joined(separator: "; "))
+                De-emphasize: \(guidance.deEmphasis.joined(separator: "; "))
+                """)
             }
         }
 
@@ -365,7 +342,8 @@ final class RevisionTaskBuilder {
         phase1Decisions: String? = nil,
         knowledgeCards: [KnowledgeCard] = [],
         targetingPlan: TargetingPlan? = nil,
-        textResumeSnapshot: String? = nil
+        textResumeSnapshot: String? = nil,
+        workEntryNames: [String] = []
     ) -> String {
         let pathLower = revNode.path.lowercased()
         let phase1Section = phase1DecisionsSection(phase1Decisions)
@@ -374,7 +352,8 @@ final class RevisionTaskBuilder {
             let bulletSection = suggestedBulletsSection(
                 for: revNode,
                 knowledgeCards: knowledgeCards,
-                targetingPlan: targetingPlan
+                targetingPlan: targetingPlan,
+                workEntryNames: workEntryNames
             )
             return generateHighlightsPrompt(
                 for: revNode,
@@ -403,13 +382,14 @@ final class RevisionTaskBuilder {
     private func suggestedBulletsSection(
         for revNode: ExportedReviewNode,
         knowledgeCards: [KnowledgeCard],
-        targetingPlan: TargetingPlan?
+        targetingPlan: TargetingPlan?,
+        workEntryNames: [String] = []
     ) -> String? {
         guard let plan = targetingPlan else { return nil }
 
-        // Find supporting card IDs for this work entry via work entry guidance
+        // Find supporting card IDs for THIS specific work entry
         var supportingCardIds: [String] = []
-        for guidance in plan.workEntryGuidance {
+        if let guidance = matchWorkEntryGuidance(path: revNode.path, plan: plan, workEntryNames: workEntryNames) {
             supportingCardIds.append(contentsOf: guidance.supportingCardIds)
         }
 
@@ -447,122 +427,6 @@ final class RevisionTaskBuilder {
         """
     }
 
-    // MARK: - Section Compound Prompt Generation
-
-    /// Generate a section-level compound prompt for multi-attribute bundle groups.
-    /// Groups nodes by parent path (entry) and presents the full section structure
-    /// so the LLM revises all entries with all their attributes coherently.
-    private func generateSectionCompoundPrompt(
-        for group: [ExportedReviewNode],
-        skills: [Skill],
-        targetingPlan: TargetingPlan?,
-        phase1Decisions: String?,
-        textResumeSnapshot: String? = nil
-    ) -> String {
-        let phase1Section = phase1DecisionsSection(phase1Decisions)
-
-        // Determine the section name from the sectionBundleKey or paths
-        let sectionKey = group.first?.sectionBundleKey ?? parentPath(for: group[0].path)
-        let sectionName = sectionKey.split(separator: ".").last.map(String.init)?.capitalized ?? sectionKey.capitalized
-
-        // Group nodes by parent path (entry) to present structured entries
-        let entryGroups = Dictionary(grouping: group) { parentPath(for: $0.path) }
-        let sortedEntryKeys = entryGroups.keys.sorted()
-
-        // Build entry descriptions
-        var entrySections: [String] = []
-        for (index, entryKey) in sortedEntryKeys.enumerated() {
-            guard let entryNodes = entryGroups[entryKey] else { continue }
-            // Use the first node's parent context as the entry label
-            let entryLabel = entryKey.split(separator: ".").dropFirst().first.map(String.init) ?? "Entry \(index + 1)"
-            var lines: [String] = ["### Entry \(index + 1): \"\(entryLabel)\""]
-            for node in entryNodes {
-                let fieldName = node.path.split(separator: ".").last.map(String.init) ?? node.displayName
-                if node.isContainer, let children = node.childValues {
-                    lines.append("- \(fieldName) (id: \(node.id)): \(children.joined(separator: ", "))")
-                } else {
-                    lines.append("- \(fieldName) (id: \(node.id)): \(node.value)")
-                }
-            }
-            entrySections.append(lines.joined(separator: "\n"))
-        }
-
-        // Include skill bank reference for skills sections
-        let pathLower = sectionKey.lowercased()
-        var skillBankSection = ""
-        if pathLower.contains("skills") && !skills.isEmpty {
-            skillBankSection = "\n## Available Skills from Skill Bank\n\n\(formatSkillBank(skills))\n"
-        }
-
-        // Build targeting guidance
-        var targetingSection = ""
-        if let plan = targetingPlan {
-            if !plan.narrativeArc.isEmpty {
-                targetingSection += "\n**Narrative Arc:** \(plan.narrativeArc)"
-            }
-            if !plan.emphasisThemes.isEmpty {
-                targetingSection += "\n**Emphasis Themes:** \(plan.emphasisThemes.joined(separator: "; "))"
-            }
-            if !plan.prioritizedSkills.isEmpty {
-                targetingSection += "\n**Prioritized Skills:** \(plan.prioritizedSkills.prefix(5).joined(separator: ", "))"
-            }
-        }
-
-        let nodeIds = group.map { "\"\($0.id)\"" }.joined(separator: ", ")
-        let fieldPaths = group.map { "\"\($0.path)\"" }.joined(separator: ", ")
-
-        return """
-        ## Task: Revise \(sectionName) Section as a Coherent Unit
-
-        Review and revise all entries in the \(sectionName) section together to ensure cross-entry coherence.
-        Each entry has multiple attributes that must remain associated — do not mix attributes between entries.
-
-        ## Current Section Data
-
-        \(entrySections.joined(separator: "\n\n"))
-        \(skillBankSection)
-        \(targetingSection.isEmpty ? "" : "\n## Strategic Guidance\n\(targetingSection)\n")
-        \(resumeContextSection(textResumeSnapshot))
-
-        ## Requirements
-
-        1. **Preserve entry-attribute associations** — each entry's fields must stay coherent (e.g., a skill category's name and keywords must match)
-        2. **Ground every claim in Knowledge Card evidence** — do not fabricate facts, metrics, or capabilities
-        3. **Match the candidate's authentic voice** — study writing samples in the preamble
-        4. **Ensure cross-entry coherence** — entries should complement each other without redundancy
-
-        ## FORBIDDEN
-
-        - Fabricated metrics, percentages, or numbers not in Knowledge Cards
-        - Generic resume phrases: "spearheaded", "leveraged", "drove results", "proven track record"
-        - Mixing attributes between entries (e.g., putting Entry 1's keywords under Entry 2's name)
-
-        ## Output Format
-
-        Return a JSON object with this structure:
-        {
-          "compoundFields": [
-            {
-              "id": "<node id>",
-              "path": "<node path>",
-              "oldValue": "<current value>",
-              "newValue": "<revised value>",
-              "valueChanged": true,
-              "why": "<explanation>",
-              "nodeType": "scalar" or "list",
-              "newValueArray": ["item1", "item2"] // only for list nodes
-            }
-          ]
-        }
-
-        Node IDs in order: [\(nodeIds)]
-        Node paths in order: [\(fieldPaths)]
-
-        If no changes are needed for a field, set "valueChanged" to false and copy the current value.
-        \(phase1Section)
-        """
-    }
-
     // MARK: - Compound Prompt Generation
 
     /// Generate a compound prompt for a group of related fields.
@@ -571,7 +435,8 @@ final class RevisionTaskBuilder {
         targetingPlan: TargetingPlan?,
         phase1Decisions: String?,
         knowledgeCards: [KnowledgeCard],
-        textResumeSnapshot: String? = nil
+        textResumeSnapshot: String? = nil,
+        workEntryNames: [String] = []
     ) -> String {
         let parent = parentPath(for: group[0].path)
         let phase1Section = phase1DecisionsSection(phase1Decisions)
@@ -579,8 +444,8 @@ final class RevisionTaskBuilder {
         // Build targeting guidance for this entry
         var targetingSection = ""
         if let plan = targetingPlan {
-            // Find matching work entry guidance
-            for guidance in plan.workEntryGuidance {
+            // Match work entry guidance using the first node's path
+            if let guidance = matchWorkEntryGuidance(path: group[0].path, plan: plan, workEntryNames: workEntryNames) {
                 targetingSection += """
 
                 **Work Entry: \(guidance.entryIdentifier)**
@@ -589,7 +454,6 @@ final class RevisionTaskBuilder {
                 De-emphasize: \(guidance.deEmphasis.joined(separator: "; "))
 
                 """
-                break
             }
 
             if !plan.narrativeArc.isEmpty {
@@ -605,7 +469,7 @@ final class RevisionTaskBuilder {
         let hasHighlights = group.contains { $0.path.lowercased().contains("highlights") }
         if hasHighlights, let plan = targetingPlan {
             var supportingCardIds: [String] = []
-            for guidance in plan.workEntryGuidance {
+            if let guidance = matchWorkEntryGuidance(path: group[0].path, plan: plan, workEntryNames: workEntryNames) {
                 supportingCardIds.append(contentsOf: guidance.supportingCardIds)
             }
             let workMappings = plan.cardMappings(forSection: "work")
@@ -665,17 +529,11 @@ final class RevisionTaskBuilder {
 
         ## Requirements
 
-        1. **Ground every claim in Knowledge Card evidence** -- do not fabricate facts, metrics, or capabilities
-        2. **Match the candidate's authentic voice** -- study writing samples in the preamble
-        3. **Ensure cross-field coherence** -- description sets up highlights; title aligns with framing
-        4. **Vary sentence structure across highlights** -- do NOT start every bullet with an action verb
+        Follow all constraints defined in the system preamble.
 
-        ## FORBIDDEN
-
-        - Fabricated metrics, percentages, or numbers not in Knowledge Cards
-        - Generic resume phrases: "spearheaded", "leveraged", "drove results", "proven track record"
-        - Vague impact claims: "significantly improved", "enhanced capabilities"
-        - Repeating the same information across description and highlights
+        1. **Ensure cross-field coherence** — description sets up highlights; title aligns with framing
+        2. **Vary sentence structure across highlights** — do NOT start every bullet with an action verb
+        3. Do not repeat the same information across description and highlights
 
         ## Output Format
 
@@ -707,6 +565,12 @@ final class RevisionTaskBuilder {
     private func generateSkillsPrompt(for revNode: ExportedReviewNode, skills: [Skill], textResumeSnapshot: String? = nil) -> String {
         let skillBank = formatSkillBank(skills)
 
+        // Multi-attribute serialized object (from exportSectionAsObject)
+        if revNode.id.hasSuffix("-object") {
+            return generateSkillsSectionPrompt(for: revNode, skillBank: skillBank, textResumeSnapshot: textResumeSnapshot)
+        }
+
+        // Single-attribute bundle (category names only)
         return """
         Review and adjust the skill category names for this resume to better align with the target job posting.
 
@@ -729,6 +593,49 @@ final class RevisionTaskBuilder {
         Individual skill selection within categories will happen in a separate step.
 
         \(jsonResponseBlock(for: revNode))
+        """
+    }
+
+    /// Generate prompt for a full skills section revision (multi-attribute bundle).
+    /// The LLM receives the entire skills section as a JSON array of entry objects
+    /// and returns the revised section in the same format.
+    private func generateSkillsSectionPrompt(for revNode: ExportedReviewNode, skillBank: String, textResumeSnapshot: String? = nil) -> String {
+        return """
+        Revise the entire skills section as a coherent unit. You may rename categories,
+        reorder entries, add or remove categories (keep 4-7 total), and re-select keywords
+        within each category — all in one pass.
+
+        CONSTRAINTS:
+        - Category names: concise (2-5 words), aligned with job posting terminology
+        - Keywords: ONLY use skills from the Skill Bank below — do NOT invent new skills
+        - Prefer higher-proficiency skills (expert > proficient > familiar) when choosing keywords
+        - Preserve the JSON array structure: each entry has the same attributes as the input
+        - Order entries by relevance to the job (most relevant first)
+
+        ## Available Skills from Skill Bank
+
+        \(skillBank)
+
+        ## Current Skills Section
+
+        \(revNode.value)
+        \(resumeContextSection(textResumeSnapshot))
+
+        ## Output Format
+
+        Return the revised skills section as `newValue` — a JSON array with the same structure:
+        {
+          "id": "\(revNode.id)",
+          "oldValue": "(truncated, use current section data above)",
+          "newValue": "[{...}, ...]",
+          "valueChanged": true,
+          "why": "explanation of changes",
+          "treePath": "\(revNode.path)",
+          "nodeType": "scalar"
+        }
+
+        The `newValue` must be a valid JSON array string matching the input structure.
+        If no changes are needed, set "valueChanged" to false and copy the current value.
         """
     }
 
@@ -922,45 +829,15 @@ final class RevisionTaskBuilder {
 
         ## Requirements
 
+        Follow all constraints defined in the system preamble.
+
         Generate 3-5 bullet points that:
 
-        1. **Use ONLY facts from the Knowledge Cards** — every claim must trace to evidence in the KCs provided in the preamble. If no metric exists in the source material, describe the work narratively without inventing numbers.
+        1. **Describe work narratively** — focus on what was built, created, discovered, solved, or shipped. Frame contributions as stories of problems tackled and outcomes produced.
 
-        2. **Match the candidate's authentic voice** — write in their natural style as shown in writing samples (see Voice section in preamble), not in generic resume-speak. Study their vocabulary, sentence length, and professional register.
+        2. **Vary sentence structure across bullets** — do NOT start every bullet with an action verb. Mix leading with context, outcomes, or technical details. Some bullets can begin with what was built; others with why it mattered.
 
-        3. **Describe work narratively** — focus on what was built, created, discovered, solved, or shipped. Frame contributions as stories of problems tackled and outcomes produced.
-
-        4. **Vary sentence structure across bullets** — do NOT start every bullet with an action verb. Mix leading with context, outcomes, or technical details. Some bullets can begin with what was built; others with why it mattered.
-
-        5. **Lead with the strongest evidence** — place the most impactful, well-documented bullet first. Subsequent bullets should still be strong but can cover different facets of the role.
-
-        ## Role-Appropriate Framing
-
-        Tailor bullet structure to the position type:
-
-        **For R&D / Academic / Research positions:**
-        - What problem or gap existed?
-        - What novel approach was taken?
-        - What was created, discovered, or published?
-
-        **For Industry / Engineering / Corporate positions:**
-        - What system or process did they own?
-        - What was their specific technical contribution?
-        - What concrete outcome resulted? (only if documented)
-
-        **For Teaching / Education positions:**
-        - What did they build or redesign?
-        - What pedagogical approach did they use?
-        - What was the scope and impact on students?
-
-        ## FORBIDDEN
-
-        - Fabricated metrics, percentages, or numbers not explicitly stated in Knowledge Cards
-        - Generic phrases: "spearheaded", "leveraged", "drove results", "collaborated cross-functionally"
-        - Vague impact claims: "significantly improved", "enhanced capabilities", "streamlined processes"
-        - Formulaic structure: "[Action verb] [thing] resulting in [X]% improvement"
-        - LinkedIn buzzwords: "synergized", "thought leadership", "paradigm shift"
-        - Starting every bullet identically (e.g., all beginning with past-tense verbs)
+        3. **Lead with the strongest evidence** — place the most impactful, well-documented bullet first. Subsequent bullets should still be strong but can cover different facets of the role.
 
         \(jsonResponseBlock(for: revNode))
         """
@@ -986,28 +863,15 @@ final class RevisionTaskBuilder {
 
         ## Requirements
 
+        Follow all constraints defined in the system preamble.
+
         Generate a professional summary that:
 
         1. **Is 3-5 sentences, 60-100 words** — concise and dense with meaning, not padded with filler
         2. **Leads with the core value proposition** — what does this candidate uniquely offer for the target role?
         3. **Conveys professional identity** — how the candidate frames their expertise and career focus
-        4. **References key skills naturally** — weave in the most relevant skills from the preamble without listing them mechanically
-        5. **Matches the candidate's voice** — study writing samples carefully (see Voice section in preamble) and write in their natural style, not generic resume-speak
-
-        ## CONSTRAINTS
-
-        1. Use ONLY facts from the provided Knowledge Cards and documented experience
-        2. Do NOT invent metrics, percentages, or quantitative claims not present in KCs
-        3. Do NOT pad with vague qualifiers ("extensive experience", "deep expertise")
-        4. The summary should feel like the candidate wrote it themselves
-
-        ## FORBIDDEN
-
-        - Fabricated numbers ("X years of experience", "reduced by Y%") unless exact figures appear in KCs
-        - Generic phrases: "results-driven", "passionate about", "proven track record", "detail-oriented professional"
-        - Vague claims: "significantly improved", "extensive experience in", "strong background in"
-        - LinkedIn buzzwords: "leveraged", "spearheaded", "synergized"
-        - Opening with "Experienced professional with..." or "Results-driven [title] with..."
+        4. **References key skills naturally** — weave in the most relevant skills without listing them mechanically
+        5. Do NOT open with "Experienced professional with..." or "Results-driven [title] with..."
 
         \(jsonResponseBlock(for: revNode))
         """
@@ -1033,28 +897,15 @@ final class RevisionTaskBuilder {
 
         ## Requirements
 
+        Follow all constraints defined in the system preamble.
+
         Generate a description that:
 
         1. **Is 2-3 sentences for project descriptions, 1-2 sentences for work descriptions** — tight and purposeful
         2. **Explains what was built and why** — lead with the purpose or problem, then the approach and candidate's role
         3. **References specific technologies from the Knowledge Cards** — name the actual tools, languages, and frameworks documented in KCs rather than using vague terms like "various technologies"
         4. **Angles toward the target job** — emphasize the aspects most relevant to the job posting without distorting what actually happened
-        5. **Matches the candidate's voice** — study writing samples (see Voice section in preamble)
-
-        ## CONSTRAINTS
-
-        1. Use ONLY facts from the provided Knowledge Cards — every technology, tool, and claim must trace to KC evidence
-        2. Do NOT invent metrics or quantitative claims
-        3. Do NOT add capabilities or technologies not documented in KCs
-        4. Keep descriptions focused — avoid trying to cover everything; pick the angle that best serves the job target
-
-        ## FORBIDDEN
-
-        - Fabricated numbers ("increased by X%", "reduced by Y%") unless exact figures appear in KCs
-        - Generic phrases: "spearheaded", "leveraged", "cutting-edge", "state-of-the-art"
-        - Vague claims: "significantly improved", "enhanced performance"
-        - Technology name-dropping not backed by KC evidence
-        - Overstuffing with every possible keyword
+        5. Keep descriptions focused — pick the angle that best serves the job target
 
         \(jsonResponseBlock(for: revNode))
         """
@@ -1079,20 +930,10 @@ final class RevisionTaskBuilder {
 
         ## Requirements
 
-        1. **Ground every claim in Knowledge Card evidence** — do not fabricate facts, metrics, or capabilities. If the KCs don't support a claim, omit it.
+        Follow all constraints defined in the system preamble.
 
-        2. **Match the candidate's authentic voice** — study the writing samples in the preamble. Mirror their vocabulary, sentence structure, and professional register. Do not default to generic resume-speak.
-
-        3. **Target the job posting** — emphasize the aspects of this field that are most relevant to the target role, but do not distort or fabricate to create a better fit.
-
-        4. **Be concise** — prefer fewer, stronger words over padding with qualifiers and filler phrases.
-
-        ## FORBIDDEN
-
-        - Fabricated metrics, percentages, or numbers not in Knowledge Cards
-        - Generic resume phrases: "spearheaded", "leveraged", "drove results", "proven track record"
-        - Vague impact claims: "significantly improved", "enhanced capabilities"
-        - LinkedIn buzzwords: "synergized", "thought leadership"
+        1. **Target the job posting** — emphasize the aspects of this field that are most relevant to the target role, but do not distort or fabricate to create a better fit.
+        2. **Be concise** — prefer fewer, stronger words over padding with qualifiers and filler phrases.
 
         \(jsonResponseBlock(for: revNode))
         """
@@ -1200,6 +1041,48 @@ final class RevisionTaskBuilder {
         return allCategories.first {
             name.contains($0.lowercased()) || $0.lowercased().contains(name)
         }
+    }
+
+    // MARK: - Work Entry Matching
+
+    /// Extract ordered work entry names from the resume tree.
+    /// Index 0 corresponds to "work.0", index 1 to "work.1", etc.
+    private func extractWorkEntryNames(from resume: Resume) -> [String] {
+        guard let rootNode = resume.rootNode else { return [] }
+        // Find the "work" section node
+        guard let workSection = rootNode.orderedChildren.first(where: {
+            $0.name.lowercased() == "work"
+        }) else { return [] }
+        // Each child of the work section is a work entry; its name is the entry identifier
+        return workSection.orderedChildren.map { $0.name }
+    }
+
+    /// Extract the numeric index from a work-related path.
+    /// E.g., "work.0.highlights" → 0, "work.2.description" → 2
+    private func extractWorkIndex(from path: String) -> Int? {
+        let components = path.split(separator: ".")
+        guard components.count >= 2,
+              components[0].lowercased() == "work",
+              let index = Int(components[1]) else {
+            return nil
+        }
+        return index
+    }
+
+    /// Match the correct WorkEntryGuidance for a given node path.
+    /// Uses the numeric index in the path to look up the work entry name,
+    /// then uses `plan.guidance(forEntry:)` for exact matching.
+    private func matchWorkEntryGuidance(
+        path: String,
+        plan: TargetingPlan,
+        workEntryNames: [String]
+    ) -> WorkEntryGuidance? {
+        guard let index = extractWorkIndex(from: path),
+              index < workEntryNames.count else {
+            return nil
+        }
+        let entryName = workEntryNames[index]
+        return plan.guidance(forEntry: entryName)
     }
 
     /// Escape string for inclusion in JSON template.

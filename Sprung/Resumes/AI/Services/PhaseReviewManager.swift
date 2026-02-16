@@ -18,7 +18,7 @@
 // |----------------------------|------------------------------------------------------|
 // | skills.*.name              | skills.bundledAttributes = ["name"]                  |
 // | skills.*.(name, keywords)  | skills.bundledAttributes = ["name", "keywords"]      |
-// |                            | → section-level compound: individual nodes grouped   |
+// |                            | → 1 RevNode with serialized JSON object              |
 // | skills[].keywords          | skills.enumeratedAttributes = ["keywords"]           |
 // | skills[name, keywords]     | skills.enumeratedAttributes = ["name", "keywords"]   |
 // |                            | → per-entry compounds (multi-attr iterate)           |
@@ -26,16 +26,15 @@
 // | custom.objective           | objective.status = .aiToReplace (scalar)             |
 //
 // Each TreeNode stores:
-// - `bundledAttributes: [String]?` -- Attributes bundled into 1 RevNode (Phase 1)
-// - `enumeratedAttributes: [String]?` -- Attributes as N separate RevNodes (Phase 2)
+// - `bundledAttributes: [String]?` -- Attributes bundled into 1 RevNode
+// - `enumeratedAttributes: [String]?` -- Attributes as N separate RevNodes
 // - `status == .aiToReplace` -- Node is selected for AI review
 //
-// buildReviewRounds() walks the tree and reads TreeNode state:
+// buildReviewManifest() walks the tree and reads TreeNode state:
 //
 // 1. For nodes with `bundledAttributes`:
 //    -> Single attr: Generate pattern like "skills.*.name" -> 1 bundled RevNode
-//    -> Multi attr: Generate patterns like "skills[].name", "skills[].keywords"
-//       -> Individual RevNodes tagged with sectionBundleKey -> section compound
+//    -> Multi attr: exportSectionAsObject() -> 1 RevNode with serialized JSON object
 //
 // 2. For nodes with `enumeratedAttributes`:
 //    -> Generate pattern like "skills[].keywords"
@@ -56,12 +55,12 @@
 // | []     | Iterate children        | N RevNodes, one per child           |
 // | .name  | Navigate to field       | Match specific attribute            |
 //
-// Phase Assignment:
-// - Phase 1: bundledAttributes patterns (need holistic review first)
-// - Phase 2: Everything else (enumerated, scalars, container enumerates)
+// Node Assignment:
+// - Auto nodes: phaseAssignment key present (skill categories, titles — auto-applied)
+// - Review nodes: everything else (single human review pass)
 //
-// Phase 1 changes are applied to tree before Phase 2 export, so Phase 2
-// content can reference updated names (e.g., keywords under renamed skills).
+// Auto nodes are executed and applied before review nodes, so review
+// tasks can reference updated names (e.g., keywords under renamed skills).
 
 import Foundation
 import SwiftUI
@@ -74,44 +73,44 @@ class PhaseReviewManager {
 
     // MARK: - Phase Detection
 
-    /// Build the two-round review structure from TreeNode state.
+    /// Build the review manifest from TreeNode state.
     ///
     /// TreeNode is the single source of truth for AI review configuration:
     /// - `bundledAttributes`: Attributes to bundle into 1 RevNode
     /// - `enumeratedAttributes`: Attributes to enumerate as N RevNodes
     /// - `status == .aiToReplace`: Scalar nodes or container items to review
     ///
-    /// Phase assignments come from `resume.phaseAssignments` (populated from manifest defaults
-    /// at tree creation time, then editable via Phase Assignments panel).
-    /// Fallback: bundle=1, enumerate/scalar=2
-    func buildReviewRounds(for resume: Resume) -> (phase1: [ExportedReviewNode], phase2: [ExportedReviewNode]) {
+    /// Phase assignments from `resume.phaseAssignments` determine which nodes
+    /// are auto-applied (skill categories, titles) vs. human-reviewed.
+    /// Auto nodes: phase assignment key present → executed and auto-applied before main tasks.
+    /// Review nodes: everything else → single human review pass.
+    func buildReviewManifest(for resume: Resume) -> (autoNodes: [ExportedReviewNode], reviewNodes: [ExportedReviewNode]) {
         guard let rootNode = resume.rootNode else {
             Logger.warning("[buildReviewRounds] No rootNode")
             return ([], [])
         }
 
-        var phase1Nodes: [ExportedReviewNode] = []
-        var phase2Nodes: [ExportedReviewNode] = []
+        var autoNodes: [ExportedReviewNode] = []
+        var reviewNodes: [ExportedReviewNode] = []
         var processedPaths = Set<String>()
 
-        // Phase assignments: key exists = phase 1, absent = phase 2 (default)
-        let phase1Keys = Set(resume.phaseAssignments.keys)
+        // Phase assignments: key exists = auto-apply, absent = human review
+        let autoKeys = Set(resume.phaseAssignments.keys)
 
-        /// Get phase for a section+attribute combination
-        /// Key present in phaseAssignments = phase 1, absent = phase 2
-        func phaseFor(section: String, attr: String) -> Int {
+        /// Determine if a section+attribute combo is auto-applied or human-reviewed
+        func isAuto(section: String, attr: String) -> Bool {
             let groupKey = "\(section)-\(attr)"
-            return phase1Keys.contains(groupKey) ? 1 : 2
+            return autoKeys.contains(groupKey)
         }
 
-        /// Add nodes to appropriate phase
-        func addToPhase(_ nodes: [ExportedReviewNode], phase: Int, pattern: String) {
-            if phase == 1 {
-                phase1Nodes.append(contentsOf: nodes)
-                Logger.debug("[buildReviewRounds] '\(pattern)' -> \(nodes.count) Phase 1 RevNodes")
+        /// Add nodes to appropriate list
+        func addToManifest(_ nodes: [ExportedReviewNode], auto: Bool, pattern: String) {
+            if auto {
+                autoNodes.append(contentsOf: nodes)
+                Logger.debug("[buildReviewManifest] '\(pattern)' -> \(nodes.count) auto nodes")
             } else {
-                phase2Nodes.append(contentsOf: nodes)
-                Logger.debug("[buildReviewRounds] '\(pattern)' -> \(nodes.count) Phase 2 RevNodes")
+                reviewNodes.append(contentsOf: nodes)
+                Logger.debug("[buildReviewManifest] '\(pattern)' -> \(nodes.count) review nodes")
             }
         }
 
@@ -128,27 +127,19 @@ class PhaseReviewManager {
                 let isMultiAttrBundle = simpleAttrs.count > 1
 
                 if isMultiAttrBundle {
-                    // Multi-attribute bundle → export individual nodes for section-level compound.
-                    // All attributes share the same phase (use first attr's phase).
-                    let phase = phaseFor(section: currentSection, attr: simpleAttrs[0])
-                    for attr in simpleAttrs {
-                        let pattern = "\(currentPath)[].\(attr)"  // [] gives individual nodes
-                        guard !processedPaths.contains(pattern) else { continue }
+                    // Multi-attribute bundle → 1 single RevNode with the full serialized section object.
+                    // All attributes per entry are serialized together, preserving order.
+                    // Auto if ALL attributes are auto; otherwise review (since any review attr needs human eyes).
+                    let pattern = "\(currentPath).*"
+                    if !processedPaths.contains(pattern) {
                         processedPaths.insert(pattern)
-                        var nodes = TreeNode.exportNodesMatchingPath(pattern, from: rootNode)
-                        nodes = nodes.map { $0.withSectionBundleTag(key: currentPath) }
-                        addToPhase(nodes, phase: phase, pattern: pattern)
-                    }
-                    // Handle any nested array attrs (e.g., "keywords[]") separately — existing bundle behavior
-                    let nestedAttrs = bundled.filter { $0.hasSuffix("[]") }
-                    for attr in nestedAttrs {
-                        let pattern = "\(currentPath).*.\(attr)"
-                        if !processedPaths.contains(pattern) {
-                            processedPaths.insert(pattern)
-                            let nodes = TreeNode.exportNodesMatchingPath(pattern, from: rootNode)
-                            let phase = phaseFor(section: currentSection, attr: attr)
-                            addToPhase(nodes, phase: phase, pattern: pattern)
-                        }
+                        let nodes = TreeNode.exportSectionAsObject(
+                            sectionPath: currentPath,
+                            attributes: simpleAttrs,
+                            from: rootNode
+                        )
+                        let allAuto = simpleAttrs.allSatisfy { isAuto(section: currentSection, attr: $0) }
+                        addToManifest(nodes, auto: allAuto, pattern: pattern)
                     }
                 } else {
                     // Single attribute (or "*"): existing bundle behavior — 1 bundled ExportedReviewNode
@@ -159,8 +150,8 @@ class PhaseReviewManager {
                         if !processedPaths.contains(pattern) {
                             processedPaths.insert(pattern)
                             let nodes = TreeNode.exportNodesMatchingPath(pattern, from: rootNode)
-                            let phase = phaseFor(section: currentSection, attr: attr)
-                            addToPhase(nodes, phase: phase, pattern: pattern)
+                            let auto = isAuto(section: currentSection, attr: attr)
+                            addToManifest(nodes, auto: auto, pattern: pattern)
                         }
                     }
                 }
@@ -183,13 +174,13 @@ class PhaseReviewManager {
                     iterateAttrs = enumerated.filter { $0 != "*" }
                 }
 
-                // Group by phase, then export
-                let attrsByPhase = Dictionary(grouping: iterateAttrs) { phaseFor(section: currentSection, attr: $0) }
+                // Group by auto/review, then export
+                let attrsByAuto = Dictionary(grouping: iterateAttrs) { isAuto(section: currentSection, attr: $0) }
 
-                for (phase, attrs) in attrsByPhase {
+                for (auto, attrs) in attrsByAuto {
                     let isMultiAttr = attrs.count > 1
                     if isMultiAttr {
-                        Logger.debug("[buildReviewRounds] Multi-attribute iterate: \(currentPath)[\(attrs.joined(separator: ", "))]")
+                        Logger.debug("[buildReviewManifest] Multi-attribute iterate: \(currentPath)[\(attrs.joined(separator: ", "))]")
                     }
                     for attr in attrs {
                         let pattern = "\(currentPath)[].\(attr)"
@@ -199,14 +190,13 @@ class PhaseReviewManager {
                         if isMultiAttr {
                             nodes = nodes.map { $0.withMultiAttributeFlag() }
                         }
-                        addToPhase(nodes, phase: phase, pattern: pattern)
+                        addToManifest(nodes, auto: auto, pattern: pattern)
                     }
                 }
             }
 
             // Check for container enumerate (enumeratedAttributes contains "*")
             // Only applies to flat containers (entries without sub-attributes).
-            // Object collections with ["*"] are expanded by the iterate block above.
             if node.enumeratedAttributes?.contains("*") == true {
                 let isObjectCollection = node.orderedChildren.first.map { !$0.orderedChildren.isEmpty } ?? false
                 if !isObjectCollection {
@@ -214,8 +204,8 @@ class PhaseReviewManager {
                     if !processedPaths.contains(pattern) {
                         processedPaths.insert(pattern)
                         let nodes = TreeNode.exportNodesMatchingPath(pattern, from: rootNode)
-                        let phase = phaseFor(section: currentSection, attr: "*")
-                        addToPhase(nodes, phase: phase, pattern: pattern)
+                        let auto = isAuto(section: currentSection, attr: "*")
+                        addToManifest(nodes, auto: auto, pattern: pattern)
                     }
                 }
             }
@@ -228,8 +218,8 @@ class PhaseReviewManager {
             if isAIMarked && !processedPaths.contains(currentPath) {
                 processedPaths.insert(currentPath)
                 let nodes = TreeNode.exportNodesMatchingPath(currentPath, from: rootNode)
-                let phase = phaseFor(section: currentSection, attr: nodeName)
-                addToPhase(nodes, phase: phase, pattern: currentPath)
+                let auto = isAuto(section: currentSection, attr: nodeName)
+                addToManifest(nodes, auto: auto, pattern: currentPath)
             }
 
             // Recurse into children
@@ -243,7 +233,7 @@ class PhaseReviewManager {
             processNode(section, parentPath: "", sectionName: "")
         }
 
-        Logger.info("Review rounds: Phase 1 has \(phase1Nodes.count) nodes, Phase 2 has \(phase2Nodes.count) nodes")
-        return (phase1Nodes, phase2Nodes)
+        Logger.info("Review manifest: \(autoNodes.count) auto nodes, \(reviewNodes.count) review nodes")
+        return (autoNodes, reviewNodes)
     }
 }

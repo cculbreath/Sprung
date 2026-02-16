@@ -92,6 +92,7 @@ extension Notification.Name {
     static let exportCoverLetterText = Notification.Name("exportCoverLetterText")
     static let exportAllCoverLetters = Notification.Name("exportAllCoverLetters")
     static let exportApplicationPacket = Notification.Name("exportApplicationPacket")
+    static let triggerExport = Notification.Name("triggerExport")
     // Settings/Configuration
     static let apiKeysChanged = Notification.Name("apiKeysChanged")
     static let showSetupWizard = Notification.Name("showSetupWizard")
@@ -103,6 +104,8 @@ extension Notification.Name {
     static let discoveryTriggerSourceDiscovery = Notification.Name("discoveryTriggerSourceDiscovery")
     static let discoveryTriggerEventDiscovery = Notification.Name("discoveryTriggerEventDiscovery")
     static let discoveryTriggerTaskGeneration = Notification.Name("discoveryTriggerTaskGeneration")
+    // Toolbar Validation
+    static let toolbarNeedsValidation = Notification.Name("toolbarNeedsValidation")
     // Module Navigation
     /// Navigate to a specific module (userInfo: ["module": String (AppModule.rawValue)])
     static let navigateToModule = Notification.Name("navigateToModule")

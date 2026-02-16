@@ -25,20 +25,19 @@ struct ResumeBannerView: View {
             createResumeButton
             resumePicker
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
+        .padding(.leading, 12)
+        .padding(.trailing, 20)
+        .padding(.top, 8)
+        .padding(.bottom, 12)
         .background {
-            // Base layer: match window/toolbar background so macOS 26
-            // icon-only toolbar mode doesn't show a mismatched color
-            Color(.windowBackgroundColor)
+            Color(nsColor: .controlBackgroundColor).opacity(0.85)
         }
         .background {
-            // Visual layer: the actual banner tint
-            Color(red: 222/255, green: 226/255, blue: 228/255)
+            Color(red: 190/255, green: 194/255, blue: 198/255)
         }
         .overlay(alignment: .top) {
             Rectangle()
-                .fill(Color(red: 205/255, green: 205/255, blue: 206/255))
+                .fill(Color(red: 170/255, green: 172/255, blue: 175/255))
                 .frame(height: 1)
         }
     }

@@ -63,11 +63,15 @@ struct HeaderView: View {
                 Button {
                     buttons.edit = true
                 } label: {
-                    Label("Edit", systemImage: "pencil")
-                        .padding(5)
-                        .foregroundColor(.accentColor)
+                    HStack(spacing: 4) {
+                        Image(systemName: "pencil")
+                            .font(.system(size: 11))
+                        Text("Edit")
+                            .font(.caption)
+                    }
                 }
                 .buttonStyle(.plain)
+                .foregroundStyle(Color.accentColor)
                 .help("Edit job application")
             }
         }

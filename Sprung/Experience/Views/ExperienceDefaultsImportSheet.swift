@@ -168,14 +168,32 @@ struct ExperienceDefaultsImportSheet: View {
 private struct ResumeRow: View {
     let resume: Resume
 
+    private var jobLabel: String? {
+        guard let jobApp = resume.jobApp else { return nil }
+        let company = jobApp.companyName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let position = jobApp.jobPosition.trimmingCharacters(in: .whitespacesAndNewlines)
+        switch (company.isEmpty, position.isEmpty) {
+        case (false, false): return "\(company) — \(position)"
+        case (false, true): return company
+        case (true, false): return position
+        case (true, true): return nil
+        }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(resume.template?.name ?? "Resume")
                 .font(.callout.weight(.medium))
                 .lineLimit(1)
+            if let jobLabel {
+                Text(jobLabel)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
             Text(resume.dateCreated.formatted(date: .abbreviated, time: .shortened))
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(.tertiary)
         }
         .padding(.vertical, 4)
     }

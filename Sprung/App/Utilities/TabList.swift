@@ -7,7 +7,7 @@ enum TabList: String, CaseIterable, Codable {
     case listing = "Listing"
     case resume = "Résumé"
     case coverLetter = "Cover Letter"
-    case submitApp = "Export"
+    case submitApp = "Submit"
     case none = "None"
 
     static var visibleCases: [TabList] {

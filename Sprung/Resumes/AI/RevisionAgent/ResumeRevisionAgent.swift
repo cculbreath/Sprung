@@ -85,6 +85,7 @@ class ResumeRevisionAgent {
     private(set) var messages: [RevisionMessage] = []
     private(set) var currentProposal: ChangeProposal?
     private(set) var currentQuestion: String?
+    private(set) var currentCompletionSummary: String?
     private(set) var turnCount: Int = 0
     private(set) var currentAction: String = ""
     private(set) var latestPDFData: Data?
@@ -543,6 +544,7 @@ class ResumeRevisionAgent {
     func respondToCompletion(_ accepted: Bool) {
         guard let cont = completionContinuation else { return }
         completionContinuation = nil
+        currentCompletionSummary = nil
         timeoutDeadline = Date().addingTimeInterval(timeoutSeconds)
         messages.append(RevisionMessage(
             role: .user,
@@ -572,6 +574,7 @@ class ResumeRevisionAgent {
         if let cont = completionContinuation {
             // Reject — the user wants more changes.
             completionContinuation = nil
+            currentCompletionSummary = nil
             timeoutDeadline = Date().addingTimeInterval(timeoutSeconds)
             cont.resume(returning: false)
         } else if let cont = proposalContinuation {
@@ -624,10 +627,13 @@ class ResumeRevisionAgent {
         // Resume any waiting continuations
         proposalContinuation?.resume(returning: .rejected)
         proposalContinuation = nil
+        currentProposal = nil
         questionContinuation?.resume(returning: "")
         questionContinuation = nil
+        currentQuestion = nil
         completionContinuation?.resume(returning: false)
         completionContinuation = nil
+        currentCompletionSummary = nil
     }
 
     // MARK: - Tool Building
@@ -870,6 +876,7 @@ class ResumeRevisionAgent {
 
         let params = try JSONDecoder().decode(CompleteRevisionTool.Parameters.self, from: data)
 
+        currentCompletionSummary = params.summary
         messages.append(RevisionMessage(
             role: .assistant,
             content: "Revision complete: \(params.summary)"
@@ -879,6 +886,7 @@ class ResumeRevisionAgent {
         let accepted: Bool = await withCheckedContinuation { continuation in
             completionContinuation = continuation
         }
+        currentCompletionSummary = nil
 
         if accepted {
             try await buildAndActivateResumeFromWorkspace()
@@ -889,8 +897,12 @@ class ResumeRevisionAgent {
 
     /// Build a new resume from the current workspace state and activate it.
     /// Used by the main loop's cancellation guard, the catch path, and handleCompleteRevision.
-    /// Explicitly saves the model context so the main window's context picks up
-    /// the new resume — the revision window has its own context from `.modelContainer(...)`.
+    ///
+    /// CRITICAL ORDERING: All synchronous work (node import, resume creation,
+    /// selection, and modelContext.save()) happens BEFORE any async work (PDF
+    /// generation). This guarantees the data is persisted even if the user
+    /// closes the window immediately after clicking Save — SwiftUI cancels the
+    /// `.task`, but the save has already hit the persistent store.
     private func buildAndActivateResumeFromWorkspace() async throws {
         let revisedNodes = try workspaceService.importRevisedTreeNodes()
         let revisedFontSizes = try workspaceService.importRevisedFontSizes()
@@ -900,21 +912,25 @@ class ResumeRevisionAgent {
             revisedFontSizes: revisedFontSizes,
             context: modelContext
         )
-        await activateNewResume(newResume)
-        try modelContext.save()
-    }
 
-    /// Generate PDF for the new resume and switch the editor to it.
-    private func activateNewResume(_ newResume: Resume) async {
+        // Activate and persist BEFORE any async work. Everything above and
+        // below this comment is synchronous — no suspension points — so task
+        // cancellation cannot prevent the save from completing.
+        resume.jobApp?.selectedRes = newResume
+        try modelContext.save()
+        Logger.info("RevisionAgent: Persisted revised resume and activated in editor", category: .ai)
+
+        // Best-effort PDF generation. If the window closes (task cancelled)
+        // during this step the resume data is already saved. The main window
+        // will regenerate the PDF on next display if needed.
         let slug = resume.template?.slug ?? "default"
         do {
             let pdfData = try await pdfGenerator.generatePDF(for: newResume, template: slug)
             newResume.pdfData = pdfData
+            try modelContext.save()
         } catch {
-            Logger.error("RevisionAgent: Failed to generate PDF for new resume: \(error)", category: .ai)
+            Logger.error("RevisionAgent: Post-save PDF generation failed (data is safe): \(error)", category: .ai)
         }
-        resume.jobApp?.selectedRes = newResume
-        Logger.info("RevisionAgent: Activated new resume in editor", category: .ai)
     }
 
     // MARK: - Conversation Repair

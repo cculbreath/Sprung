@@ -692,6 +692,105 @@ extension TreeNode {
         return "Bundled Items"
     }
 
+    /// Export a section as a single bundled RevNode with the full serialized object.
+    ///
+    /// For multi-attribute bundles like `skills.*.(name, keywords)`, this produces ONE
+    /// ExportedReviewNode whose value is a JSON array of entry objects, each containing
+    /// only the specified attributes. Order is preserved.
+    ///
+    /// - Parameters:
+    ///   - sectionPath: Path to the section node (e.g., "skills")
+    ///   - attributes: Attributes to include per entry (e.g., ["name", "keywords"])
+    ///   - rootNode: The tree root to search from
+    /// - Returns: A single ExportedReviewNode with serialized JSON value, or empty array if section not found
+    static func exportSectionAsObject(
+        sectionPath: String,
+        attributes: [String],
+        from rootNode: TreeNode
+    ) -> [ExportedReviewNode] {
+        // Navigate to the section node
+        let pathComponents = sectionPath.split(separator: ".").map(String.init)
+        var current = rootNode
+        for component in pathComponents {
+            guard let child = current.findChildByName(component) else {
+                Logger.warning("[exportSectionAsObject] Section not found: \(sectionPath)")
+                return []
+            }
+            current = child
+        }
+
+        let entries = current.orderedChildren.filter { $0.status != .excludedFromGroup }
+        guard !entries.isEmpty else { return [] }
+
+        // Collect entry objects and source node IDs
+        var entryDicts: [[String: Any]] = []
+        var sourceNodeIds: [String] = []  // Flat: [entry0.attr0_id, entry0.attr1_id, entry1.attr0_id, ...]
+
+        for entry in entries {
+            var dict: [String: Any] = [:]
+            for attr in attributes {
+                if let attrNode = entry.findChildByName(attr) {
+                    sourceNodeIds.append(attrNode.id)
+                    if attrNode.orderedChildren.isEmpty {
+                        // Scalar attribute
+                        dict[attr] = attrNode.value
+                    } else {
+                        // Container attribute (e.g., keywords) — array of child values
+                        let childVals = attrNode.orderedChildren.compactMap { child -> String? in
+                            let v = child.value.isEmpty ? child.name : child.value
+                            return v.isEmpty ? nil : v
+                        }
+                        dict[attr] = childVals
+                    }
+                } else {
+                    // Attribute not found on this entry — use empty placeholder
+                    sourceNodeIds.append("")
+                    dict[attr] = ""
+                }
+            }
+            entryDicts.append(dict)
+        }
+
+        // Serialize as JSON, preserving attribute order via manual construction
+        let jsonLines = entryDicts.map { dict -> String in
+            let fields = attributes.map { attr -> String in
+                let val = dict[attr]
+                if let arr = val as? [String] {
+                    let escaped = arr.map { "\"\($0.replacingOccurrences(of: "\"", with: "\\\""))\"" }
+                    return "\"\(attr)\": [\(escaped.joined(separator: ", "))]"
+                } else if let str = val as? String {
+                    return "\"\(attr)\": \"\(str.replacingOccurrences(of: "\"", with: "\\\""))\""
+                } else {
+                    return "\"\(attr)\": \"\""
+                }
+            }
+            return "  { \(fields.joined(separator: ", ")) }"
+        }
+        let jsonValue = "[\n\(jsonLines.joined(separator: ",\n"))\n]"
+
+        // Build display name
+        let sectionName = pathComponents.last?.capitalized ?? sectionPath.capitalized
+        let attrList = attributes.joined(separator: ", ")
+        let displayName = "\(sectionName) (\(attrList))"
+
+        let pattern = "\(sectionPath).*.(\(attributes.joined(separator: ", ")))"
+        let bundledId = "bundled-\(sectionPath.replacingOccurrences(of: ".", with: "-"))-object"
+
+        let node = ExportedReviewNode(
+            id: bundledId,
+            path: pattern,
+            displayName: displayName,
+            value: jsonValue,
+            childValues: jsonLines.map { $0.trimmingCharacters(in: .whitespaces) },
+            childCount: entries.count,
+            isBundled: true,
+            sourceNodeIds: sourceNodeIds
+        )
+
+        Logger.debug("[exportSectionAsObject] Exported \(entries.count) entries × \(attributes.count) attrs as single RevNode for '\(sectionPath)'")
+        return [node]
+    }
+
     private static func exportNodesRecursive(
         node: TreeNode,
         pathComponents: [String],

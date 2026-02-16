@@ -8,6 +8,7 @@
 //
 
 import Foundation
+import SwiftData
 import SwiftyJSON
 
 /// Immutable context snapshot for resume customization.
@@ -105,7 +106,8 @@ struct CustomizationContext {
         guidanceStore: InferenceGuidanceStore,
         knowledgeCardStore: KnowledgeCardStore,
         coverRefStore: CoverRefStore,
-        applicantProfileStore: ApplicantProfileStore
+        applicantProfileStore: ApplicantProfileStore,
+        candidateDossierStore: CandidateDossierStore? = nil
     ) -> CustomizationContext {
         // Get approved skills
         let approvedSkills = skillStore.approvedSkills
@@ -139,6 +141,16 @@ struct CustomizationContext {
             filteredCards = allApprovedCards
         }
 
+        // Export dossier as JSON for prompt builders
+        let dossierJSON: JSON?
+        if let dossierModel = candidateDossierStore?.dossier,
+           let data = try? JSONEncoder().encode(dossierModel),
+           let json = try? JSON(data: data) {
+            dossierJSON = json
+        } else {
+            dossierJSON = nil
+        }
+
         return CustomizationContext(
             resume: resume,
             applicantProfile: profileDraft,
@@ -148,7 +160,7 @@ struct CustomizationContext {
             skills: approvedSkills,
             titleSets: titleSets,
             writersVoice: coverRefStore.writersVoice,
-            dossier: nil,  // Strategic insights can be populated separately if available
+            dossier: dossierJSON,
             jobDescription: jobDescription,
             clarifyingQA: nil
         )

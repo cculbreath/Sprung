@@ -10,9 +10,9 @@ struct RoundedTagView: View {
     var foregroundColor: Color = .white
     var body: some View {
         Text(tagText.capitalized)
-            .font(.caption)
-            .padding(.vertical, 4)
-            .padding(.horizontal, 8)
+            .font(.system(size: 10, weight: .medium))
+            .padding(.vertical, 2)
+            .padding(.horizontal, 6)
             .foregroundColor(foregroundColor)
             .glassEffect(.regular.tint(backgroundColor), in: .capsule)
     }

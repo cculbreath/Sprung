@@ -11,9 +11,10 @@ struct CoverLetterReviseButton: View {
         }, label: {
             Label {
                 Text("Revise")
+                    .font(.system(size: 11, weight: .regular))
             } icon: {
                 Image(systemName: "text.append")
-                    .font(.system(size: 14, weight: .light))
+                    .font(.system(size: 11, weight: .regular))
             }
         })
         .buttonStyle( .automatic )

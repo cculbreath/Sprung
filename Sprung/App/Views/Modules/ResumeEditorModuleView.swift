@@ -14,7 +14,6 @@ struct ResumeEditorModuleView: View {
     @Environment(CoverLetterStore.self) private var coverLetterStore
     @Environment(NavigationStateService.self) private var navigationState
     @Environment(ReasoningStreamManager.self) private var reasoningStreamManager
-    @Environment(EnabledLLMStore.self) private var enabledLLMStore
     @Environment(ResumeReviseViewModel.self) private var resumeReviseViewModel
     @Environment(WindowCoordinator.self) private var windowCoordinator
     @Environment(UnifiedJobFocusState.self) private var focusState
@@ -23,7 +22,6 @@ struct ResumeEditorModuleView: View {
     @State var showSlidingList: Bool = false
     @State private var sheets = AppSheets()
     @State private var clarifyingQuestions: [ClarifyingQuestion] = []
-    @State private var listingButtons = SaveButtons()
     @State private var hasVisitedResumeTab: Bool = false
     @State private var refPopup: Bool = false
     @State private var menuHandler = MenuNotificationHandler()
@@ -88,22 +86,24 @@ struct ResumeEditorModuleView: View {
                 .zIndex(1000)
             }
         }
-        .toolbar(id: "sprungMainToolbar") {
-            buildUnifiedToolbar(
-                selectedTab: $navigationState.selectedTab,
-                listingButtons: $listingButtons,
-                refresh: $tabRefresh,
-                sheets: $sheets,
-                clarifyingQuestions: $clarifyingQuestions,
-                showNewAppSheet: $sheets.showNewJobApp
-            )
+        // Headless toolbar button views: stay in the view hierarchy so their
+        // notification-driven sheets/alerts continue to present from menu and toolbar commands
+        .background {
+            VStack(spacing: 0) {
+                BestJobButton()
+                CoverLetterGenerateButton()
+            }
+            .frame(width: 0, height: 0)
+            .clipped()
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
         }
-        .toolbarRole(.editor)
         .appSheets(sheets: $sheets, clarifyingQuestions: $clarifyingQuestions, refPopup: $refPopup)
         .onChange(of: jobAppStore.selectedApp) { _, newValue in
             navigationState.saveSelectedJobApp(newValue)
             updateMyLetter()
             focusState.focusedJob = newValue
+            NotificationCenter.default.post(name: .toolbarNeedsValidation, object: nil)
         }
         .onChange(of: focusState.focusedJob) { _, newFocusedJob in
             if let job = newFocusedJob, job.id != jobAppStore.selectedApp?.id {
@@ -120,6 +120,7 @@ struct ResumeEditorModuleView: View {
                     hasVisitedResumeTab = true
                 }
             }
+            NotificationCenter.default.post(name: .toolbarNeedsValidation, object: nil)
         }
         .onAppear {
             Logger.debug("ResumeEditorModuleView configuring MenuNotificationHandler", category: .ui)

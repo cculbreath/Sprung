@@ -95,6 +95,7 @@ struct SprungApp: App {
                     appDelegate.jobAppStore = appDependencies.jobAppStore
                     appDelegate.templateStore = appDependencies.templateStore
                     appDelegate.backgroundActivityTracker = appDependencies.backgroundActivityTracker
+                    appDelegate.setupMainWindowToolbar()
                 }
         }
         .modelContainer(modelContainer)

@@ -401,6 +401,32 @@ class MenuNotificationHandler {
                 }
             }
         }
+        // Export Commands - switch to Submit tab and relay via .triggerExport
+        let exportMap: [(Notification.Name, String)] = [
+            (.exportResumePDF, "resumePDF"),
+            (.exportResumeText, "resumeText"),
+            (.exportResumeJSON, "resumeJSON"),
+            (.exportCoverLetterPDF, "coverLetterPDF"),
+            (.exportCoverLetterText, "coverLetterText"),
+            (.exportAllCoverLetters, "allCoverLetters"),
+            (.exportApplicationPacket, "completeApplication"),
+        ]
+        for (name, optionKey) in exportMap {
+            NotificationCenter.default.addObserver(
+                forName: name,
+                object: nil,
+                queue: .main
+            ) { [weak self] _ in
+                self?.selectedTab?.wrappedValue = .submitApp
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                    NotificationCenter.default.post(
+                        name: .triggerExport,
+                        object: nil,
+                        userInfo: ["option": optionKey]
+                    )
+                }
+            }
+        }
     }
     // MARK: - Menu Action Handlers
     // These handlers directly trigger the same UI state changes that the toolbar buttons do
@@ -439,7 +465,7 @@ class MenuNotificationHandler {
     }
     @MainActor
     private func handleBestCoverLetter() {
-        // Trigger the same action as the "committee" button in UnifiedToolbar
+        // Trigger the multi-model choose best cover letter sheet
         // This shows the multi-model choose best cover letter sheet
         guard let jobAppStore = jobAppStore else { return }
         // Check if we have enough cover letters (same logic as toolbar button)

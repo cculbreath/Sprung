@@ -25,7 +25,7 @@ struct JobAppDescriptionSection: View {
         if let selApp = jobAppStore.selectedApp {
             @Bindable var boundSelApp = selApp
 
-            HStack(alignment: .top, spacing: 0) {
+            HStack(alignment: .top, spacing: 12) {
                 // Left column: Job Description
                 descriptionColumn(boundSelApp: boundSelApp)
                     .frame(minWidth: 300)
@@ -33,21 +33,46 @@ struct JobAppDescriptionSection: View {
                 // Right column: Skills Panel (only if preprocessing complete)
                 if let requirements = selApp.extractedRequirements,
                    !requirements.skillEvidence.isEmpty {
-                    Divider()
-
-                    JobAppSkillsPanel(
-                        skillEvidence: requirements.skillEvidence,
-                        skillRecommendations: requirements.skillRecommendations,
-                        hoveredSkill: $hoveredSkill,
-                        selectedSkill: $selectedSkill,
-                        isEditing: $isEditingSkills
-                    )
-                    .frame(width: 280)
+                    skillsColumn(requirements: requirements)
+                        .frame(width: 280)
                 }
             }
         } else {
             Text("No job application selected.")
                 .padding()
+        }
+    }
+
+    @ViewBuilder
+    private func skillsColumn(requirements: ExtractedRequirements) -> some View {
+        GroupBox(label: skillsHeader().padding(.top).padding(.bottom, 6)) {
+            JobAppSkillsPanel(
+                skillEvidence: requirements.skillEvidence,
+                skillRecommendations: requirements.skillRecommendations,
+                hoveredSkill: $hoveredSkill,
+                selectedSkill: $selectedSkill,
+                isEditing: $isEditingSkills
+            )
+        }
+    }
+
+    @ViewBuilder
+    private func skillsHeader() -> some View {
+        HStack {
+            Text("Referenced Skills")
+            Spacer()
+            Button {
+                isEditingSkills.toggle()
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "pencil")
+                        .font(.system(size: 11))
+                    Text("Edit")
+                        .font(.caption)
+                }
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(Color.accentColor)
         }
     }
 

@@ -218,10 +218,11 @@ final class CustomizationReviewQueue {
         !activeItems.isEmpty && pendingItems.isEmpty
     }
 
-    /// True when all active items are approved (approved, edited, or useOriginal) and none are regenerating
+    /// True when all active items are approved (approved, edited, or useOriginal) and none are regenerating.
+    /// Also returns true when the queue is empty (vacuously true), allowing advancement past empty phases.
     var allItemsApproved: Bool {
         let active = activeItems
-        return !active.isEmpty && active.allSatisfy { $0.isApproved && !$0.isRegenerating }
+        return active.allSatisfy { $0.isApproved && !$0.isRegenerating }
     }
 
     /// Whether any items have been approved

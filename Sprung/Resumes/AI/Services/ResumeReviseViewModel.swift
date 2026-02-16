@@ -84,6 +84,7 @@ class ResumeReviseViewModel {
         guidanceStore: InferenceGuidanceStore? = nil,
         skillStore: SkillStore? = nil,
         titleSetStore: TitleSetStore? = nil,
+        candidateDossierStore: CandidateDossierStore? = nil,
         streamingService: RevisionStreamingService? = nil,
         toolRegistry: ResumeToolRegistry? = nil
     ) {
@@ -118,6 +119,7 @@ class ResumeReviseViewModel {
             titleSetStore: titleSetStore,
             targetingPlanService: TargetingPlanService(),
             coherencePassService: CoherencePassService(),
+            candidateDossierStore: candidateDossierStore,
             workflowState: self.workflowState
         )
 
@@ -182,20 +184,11 @@ class ResumeReviseViewModel {
         workflowOrchestrator.hasUnappliedApprovedChanges()
     }
 
-    /// Whether Phase 2 is still pending
-    var hasPhase2Pending: Bool {
-        workflowOrchestrator.hasPhase2Pending
-    }
+    /// Current phase number — always 1 with flattened workflow
+    var currentPhaseNumber: Int { 1 }
 
-    /// Current phase number (1 or 2) for UI display
-    var currentPhaseNumber: Int {
-        workflowOrchestrator.currentPhaseNumber
-    }
-
-    /// Total phases (1 or 2) for UI display
-    var totalPhases: Int {
-        workflowOrchestrator.totalPhases
-    }
+    /// Total phases — always 1 with flattened workflow
+    var totalPhases: Int { 1 }
 
     // MARK: - Coherence Pass
 
