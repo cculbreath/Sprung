@@ -18,7 +18,6 @@ class ClarifyingQuestionsViewModel {
     private let exportCoordinator: ResumeExportCoordinator
     private let applicantProfileStore: ApplicantProfileStore
     private let knowledgeCardStore: KnowledgeCardStore
-    private let coverRefStore: CoverRefStore
     private var activeStreamingHandle: LLMStreamingHandle?
     // MARK: - UI State
     var isGeneratingQuestions: Bool = false
@@ -36,7 +35,6 @@ class ClarifyingQuestionsViewModel {
         exportCoordinator: ResumeExportCoordinator,
         applicantProfileStore: ApplicantProfileStore,
         knowledgeCardStore: KnowledgeCardStore,
-        coverRefStore: CoverRefStore
     ) {
         self.llm = llmFacade
         self.openRouterService = openRouterService
@@ -45,7 +43,6 @@ class ClarifyingQuestionsViewModel {
         self.exportCoordinator = exportCoordinator
         self.applicantProfileStore = applicantProfileStore
         self.knowledgeCardStore = knowledgeCardStore
-        self.coverRefStore = coverRefStore
     }
     // MARK: - Public Interface
     /// Start the clarifying questions workflow
@@ -159,8 +156,7 @@ class ClarifyingQuestionsViewModel {
             throw error
         }
     }
-    /// Process user answers and hand off to parallel workflow
-    /// The clarifying Q&A will be prepended to the preamble of all parallel tasks
+    /// Process user answers and hand off to revision workflow
     /// - Parameters:
     ///   - answers: User answers to the clarifying questions
     ///   - resume: The resume being revised
@@ -171,31 +167,23 @@ class ClarifyingQuestionsViewModel {
         resumeReviseViewModel: ResumeReviseViewModel
     ) async throws {
         Logger.debug("✅ Processing \(answers.count) clarifying question answers")
-        // Hand off to parallel workflow with clarifying Q&A prepended to preamble
-        // (No need to continue the conversation - the Q&A context will be included in the preamble)
-        await handoffToParallelWorkflow(
+        await handoffToRevisionWorkflow(
             resumeReviseViewModel: resumeReviseViewModel,
-            resume: resume,
-            answers: answers
+            resume: resume
         )
     }
     private func cancelActiveStreaming() {
         activeStreamingHandle?.cancel()
         activeStreamingHandle = nil
     }
-    // MARK: - Parallel Workflow Handoff
-    /// Hand off to parallel workflow with clarifying Q&A prepended to preamble
-    /// - Parameters:
-    ///   - resumeReviseViewModel: The ViewModel to receive the workflow handoff
-    ///   - resume: The resume being revised
-    ///   - answers: User answers to prepend to all parallel tasks
+    // MARK: - Revision Workflow Handoff
+    /// Hand off to sequential revision workflow
     @MainActor
-    private func handoffToParallelWorkflow(
+    private func handoffToRevisionWorkflow(
         resumeReviseViewModel: ResumeReviseViewModel,
-        resume: Resume,
-        answers: [QuestionAnswer]
+        resume: Resume
     ) async {
-        Logger.debug("🔄 Handing off to parallel workflow with \(questions.count) Q&A pairs")
+        Logger.debug("🔄 Handing off to revision workflow")
         do {
             guard let modelId = currentModelId, !modelId.isEmpty else {
                 throw ModelConfigurationError.modelNotConfigured(
@@ -203,18 +191,14 @@ class ClarifyingQuestionsViewModel {
                     operationName: "Clarifying Questions"
                 )
             }
-            // Build clarifying Q&A pairs for the parallel workflow preamble
-            let clarifyingQA = zip(questions, answers).map { ($0, $1) }
-            // Start parallel workflow with clarifying Q&A prepended to preamble
-            try await resumeReviseViewModel.startParallelRevisionWorkflow(
+            try await resumeReviseViewModel.startFreshRevisionWorkflow(
                 resume: resume,
                 modelId: modelId,
-                clarifyingQA: clarifyingQA,
-                coverRefStore: coverRefStore
+                workflow: .customize
             )
-            Logger.debug("✅ Parallel workflow started with clarifying Q&A context")
+            Logger.debug("✅ Revision workflow started")
         } catch {
-            Logger.error("Error starting parallel workflow: \(error.localizedDescription)")
+            Logger.error("Error starting revision workflow: \(error.localizedDescription)")
             lastError = "Error starting customization: \(error.localizedDescription)"
             showError = true
         }
@@ -249,27 +233,23 @@ class ClarifyingQuestionsViewModel {
             await proceedDirectlyToRevisions(resume: resume, modelId: modelId)
         }
     }
-    /// Proceed directly to parallel workflow without clarifying questions
+    /// Proceed directly to revision workflow without clarifying questions
     private func proceedDirectlyToRevisions(
         resume: Resume,
         modelId: String
     ) async {
-        Logger.info("🎯 Proceeding directly to parallel workflow without clarifying questions")
+        Logger.info("🎯 Proceeding directly to revision workflow without clarifying questions")
         do {
             let reviseViewModel = defaultResumeReviseViewModel
-            Logger.debug("🔍 [ClarifyingQuestionsViewModel] Using shared ResumeReviseViewModel")
-            // Start the parallel revision workflow without clarifying Q&A
-            try await reviseViewModel.startParallelRevisionWorkflow(
+            try await reviseViewModel.startFreshRevisionWorkflow(
                 resume: resume,
                 modelId: modelId,
-                clarifyingQA: nil,
-                coverRefStore: coverRefStore
+                workflow: .customize
             )
-            Logger.info("✅ Parallel workflow started, transitioning to review")
-            // Ensure reasoning modal is hidden before transitioning
+            Logger.info("✅ Revision workflow started, transitioning to review")
             reasoningStreamManager.isVisible = false
         } catch {
-            Logger.error("❌ Parallel workflow failed: \(error.localizedDescription)")
+            Logger.error("❌ Revision workflow failed: \(error.localizedDescription)")
             lastError = "Failed to start customization: \(error.localizedDescription)"
             showError = true
         }

@@ -116,6 +116,15 @@ class Resume: Identifiable, Hashable {
         guard let rootNode = rootNode else { return false }
         return rootNode.aiStatusChildren > 0
     }
+
+    /// Returns flat array of AI-marked nodes as dictionaries for the revision workflow
+    func getUpdatableNodes() -> [[String: Any]] {
+        if let node = rootNode {
+            return TreeNode.traverseAndExportNodes(node: node)
+        } else {
+            return [[:]]
+        }
+    }
     var meta: String = "\"format\": \"FRESH@0.6.0\", \"version\": \"0.1.0\""
     init(
         jobApp: JobApp,

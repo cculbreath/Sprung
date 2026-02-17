@@ -34,11 +34,11 @@ struct AppSheetsModifier: ViewModifier {
     @Environment(EnabledLLMStore.self) private var enabledLLMStore
     @Environment(AppState.self) private var appState
     @Environment(ResumeReviseViewModel.self) private var resumeReviseViewModel
-    private var parallelReviewQueueBinding: Binding<Bool> {
+    private var revisionSheetBinding: Binding<Bool> {
         Binding(
-            get: { resumeReviseViewModel.showParallelReviewQueueSheet },
+            get: { resumeReviseViewModel.showResumeRevisionSheet },
             set: { newValue in
-                resumeReviseViewModel.showParallelReviewQueueSheet = newValue
+                resumeReviseViewModel.showResumeRevisionSheet = newValue
             }
         )
     }
@@ -137,113 +137,14 @@ struct AppSheetsModifier: ViewModifier {
                     sheets.showSetupWizard = false
                 }
             }
-            .sheet(isPresented: parallelReviewQueueBinding) {
-                ParallelReviewQueueSheetContent(
-                    resumeReviseViewModel: resumeReviseViewModel,
-                    selectedResume: jobAppStore.selectedApp?.selectedRes
-                )
-            }
-    }
-}
-// MARK: - Parallel Review Queue Sheet Content
-/// Wrapper view for the parallel customization review queue
-private struct ParallelReviewQueueSheetContent: View {
-    @Bindable var resumeReviseViewModel: ResumeReviseViewModel
-    let selectedResume: Resume?
-    @Environment(\.modelContext) private var modelContext
-    @Environment(ReasoningStreamManager.self) private var reasoningStreamManager
-    @State private var showDiscardConfirmation = false
-
-    var body: some View {
-        ZStack {
-            if let _ = selectedResume,
-               let reviewQueue = resumeReviseViewModel.parallelReviewQueue {
-                CustomizationReviewQueueView(
-                    reviewQueue: reviewQueue,
-                    phaseNumber: resumeReviseViewModel.currentPhaseNumber,
-                    totalPhases: resumeReviseViewModel.totalPhases,
-                    isProcessing: resumeReviseViewModel.isProcessingRevisions,
-                    reasoningStreamManager: reasoningStreamManager,
-                    onComplete: {
-                        guard let resume = selectedResume else { return }
-                        Task {
-                            do {
-                                try await resumeReviseViewModel.completeCurrentPhaseAndAdvance(
-                                    resume: resume,
-                                    context: modelContext
-                                )
-                            } catch {
-                                Logger.error("Failed to complete phase: \(error.localizedDescription)")
-                            }
-                        }
-                    },
-                    onCancel: {
-                        if resumeReviseViewModel.hasUnappliedParallelApprovedChanges() {
-                            showDiscardConfirmation = true
-                        } else {
-                            resumeReviseViewModel.discardParallelChangesAndClose()
-                        }
-                    }
-                )
-                .frame(minWidth: 900, minHeight: 600)
-            } else {
-                VStack(spacing: 12) {
-                    if selectedResume == nil {
-                        Text("Error: Missing resume")
-                    } else {
-                        Text("No items to review")
-                    }
-                    Button("Close") {
-                        resumeReviseViewModel.discardParallelChangesAndClose()
-                    }
-                    .buttonStyle(.borderedProminent)
+            .sheet(isPresented: revisionSheetBinding) {
+                if let selectedResume = jobAppStore.selectedApp?.selectedRes {
+                    RevisionReviewView(
+                        viewModel: resumeReviseViewModel,
+                        resume: .constant(selectedResume)
+                    )
                 }
-                .frame(width: 400, height: 300)
             }
-        }
-        // Reasoning stream as sheet-level overlay
-        .overlay {
-            if reasoningStreamManager.isVisible {
-                ReasoningStreamView(
-                    isVisible: Binding(
-                        get: { reasoningStreamManager.isVisible },
-                        set: { reasoningStreamManager.isVisible = $0 }
-                    ),
-                    reasoningText: Binding(
-                        get: { reasoningStreamManager.reasoningText },
-                        set: { reasoningStreamManager.reasoningText = $0 }
-                    ),
-                    isStreaming: Binding(
-                        get: { reasoningStreamManager.isStreaming },
-                        set: { reasoningStreamManager.isStreaming = $0 }
-                    ),
-                    errorMessage: Binding(
-                        get: { reasoningStreamManager.errorMessage },
-                        set: { reasoningStreamManager.errorMessage = $0 }
-                    ),
-                    modelName: reasoningStreamManager.modelName
-                )
-            }
-        }
-        .confirmationDialog(
-            "Cancel Review?",
-            isPresented: $showDiscardConfirmation,
-            titleVisibility: .visible
-        ) {
-            Button("Apply Approved & Close") {
-                guard let resume = selectedResume else { return }
-                resumeReviseViewModel.applyApprovedParallelChangesAndClose(
-                    resume: resume,
-                    context: modelContext
-                )
-            }
-            Button("Discard All", role: .destructive) {
-                resumeReviseViewModel.discardParallelChangesAndClose()
-            }
-            Button("Continue Review", role: .cancel) { }
-        } message: {
-            Text("You have approved changes that haven't been applied yet.")
-        }
     }
 }
 

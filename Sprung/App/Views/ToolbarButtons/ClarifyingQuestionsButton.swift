@@ -9,7 +9,7 @@ struct ClarifyingQuestionsButton: View {
     @Environment(ResumeReviseViewModel.self) private var resumeReviseViewModel: ResumeReviseViewModel
     @Environment(ApplicantProfileStore.self) private var applicantProfileStore: ApplicantProfileStore
     @Environment(KnowledgeCardStore.self) private var knowledgeCardStore: KnowledgeCardStore
-    @Environment(CoverRefStore.self) private var coverRefStore: CoverRefStore
+
     @Binding var selectedTab: TabList
     @Binding var clarifyingQuestions: [ClarifyingQuestion]
     @Binding var sheets: AppSheets
@@ -97,8 +97,7 @@ struct ClarifyingQuestionsButton: View {
                 defaultResumeReviseViewModel: resumeReviseViewModel,
                 exportCoordinator: appEnvironment.resumeExportCoordinator,
                 applicantProfileStore: applicantProfileStore,
-                knowledgeCardStore: knowledgeCardStore,
-                coverRefStore: coverRefStore
+                knowledgeCardStore: knowledgeCardStore
             )
             clarifyingQuestionsViewModel = clarifyingViewModel
             try await clarifyingViewModel.startClarifyingQuestionsWorkflow(

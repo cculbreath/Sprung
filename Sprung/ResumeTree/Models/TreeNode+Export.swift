@@ -458,4 +458,81 @@ extension TreeNode {
             containerNode.addChild(childNode)
         }
     }
+
+    // MARK: - Legacy Flat Export for Revision Workflow
+
+    /// Traverse and export AI-marked nodes as flat dictionaries for the revision workflow.
+    /// Used by ResumeApiQuery to build the editable fields string.
+    static func traverseAndExportNodes(node: TreeNode, currentPath _: String = "")
+        -> [[String: Any]] {
+        var result: [[String: Any]] = []
+        let treePath = node.buildTreePath()
+
+        if node.status == .aiToReplace {
+            let hasChildren = node.children != nil && !node.orderedChildren.isEmpty
+
+            if hasChildren {
+                let oldValueArray = collectDescendantValues(from: node)
+                let concatenatedValue = oldValueArray.joined(separator: "\n")
+
+                let groupedNodeData: [String: Any] = [
+                    "id": node.id,
+                    "name": node.name,
+                    "value": concatenatedValue,
+                    "tree_path": treePath,
+                    "isGrouped": true,
+                    "oldValueArray": oldValueArray,
+                    "itemCount": oldValueArray.count,
+                    "isTitleNode": false
+                ]
+                result.append(groupedNodeData)
+                return result
+            } else {
+                if !node.name.isEmpty {
+                    let titleNodeData: [String: Any] = [
+                        "id": node.id,
+                        "value": node.name,
+                        "name": node.name,
+                        "tree_path": treePath,
+                        "isTitleNode": true,
+                        "isGrouped": false
+                    ]
+                    result.append(titleNodeData)
+                }
+                if !node.value.isEmpty {
+                    let valueNodeData: [String: Any] = [
+                        "id": node.id,
+                        "value": node.value,
+                        "name": node.name,
+                        "tree_path": treePath,
+                        "isTitleNode": false,
+                        "isGrouped": false
+                    ]
+                    result.append(valueNodeData)
+                }
+            }
+        } else if !node.isInheritedAISelection {
+            let childNodes = node.children ?? []
+            for child in childNodes {
+                result.append(contentsOf: traverseAndExportNodes(node: child, currentPath: treePath))
+            }
+        }
+
+        return result
+    }
+
+    private static func collectDescendantValues(from node: TreeNode) -> [String] {
+        var values: [String] = []
+
+        for child in node.orderedChildren {
+            if !child.value.isEmpty {
+                values.append(child.value)
+            } else if !child.name.isEmpty && child.orderedChildren.isEmpty {
+                values.append(child.name)
+            }
+            values.append(contentsOf: collectDescendantValues(from: child))
+        }
+
+        return values
+    }
 }

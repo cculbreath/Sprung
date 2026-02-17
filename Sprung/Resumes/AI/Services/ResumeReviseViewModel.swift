@@ -3,7 +3,7 @@
 //  Sprung
 //
 //  ViewModel responsible for coordinating the resume revision workflow.
-//  Uses parallel LLM execution with accumulating review queue.
+//  Delegates to specialized services for tool calling, navigation, and phase review.
 //
 
 import Foundation
@@ -13,7 +13,7 @@ import SwiftOpenAI
 import SwiftyJSON
 
 /// ViewModel responsible for coordinating the resume revision workflow.
-/// Uses parallel task execution with SGM-style accumulating review queue.
+/// Acts as a facade, delegating to specialized services for different concerns.
 @MainActor
 @Observable
 class ResumeReviseViewModel {
@@ -23,6 +23,7 @@ class ResumeReviseViewModel {
 
     // MARK: - Specialized Services (Public for direct access)
     let toolRunner: ToolConversationRunner
+    let navigationManager: RevisionNavigationManager
     let phaseReviewManager: PhaseReviewManager
     let workflowOrchestrator: RevisionWorkflowOrchestrator
 
@@ -30,28 +31,16 @@ class ResumeReviseViewModel {
     let workflowState = RevisionWorkflowState()
 
     // MARK: - UI State
-    /// Shows the parallel review queue UI
-    var showParallelReviewQueueSheet: Bool = false
-
-    /// Shows the coherence report UI
-    var showCoherenceReportSheet: Bool = false
-
-    /// The review queue for the parallel workflow (exposed for UI binding)
-    var parallelReviewQueue: CustomizationReviewQueue? {
-        workflowOrchestrator.reviewQueue
+    var showResumeRevisionSheet: Bool = false {
+        didSet {
+            Logger.debug(
+                "🔍 [ResumeReviseViewModel] showResumeRevisionSheet changed from \(oldValue) to \(showResumeRevisionSheet)",
+                category: .ui
+            )
+        }
     }
 
-    /// The coherence report from the post-assembly pass (exposed for UI binding)
-    var coherenceReport: CoherenceReport? {
-        workflowOrchestrator.coherenceReport
-    }
-
-    /// Whether the coherence pass is currently running
-    var isRunningCoherencePass: Bool {
-        workflowOrchestrator.isRunningCoherencePass
-    }
-
-    // MARK: - Convenience Accessors
+    // MARK: - Convenience Accessors (for backward compatibility)
 
     var aiResubmit: Bool {
         get { workflowState.aiResubmit }
@@ -71,6 +60,67 @@ class ResumeReviseViewModel {
         workflowState.isProcessingRevisions
     }
 
+    // MARK: - Forwarded Properties (for view compatibility)
+
+    var resumeRevisions: [ProposedRevisionNode] {
+        get { navigationManager.resumeRevisions }
+        set { navigationManager.resumeRevisions = newValue }
+    }
+
+    var feedbackNodes: [FeedbackNode] {
+        get { navigationManager.feedbackNodes }
+        set { navigationManager.feedbackNodes = newValue }
+    }
+
+    var approvedFeedbackNodes: [FeedbackNode] {
+        get { navigationManager.approvedFeedbackNodes }
+        set { navigationManager.approvedFeedbackNodes = newValue }
+    }
+
+    var currentRevisionNode: ProposedRevisionNode? {
+        get { navigationManager.currentRevisionNode }
+        set { navigationManager.currentRevisionNode = newValue }
+    }
+
+    var currentFeedbackNode: FeedbackNode? {
+        get { navigationManager.currentFeedbackNode }
+        set { navigationManager.currentFeedbackNode = newValue }
+    }
+
+    var feedbackIndex: Int {
+        get { navigationManager.feedbackIndex }
+        set { navigationManager.feedbackIndex = newValue }
+    }
+
+    var updateNodes: [[String: Any]] {
+        get { navigationManager.updateNodes }
+        set { navigationManager.updateNodes = newValue }
+    }
+
+    var isEditingResponse: Bool {
+        get { navigationManager.isEditingResponse }
+        set { navigationManager.isEditingResponse = newValue }
+    }
+
+    var isCommenting: Bool {
+        get { navigationManager.isCommenting }
+        set { navigationManager.isCommenting = newValue }
+    }
+
+    var isMoreCommenting: Bool {
+        get { navigationManager.isMoreCommenting }
+        set { navigationManager.isMoreCommenting = newValue }
+    }
+
+    var phaseReviewState: PhaseReviewState {
+        get { phaseReviewManager.phaseReviewState }
+        set { phaseReviewManager.phaseReviewState = newValue }
+    }
+
+    var isHierarchicalReviewActive: Bool {
+        phaseReviewManager.isHierarchicalReviewActive
+    }
+
     // MARK: - Initialization
 
     init(
@@ -80,31 +130,33 @@ class ResumeReviseViewModel {
         exportCoordinator: ResumeExportCoordinator,
         applicantProfileStore: ApplicantProfileStore,
         knowledgeCardStore: KnowledgeCardStore,
-        coverRefStore: CoverRefStore,
         guidanceStore: InferenceGuidanceStore? = nil,
-        skillStore: SkillStore? = nil,
-        titleSetStore: TitleSetStore? = nil,
-        candidateDossierStore: CandidateDossierStore? = nil,
+        validationService: RevisionValidationService? = nil,
         streamingService: RevisionStreamingService? = nil,
+        completionService: RevisionCompletionService? = nil,
         toolRegistry: ResumeToolRegistry? = nil
     ) {
         self.exportCoordinator = exportCoordinator
         self.openRouterService = openRouterService
+        let validationSvc = validationService ?? RevisionValidationService()
         let streaming = streamingService ?? RevisionStreamingService(
             llm: llmFacade,
             reasoningStreamManager: reasoningStreamManager
         )
+        let completionSvc = completionService ?? RevisionCompletionService()
 
         // Initialize specialized services
-        let registry = toolRegistry ?? ResumeToolRegistry(knowledgeCardStore: knowledgeCardStore)
         self.toolRunner = ToolConversationRunner(
             llm: llmFacade,
-            toolRegistry: registry
+            toolRegistry: toolRegistry
         )
 
-        self.phaseReviewManager = PhaseReviewManager()
+        self.navigationManager = RevisionNavigationManager(
+            completionService: completionSvc,
+            exportCoordinator: exportCoordinator
+        )
 
-        self.workflowOrchestrator = RevisionWorkflowOrchestrator(
+        self.phaseReviewManager = PhaseReviewManager(
             llm: llmFacade,
             openRouterService: openRouterService,
             reasoningStreamManager: reasoningStreamManager,
@@ -113,17 +165,28 @@ class ResumeReviseViewModel {
             applicantProfileStore: applicantProfileStore,
             knowledgeCardStore: knowledgeCardStore,
             toolRunner: self.toolRunner,
+            guidanceStore: guidanceStore
+        )
+
+        self.workflowOrchestrator = RevisionWorkflowOrchestrator(
+            llm: llmFacade,
+            openRouterService: openRouterService,
+            reasoningStreamManager: reasoningStreamManager,
+            exportCoordinator: exportCoordinator,
+            validationService: validationSvc,
+            streamingService: streaming,
+            completionService: completionSvc,
+            applicantProfileStore: applicantProfileStore,
+            knowledgeCardStore: knowledgeCardStore,
+            toolRunner: self.toolRunner,
             phaseReviewManager: self.phaseReviewManager,
             guidanceStore: guidanceStore,
-            skillStore: skillStore,
-            titleSetStore: titleSetStore,
-            targetingPlanService: TargetingPlanService(),
-            coherencePassService: CoherencePassService(),
-            candidateDossierStore: candidateDossierStore,
             workflowState: self.workflowState
         )
 
-        // Set up delegate
+        // Set up delegates
+        navigationManager.delegate = self
+        phaseReviewManager.delegate = self
         workflowOrchestrator.delegate = self
     }
 
@@ -141,85 +204,203 @@ class ResumeReviseViewModel {
         workflowState.markWorkflowCompleted(reset: reset)
     }
 
-    // MARK: - Parallel Workflow
+    // MARK: - Public Interface
 
-    /// Start the parallel revision workflow
-    /// - Parameters:
-    ///   - resume: The resume to customize
-    ///   - modelId: The LLM model ID (from user selection)
-    ///   - clarifyingQA: Optional clarifying questions and answers to prepend to preamble
-    ///   - coverRefStore: Cover ref store for writing samples
-    func startParallelRevisionWorkflow(
+    /// Start a fresh revision workflow (without clarifying questions)
+    func startFreshRevisionWorkflow(
         resume: Resume,
         modelId: String,
-        clarifyingQA: [(ClarifyingQuestion, QuestionAnswer)]? = nil,
-        coverRefStore: CoverRefStore
+        workflow: RevisionWorkflowState.WorkflowKind
     ) async throws {
+        navigationManager.reset()
         workflowState.aiResubmit = false
-        try await workflowOrchestrator.startParallelWorkflow(
+        try await workflowOrchestrator.startFreshRevisionWorkflow(
             resume: resume,
             modelId: modelId,
-            clarifyingQA: clarifyingQA,
-            coverRefStore: coverRefStore
+            workflow: workflow
         )
     }
 
-    /// Complete the current phase, apply approved changes, and advance to the next phase or finalize
-    func completeCurrentPhaseAndAdvance(resume: Resume, context: ModelContext) async throws {
-        try await workflowOrchestrator.completeCurrentPhaseAndAdvance(resume: resume, context: context)
+    /// Continue an existing conversation and generate revisions
+    func continueConversationAndGenerateRevisions(
+        conversationId: UUID,
+        resume: Resume,
+        modelId: String
+    ) async throws {
+        try await workflowOrchestrator.continueConversationAndGenerateRevisions(
+            conversationId: conversationId,
+            resume: resume,
+            modelId: modelId
+        )
     }
 
-    /// Apply all approved parallel changes and close the workflow
-    func applyApprovedParallelChangesAndClose(resume: Resume, context: ModelContext) {
-        workflowOrchestrator.applyApprovedAndClose(resume: resume, context: context)
+    // MARK: - Forwarded Navigation Methods
+
+    func saveAndNext(response: PostReviewAction, resume: Resume) {
+        navigationManager.saveAndNext(response: response, resume: resume)
     }
 
-    /// Discard all parallel changes and close the workflow
-    func discardParallelChangesAndClose() {
-        workflowOrchestrator.discardAndClose()
+    func initializeUpdateNodes(for resume: Resume) {
+        navigationManager.initializeUpdateNodes(for: resume)
     }
 
-    /// Whether there are unapplied approved changes in the parallel review queue
-    func hasUnappliedParallelApprovedChanges() -> Bool {
-        workflowOrchestrator.hasUnappliedApprovedChanges()
+    func navigateToPrevious() {
+        navigationManager.navigateToPrevious()
     }
 
-    /// Current phase number — always 1 with flattened workflow
-    var currentPhaseNumber: Int { 1 }
-
-    /// Total phases — always 1 with flattened workflow
-    var totalPhases: Int { 1 }
-
-    // MARK: - Coherence Pass
-
-    /// Complete the coherence report review and finalize the workflow.
-    func completeCoherencePass() {
-        workflowOrchestrator.completeCoherencePass()
+    func navigateToNext() {
+        navigationManager.navigateToNext()
     }
 
-    /// Skip the coherence report and finalize the workflow.
-    func skipCoherencePass() {
-        workflowOrchestrator.skipCoherencePass()
+    func isNodeAccepted(_ feedbackNode: FeedbackNode?) -> Bool {
+        navigationManager.isNodeAccepted(feedbackNode)
     }
 
+    func isNodeRejectedWithComments(_ feedbackNode: FeedbackNode?) -> Bool {
+        navigationManager.isNodeRejectedWithComments(feedbackNode)
+    }
+
+    func isNodeRejectedWithoutComments(_ feedbackNode: FeedbackNode?) -> Bool {
+        navigationManager.isNodeRejectedWithoutComments(feedbackNode)
+    }
+
+    func isNodeRestored(_ feedbackNode: FeedbackNode?) -> Bool {
+        navigationManager.isNodeRestored(feedbackNode)
+    }
+
+    func isNodeEdited(_ feedbackNode: FeedbackNode?) -> Bool {
+        navigationManager.isNodeEdited(feedbackNode)
+    }
+
+    // MARK: - Forwarded Phase Review Methods
+
+    func completeCurrentPhase(resume: Resume, context: ModelContext) {
+        phaseReviewManager.completeCurrentPhase(resume: resume, context: context)
+    }
+
+    func acceptCurrentItemAndMoveNext(resume: Resume, context: ModelContext) {
+        phaseReviewManager.acceptCurrentItemAndMoveNext(resume: resume, context: context)
+    }
+
+    func rejectCurrentItemAndMoveNext() {
+        phaseReviewManager.rejectCurrentItemAndMoveNext()
+    }
+
+    func rejectCurrentItemWithFeedback(_ feedback: String) {
+        phaseReviewManager.rejectCurrentItemWithFeedback(feedback)
+    }
+
+    func acceptCurrentItemWithEdits(_ editedValue: String?, editedChildren: [String]?, resume: Resume, context: ModelContext) {
+        phaseReviewManager.acceptCurrentItemWithEdits(editedValue, editedChildren: editedChildren, resume: resume, context: context)
+    }
+
+    func acceptOriginalAndMoveNext(resume: Resume, context: ModelContext) {
+        phaseReviewManager.acceptOriginalAndMoveNext(resume: resume, context: context)
+    }
+
+    // MARK: - Navigation
+
+    func goToPreviousItem() {
+        phaseReviewManager.goToPreviousItem()
+    }
+
+    func goToNextItem() {
+        phaseReviewManager.goToNextItem()
+    }
+
+    var canGoToPrevious: Bool {
+        phaseReviewManager.canGoToPrevious
+    }
+
+    var canGoToNext: Bool {
+        phaseReviewManager.canGoToNext
+    }
+
+    func hasUnappliedApprovedChanges() -> Bool {
+        phaseReviewManager.hasUnappliedApprovedChanges()
+    }
+
+    func applyApprovedChangesAndClose(resume: Resume, context: ModelContext) {
+        phaseReviewManager.applyApprovedChangesAndClose(resume: resume, context: context)
+    }
+
+    func discardAllAndClose() {
+        phaseReviewManager.discardAllAndClose()
+    }
+}
+
+// MARK: - RevisionNavigationDelegate
+
+extension ResumeReviseViewModel: RevisionNavigationDelegate {
+    func showReviewSheet() {
+        showResumeRevisionSheet = true
+    }
+
+    func hideReviewSheet() {
+        showResumeRevisionSheet = false
+    }
+
+    func startAIResubmission(feedbackNodes: [FeedbackNode], resume: Resume) {
+        feedbackIndex = 0
+        workflowState.aiResubmit = true
+        workflowState.workflowInProgress = true
+
+        Task {
+            do {
+                Logger.debug("Starting PDF re-rendering for AI resubmission...")
+                try await exportCoordinator.ensureFreshRenderedText(for: resume)
+                Logger.debug("PDF rendering complete for AI resubmission")
+                await workflowOrchestrator.performAIResubmission(
+                    with: resume,
+                    feedbackNodes: feedbackNodes,
+                    exportCoordinator: exportCoordinator
+                )
+            } catch {
+                Logger.debug("Error rendering resume for AI resubmission: \(error)")
+                workflowState.aiResubmit = false
+                workflowState.workflowInProgress = false
+            }
+        }
+    }
+
+    func setWorkflowCompleted() {
+        markWorkflowCompleted(reset: true)
+    }
+}
+
+// MARK: - PhaseReviewDelegate
+// Note: showReviewSheet, hideReviewSheet, setWorkflowCompleted are implemented
+// in RevisionNavigationDelegate extension and satisfy both protocol requirements.
+
+extension ResumeReviseViewModel: PhaseReviewDelegate {
+    func setConversationContext(conversationId: UUID, modelId: String) {
+        workflowState.setConversationContext(conversationId: conversationId, modelId: modelId)
+    }
+
+    func setProcessingRevisions(_ processing: Bool) {
+        workflowState.setProcessingRevisions(processing)
+    }
+
+    func markWorkflowStarted() {
+        markWorkflowStarted(.customize)
+    }
 }
 
 // MARK: - RevisionWorkflowOrchestratorDelegate
 
 extension ResumeReviseViewModel: RevisionWorkflowOrchestratorDelegate {
-    func showParallelReviewQueue() {
-        showParallelReviewQueueSheet = true
+    func setupRevisionsForReview(_ revisions: [ProposedRevisionNode]) async {
+        Logger.debug("🔍 [ResumeReviseViewModel] setupRevisionsForReview called with \(revisions.count) revisions")
+        navigationManager.setupRevisionsForReview(revisions)
+        showResumeRevisionSheet = true
+        workflowState.setProcessingRevisions(false)
+        markWorkflowCompleted(reset: false)
     }
 
-    func hideParallelReviewQueue() {
-        showParallelReviewQueueSheet = false
-    }
-
-    func showCoherenceReport() {
-        showCoherenceReportSheet = true
-    }
-
-    func hideCoherenceReport() {
-        showCoherenceReportSheet = false
+    func handleResubmissionResults(validatedRevisions: [ProposedRevisionNode], resubmittedNodeIds: Set<String>) {
+        navigationManager.handleResubmissionResults(
+            validatedRevisions: validatedRevisions,
+            resubmittedNodeIds: resubmittedNodeIds
+        )
     }
 }

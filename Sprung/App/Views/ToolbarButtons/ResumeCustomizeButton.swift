@@ -4,7 +4,6 @@ struct ResumeCustomizeButton: View {
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
     @Environment(ResumeReviseViewModel.self) private var resumeReviseViewModel: ResumeReviseViewModel
     @Environment(ReasoningStreamManager.self) private var reasoningStreamManager: ReasoningStreamManager
-    @Environment(CoverRefStore.self) private var coverRefStore: CoverRefStore
     @Binding var selectedTab: TabList
     @State private var isGeneratingResume = false
     @State private var showCustomizeModelSheet = false
@@ -74,13 +73,12 @@ struct ResumeCustomizeButton: View {
             return
         }
         do {
-            Logger.debug("🛡️ [ResumeCustomizeButton] Starting parallel workflow with model: \(modelId)")
+            Logger.debug("🛡️ [ResumeCustomizeButton] Starting customize workflow with model: \(modelId)")
             reasoningStreamManager.hideAndClear()
-            try await resumeReviseViewModel.startParallelRevisionWorkflow(
+            try await resumeReviseViewModel.startFreshRevisionWorkflow(
                 resume: resume,
                 modelId: modelId,
-                clarifyingQA: nil,
-                coverRefStore: coverRefStore
+                workflow: .customize
             )
             if Task.isCancelled {
                 isGeneratingResume = false

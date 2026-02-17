@@ -55,9 +55,8 @@ class ResumeToolRegistry {
     private var tools: [any ResumeTool] = []
 
     init(knowledgeCardStore: KnowledgeCardStore? = nil) {
-        if let store = knowledgeCardStore {
-            registerTool(ReadKnowledgeCardsTool(knowledgeCardStore: store))
-        }
+        // No built-in tools currently registered.
+        // Tools can be added via registerTool() as needed.
     }
 
     /// Register a tool with the registry

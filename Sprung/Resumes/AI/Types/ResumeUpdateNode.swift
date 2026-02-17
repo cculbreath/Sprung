@@ -66,6 +66,17 @@ struct ProposedRevisionNode: Codable, Equatable {
         Logger.debug("⚠️ Fallback to '(no text)'")
         return "(no text)"
     }
+    /// Create a FeedbackNode from this ProposedRevisionNode
+    func createFeedbackNode() -> FeedbackNode {
+        return FeedbackNode(
+            id: id,
+            originalValue: oldValue,
+            proposedRevision: newValue,
+            actionRequested: .unevaluated,
+            reviewerComments: "",
+            isTitleNode: isTitleNode
+        )
+    }
     enum CodingKeys: String, CodingKey {
         case id
         case oldValue
@@ -132,6 +143,20 @@ struct RevisionsContainer: Codable {
         try container.encode(revArray, forKey: .revArray)
     }
 }
+enum PostReviewAction: String, Codable {
+    case accepted = "No action required. Revision Accepted."
+    case acceptedWithChanges = "No action required. Revision Accepted with reviewer changes."
+    case noChange = "No action required. Original value retained as recommended."
+    case restored = "No action Required. Revision rejected and original value restored."
+    case revise =
+        "Action Required: Please update your submission to incorporate the reviewer comments."
+    case rewriteNoComment = "Action Required: Revsion rejected without comment, please try again."
+    case mandatedChangeNoComment = "Action Required:  Proposal to maintain original value rejected without comment. Please propose a  revised value for this field."
+    case mandatedChange =
+        "Action Required: Proposal to maintain original value rejected. Please propose a  revised value for this field and incorporate reviewer comments"
+    case unevaluated = "Unevaluated"
+}
+
 // MARK: - Generic Manifest-Driven Review Phase Types
 
 /// Actions the LLM can propose for any review item
@@ -323,4 +348,174 @@ struct PhaseReviewState {
 enum NodeType: String, Codable {
     case scalar  // Single string value (existing behavior)
     case list    // Array of string values (keywords, highlights)
+}
+
+// MARK: - FeedbackNode
+
+@Observable class FeedbackNode {
+    var id: String
+    var originalValue: String
+    var proposedRevision: String = ""
+    var actionRequested: PostReviewAction = .unevaluated
+    var reviewerComments: String = ""
+    var isTitleNode: Bool = false
+    init(
+        id: String = "",
+        originalValue: String = "",
+        proposedRevision: String = "",
+        actionRequested: PostReviewAction = .unevaluated,
+        reviewerComments: String = "",
+        isTitleNode: Bool = false
+    ) {
+        self.id = id
+        self.originalValue = originalValue
+        self.proposedRevision = proposedRevision
+        self.actionRequested = actionRequested
+        self.reviewerComments = reviewerComments
+        self.isTitleNode = isTitleNode
+    }
+    /// Check if this feedback node requires AI resubmission
+    var requiresAIResubmission: Bool {
+        let aiActions: Set<PostReviewAction> = [
+            .revise, .mandatedChange, .mandatedChangeNoComment, .rewriteNoComment
+        ]
+        return aiActions.contains(actionRequested)
+    }
+    /// Check if this feedback node should be applied to the resume
+    var shouldBeApplied: Bool {
+        return actionRequested == .accepted || actionRequested == .acceptedWithChanges
+    }
+    /// Apply this feedback node's changes to a resume tree node
+    func applyToResume(_ resume: Resume) {
+        guard shouldBeApplied else { return }
+        if let treeNode = resume.nodes.first(where: { $0.id == id }) {
+            if isTitleNode {
+                treeNode.name = proposedRevision
+            } else {
+                treeNode.value = proposedRevision
+            }
+            Logger.debug("✅ Applied change to node \(id): \(actionRequested.rawValue)")
+        } else {
+            Logger.debug("⚠️ Could not find TreeNode with ID: \(id) to apply changes")
+        }
+    }
+    /// Handle the action for saveAndNext workflow
+    func processAction(_ action: PostReviewAction) {
+        self.actionRequested = action
+        switch action {
+        case .restored:
+            self.proposedRevision = self.originalValue
+        case .acceptedWithChanges:
+            break
+        default:
+            break
+        }
+    }
+}
+
+extension FeedbackNode: Encodable {
+    enum CodingKeys: String, CodingKey {
+        case id
+        case originalValue
+        case proposedRevision
+        case actionRequested
+        case reviewerComments
+        case isTitleNode
+    }
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(originalValue, forKey: .originalValue)
+        try container.encode(proposedRevision, forKey: .proposedRevision)
+        try container.encode(actionRequested, forKey: .actionRequested)
+        try container.encode(reviewerComments, forKey: .reviewerComments)
+        try container.encode(isTitleNode, forKey: .isTitleNode)
+    }
+}
+
+// MARK: - Collection Extensions for Review Workflow Logic
+
+@MainActor
+extension Array where Element == FeedbackNode {
+    /// Apply all accepted changes to the resume
+    func applyAcceptedChanges(to resume: Resume, exportCoordinator: ResumeExportCoordinator) {
+        Logger.debug("✅ Applying accepted changes to resume")
+        let acceptedNodes = filter { $0.shouldBeApplied }
+        for node in acceptedNodes {
+            node.applyToResume(resume)
+        }
+        // Delete any TreeNodes where both name and value are empty
+        let nodesToDelete = resume.nodes.filter { treeNode in
+            let nameIsEmpty = treeNode.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            let valueIsEmpty = treeNode.value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            return nameIsEmpty && valueIsEmpty
+        }
+        if !nodesToDelete.isEmpty {
+            Logger.debug("🗑️ Deleting \(nodesToDelete.count) empty nodes")
+            if let context = resume.modelContext {
+                Task { @MainActor in
+                    for nodeToDelete in nodesToDelete {
+                        TreeNode.deleteTreeNode(node: nodeToDelete, context: context)
+                    }
+                    do {
+                        try context.save()
+                        Logger.debug("✅ Successfully saved context after deleting empty nodes")
+                    } catch {
+                        Logger.error("❌ Failed to save context after deleting TreeNodes: \(error)")
+                    }
+                }
+            }
+        }
+        exportCoordinator.debounceExport(resume: resume)
+        Logger.debug("✅ Applied \(acceptedNodes.count) accepted changes")
+    }
+    /// Get nodes that require AI resubmission
+    var nodesRequiringAIResubmission: [FeedbackNode] {
+        return filter { $0.requiresAIResubmission }
+    }
+    /// Log feedback statistics
+    func logFeedbackStatistics() {
+        Logger.debug("\n===== FEEDBACK NODE STATISTICS =====")
+        Logger.debug("Total feedback nodes: \(count)")
+        let acceptedCount = filter { $0.actionRequested == .accepted }.count
+        let acceptedWithChangesCount = filter { $0.actionRequested == .acceptedWithChanges }.count
+        let noChangeCount = filter { $0.actionRequested == .noChange }.count
+        let restoredCount = filter { $0.actionRequested == .restored }.count
+        let reviseCount = filter { $0.actionRequested == .revise }.count
+        let rewriteNoCommentCount = filter { $0.actionRequested == .rewriteNoComment }.count
+        let mandatedChangeCount = filter { $0.actionRequested == .mandatedChange }.count
+        let mandatedChangeNoCommentCount = filter { $0.actionRequested == .mandatedChangeNoComment }.count
+        Logger.debug("Accepted: \(acceptedCount)")
+        Logger.debug("Accepted with changes: \(acceptedWithChangesCount)")
+        Logger.debug("No change needed: \(noChangeCount)")
+        Logger.debug("Restored to original: \(restoredCount)")
+        Logger.debug("Revise (with comments): \(reviseCount)")
+        Logger.debug("Rewrite (no comments): \(rewriteNoCommentCount)")
+        Logger.debug("Mandated change (with comments): \(mandatedChangeCount)")
+        Logger.debug("Mandated change (no comments): \(mandatedChangeNoCommentCount)")
+        Logger.debug("==================================\n")
+    }
+    /// Log resubmission summary
+    func logResubmissionSummary() {
+        Logger.debug("\n===== SUBMITTING REVISION REQUEST =====")
+        Logger.debug("Number of nodes to revise: \(count)")
+        let typeCount = reduce(into: [PostReviewAction: Int]()) { counts, node in
+            counts[node.actionRequested, default: 0] += 1
+        }
+        for (action, count) in typeCount.sorted(by: { $0.value > $1.value }) {
+            Logger.debug("  - \(action.rawValue): \(count) nodes")
+        }
+        let nodeIds = map { $0.id }.joined(separator: ", ")
+        Logger.debug("Node IDs: \(nodeIds)")
+        Logger.debug("========================================\n")
+        for (index, node) in enumerated() {
+            Logger.debug("Node \(index + 1)/\(count) for revision:")
+            Logger.debug("  - ID: \(node.id)")
+            Logger.debug("  - Action: \(node.actionRequested.rawValue)")
+            Logger.debug("  - Original: \(node.originalValue.prefix(30))\(node.originalValue.count > 30 ? "..." : "")")
+            if !node.reviewerComments.isEmpty {
+                Logger.debug("  - Comments: \(node.reviewerComments.prefix(50))\(node.reviewerComments.count > 50 ? "..." : "")")
+            }
+        }
+    }
 }

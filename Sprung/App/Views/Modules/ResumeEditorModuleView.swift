@@ -63,7 +63,7 @@ struct ResumeEditorModuleView: View {
         .animation(.easeInOut(duration: 0.2), value: isSidebarExpanded)
         // Reasoning stream overlay
         .overlay {
-            if reasoningStreamManager.isVisible && !resumeReviseViewModel.showParallelReviewQueueSheet {
+            if reasoningStreamManager.isVisible && !resumeReviseViewModel.showResumeRevisionSheet {
                 ReasoningStreamView(
                     isVisible: Binding(
                         get: { reasoningStreamManager.isVisible },

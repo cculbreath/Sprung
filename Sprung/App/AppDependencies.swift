@@ -37,7 +37,6 @@ final class AppDependencies {
     let guidanceStore: InferenceGuidanceStore
     let titleSetStore: TitleSetStore
     let backgroundActivityTracker: BackgroundActivityTracker
-    let targetingPlanService: TargetingPlanService
     // MARK: - UI State
     let dragInfo: DragInfo
     let debugSettingsStore: DebugSettingsStore
@@ -165,11 +164,7 @@ final class AppDependencies {
             exportCoordinator: resumeExportCoordinator,
             applicantProfileStore: applicantProfileStore,
             knowledgeCardStore: knowledgeCardStore,
-            coverRefStore: coverRefStore,
-            guidanceStore: guidanceStore,
-            skillStore: skillStore,
-            titleSetStore: titleSetStore,
-            candidateDossierStore: candidateDossierStore
+            guidanceStore: guidanceStore
         )
         self.resumeReviseViewModel = resumeReviseViewModel
         let interviewDataStore = InterviewDataStore()
@@ -204,9 +199,6 @@ final class AppDependencies {
         // Background Activity Tracker (for monitoring LLM operations)
         let backgroundActivityTracker = BackgroundActivityTracker()
         self.backgroundActivityTracker = backgroundActivityTracker
-
-        // Targeting Plan Service (strategic pre-analysis for resume customization)
-        self.targetingPlanService = TargetingPlanService()
 
         // Job App Preprocessor (background processing for job requirements and card selection)
         let jobAppPreprocessor = JobAppPreprocessor(llmFacade: llmFacade)
