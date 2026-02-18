@@ -124,6 +124,16 @@ struct ResumeEntryCardView: View {
                 .buttonStyle(.plain)
                 .help("Add field")
             }
+
+            if node.allowsDeletion {
+                Button(action: { vm.deleteNode(node, context: modelContext) }) {
+                    Image(systemName: "trash")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .help("Delete entry")
+            }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)

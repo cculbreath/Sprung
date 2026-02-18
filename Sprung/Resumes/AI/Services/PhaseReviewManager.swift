@@ -122,6 +122,7 @@ class PhaseReviewManager {
     private let knowledgeCardStore: KnowledgeCardStore
     private let toolRunner: ToolConversationRunner
     private let guidanceStore: InferenceGuidanceStore?
+    private let titleSetStore: TitleSetStore?
     weak var delegate: PhaseReviewDelegate?
 
     // MARK: - Phase Review State
@@ -141,7 +142,8 @@ class PhaseReviewManager {
         applicantProfileStore: ApplicantProfileStore,
         knowledgeCardStore: KnowledgeCardStore,
         toolRunner: ToolConversationRunner,
-        guidanceStore: InferenceGuidanceStore? = nil
+        guidanceStore: InferenceGuidanceStore? = nil,
+        titleSetStore: TitleSetStore? = nil
     ) {
         self.llm = llm
         self.openRouterService = openRouterService
@@ -152,6 +154,51 @@ class PhaseReviewManager {
         self.knowledgeCardStore = knowledgeCardStore
         self.toolRunner = toolRunner
         self.guidanceStore = guidanceStore
+        self.titleSetStore = titleSetStore
+    }
+
+    // MARK: - Title Set Constraint
+
+    /// Build a prompt constraint listing available title sets when nodes include jobTitles.
+    /// Returns nil if no jobTitles nodes are present or no title sets exist.
+    private func titleSetsConstraint(for nodes: [ExportedReviewNode]) -> String? {
+        guard nodes.contains(where: { $0.path.contains("jobTitles") }) else { return nil }
+        return buildTitleSetsConstraintString()
+    }
+
+    /// Build a prompt constraint for resubmission when rejected items include jobTitles.
+    private func titleSetsConstraint(forReviewIn review: PhaseReviewContainer) -> String? {
+        let isJobTitles = review.fieldPath.contains("jobTitles")
+            || review.items.contains(where: { $0.displayName.lowercased().contains("jobtitle") || $0.id.contains("jobTitles") })
+        guard isJobTitles else { return nil }
+        return buildTitleSetsConstraintString()
+    }
+
+    private func buildTitleSetsConstraintString() -> String? {
+        guard let store = titleSetStore else { return nil }
+        let sets = store.allTitleSets
+        guard !sets.isEmpty else { return nil }
+
+        let formatted = sets.enumerated().map { index, record in
+            "\(index + 1). \(record.displayString)"
+        }.joined(separator: "\n")
+
+        return """
+
+        ================================================================================
+        JOB TITLES REFERENCE
+        ================================================================================
+
+        The candidate maintains a library of professional identity Title Sets.
+        For jobTitles items, strongly prefer selecting from this library.
+        Modest variations are acceptable if they better fit the target role,
+        but avoid inventing entirely new titles unrelated to these sets.
+
+        Available Title Sets:
+        \(formatted)
+
+        ================================================================================
+        """
     }
 
     // MARK: - Tool Response Parsing
@@ -211,6 +258,10 @@ class PhaseReviewManager {
                 // Ensure originalChildren is populated for containers
                 if merged.originalChildren == nil || merged.originalChildren?.isEmpty == true {
                     merged.originalChildren = sourceNode.childValues
+                }
+                // Thread sourceNodeIds for bundled items (needed to apply changes back to tree)
+                if sourceNode.isBundled, let ids = sourceNode.sourceNodeIds {
+                    merged.sourceNodeIds = ids
                 }
             }
             return merged
@@ -477,13 +528,16 @@ class PhaseReviewManager {
 
             let sectionName = roundNumber == 1 ? "Phase 1" : "All Fields"
             let systemPrompt = query.genericSystemMessage.textContent
-            let userPrompt = await query.phaseReviewPrompt(
+            var userPrompt = await query.phaseReviewPrompt(
                 section: sectionName,
                 phaseNumber: roundNumber,
                 fieldPath: "*",
                 nodes: nodes,
                 isBundled: isBundledReview
             )
+            if let constraint = titleSetsConstraint(for: nodes) {
+                userPrompt += constraint
+            }
 
             let model = openRouterService.findModel(id: modelId)
             let supportsReasoning = model?.supportsReasoning ?? false
@@ -679,13 +733,16 @@ class PhaseReviewManager {
             )
 
             let systemPrompt = query.genericSystemMessage.textContent
-            let userPrompt = await query.phaseReviewPrompt(
+            var userPrompt = await query.phaseReviewPrompt(
                 section: phaseReviewState.currentSection,
                 phaseNumber: nextPhase.phase,
                 fieldPath: nextPhase.field,
                 nodes: exportedNodes,
                 isBundled: nextPhase.bundle
             )
+            if let constraint = titleSetsConstraint(for: exportedNodes) {
+                userPrompt += constraint
+            }
 
             let model = openRouterService.findModel(id: modelId)
             let supportsReasoning = model?.supportsReasoning ?? false
@@ -910,13 +967,16 @@ class PhaseReviewManager {
             )
 
             let systemPrompt = query.genericSystemMessage.textContent
-            let userPrompt = await query.phaseResubmissionPrompt(
+            var userPrompt = await query.phaseResubmissionPrompt(
                 section: phaseReviewState.currentSection,
                 phaseNumber: currentPhase.phase,
                 fieldPath: currentPhase.field,
                 rejectedItems: rejectedItems,
                 isBundled: currentPhase.bundle
             )
+            if let constraint = titleSetsConstraint(forReviewIn: originalReview) {
+                userPrompt += constraint
+            }
 
             let model = openRouterService.findModel(id: modelId)
             let supportsReasoning = model?.supportsReasoning ?? false
@@ -981,8 +1041,11 @@ class PhaseReviewManager {
 
             Logger.info("✅ Phase resubmission complete: \(resubmissionResponse.items.count) revised proposals received")
 
-            // Reset to beginning for re-review
+            // Reset navigation to match the filtered review items
             phaseReviewState.currentItemIndex = 0
+            if let review = phaseReviewState.currentReview {
+                phaseReviewState.pendingItemIds = review.items.map { $0.id }
+            }
             reasoningStreamManager.hideAndClear()
             delegate?.setProcessingRevisions(false)
 
@@ -993,19 +1056,25 @@ class PhaseReviewManager {
         }
     }
 
-    /// Replace the current review with ONLY the resubmitted items.
-    /// Accepted items have already been applied, so we only need to track the rejected ones.
+    /// Replace the current review with ONLY the rejected items that were resubmitted.
+    /// Accepted items have already been applied to the tree and must not reappear.
     private func mergeResubmissionResults(_ resubmission: PhaseReviewContainer, into original: PhaseReviewContainer) {
-        // Get the original rejected items to preserve their originalValue
+        // Build lookup of rejected items to preserve their originalValue
         let originalRejectedById = Dictionary(
             uniqueKeysWithValues: original.items
                 .filter { $0.userDecision == .rejected || $0.userDecision == .rejectedWithFeedback }
                 .map { ($0.id, $0) }
         )
+        let rejectedIds = Set(originalRejectedById.keys)
 
-        // Create new items from resubmission, preserving original values
+        // Only include LLM proposals that correspond to actually-rejected items.
+        // The LLM may hallucinate proposals for approved items — discard those.
         var newItems: [PhaseReviewItem] = []
         for newProposal in resubmission.items {
+            guard rejectedIds.contains(newProposal.id) else {
+                Logger.warning("⚠️ Discarding LLM proposal for non-rejected item '\(newProposal.displayName)' (id: \(newProposal.id))")
+                continue
+            }
             let originalItem = originalRejectedById[newProposal.id]
             let item = PhaseReviewItem(
                 id: newProposal.id,
@@ -1019,7 +1088,8 @@ class PhaseReviewManager {
                 editedValue: nil,
                 editedChildren: nil,
                 originalChildren: originalItem?.originalChildren ?? newProposal.originalChildren,
-                proposedChildren: newProposal.proposedChildren
+                proposedChildren: newProposal.proposedChildren,
+                sourceNodeIds: originalItem?.sourceNodeIds
             )
             newItems.append(item)
             Logger.debug("🔄 Resubmitted item '\(item.displayName)' ready for re-review")
@@ -1035,7 +1105,7 @@ class PhaseReviewManager {
         )
 
         phaseReviewState.currentReview = freshReview
-        Logger.info("📋 Review now contains \(newItems.count) resubmitted items for re-review")
+        Logger.info("📋 Review now contains \(newItems.count) resubmitted items for re-review (filtered from \(resubmission.items.count) LLM proposals)")
     }
 
     // MARK: - Workflow Completion
@@ -1059,7 +1129,8 @@ class PhaseReviewManager {
                 return
             }
 
-            // Show loading state BEFORE clearing review
+            // Dismiss the review sheet so the reasoning overlay can show for round 2
+            delegate?.hideReviewSheet()
             delegate?.setProcessingRevisions(true)
             phaseReviewState.reset()
 

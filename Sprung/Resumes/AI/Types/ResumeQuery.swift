@@ -642,11 +642,13 @@ import SwiftUI
         }.joined(separator: ",\n    ")
 
         // Build prompt from template with substitutions
+        // resumeText reflects the current resume state with accepted changes already applied
         let prompt = loadPromptTemplateWithSubstitutions(named: "resume_phase_resubmission", substitutions: [
             "phaseNumber": String(phaseNumber),
             "sectionUppercase": section.uppercased(),
             "fieldPath": fieldPath,
             "jobListing": jobListing,
+            "resumeText": resumeText,
             "itemsJson": itemsJson,
             "backgroundDocs": backgroundDocs,
             "section": section,

@@ -14,10 +14,7 @@ import SwiftUI
 /// Bottom drawer containing AI action buttons, revnode count, and phase assignments
 struct ResumeAIDrawer: View {
     @Binding var isExpanded: Bool
-    @Binding var selectedTab: TabList
     @Binding var sheets: AppSheets
-    @Binding var clarifyingQuestions: [ClarifyingQuestion]
-    @Binding var showCreateResumeSheet: Bool
     let revnodeCount: Int
     @Binding var showPhaseAssignments: Bool
     let resume: Resume?
@@ -52,14 +49,27 @@ struct ResumeAIDrawer: View {
                 VStack(spacing: 10) {
                     // AI action buttons row (compact size)
                     HStack(spacing: 8) {
-                        ResumeCustomizeButton(selectedTab: $selectedTab)
-                            .controlSize(.small)
-                        ClarifyingQuestionsButton(
-                            selectedTab: $selectedTab,
-                            clarifyingQuestions: $clarifyingQuestions,
-                            sheets: $sheets
-                        )
+                        Button {
+                            NotificationCenter.default.post(name: .customizeResume, object: nil)
+                        } label: {
+                            Label("Customize", systemImage: "wand.and.sparkles")
+                                .font(.system(size: 12))
+                        }
                         .controlSize(.small)
+                        .buttonStyle(.automatic)
+                        .help("Create resume revisions (requires nodes marked for AI revision)")
+                        .disabled(jobAppStore.selectedApp?.selectedRes?.hasUpdatableNodes != true)
+
+                        Button {
+                            NotificationCenter.default.post(name: .clarifyCustomize, object: nil)
+                        } label: {
+                            Label("Clarify", systemImage: "questionmark.bubble")
+                                .font(.system(size: 12))
+                        }
+                        .controlSize(.small)
+                        .buttonStyle(.automatic)
+                        .help("Create resume revisions with clarifying questions")
+                        .disabled(jobAppStore.selectedApp?.selectedRes?.hasUpdatableNodes != true)
                         Button {
                             sheets.showResumeReview = true
                         } label: {

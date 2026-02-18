@@ -131,6 +131,7 @@ class ResumeReviseViewModel {
         applicantProfileStore: ApplicantProfileStore,
         knowledgeCardStore: KnowledgeCardStore,
         guidanceStore: InferenceGuidanceStore? = nil,
+        titleSetStore: TitleSetStore? = nil,
         validationService: RevisionValidationService? = nil,
         streamingService: RevisionStreamingService? = nil,
         completionService: RevisionCompletionService? = nil,
@@ -165,7 +166,8 @@ class ResumeReviseViewModel {
             applicantProfileStore: applicantProfileStore,
             knowledgeCardStore: knowledgeCardStore,
             toolRunner: self.toolRunner,
-            guidanceStore: guidanceStore
+            guidanceStore: guidanceStore,
+            titleSetStore: titleSetStore
         )
 
         self.workflowOrchestrator = RevisionWorkflowOrchestrator(

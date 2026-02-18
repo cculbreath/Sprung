@@ -245,10 +245,13 @@ struct PhaseReviewItem: Codable, Equatable, Identifiable {
     var originalChildren: [String]?         // Original child values
     var proposedChildren: [String]?         // Proposed child values
 
+    // For bundled items: maps proposed children back to real tree node IDs
+    var sourceNodeIds: [String]?
+
     enum CodingKeys: String, CodingKey {
         case id, displayName, originalValue, proposedValue, action, reason
         case userDecision, userComment, editedValue, editedChildren
-        case originalChildren, proposedChildren
+        case originalChildren, proposedChildren, sourceNodeIds
     }
 
     init(
@@ -263,7 +266,8 @@ struct PhaseReviewItem: Codable, Equatable, Identifiable {
         editedValue: String? = nil,
         editedChildren: [String]? = nil,
         originalChildren: [String]? = nil,
-        proposedChildren: [String]? = nil
+        proposedChildren: [String]? = nil,
+        sourceNodeIds: [String]? = nil
     ) {
         self.id = id
         self.displayName = displayName
@@ -277,6 +281,7 @@ struct PhaseReviewItem: Codable, Equatable, Identifiable {
         self.editedChildren = editedChildren
         self.originalChildren = originalChildren
         self.proposedChildren = proposedChildren
+        self.sourceNodeIds = sourceNodeIds
     }
 
     init(from decoder: Decoder) throws {
@@ -294,6 +299,7 @@ struct PhaseReviewItem: Codable, Equatable, Identifiable {
         editedChildren = try container.decodeIfPresent([String].self, forKey: .editedChildren)
         originalChildren = try container.decodeIfPresent([String].self, forKey: .originalChildren)
         proposedChildren = try container.decodeIfPresent([String].self, forKey: .proposedChildren)
+        sourceNodeIds = try container.decodeIfPresent([String].self, forKey: .sourceNodeIds)
     }
 }
 

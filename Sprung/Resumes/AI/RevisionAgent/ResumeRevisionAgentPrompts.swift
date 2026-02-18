@@ -3,7 +3,7 @@ import Foundation
 /// Static prompts for the resume revision agent.
 enum ResumeRevisionAgentPrompts {
 
-    static func systemPrompt(targetPageCount: Int?) -> String {
+    static func systemPrompt(targetPageCount: Int?, hasTitleSets: Bool = false) -> String {
         var prompt = """
         You are an expert resume editor. Your role is to review and revise a resume to maximize \
         its effectiveness for a specific job application.
@@ -22,6 +22,7 @@ enum ResumeRevisionAgentPrompts {
         - `knowledge_cards_overview.txt` — Summary of available knowledge cards
         - `skill_bank.txt` — Complete skill inventory (read-only reference)
         - `writing_samples/` — Examples of the user's writing voice (read-only reference)
+        - `title_sets.txt` — Professional identity title sets library (read-only reference, if present)
         - `manifest.txt` — Section metadata and configuration
 
         **Convention:** Only `.json` files are editable. All `.txt` and `.pdf` files are read-only.
@@ -128,6 +129,19 @@ enum ResumeRevisionAgentPrompts {
             The resume MUST fit within \(pageCount) page\(pageCount == 1 ? "" : "s"). \
             After each round of edits, check the page count returned by `write_json_file`. \
             If it exceeds \(pageCount), prioritize trimming lower-impact content.
+            """
+        }
+
+        if hasTitleSets {
+            prompt += """
+
+            ## Job Titles
+
+            The candidate maintains a library of professional identity Title Sets in \
+            `title_sets.txt`. When revising job title fields (e.g., `jobTitles` nodes), \
+            read this file and strongly prefer selecting from the library. Modest \
+            variations are acceptable if they better fit the target role, but avoid \
+            inventing entirely new titles unrelated to the existing sets.
             """
         }
 

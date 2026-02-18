@@ -88,10 +88,24 @@ struct ResumeEditorModuleView: View {
         }
         // Headless toolbar button views: stay in the view hierarchy so their
         // notification-driven sheets/alerts continue to present from menu and toolbar commands
+        // Processing logo overlay (shown when LLM is working but thinking/review dialogs are hidden)
+        .overlay {
+            if resumeReviseViewModel.isWorkflowBusy(.customize)
+                && !reasoningStreamManager.isVisible
+                && !resumeReviseViewModel.showResumeRevisionSheet {
+                ProcessingLogoOverlay()
+            }
+        }
         .background {
             VStack(spacing: 0) {
                 BestJobButton()
                 CoverLetterGenerateButton()
+                ResumeCustomizeButton(selectedTab: $navigationState.selectedTab)
+                ClarifyingQuestionsButton(
+                    selectedTab: $navigationState.selectedTab,
+                    clarifyingQuestions: $clarifyingQuestions,
+                    sheets: $sheets
+                )
             }
             .frame(width: 0, height: 0)
             .clipped()

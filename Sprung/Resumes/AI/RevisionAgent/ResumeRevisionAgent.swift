@@ -118,12 +118,15 @@ class ResumeRevisionAgent {
 
     // MARK: - Init
 
+    private let titleSets: [TitleSetRecord]
+
     init(
         resume: Resume,
         llmFacade: LLMFacade,
         modelId: String,
         pdfGenerator: NativePDFGenerator,
-        modelContext: ModelContext
+        modelContext: ModelContext,
+        titleSets: [TitleSetRecord] = []
     ) {
         self.resume = resume
         self.llmFacade = llmFacade
@@ -131,6 +134,7 @@ class ResumeRevisionAgent {
         self.pdfGenerator = pdfGenerator
         self.modelContext = modelContext
         self.workspaceService = ResumeRevisionWorkspaceService()
+        self.titleSets = titleSets
     }
 
     // MARK: - Public API
@@ -160,12 +164,14 @@ class ResumeRevisionAgent {
             try workspaceService.exportSkillBank(skills)
             try workspaceService.exportWritingSamples(coverRefs)
             try workspaceService.exportFontSizeNodes(resume.fontSizeNodes)
+            try workspaceService.exportTitleSets(titleSets)
 
             let writingSamplesAvailable = coverRefs.contains { $0.type == .writingSample }
 
             // 2. Build system prompt
             let systemPrompt = ResumeRevisionAgentPrompts.systemPrompt(
-                targetPageCount: manifest.targetPageCount
+                targetPageCount: manifest.targetPageCount,
+                hasTitleSets: !titleSets.isEmpty
             )
 
             // 3. Build initial user message with PDF attachment

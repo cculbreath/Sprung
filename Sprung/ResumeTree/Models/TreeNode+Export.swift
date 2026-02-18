@@ -84,10 +84,9 @@ extension TreeNode {
     }
 
     /// Bundle multiple exported nodes into a single revnode with combined values.
+    /// `sourceNodeIds` maps 1:1 with `childValues`, enabling `applyBundledChanges`
+    /// to route each proposed value back to its real tree node.
     private static func bundleExportedNodes(_ nodes: [ExportedReviewNode], pattern: String) -> ExportedReviewNode {
-        // Collect one value per source node (1:1 with sourceNodeIds).
-        // For containers, use the concatenated value — NOT flattened children —
-        // so that applyBundledChanges can map each entry back to its source node.
         var allValues: [String] = []
         var allIds: [String] = []
 
@@ -372,10 +371,15 @@ extension TreeNode {
             // Only process accepted items (acceptedOriginal means keep original - no change needed)
             guard item.userDecision == .accepted else { continue }
 
+            // Bundled items have synthetic IDs — apply via sourceNodeIds mapping
+            if let sourceNodeIds = item.sourceNodeIds, !sourceNodeIds.isEmpty {
+                applyBundledChanges(item: item, sourceNodeIds: sourceNodeIds, rootNode: rootNode, context: context)
+                continue
+            }
+
             // Find the node by ID
             guard let node = findNodeById(item.id, in: rootNode) else {
                 if item.action == .add {
-                    // Handle adding new nodes - need parent context from path
                     Logger.warning("⚠️ Add action not yet implemented for new nodes")
                 }
                 continue
@@ -416,6 +420,81 @@ extension TreeNode {
             Logger.debug("✅ Saved phase review changes")
         } catch {
             Logger.error("❌ Failed to save phase review changes: \(error)")
+        }
+    }
+
+    /// Apply changes from a bundled review item back to individual tree nodes.
+    ///
+    /// Bundled items aggregate multiple tree nodes into one review item. The `sourceNodeIds`
+    /// array maps 1:1 with `proposedChildren` (or `editedChildren`), allowing each proposed
+    /// value to be applied to its corresponding real tree node.
+    @MainActor
+    private static func applyBundledChanges(
+        item: PhaseReviewItem,
+        sourceNodeIds: [String],
+        rootNode: TreeNode,
+        context: ModelContext
+    ) {
+        guard item.action == .modify else {
+            if item.action == .keep {
+                Logger.debug("⏭️ Bundled item '\(item.displayName)' action is keep - skipping")
+            }
+            return
+        }
+
+        let newValues = item.editedChildren ?? item.proposedChildren
+        guard let newValues else {
+            // Scalar bundled item — each source node gets the same proposed value
+            let newValue = item.editedValue ?? item.proposedValue
+            for nodeId in sourceNodeIds where !nodeId.isEmpty {
+                if let node = findNodeById(nodeId, in: rootNode) {
+                    node.value = newValue
+                    Logger.info("✅ Applied bundled scalar change to node '\(node.name.isEmpty ? node.id : node.name)'")
+                } else {
+                    Logger.warning("⚠️ Bundled source node not found: \(nodeId)")
+                }
+            }
+            return
+        }
+
+        // Container bundled item — map each proposed child to its source node
+        // sourceNodeIds and newValues should be parallel arrays
+        guard sourceNodeIds.count == newValues.count else {
+            Logger.warning("⚠️ Bundled item '\(item.displayName)' has \(sourceNodeIds.count) source IDs but \(newValues.count) proposed values — applying by position where possible")
+            let count = min(sourceNodeIds.count, newValues.count)
+            for i in 0..<count {
+                let nodeId = sourceNodeIds[i]
+                guard !nodeId.isEmpty else { continue }
+                if let node = findNodeById(nodeId, in: rootNode) {
+                    applyValueToNode(node, value: newValues[i])
+                    Logger.info("✅ Applied bundled change to '\(node.name.isEmpty ? node.id : node.name)'")
+                }
+            }
+            return
+        }
+
+        for (nodeId, newValue) in zip(sourceNodeIds, newValues) {
+            guard !nodeId.isEmpty else { continue }
+            if let node = findNodeById(nodeId, in: rootNode) {
+                applyValueToNode(node, value: newValue)
+                Logger.info("✅ Applied bundled change to '\(node.name.isEmpty ? node.id : node.name)'")
+            } else {
+                Logger.warning("⚠️ Bundled source node not found: \(nodeId)")
+            }
+        }
+
+        Logger.info("✅ Applied bundled changes for '\(item.displayName)' to \(sourceNodeIds.count) nodes")
+    }
+
+    /// Apply a value to a scalar node, matching the same field that `exportNode` reads from.
+    /// `exportNode` reads: `node.value.isEmpty ? node.name : node.value`
+    /// So we write back to the same field.
+    @MainActor
+    private static func applyValueToNode(_ node: TreeNode, value: String) {
+        if node.value.isEmpty && !node.name.isEmpty {
+            node.name = value
+        } else {
+            node.value = value
         }
     }
 

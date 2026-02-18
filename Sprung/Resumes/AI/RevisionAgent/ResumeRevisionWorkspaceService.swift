@@ -311,6 +311,29 @@ final class ResumeRevisionWorkspaceService {
         Logger.info("Exported \(nodes.count) font size nodes", category: .ai)
     }
 
+    // MARK: - Export: Title Sets
+
+    func exportTitleSets(_ titleSets: [TitleSetRecord]) throws {
+        guard let workspace = workspacePath else {
+            throw WorkspaceError.workspaceNotCreated
+        }
+
+        guard !titleSets.isEmpty else {
+            Logger.info("No title sets to export", category: .ai)
+            return
+        }
+
+        var lines: [String] = ["# Title Sets Library", ""]
+        for (index, record) in titleSets.enumerated() {
+            lines.append("\(index + 1). \(record.displayString)")
+        }
+
+        let file = workspace.appendingPathComponent("title_sets.txt")
+        try lines.joined(separator: "\n").write(to: file, atomically: true, encoding: .utf8)
+
+        Logger.info("Exported \(titleSets.count) title sets", category: .ai)
+    }
+
     // MARK: - Import: Revised Font Sizes
 
     /// Read fontsizenodes.json from the workspace and return parsed entries.

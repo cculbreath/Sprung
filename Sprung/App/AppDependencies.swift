@@ -164,7 +164,8 @@ final class AppDependencies {
             exportCoordinator: resumeExportCoordinator,
             applicantProfileStore: applicantProfileStore,
             knowledgeCardStore: knowledgeCardStore,
-            guidanceStore: guidanceStore
+            guidanceStore: guidanceStore,
+            titleSetStore: titleSetStore
         )
         self.resumeReviseViewModel = resumeReviseViewModel
         let interviewDataStore = InterviewDataStore()

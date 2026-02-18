@@ -635,7 +635,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                let templateStore,
                let knowledgeCardStore,
                let skillStore,
-               let coverRefStore {
+               let coverRefStore,
+               let titleSetStore {
                 hostingView = NSHostingView(rootView: AnyView(
                     revisionView
                         .modelContainer(modelContainer)
@@ -645,6 +646,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                         .environment(knowledgeCardStore)
                         .environment(skillStore)
                         .environment(coverRefStore)
+                        .environment(titleSetStore)
                 ))
             } else {
                 Logger.error("Missing dependencies for resume revision window", category: .ui)

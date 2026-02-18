@@ -95,10 +95,7 @@ struct ResumeDetailView: View {
 
                 ResumeAIDrawer(
                     isExpanded: $isAIDrawerExpanded,
-                    selectedTab: $tab,
                     sheets: $sheets,
-                    clarifyingQuestions: $clarifyingQuestions,
-                    showCreateResumeSheet: $showCreateResumeSheet,
                     revnodeCount: vm.rootNode?.revnodeCount ?? 0,
                     showPhaseAssignments: $showNodeGroupPhasePopover,
                     resume: vm.resume

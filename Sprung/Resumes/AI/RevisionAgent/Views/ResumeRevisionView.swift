@@ -11,6 +11,7 @@ struct ResumeRevisionView: View {
     @Environment(KnowledgeCardStore.self) private var knowledgeCardStore
     @Environment(SkillStore.self) private var skillStore
     @Environment(CoverRefStore.self) private var coverRefStore
+    @Environment(TitleSetStore.self) private var titleSetStore
     @Environment(\.modelContext) private var modelContext
 
     let resume: Resume
@@ -169,7 +170,8 @@ struct ResumeRevisionView: View {
             llmFacade: llmFacade,
             modelId: modelId,
             pdfGenerator: pdfGenerator,
-            modelContext: modelContext
+            modelContext: modelContext,
+            titleSets: titleSetStore.allTitleSets
         )
         agent = revisionAgent
 

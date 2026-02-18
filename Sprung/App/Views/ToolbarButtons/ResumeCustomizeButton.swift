@@ -10,41 +10,10 @@ struct ResumeCustomizeButton: View {
     @State private var selectedCustomizeModel = ""
     @State private var workflowTask: Task<Void, Never>?
     var body: some View {
-        Group {
-            let isBusy = isGeneratingResume || resumeReviseViewModel.isWorkflowBusy(.customize)
-            if isBusy {
-                HStack(spacing: 4) {
-                    Label("Customize", systemImage: "wand.and.rays").fontWeight(.bold).foregroundColor(.blue)
-                        .symbolEffect(.variableColor.iterative.nonReversing)
-                        .font(.system(size: 14, weight: .light))
-
-                    Button {
-                        workflowTask?.cancel()
-                        workflowTask = nil
-                        isGeneratingResume = false
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundStyle(.secondary)
-                            .font(.system(size: 14))
-                    }
-                    .buttonStyle(.plain)
-                    .help("Cancel customization")
-                }
-            } else {
-                Button(action: {
-                    selectedTab = .resume
-                    showCustomizeModelSheet = true
-                }, label: {
-                    Label("Customize", systemImage: "wand.and.sparkles")
-                        .font(.system(size: 14, weight: .light))
-                })
-                .buttonStyle(.automatic)
-                .help("Create Resume Revisions (requires nodes marked for AI revision)")
-                .disabled(jobAppStore.selectedApp == nil ||
-                          jobAppStore.selectedApp?.selectedRes?.rootNode == nil ||
-                          !(jobAppStore.selectedApp?.selectedRes?.hasUpdatableNodes == true))
-            }
-        }
+        // Headless: no visible content. Sheets and notification listeners
+        // remain in the view hierarchy for toolbar/menu-driven workflows.
+        Color.clear
+            .frame(width: 0, height: 0)
         .sheet(isPresented: $showCustomizeModelSheet) {
             ModelSelectionSheet(
                 title: "Choose Model for Resume Customization",

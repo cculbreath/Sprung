@@ -97,6 +97,9 @@ extension NSToolbarItem.Identifier {
     static let settingsItem = NSToolbarItem.Identifier("settings")
     static let applicantProfile = NSToolbarItem.Identifier("applicantProfile")
     static let ttsReadAloud = NSToolbarItem.Identifier("ttsReadAloud")
+    static let customize = NSToolbarItem.Identifier("customize")
+    static let clarifyCustomize = NSToolbarItem.Identifier("clarifyCustomize")
+    static let optimize = NSToolbarItem.Identifier("optimize")
 }
 
 // MARK: - Toolbar Coordinator
@@ -153,6 +156,7 @@ final class ToolbarCoordinator: NSObject, NSToolbarDelegate, NSToolbarItemValida
             .templateEditor,
             .flexibleSpace,
             .createResume,
+            .customize,
             .coverLetter,
             .experienceEditor,
             .analyze,
@@ -168,6 +172,9 @@ final class ToolbarCoordinator: NSObject, NSToolbarDelegate, NSToolbarItemValida
             .bestJob,
             .onboardingInterview,
             .createResume,
+            .customize,
+            .clarifyCustomize,
+            .optimize,
             .coverLetter,
             .experienceEditor,
             .resumePolish,
@@ -227,6 +234,27 @@ final class ToolbarCoordinator: NSObject, NSToolbarDelegate, NSToolbarItemValida
                 ?? NSImage(systemSymbolName: "doc.badge.plus", accessibilityDescription: "Create Resume")
             item.action = #selector(createResumeAction)
 
+        case .customize:
+            item.label = "Customize"
+            item.paletteLabel = "Customize Resume"
+            item.toolTip = "Create resume revisions (requires nodes marked for AI revision)"
+            item.image = NSImage(systemSymbolName: "wand.and.sparkles", accessibilityDescription: "Customize")
+            item.action = #selector(customizeResumeAction)
+
+        case .clarifyCustomize:
+            item.label = "Clarify & Customize"
+            item.paletteLabel = "Clarify & Customize"
+            item.toolTip = "Create resume revisions with clarifying questions"
+            item.image = NSImage(systemSymbolName: "questionmark.bubble", accessibilityDescription: "Clarify & Customize")
+            item.action = #selector(clarifyCustomizeAction)
+
+        case .optimize:
+            item.label = "Optimize"
+            item.paletteLabel = "Optimize Resume"
+            item.toolTip = "Review and optimize resume"
+            item.image = NSImage(systemSymbolName: "character.magnify", accessibilityDescription: "Optimize")
+            item.action = #selector(optimizeResumeAction)
+
         case .coverLetter:
             item.label = "Create Letter"
             item.paletteLabel = "Generate Cover Letter"
@@ -246,7 +274,7 @@ final class ToolbarCoordinator: NSObject, NSToolbarDelegate, NSToolbarItemValida
             item.label = "Polish Resume"
             item.paletteLabel = "Polish Resume"
             item.toolTip = "Polish resume with AI revision agent"
-            item.image = NSImage(systemSymbolName: "sparkles", accessibilityDescription: "Polish Resume")
+            item.image = NSImage(systemSymbolName: "bubbles.and.sparkles", accessibilityDescription: "Polish Resume")
             item.action = #selector(resumePolishAction)
 
         case .analyze:
@@ -305,6 +333,12 @@ final class ToolbarCoordinator: NSObject, NSToolbarDelegate, NSToolbarItemValida
             case .analyze:
                 return jobAppStore?.selectedApp?.selectedRes != nil
                     && jobAppStore?.selectedApp?.selectedCover?.generated == true
+            case .customize, .clarifyCustomize:
+                return navigationState?.selectedTab == .resume
+                    && jobAppStore?.selectedApp?.selectedRes?.hasUpdatableNodes == true
+            case .optimize:
+                return navigationState?.selectedTab == .resume
+                    && jobAppStore?.selectedApp?.selectedRes != nil
             case .inspector:
                 return navigationState?.selectedTab == .coverLetter
             default:
@@ -333,6 +367,18 @@ final class ToolbarCoordinator: NSObject, NSToolbarDelegate, NSToolbarItemValida
 
     @objc private func createResumeAction() {
         NotificationCenter.default.post(name: .createNewResume, object: nil)
+    }
+
+    @objc private func customizeResumeAction() {
+        NotificationCenter.default.post(name: .customizeResume, object: nil)
+    }
+
+    @objc private func clarifyCustomizeAction() {
+        NotificationCenter.default.post(name: .clarifyCustomize, object: nil)
+    }
+
+    @objc private func optimizeResumeAction() {
+        NotificationCenter.default.post(name: .optimizeResume, object: nil)
     }
 
     @objc private func coverLetterAction() {

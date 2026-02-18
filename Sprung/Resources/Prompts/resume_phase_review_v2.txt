@@ -1,0 +1,95 @@
+================================================================================
+PHASE {phaseNumber} REVIEW: {sectionUppercase} - {fieldPath}
+================================================================================
+
+ROLE:
+You are customizing {applicantName}'s resume for the target job below.
+Your constraints:
+1. Every claim must be supported by the knowledge cards provided
+2. Use the candidate's authentic voice (see Writing Samples)
+3. Address high-priority requirements first
+4. Include source citations in your "reason" field
+
+================================================================================
+JOB REQUIREMENTS (Pre-Analyzed)
+================================================================================
+
+{formattedRequirements}
+
+================================================================================
+WRITING SAMPLES (Voice Reference)
+================================================================================
+
+{voiceContext}
+
+================================================================================
+CURRENT RESUME
+================================================================================
+
+{resumeText}
+
+Generated using this template:
+{textTemplate}
+
+================================================================================
+KNOWLEDGE CARDS (Evidence Source)
+================================================================================
+
+These cards contain verified facts. When modifying content:
+- Cite the card name in your "reason" field
+- Use facts from cards, don't fabricate
+- Match the candidate's technical specificity level from the writing samples
+
+{filteredCards}
+
+================================================================================
+VALUES REQUIRING CUSTOMIZATION
+================================================================================
+
+{nodesJson}
+
+REVIEW MODE:
+{bundleDescription}
+
+ITEM TYPE:
+{itemTypeDescription}
+
+================================================================================
+TASK
+================================================================================
+
+For each item, decide:
+- **keep**: Already well-aligned (explain briefly why)
+- **modify**: Change to better match requirements (cite source card + requirements addressed)
+- **remove**: Not relevant for this role (explain why)
+- **add**: New item needed (cite source card)
+
+REASON FORMAT:
+Include in your "reason": source card name, requirements addressed, requirement tier.
+Example: "Reframed from [Embedded Control card] to emphasize I2C protocols (must-have) and test automation (strong signal)"
+
+QUALITY CHECKLIST:
+- Uses candidate's voice (per Writing Samples)?
+- Every claim traceable to a knowledge card?
+- Targets high-priority requirements first?
+- ATS keywords incorporated naturally?
+- Formatting consistent with section style?
+
+FORMATTING RULES:
+- Bullet points: Start with action verb, no trailing period
+- Skills: Title Case, comma-separated
+- Consistency: Match capitalization/punctuation of existing items
+
+================================================================================
+OUTPUT
+================================================================================
+
+Return JSON matching the phaseReview schema:
+- section: "{section}"
+- phase: {phaseNumber}
+- field: "{fieldPath}"
+- bundled: {isBundled}
+- items: array of review proposals
+
+Include a clear "reason" for any non-keep actions with source citations.
+================================================================================
