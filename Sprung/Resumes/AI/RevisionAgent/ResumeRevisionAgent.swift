@@ -1,71 +1,7 @@
-import AppKit
-import CoreGraphics
 import Foundation
 import Observation
 import SwiftOpenAI
 import SwiftData
-
-// MARK: - Agent Status
-
-enum RevisionAgentStatus: Equatable {
-    case idle
-    case running
-    case completed
-    case failed(String)
-    case cancelled
-}
-
-// MARK: - Agent Error
-
-enum RevisionAgentError: LocalizedError {
-    case noLLMFacade
-    case modelNotConfigured
-    case maxTurnsExceeded
-    case agentDidNotComplete
-    case invalidToolCall(String)
-    case toolExecutionFailed(String)
-    case timeout
-    case workspaceError(String)
-    case pdfRenderFailed(String)
-
-    var errorDescription: String? {
-        switch self {
-        case .noLLMFacade:
-            return "LLM service is not available"
-        case .modelNotConfigured:
-            return "Resume revision model is not configured in Settings"
-        case .maxTurnsExceeded:
-            return "Agent exceeded maximum number of turns without completing"
-        case .agentDidNotComplete:
-            return "Agent stopped without calling complete_revision"
-        case .invalidToolCall(let msg):
-            return "Invalid tool call: \(msg)"
-        case .toolExecutionFailed(let msg):
-            return "Tool execution failed: \(msg)"
-        case .timeout:
-            return "Agent timed out"
-        case .workspaceError(let msg):
-            return "Workspace error: \(msg)"
-        case .pdfRenderFailed(let msg):
-            return "PDF render failed: \(msg)"
-        }
-    }
-}
-
-// MARK: - Revision Message (for UI)
-
-struct RevisionMessage: Identifiable {
-    let id = UUID()
-    let role: RevisionMessageRole
-    let content: String
-    let timestamp = Date()
-}
-
-enum RevisionMessageRole {
-    case assistant
-    case user
-    case toolActivity(String) // tool name
-}
 
 // MARK: - Resume Revision Agent
 
@@ -79,6 +15,7 @@ class ResumeRevisionAgent {
     private let resume: Resume
     private let pdfGenerator: NativePDFGenerator
     private let modelContext: ModelContext
+    private let pdfRenderer: RevisionPDFRenderer
 
     // State
     private(set) var status: RevisionAgentStatus = .idle
@@ -95,7 +32,7 @@ class ResumeRevisionAgent {
     /// Task tried to read from an already-deleted workspace.
     private var shouldBuildResumeOnExit = false
     private var consecutiveNoToolTurns = 0
-    private var activeStreamTask: Task<StreamResult, Error>?
+    private var activeStreamTask: Task<RevisionAgentStreamResult, Error>?
     /// Wall-clock deadline for the session. Reset whenever the user responds to
     /// a human-in-the-loop prompt (proposal, question, completion) so idle time
     /// waiting for user input doesn't count toward the timeout.
@@ -135,6 +72,11 @@ class ResumeRevisionAgent {
         self.modelContext = modelContext
         self.workspaceService = ResumeRevisionWorkspaceService()
         self.titleSets = titleSets
+        self.pdfRenderer = RevisionPDFRenderer(
+            workspaceService: workspaceService,
+            pdfGenerator: pdfGenerator,
+            modelContext: modelContext
+        )
     }
 
     // MARK: - Public API
@@ -255,7 +197,7 @@ class ResumeRevisionAgent {
                 // When the user sends a chat message mid-stream, the stream is
                 // cancelled and tool results may never be generated, leaving
                 // tool_use IDs without matching tool_result blocks.
-                repairOrphanedToolUse()
+                AnthropicConversationRepairer.repairOrphanedToolUse(in: &conversationMessages)
 
                 // Call Anthropic
                 let parameters = AnthropicMessageParameter(
@@ -274,10 +216,10 @@ class ResumeRevisionAgent {
 
                 // Process stream in a child task so it can be cancelled by
                 // sendUserMessage() or the per-turn timeout.
-                let streamTask = Task { @MainActor [weak self] () -> StreamResult in
-                    guard let self else { return StreamResult() }
+                let streamTask = Task { @MainActor [weak self] () -> RevisionAgentStreamResult in
+                    guard let self else { return RevisionAgentStreamResult() }
                     var processor = RevisionStreamProcessor()
-                    var result = StreamResult()
+                    var result = RevisionAgentStreamResult()
 
                     for try await event in stream {
                         try Task.checkCancellation()
@@ -315,21 +257,21 @@ class ResumeRevisionAgent {
                     Logger.warning("RevisionAgent: Turn \(turnCount) stream timed out", category: .ai)
                 }
 
-                var streamResult: StreamResult
+                var streamResult: RevisionAgentStreamResult
                 var streamWasInterrupted = false
 
                 do {
                     streamResult = try await streamTask.value
                 } catch is CancellationError {
                     // Stream was interrupted by user message, timeout, or cancel
-                    streamResult = StreamResult()
+                    streamResult = RevisionAgentStreamResult()
                     streamWasInterrupted = !isCancelled
                     if streamWasInterrupted {
                         Logger.info("RevisionAgent: Stream interrupted on turn \(turnCount)", category: .ai)
                     }
                 } catch {
                     // Stream threw a real error — treat as interrupted
-                    streamResult = StreamResult()
+                    streamResult = RevisionAgentStreamResult()
                     streamWasInterrupted = true
                     Logger.error("RevisionAgent: Stream error on turn \(turnCount): \(error.localizedDescription)", category: .ai)
                 }
@@ -460,7 +402,7 @@ class ResumeRevisionAgent {
                 // single render avoids sending N duplicate image sets.
                 var trailingImageBlocks: [AnthropicContentBlock] = []
                 if hadWriteCall, let pdfData = latestPDFData {
-                    trailingImageBlocks = renderPDFPageImages(pdfData)
+                    trailingImageBlocks = pdfRenderer.renderPDFPageImages(pdfData)
                 }
 
                 // All tool_result blocks first, then images
@@ -620,19 +562,12 @@ class ResumeRevisionAgent {
         ]
     }
 
-    // MARK: - Stream Result
+    // MARK: - Tool Execution Result
 
     /// Result from executing a tool.
     private struct ToolExecutionResult {
         let text: String
         var isError: Bool = false
-    }
-
-    /// Accumulated output from a single stream processing turn.
-    private struct StreamResult {
-        var textBlocks: [AnthropicContentBlock] = []
-        var toolCallBlocks: [AnthropicContentBlock] = []
-        var toolCalls: [RevisionStreamProcessor.ToolCallInfo] = []
     }
 
     // MARK: - Tool Execution
@@ -671,7 +606,8 @@ class ResumeRevisionAgent {
                 let result = try WriteJsonFileTool.execute(parameters: params, repoRoot: workspacePath)
                 // Auto-render for the live preview pane (no images for LLM yet —
                 // a single set of page images is appended after all tools complete)
-                let renderInfo = await autoRenderResume()
+                let renderInfo = await pdfRenderer.autoRenderResume(from: resume)
+                latestPDFData = renderInfo.pdfData
                 let text = "{\"success\": true, \"path\": \"\(result.path)\", \"itemCount\": \(result.itemCount), \"pageCount\": \(renderInfo.pageCount), \"renderSuccess\": \(renderInfo.success)}"
                 return ToolExecutionResult(text: text)
 
@@ -690,117 +626,6 @@ class ResumeRevisionAgent {
             Logger.error("RevisionAgent tool error (\(name)): \(error.localizedDescription)", category: .ai)
             return ToolExecutionResult(text: "Error: \(error.localizedDescription)", isError: true)
         }
-    }
-
-    // MARK: - Auto-Render
-
-    private struct RenderInfo {
-        let success: Bool
-        let pageCount: Int
-        let pdfData: Data?
-    }
-
-    /// Re-render the resume PDF from current workspace state and publish to the preview pane.
-    /// Called automatically after every `write_json_file`.
-    private func autoRenderResume() async -> RenderInfo {
-        guard let workspacePath = workspaceService.workspacePath else {
-            return RenderInfo(success: false, pageCount: 0, pdfData: nil)
-        }
-
-        do {
-            let revisedNodes = try workspaceService.importRevisedTreeNodes()
-            let revisedFontSizes = try workspaceService.importRevisedFontSizes()
-
-            let tempResume = workspaceService.buildNewResume(
-                from: resume,
-                revisedNodes: revisedNodes,
-                revisedFontSizes: revisedFontSizes,
-                context: modelContext
-            )
-
-            let slug = resume.template?.slug ?? "default"
-            let pdfData = try await pdfGenerator.generatePDF(for: tempResume, template: slug)
-
-            // Write to workspace (so read_file can access it too)
-            let pdfPath = workspacePath.appendingPathComponent("resume.pdf")
-            try pdfData.write(to: pdfPath)
-
-            let pageCount = countPDFPages(pdfData)
-
-            // Publish to preview pane
-            latestPDFData = pdfData
-
-            // Clean up temp resume
-            modelContext.delete(tempResume)
-
-            Logger.info("RevisionAgent: Auto-rendered PDF (\(pdfData.count) bytes, \(pageCount) pages)", category: .ai)
-            return RenderInfo(success: true, pageCount: pageCount, pdfData: pdfData)
-        } catch {
-            Logger.error("RevisionAgent: Auto-render failed: \(error.localizedDescription)", category: .ai)
-            return RenderInfo(success: false, pageCount: 0, pdfData: nil)
-        }
-    }
-
-    private func countPDFPages(_ data: Data) -> Int {
-        guard let provider = CGDataProvider(data: data as CFData),
-              let document = CGPDFDocument(provider) else {
-            return 0
-        }
-        return document.numberOfPages
-    }
-
-    /// Render each page of a PDF to a JPEG image and return as Anthropic image content blocks.
-    private func renderPDFPageImages(_ pdfData: Data) -> [AnthropicContentBlock] {
-        guard let provider = CGDataProvider(data: pdfData as CFData),
-              let document = CGPDFDocument(provider) else {
-            return []
-        }
-
-        var blocks: [AnthropicContentBlock] = []
-        let scale: CGFloat = 2.0 // 2x for readable text
-
-        for pageIndex in 1...document.numberOfPages {
-            guard let page = document.page(at: pageIndex) else { continue }
-            let mediaBox = page.getBoxRect(.mediaBox)
-            let width = Int(mediaBox.width * scale)
-            let height = Int(mediaBox.height * scale)
-
-            guard let colorSpace = CGColorSpace(name: CGColorSpace.sRGB),
-                  let context = CGContext(
-                      data: nil,
-                      width: width,
-                      height: height,
-                      bitsPerComponent: 8,
-                      bytesPerRow: 0,
-                      space: colorSpace,
-                      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-                  ) else { continue }
-
-            // White background
-            context.setFillColor(CGColor(red: 1, green: 1, blue: 1, alpha: 1))
-            context.fill(CGRect(x: 0, y: 0, width: width, height: height))
-
-            // Scale and draw
-            context.scaleBy(x: scale, y: scale)
-            context.drawPDFPage(page)
-
-            guard let cgImage = context.makeImage() else { continue }
-
-            let nsImage = NSImage(cgImage: cgImage, size: NSSize(width: width, height: height))
-            guard let tiffData = nsImage.tiffRepresentation,
-                  let bitmap = NSBitmapImageRep(data: tiffData),
-                  let jpegData = bitmap.representation(using: .jpeg, properties: [.compressionFactor: 0.8]) else {
-                continue
-            }
-
-            let base64 = jpegData.base64EncodedString()
-            let imageSource = AnthropicImageSource(mediaType: "image/jpeg", data: base64)
-            let imageBlock = AnthropicImageBlock(source: imageSource)
-            blocks.append(.image(imageBlock))
-        }
-
-        Logger.info("RevisionAgent: Rendered \(blocks.count) PDF page image(s) for agent preview", category: .ai)
-        return blocks
     }
 
     // MARK: - Human-in-the-Loop Tools
@@ -928,97 +753,6 @@ class ResumeRevisionAgent {
         }
     }
 
-    // MARK: - Conversation Repair
-
-    /// Scan conversation for assistant messages containing tool_use blocks whose
-    /// IDs are not answered by a tool_result in the immediately following user message.
-    /// Inject synthetic "cancelled" tool_result blocks so the API accepts the history.
-    private func repairOrphanedToolUse() {
-        var repaired = false
-        var i = 0
-        while i < conversationMessages.count {
-            let msg = conversationMessages[i]
-            guard msg.role == "assistant" else { i += 1; continue }
-
-            // Collect tool_use IDs from this assistant message
-            let toolUseIds: [String]
-            switch msg.content {
-            case .text:
-                i += 1; continue
-            case .blocks(let blocks):
-                toolUseIds = blocks.compactMap { block in
-                    if case .toolUse(let tu) = block { return tu.id }
-                    return nil
-                }
-            }
-            guard !toolUseIds.isEmpty else { i += 1; continue }
-
-            // Gather tool_result IDs from the next user message (if it exists)
-            let answeredIds: Set<String>
-            if i + 1 < conversationMessages.count,
-               conversationMessages[i + 1].role == "user" {
-                switch conversationMessages[i + 1].content {
-                case .text:
-                    answeredIds = []
-                case .blocks(let blocks):
-                    answeredIds = Set(blocks.compactMap { block in
-                        if case .toolResult(let tr) = block { return tr.toolUseId }
-                        return nil
-                    })
-                }
-            } else {
-                answeredIds = []
-            }
-
-            let orphaned = toolUseIds.filter { !answeredIds.contains($0) }
-            guard !orphaned.isEmpty else { i += 1; continue }
-
-            // Build synthetic tool_result blocks for orphaned IDs
-            let syntheticBlocks: [AnthropicContentBlock] = orphaned.map { id in
-                .toolResult(AnthropicToolResultBlock(
-                    toolUseId: id,
-                    content: "{\"cancelled\": true, \"reason\": \"Request interrupted by user\"}",
-                    isError: true
-                ))
-            }
-
-            if i + 1 < conversationMessages.count,
-               conversationMessages[i + 1].role == "user" {
-                // Prepend synthetic results into the existing user message
-                switch conversationMessages[i + 1].content {
-                case .text(let text):
-                    var blocks = syntheticBlocks
-                    blocks.append(.text(AnthropicTextBlock(text: text)))
-                    conversationMessages[i + 1] = AnthropicMessage(
-                        role: "user", content: .blocks(blocks)
-                    )
-                case .blocks(var blocks):
-                    blocks.insert(contentsOf: syntheticBlocks, at: 0)
-                    conversationMessages[i + 1] = AnthropicMessage(
-                        role: "user", content: .blocks(blocks)
-                    )
-                }
-            } else {
-                // No user message follows — insert one with the synthetic results
-                conversationMessages.insert(
-                    AnthropicMessage(role: "user", content: .blocks(syntheticBlocks)),
-                    at: i + 1
-                )
-            }
-
-            Logger.warning(
-                "RevisionAgent: Repaired \(orphaned.count) orphaned tool_use ID(s) at message \(i)",
-                category: .ai
-            )
-            repaired = true
-            i += 2 // skip both the assistant and the (now-repaired) user message
-        }
-
-        if repaired {
-            Logger.info("RevisionAgent: Conversation repaired before API call", category: .ai)
-        }
-    }
-
     // MARK: - Message Helpers
 
     private func appendOrUpdateAssistantMessage(_ delta: String) {
@@ -1122,7 +856,7 @@ class ResumeRevisionAgent {
         turn: Int,
         messageCount: Int,
         toolNames: [String],
-        result: StreamResult,
+        result: RevisionAgentStreamResult,
         interrupted: Bool,
         durationMs: Int
     ) {

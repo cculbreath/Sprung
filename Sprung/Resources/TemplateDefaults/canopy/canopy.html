@@ -215,7 +215,7 @@
           {{#hasContent(basics.location.city, basics.location.region)}}<div class="contact-item"><span class="contact-dot"></span>{{basics.location.city}}{{#hasContent(basics.location.region)}}, {{basics.location.region}}{{/hasContent(basics.location.region)}}</div>{{/hasContent(basics.location.city, basics.location.region)}}
           {{#hasContent(basics.email)}}<div class="contact-item"><span class="contact-dot"></span>{{{basics.email}}}</div>{{/hasContent(basics.email)}}
           {{#hasContent(basics.phone)}}<div class="contact-item"><span class="contact-dot"></span>{{basics.phone}}</div>{{/hasContent(basics.phone)}}
-          {{#hasContent(basics.url)}}<div class="contact-item"><span class="contact-dot"></span>{{{basics.url}}}</div>{{/hasContent(basics.url)}}
+          {{#hasContent(basics.url)}}<div class="contact-item"><span class="contact-dot"></span><a href="{{{basics.url}}}">{{{basics.url}}}</a></div>{{/hasContent(basics.url)}}
         </div>
       </header>
 

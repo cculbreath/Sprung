@@ -276,12 +276,9 @@ final class UIStateUpdateHandler {
         let step = await state.currentWizardStep
         let completed = await state.completedWizardSteps
         ui.updateWizardProgress(step: step, completed: completed)
-        // Sync WizardTracker for View binding
-        if let trackerStep = OnboardingWizardStep(rawValue: step.rawValue) {
-            let trackerCompleted = Set(completed.compactMap { OnboardingWizardStep(rawValue: $0.rawValue) })
-            await MainActor.run {
-                wizardTracker.synchronize(currentStep: trackerStep, completedSteps: trackerCompleted)
-            }
+        // Sync WizardTracker for View binding (direct assignment, no bridging needed)
+        await MainActor.run {
+            wizardTracker.synchronize(currentStep: step, completedSteps: completed)
         }
     }
     // MARK: - Initial State Sync

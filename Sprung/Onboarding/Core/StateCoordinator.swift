@@ -50,19 +50,11 @@ actor StateCoordinator: OnboardingEventEmitter {
     private(set) var userApprovedKCSkip: Bool = false
 
     // MARK: - Wizard Progress (Computed from ObjectiveStore)
-    /// Wizard steps that correspond to the 4-phase interview structure
-    enum WizardStep: String, CaseIterable {
-        case voice      // Phase 1: Voice & Context
-        case story      // Phase 2: Career Story
-        case evidence   // Phase 3: Evidence Collection
-        case strategy   // Phase 4: Strategic Synthesis
-    }
-    private(set) var currentWizardStep: WizardStep = .voice
-    private(set) var completedWizardSteps: Set<WizardStep> = []
+    private(set) var currentWizardStep: OnboardingWizardStep = .voice
+    private(set) var completedWizardSteps: Set<OnboardingWizardStep> = []
 
-    // MARK: - Tool Response Batching
-    // Collects tool response payloads until all ConversationLog slots are filled
-    private var collectedToolResponsePayloads: [JSON] = []
+    // MARK: - Tool Response Batching (Delegated to ToolResponseBatchCoordinator)
+    private let toolResponseBatchCoordinator: ToolResponseBatchCoordinator
 
     // MARK: - Stream Queue (Delegated to StreamQueueManager)
     // StreamQueueManager handles serial LLM streaming (simplified - no tool tracking)
@@ -95,6 +87,12 @@ actor StateCoordinator: OnboardingEventEmitter {
         // New architecture: ConversationLog with OperationTracker (injected)
         self.operationTracker = operationTracker
         self.conversationLog = conversationLog
+
+        // Internal coordinator for tool response batching
+        self.toolResponseBatchCoordinator = ToolResponseBatchCoordinator(
+            conversationLog: conversationLog,
+            streamQueueManager: self.streamQueueManager
+        )
 
         Logger.info("🎯 StateCoordinator initialized (orchestrator mode with injected services)", category: .ai)
     }
@@ -390,48 +388,11 @@ actor StateCoordinator: OnboardingEventEmitter {
             await llmStateManager.queueCoordinatorMessage(payload)
             Logger.debug("📥 Developer message queued (awaiting user action)", category: .ai)
         case .llm(.toolCallBatchStarted(let expectedCount, let callIds)):
-            // Reset collected payloads for new batch
-            // ConversationLog already has slots created via appendAssistant
-            collectedToolResponsePayloads = []
-            Logger.info("📦 Tool call batch started: expecting \(expectedCount) responses, callIds: \(callIds.map { String($0.prefix(8)) })", category: .ai)
+            await toolResponseBatchCoordinator.batchStarted(expectedCount: expectedCount, callIds: callIds)
         case .llm(.enqueueToolResponse(let payload)):
-            // Collect the payload
-            collectedToolResponsePayloads.append(payload)
-            let callId = payload["callId"].stringValue
-            Logger.info("📦 Tool response collected: \(callId.prefix(8)) (total: \(collectedToolResponsePayloads.count))", category: .ai)
-
-            // Check if all ConversationLog slots are filled (including UI tool slots)
-            let hasPending = await conversationLog.hasPendingToolCalls
-            if !hasPending {
-                // All slots filled - send the batch
-                let payloadsToSend = collectedToolResponsePayloads
-                collectedToolResponsePayloads = []
-                if payloadsToSend.count == 1 {
-                    await streamQueueManager.enqueue(.toolResponse(payload: payloadsToSend[0]))
-                    Logger.info("📦 Single tool response enqueued", category: .ai)
-                } else if payloadsToSend.count > 1 {
-                    await streamQueueManager.enqueue(.batchedToolResponses(payloads: payloadsToSend))
-                    Logger.info("📦 Batched tool responses enqueued (\(payloadsToSend.count) responses)", category: .ai)
-                }
-            } else {
-                Logger.debug("📦 Holding tool response - waiting for more slots to fill", category: .ai)
-            }
+            await toolResponseBatchCoordinator.payloadReceived(payload)
         case .llm(.toolResultFilled):
-            // Tool slot filled in ConversationLog - check if we can release held payloads
-            if !collectedToolResponsePayloads.isEmpty {
-                let hasPending = await conversationLog.hasPendingToolCalls
-                if !hasPending {
-                    let payloadsToSend = collectedToolResponsePayloads
-                    collectedToolResponsePayloads = []
-                    if payloadsToSend.count == 1 {
-                        await streamQueueManager.enqueue(.toolResponse(payload: payloadsToSend[0]))
-                        Logger.info("📦 Single tool response released after slot fill", category: .ai)
-                    } else if payloadsToSend.count > 1 {
-                        await streamQueueManager.enqueue(.batchedToolResponses(payloads: payloadsToSend))
-                        Logger.info("📦 Batched tool responses released after slot fill (\(payloadsToSend.count) responses)", category: .ai)
-                    }
-                }
-            }
+            await toolResponseBatchCoordinator.slotFilled()
         case .llm(.streamCompleted):
             // Handle stream completion via event to ensure proper ordering with tool call events
             await streamQueueManager.handleStreamCompleted()
@@ -683,7 +644,7 @@ actor StateCoordinator: OnboardingEventEmitter {
         phase = .phase1VoiceContext
         currentWizardStep = .voice
         completedWizardSteps.removeAll()
-        collectedToolResponsePayloads = []
+        await toolResponseBatchCoordinator.reset()
         // Reset all services
         await objectiveStore.reset()
         await artifactRepository.reset()

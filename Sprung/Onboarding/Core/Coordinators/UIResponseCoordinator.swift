@@ -195,15 +195,96 @@ final class UIResponseCoordinator {
         completeUITool(toolName: OnboardingToolName.getUserUpload.rawValue, result: result)
         Logger.info("✅ Upload skipped", category: .ai)
     }
+    // MARK: - Validation Response (Core Logic)
+
+    /// Process a validation response: emit events, mark objectives, and prompt next steps.
+    /// This contains the full logic previously in OnboardingInterviewCoordinator.submitValidationResponse.
+    func submitValidationResponse(
+        status: String,
+        updatedData: JSON?,
+        changes: JSON?,
+        notes: String?
+    ) async -> JSON? {
+        let pendingValidation = toolRouter.pendingValidationPrompt
+
+        // Emit knowledge card persisted event for in-memory tracking
+        if let validation = pendingValidation,
+           validation.dataType == "knowledge_card",
+           let data = updatedData,
+           data != .null,
+           ["approved", "modified"].contains(status.lowercased()) {
+            await eventBus.publish(.artifact(.knowledgeCardPersisted(card: data)))
+        }
+
+        let result = toolRouter.submitValidationResponse(
+            status: status,
+            updatedData: updatedData,
+            changes: changes,
+            notes: notes
+        )
+
+        if result != nil {
+            Task {
+                await eventBus.publish(.toolpane(.validationPromptCleared))
+            }
+            // Mark skeleton_timeline objective as complete when user confirms validation
+            if let validation = pendingValidation,
+               validation.dataType == "skeleton_timeline",
+               ["confirmed", "confirmed_with_changes", "approved", "modified"].contains(status.lowercased()) {
+                await eventBus.publish(.objective(.statusUpdateRequested(
+                    id: OnboardingObjectiveId.skeletonTimelineComplete.rawValue,
+                    status: "completed",
+                    source: "ui_timeline_validated",
+                    notes: "Timeline validated by user",
+                    details: nil
+                )))
+                Logger.debug("✅ skeleton_timeline_complete objective marked complete after validation", category: .ai)
+
+                // Prompt for configure_enabled_sections as next step
+                // next_phase will be ungated when enabledSections objective completes
+                var payload = JSON()
+                payload["text"].string = """
+                    Timeline approved. Now configure which resume sections to include. \
+                    Call configure_enabled_sections with recommendations based on user's background.
+                    """
+                await eventBus.publish(.llm(.sendCoordinatorMessage(payload: payload)))
+                Logger.info("📋 Prompting configure_enabled_sections after timeline validation", category: .ai)
+            }
+
+            // Mark section_cards objective as complete when user confirms validation
+            if let validation = pendingValidation,
+               validation.dataType == "section_cards",
+               ["confirmed", "confirmed_with_changes", "approved", "modified"].contains(status.lowercased()) {
+                await eventBus.publish(.objective(.statusUpdateRequested(
+                    id: OnboardingObjectiveId.sectionCardsComplete.rawValue,
+                    status: "completed",
+                    source: "ui_section_cards_validated",
+                    notes: "Section cards validated by user",
+                    details: nil
+                )))
+                Logger.debug("✅ section_cards_complete objective marked complete after validation", category: .ai)
+
+                // Prompt for next_phase as next step
+                var payload = JSON()
+                payload["text"].string = """
+                    Section cards approved. Phase 2 is now complete. \
+                    Call next_phase to advance to Phase 3 (Evidence Collection).
+                    """
+                await eventBus.publish(.llm(.sendCoordinatorMessage(payload: payload)))
+                Logger.info("📋 Prompting next_phase after section cards validation", category: .ai)
+            }
+        }
+        return result
+    }
+
     // MARK: - Validation Handling
     func submitValidationAndResume(
         status: String,
         updatedData: JSON?,
         changes: JSON?,
-        notes: String?,
-        coordinator: OnboardingInterviewCoordinator
+        notes: String?
     ) async {
-        guard await coordinator.submitValidationResponse(status: status, updatedData: updatedData, changes: changes, notes: notes) != nil else { return }
+        guard await submitValidationResponse(status: status, updatedData: updatedData, changes: changes, notes: notes) != nil else { return }
 
         // Map status values from UI buttons to normalized status
         let statusDescription: String
@@ -728,6 +809,39 @@ final class UIResponseCoordinator {
                 uploadStorage.removeFile(at: item.storageURL)
             }
         }
+    }
+
+    // MARK: - UI Tool Interruption
+
+    /// Interrupt all pending UI tools, dismissing their UIs and returning cancelled results.
+    /// Called when user presses interrupt button or escape key.
+    func interruptPendingUITools() {
+        guard continuationManager.hasPendingTools else {
+            Logger.info("🛑 Interrupt requested but no pending UI tools", category: .ai)
+            return
+        }
+
+        // Clear any visible UI prompts
+        toolRouter.clearChoicePrompt()
+        toolRouter.clearValidationPrompt()
+        toolRouter.clearPendingUploadRequests()
+        toolRouter.clearSectionToggle()
+
+        // Emit events to update UI state
+        // Note: uploadRequestCancelled requires an ID but handler ignores it for clearing state
+        Task {
+            await eventBus.publish(.toolpane(.choicePromptCleared))
+            await eventBus.publish(.toolpane(.validationPromptCleared))
+            for request in toolRouter.pendingUploadRequests {
+                await eventBus.publish(.toolpane(.uploadRequestCancelled(id: request.id)))
+            }
+            await eventBus.publish(.toolpane(.sectionToggleCleared))
+            await eventBus.publish(.toolpane(.applicantProfileIntakeCleared))
+        }
+
+        // Resume all continuations with cancelled result
+        continuationManager.interruptAll()
+        Logger.info("🛑 Pending UI tools interrupted by user", category: .ai)
     }
 
     // MARK: - Timeline Handling

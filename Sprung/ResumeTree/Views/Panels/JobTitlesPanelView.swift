@@ -59,6 +59,16 @@ struct JobTitlesPanelView: View {
             ForEach(titleChildren, id: \.id) { child in
                 NodeLeafView(node: child)
             }
+
+            if sectionNode.allowsChildAddition {
+                Button(action: { vm.addChild(to: sectionNode) }) {
+                    Label("Add Title", systemImage: "plus")
+                        .font(.subheadline)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+                .padding(.top, 4)
+            }
         }
         .padding(12)
         .background(Color(.windowBackgroundColor).opacity(0.5))

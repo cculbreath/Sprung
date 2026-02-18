@@ -118,3 +118,16 @@ enum TimelineDiffBuilder {
         return preferred
     }
 }
+
+// MARK: - TimelineDiff Summary Extension
+
+extension TimelineDiff {
+    var summary: String {
+        var parts: [String] = []
+        if !added.isEmpty { parts.append("\(added.count) added") }
+        if !removed.isEmpty { parts.append("\(removed.count) removed") }
+        if !updated.isEmpty { parts.append("\(updated.count) updated") }
+        if reordered { parts.append("reordered") }
+        return parts.isEmpty ? "no changes" : parts.joined(separator: ", ")
+    }
+}

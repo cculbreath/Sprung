@@ -153,6 +153,94 @@ final class LLMFacadeSpecializedAPIs {
         return try await service.listModels()
     }
 
+    /// Execute a text prompt via direct Anthropic API with prompt caching.
+    /// Builds the request parameters, drives the streaming event loop, and returns the accumulated text.
+    func executeTextWithAnthropicCaching(
+        systemContent: [AnthropicSystemBlock],
+        userPrompt: String,
+        modelId: String
+    ) async throws -> String {
+        let parameters = AnthropicMessageParameter(
+            model: modelId,
+            messages: [.user(userPrompt)],
+            system: .blocks(systemContent),
+            maxTokens: 4096,
+            stream: false
+        )
+
+        let stream = try await anthropicMessagesStream(parameters: parameters)
+        var resultText = ""
+
+        for try await event in stream {
+            switch event {
+            case .contentBlockDelta(let delta):
+                if case .textDelta(let text) = delta.delta {
+                    resultText += text
+                }
+            case .messageStop:
+                break
+            default:
+                break
+            }
+        }
+
+        Logger.info("Anthropic cached request completed: \(resultText.count) chars", category: .ai)
+        return resultText
+    }
+
+    /// Execute a structured JSON request via direct Anthropic API with prompt caching and schema enforcement.
+    /// Builds the request parameters, drives the streaming event loop, decodes the result, and returns the parsed object.
+    func executeStructuredWithAnthropicCaching<T: Codable>(
+        systemContent: [AnthropicSystemBlock],
+        userPrompt: String,
+        modelId: String,
+        responseType: T.Type,
+        schema: [String: Any]
+    ) async throws -> T {
+        let outputFormat = AnthropicOutputFormat.schema(
+            schema: schema
+        )
+
+        let parameters = AnthropicMessageParameter(
+            model: modelId,
+            messages: [.user(userPrompt)],
+            system: .blocks(systemContent),
+            maxTokens: 4096,
+            stream: false,
+            outputFormat: outputFormat
+        )
+
+        let stream = try await anthropicMessagesStream(parameters: parameters)
+        var resultText = ""
+
+        for try await event in stream {
+            switch event {
+            case .contentBlockDelta(let delta):
+                if case .textDelta(let text) = delta.delta {
+                    resultText += text
+                }
+            case .messageStop:
+                break
+            default:
+                break
+            }
+        }
+
+        Logger.info("Anthropic structured request completed: \(resultText.count) chars", category: .ai)
+
+        guard let data = resultText.data(using: .utf8) else {
+            throw LLMError.clientError("Failed to convert Anthropic response to data")
+        }
+
+        do {
+            return try JSONDecoder().decode(T.self, from: data)
+        } catch {
+            Logger.warning("Failed to parse Anthropic structured response as \(T.self): \(error)", category: .ai)
+            Logger.debug("Response was: \(resultText.prefix(500))", category: .ai)
+            throw LLMError.clientError("Failed to parse structured response: \(error.localizedDescription)")
+        }
+    }
+
     // MARK: - Gemini Vision & Documents
 
     func generateFromPDF(

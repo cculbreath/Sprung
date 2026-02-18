@@ -211,7 +211,7 @@ struct DocumentCollectionView: View {
                 .font(.caption.weight(.medium))
                 .foregroundStyle(.secondary)
 
-            FlowLayout(spacing: 6) {
+            FlowStack(spacing: 6) {
                 ForEach(suggestedDocTypes, id: \.self) { docType in
                     Text(docType)
                         .font(.caption2)
@@ -311,49 +311,6 @@ struct DocumentCollectionView: View {
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
         }
-    }
-}
-
-// MARK: - Flow Layout
-
-private struct FlowLayout: Layout {
-    var spacing: CGFloat = 8
-
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let sizes = subviews.map { $0.sizeThatFits(.unspecified) }
-        return layout(sizes: sizes, containerWidth: proposal.width ?? .infinity).size
-    }
-
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        let sizes = subviews.map { $0.sizeThatFits(.unspecified) }
-        let offsets = layout(sizes: sizes, containerWidth: bounds.width).offsets
-
-        for (subview, offset) in zip(subviews, offsets) {
-            subview.place(at: CGPoint(x: bounds.minX + offset.x, y: bounds.minY + offset.y), proposal: .unspecified)
-        }
-    }
-
-    private func layout(sizes: [CGSize], containerWidth: CGFloat) -> (offsets: [CGPoint], size: CGSize) {
-        var offsets: [CGPoint] = []
-        var currentX: CGFloat = 0
-        var currentY: CGFloat = 0
-        var lineHeight: CGFloat = 0
-        var maxWidth: CGFloat = 0
-
-        for size in sizes {
-            if currentX + size.width > containerWidth && currentX > 0 {
-                currentX = 0
-                currentY += lineHeight + spacing
-                lineHeight = 0
-            }
-
-            offsets.append(CGPoint(x: currentX, y: currentY))
-            lineHeight = max(lineHeight, size.height)
-            currentX += size.width + spacing
-            maxWidth = max(maxWidth, currentX)
-        }
-
-        return (offsets, CGSize(width: maxWidth, height: currentY + lineHeight))
     }
 }
 

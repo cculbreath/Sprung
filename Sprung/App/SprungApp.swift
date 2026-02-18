@@ -77,24 +77,25 @@ struct SprungApp: App {
                 .environment(appDependencies.focusState)
                 .environment(appDependencies.windowCoordinator)
                 .onAppear {
-                    // Pass environment and dependencies to AppDelegate for windows
-                    appDelegate.appEnvironment = appEnvironment
-                    appDelegate.modelContainer = modelContainer
-                    appDelegate.enabledLLMStore = appDependencies.enabledLLMStore
-                    appDelegate.applicantProfileStore = appDependencies.applicantProfileStore
-                    appDelegate.experienceDefaultsStore = appDependencies.experienceDefaultsStore
-                    appDelegate.careerKeywordStore = appDependencies.careerKeywordStore
-                    appDelegate.guidanceStore = appDependencies.guidanceStore
-                    appDelegate.onboardingCoordinator = appDependencies.onboardingCoordinator
-                    appDelegate.searchOpsCoordinator = appDependencies.searchOpsCoordinator
-                    appDelegate.coverRefStore = appDependencies.coverRefStore
-                    appDelegate.knowledgeCardStore = appDependencies.knowledgeCardStore
-                    appDelegate.skillStore = appDependencies.skillStore
-                    appDelegate.titleSetStore = appDependencies.titleSetStore
-                    appDelegate.candidateDossierStore = appDependencies.candidateDossierStore
-                    appDelegate.jobAppStore = appDependencies.jobAppStore
-                    appDelegate.templateStore = appDependencies.templateStore
-                    appDelegate.backgroundActivityTracker = appDependencies.backgroundActivityTracker
+                    // Pass environment and dependencies to window manager for secondary windows
+                    let wm = appDelegate.windowManager
+                    wm.appEnvironment = appEnvironment
+                    wm.modelContainer = modelContainer
+                    wm.enabledLLMStore = appDependencies.enabledLLMStore
+                    wm.applicantProfileStore = appDependencies.applicantProfileStore
+                    wm.experienceDefaultsStore = appDependencies.experienceDefaultsStore
+                    wm.careerKeywordStore = appDependencies.careerKeywordStore
+                    wm.guidanceStore = appDependencies.guidanceStore
+                    wm.onboardingCoordinator = appDependencies.onboardingCoordinator
+                    wm.searchOpsCoordinator = appDependencies.searchOpsCoordinator
+                    wm.coverRefStore = appDependencies.coverRefStore
+                    wm.knowledgeCardStore = appDependencies.knowledgeCardStore
+                    wm.skillStore = appDependencies.skillStore
+                    wm.titleSetStore = appDependencies.titleSetStore
+                    wm.candidateDossierStore = appDependencies.candidateDossierStore
+                    wm.jobAppStore = appDependencies.jobAppStore
+                    wm.templateStore = appDependencies.templateStore
+                    wm.backgroundActivityTracker = appDependencies.backgroundActivityTracker
                     appDelegate.setupMainWindowToolbar()
                 }
         }

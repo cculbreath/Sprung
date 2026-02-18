@@ -1,7 +1,5 @@
-import AppKit
 import SwiftyJSON
 import SwiftUI
-import UniformTypeIdentifiers
 struct OnboardingInterviewToolPane: View {
     @Environment(ApplicantProfileStore.self) private var applicantProfileStore
     @Environment(ExperienceDefaultsStore.self) private var experienceDefaultsStore
@@ -116,7 +114,10 @@ struct OnboardingInterviewToolPane: View {
             guard !urls.isEmpty else { return }
 
             // Route based on context
-            let pendingUploads = uploadRequests()
+            let pendingUploads = ToolPaneUploadHandler.uploadRequests(
+                for: coordinator.wizardTracker.currentStep,
+                pending: coordinator.pendingUploadRequests
+            )
             if let uploadRequest = pendingUploads.first {
                 // Complete the pending upload request
                 Task {
@@ -197,7 +198,10 @@ struct OnboardingInterviewToolPane: View {
 
     @ViewBuilder
     private var interviewTabMainContent: some View {
-        let uploads = uploadRequests()
+        let uploads = ToolPaneUploadHandler.uploadRequests(
+            for: coordinator.wizardTracker.currentStep,
+            pending: coordinator.pendingUploadRequests
+        )
         if !uploads.isEmpty {
             uploadRequestsView(uploads)
         } else if let intake = coordinator.pendingApplicantProfileIntake {
@@ -330,7 +334,11 @@ struct OnboardingInterviewToolPane: View {
                     onDropFiles: { urls in
                         Task { await coordinator.uploadFilesDirectly(urls) }
                     },
-                    onSelectFiles: { openDirectUploadPanel() },
+                    onSelectFiles: {
+                        ToolPaneUploadHandler.openDirectUploadPanel { urls in
+                            Task { await coordinator.uploadFilesDirectly(urls) }
+                        }
+                    },
                     onSelectGitRepo: { repoURL in
                         Task { await coordinator.startGitRepoAnalysis(repoURL) }
                     },
@@ -376,7 +384,11 @@ struct OnboardingInterviewToolPane: View {
                     onDropFiles: { urls in
                         Task { await coordinator.uploadFilesDirectly(urls) }
                     },
-                    onSelectFiles: { openDirectUploadPanel() },
+                    onSelectFiles: {
+                        ToolPaneUploadHandler.openDirectUploadPanel { urls in
+                            Task { await coordinator.uploadFilesDirectly(urls) }
+                        }
+                    },
                     onSelectGitRepo: { repoURL in
                         Task { await coordinator.startGitRepoAnalysis(repoURL) }
                     },
@@ -408,7 +420,11 @@ struct OnboardingInterviewToolPane: View {
             // Drop handling is done by the pane-level drop zone
             Phase1WritingSampleView(
                 coordinator: coordinator,
-                onSelectFiles: { openWritingSamplePanel() },
+                onSelectFiles: {
+                    ToolPaneUploadHandler.openWritingSamplePanel { urls in
+                        Task { await coordinator.uploadWritingSamples(urls) }
+                    }
+                },
                 onDoneWithSamples: {
                     Task { await coordinator.completeWritingSamplesCollection() }
                 },
@@ -426,44 +442,6 @@ struct OnboardingInterviewToolPane: View {
         }
     }
 
-    private func openWritingSamplePanel() {
-        let panel = NSOpenPanel()
-        panel.allowsMultipleSelection = true
-        panel.canChooseDirectories = false
-        panel.allowedContentTypes = [
-            UTType.pdf,
-            UTType(filenameExtension: "docx"),
-            UTType.plainText,
-            UTType(filenameExtension: "md")
-        ].compactMap { $0 }
-        panel.begin { result in
-            guard result == .OK, !panel.urls.isEmpty else { return }
-            Task {
-                await coordinator.uploadWritingSamples(panel.urls)
-            }
-        }
-    }
-
-    private func openDirectUploadPanel() {
-        let panel = NSOpenPanel()
-        panel.allowsMultipleSelection = true
-        panel.canChooseDirectories = false
-        panel.allowedContentTypes = [
-            UTType.pdf,
-            UTType(filenameExtension: "docx"),
-            UTType.plainText,
-            UTType.png,
-            UTType.jpeg,
-            UTType(filenameExtension: "md"),
-            UTType.json
-        ].compactMap { $0 }
-        panel.begin { result in
-            guard result == .OK, !panel.urls.isEmpty else { return }
-            Task {
-                await coordinator.uploadFilesDirectly(panel.urls)
-            }
-        }
-    }
     @ViewBuilder
     private func uploadRequestsView(_ requests: [OnboardingUploadRequest]) -> some View {
         ScrollView {
@@ -471,7 +449,13 @@ struct OnboardingInterviewToolPane: View {
                 ForEach(requests) { request in
                     UploadRequestCard(
                         request: request,
-                        onSelectFile: { openPanel(for: request) },
+                        onSelectFile: {
+                            ToolPaneUploadHandler.openPanel(for: request) { urls in
+                                Task {
+                                    await coordinator.completeUploadAndResume(id: request.id, fileURLs: urls)
+                                }
+                            }
+                        },
                         onDropFiles: { urls in
                             Task {
                                 await coordinator.completeUploadAndResume(id: request.id, fileURLs: urls)
@@ -487,94 +471,16 @@ struct OnboardingInterviewToolPane: View {
             }
         }
     }
-    private func uploadRequests() -> [OnboardingUploadRequest] {
-        var filtered: [OnboardingUploadRequest]
-        switch coordinator.wizardTracker.currentStep {
-        case .voice:
-            // Phase 1: Resume, LinkedIn, profile photo ONLY
-            // IMPORTANT: Do NOT include writing samples here - the sidebar has a dedicated Phase1WritingSampleView
-            filtered = coordinator.pendingUploadRequests.filter {
-                [.resume, .linkedIn].contains($0.kind) ||
-                    ($0.kind == .generic && $0.metadata.targetKey == "basics.image")
-            }
-            // For voice phase, also add any generic requests that aren't writing samples
-            // but EXCLUDE writing samples since Phase1WritingSampleView handles those
-            for request in coordinator.pendingUploadRequests
-            where !filtered.contains(where: { $0.id == request.id })
-                && request.kind != .writingSample {
-                filtered.append(request)
-            }
-        case .story:
-            // Phase 2: Additional artifacts
-            filtered = coordinator.pendingUploadRequests.filter { [.artifact, .generic].contains($0.kind) }
-            // Include other non-writing sample requests not captured by filtering
-            for request in coordinator.pendingUploadRequests
-            where !filtered.contains(where: { $0.id == request.id })
-                && request.kind != .writingSample {
-                filtered.append(request)
-            }
-        case .evidence:
-            // Phase 3: Evidence documents (artifacts, generic uploads, resumes)
-            // Excludes writing samples since those are Phase 1 only
-            filtered = coordinator.pendingUploadRequests.filter { $0.kind != .writingSample }
-        case .strategy:
-            // Phase 4: All remaining uploads
-            filtered = coordinator.pendingUploadRequests
-        }
-        if !filtered.isEmpty {
-            let kinds = filtered.map { $0.kind.rawValue }.joined(separator: ",")
-            Logger.debug("📤 Pending upload requests surfaced in tool pane (step: \(coordinator.wizardTracker.currentStep.rawValue), kinds: \(kinds))", category: .ai)
-        }
-        return filtered
-    }
-    private func openPanel(for request: OnboardingUploadRequest) {
-        let panel = NSOpenPanel()
-        panel.allowsMultipleSelection = request.metadata.allowMultiple
-        panel.canChooseDirectories = false
-        if let allowed = allowedContentTypes(for: request) {
-            panel.allowedContentTypes = allowed
-        }
-        panel.begin { result in
-            guard result == .OK else { return }
-            let urls: [URL]
-            if request.metadata.allowMultiple {
-                urls = panel.urls
-            } else {
-                urls = Array(panel.urls.prefix(1))
-            }
-            Task {
-                await coordinator.completeUploadAndResume(id: request.id, fileURLs: urls)
-            }
-        }
-    }
-    private func allowedContentTypes(for request: OnboardingUploadRequest) -> [UTType]? {
-        var candidates = request.metadata.accepts.map {
-            $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        }
-        if candidates.isEmpty {
-            switch request.kind {
-            case .resume, .coverletter:
-                candidates = ["pdf", "docx", "txt", "json"]
-            case .artifact, .portfolio, .generic:
-                candidates = ["pdf", "docx", "txt", "json"]
-            case .writingSample:
-                candidates = ["pdf", "docx", "txt", "md"]
-            case .transcript, .certificate:
-                candidates = ["pdf", "png", "jpg"]
-            case .linkedIn:
-                return nil
-            }
-        }
-        let mapped = candidates.compactMap { UTType(filenameExtension: $0) }
-        return mapped.isEmpty ? nil : mapped
-    }
     private func isPaneOccupied(coordinator: OnboardingInterviewCoordinator) -> Bool {
         hasInteractiveCard(coordinator: coordinator) ||
             hasSummaryCard(coordinator: coordinator)
     }
     private func hasInteractiveCard(coordinator: OnboardingInterviewCoordinator) -> Bool {
         if coordinator.ui.pendingExtraction != nil { return true }
-        if !uploadRequests().isEmpty { return true }
+        if !ToolPaneUploadHandler.uploadRequests(
+            for: coordinator.wizardTracker.currentStep,
+            pending: coordinator.pendingUploadRequests
+        ).isEmpty { return true }
         // Don't count loading state as occupying the pane - allow spinner to show
         if let intake = coordinator.pendingApplicantProfileIntake {
             if case .loading = intake.mode { return false }
@@ -669,416 +575,5 @@ struct OnboardingInterviewToolPane: View {
         }
 
         return missing
-    }
-}
-private struct ExtractionProgressOverlay: View {
-    let items: [ExtractionProgressItem]
-    let statusText: String?
-    var body: some View {
-        VStack(spacing: 28) {
-            AnimatedThinkingText(statusMessage: statusText)
-            VStack(alignment: .leading, spacing: 18) {
-                Text("Processing résumé…")
-                    .font(.headline)
-                ExtractionProgressChecklistView(items: items)
-            }
-            .padding(.vertical, 26)
-            .padding(.horizontal, 26)
-            .frame(maxWidth: 420, alignment: .leading)
-            .background(
-                RoundedRectangle(cornerRadius: 26, style: .continuous)
-                    .fill(.regularMaterial)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 26, style: .continuous)
-                    .stroke(Color.white.opacity(0.4), lineWidth: 0.5)
-                    .blendMode(.plusLighter)
-            )
-            .shadow(color: Color.black.opacity(0.18), radius: 28, y: 22)
-        }
-        .padding(32)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .allowsHitTesting(false)
-    }
-}
-private struct KnowledgeCardValidationHost: View {
-    let prompt: OnboardingValidationPrompt
-    let coordinator: OnboardingInterviewCoordinator
-    @State private var draft: KnowledgeCardDraft
-    private let artifactDisplayInfos: [ArtifactDisplayInfo]
-    init(
-        prompt: OnboardingValidationPrompt,
-        artifacts: [ArtifactRecord],
-        coordinator: OnboardingInterviewCoordinator
-    ) {
-        self.prompt = prompt
-        self.coordinator = coordinator
-        _draft = State(initialValue: KnowledgeCardDraft(json: prompt.payload))
-        artifactDisplayInfos = artifacts.map { ArtifactDisplayInfo(from: $0) }
-    }
-    var body: some View {
-        KnowledgeCardReviewCard(
-            card: $draft,
-            artifacts: artifactDisplayInfos,
-            onApprove: { approved in
-                Task {
-                    await coordinator.submitValidationAndResume(
-                        status: "approved",
-                        updatedData: approved.toJSON(),
-                        changes: nil,
-                        notes: nil
-                    )
-                }
-            },
-            onReject: { reason in
-                Task {
-                    await coordinator.submitValidationAndResume(
-                        status: "rejected",
-                        updatedData: nil,
-                        changes: nil,
-                        notes: reason.isEmpty ? nil : reason
-                    )
-                }
-            }
-        )
-        .onChange(of: prompt.id) { _, _ in
-            draft = KnowledgeCardDraft(json: prompt.payload)
-        }
-    }
-}
-private struct ApplicantProfileSummaryCard: View {
-    let profile: JSON
-    let imageData: Data?
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Applicant Profile")
-                .font(.headline)
-            if let avatar = avatarImage {
-                avatar
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-                    .frame(width: 64, height: 64)
-                    .clipShape(Circle())
-                    .overlay(
-                        Circle()
-                            .stroke(Color.white.opacity(0.7), lineWidth: 1)
-                    )
-                    .shadow(radius: 2, y: 1)
-            }
-            if let name = nonEmpty(profile["name"].string) {
-                Label(name, systemImage: "person.fill")
-            }
-            if let label = nonEmpty(profile["label"].string) {
-                Text(label)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
-            if let email = nonEmpty(profile["email"].string) {
-                Label(email, systemImage: "envelope")
-                    .font(.footnote)
-            }
-            if let phone = nonEmpty(profile["phone"].string) {
-                Label(phone, systemImage: "phone")
-                    .font(.footnote)
-            }
-            if let location = formattedLocation(profile["location"]) {
-                Label(location, systemImage: "mappin.and.ellipse")
-                    .font(.footnote)
-            }
-            if let url = nonEmpty(profile["url"].string ?? profile["website"].string) {
-                Label(url, systemImage: "globe")
-                    .font(.footnote)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(16)
-        .background(Color(nsColor: .textBackgroundColor))
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-    }
-    private func nonEmpty(_ value: String?) -> String? {
-        guard let value, !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
-        return value
-    }
-    private var avatarImage: Image? {
-        if let base64 = profile["image"].string?.trimmingCharacters(in: .whitespacesAndNewlines),
-           let data = Data(base64Encoded: base64, options: .ignoreUnknownCharacters),
-           let nsImage = NSImage(data: data) {
-            return Image(nsImage: nsImage)
-        }
-        if let imageData,
-           let nsImage = NSImage(data: imageData) {
-            return Image(nsImage: nsImage)
-        }
-        return nil
-    }
-    private func formattedLocation(_ json: JSON) -> String? {
-        guard json != .null else { return nil }
-        var components: [String] = []
-        if let address = nonEmpty(json["address"].string) {
-            components.append(address)
-        }
-        let cityComponents = [json["city"].string, json["region"].string]
-            .compactMap(nonEmpty)
-            .joined(separator: ", ")
-        if !cityComponents.isEmpty {
-            components.append(cityComponents)
-        }
-        if let postal = nonEmpty(json["postalCode"].string) {
-            if components.isEmpty {
-                components.append(postal)
-            } else {
-                components[components.count - 1] += " \(postal)"
-            }
-        }
-        if let country = nonEmpty(json["countryCode"].string) {
-            components.append(country)
-        }
-        return components.isEmpty ? nil : components.joined(separator: ", ")
-    }
-}
-
-private struct InterviewTabEmptyState: View {
-    let phase: InterviewPhase
-
-    var body: some View {
-        VStack(spacing: 16) {
-            Image(systemName: icon)
-                .font(.largeTitle)
-                .foregroundStyle(.secondary)
-
-            Text(title)
-                .font(.headline)
-                .foregroundStyle(.primary)
-
-            Text(message)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 40)
-    }
-
-    private var icon: String {
-        switch phase {
-        case .phase1VoiceContext:
-            return "person.text.rectangle"
-        case .phase2CareerStory:
-            return "doc.badge.plus"
-        case .phase3EvidenceCollection:
-            return "text.document"
-        case .phase4StrategicSynthesis:
-            return "chart.bar.doc.horizontal"
-        case .complete:
-            return "checkmark.circle"
-        }
-    }
-
-    private var title: String {
-        switch phase {
-        case .phase1VoiceContext:
-            return "Building Your Profile"
-        case .phase2CareerStory:
-            return "Career Story"
-        case .phase3EvidenceCollection:
-            return "Evidence Collection"
-        case .phase4StrategicSynthesis:
-            return "Strategic Synthesis"
-        case .complete:
-            return "Interview Complete"
-        }
-    }
-
-    private var message: String {
-        switch phase {
-        case .phase1VoiceContext:
-            return "The AI is gathering information about your background. Interactive cards will appear here as the conversation progresses."
-        case .phase2CareerStory:
-            return "Building your career timeline. Add experience entries and enrich each with context."
-        case .phase3EvidenceCollection:
-            return "Upload documents, code repositories, and other evidence to support your experience."
-        case .phase4StrategicSynthesis:
-            return "Synthesizing your experience into strategic recommendations for your job search."
-        case .complete:
-            return "The interview has been completed. You can browse your collected data in the other tabs."
-        }
-    }
-}
-
-// MARK: - Card Review with Sticky Footer
-
-private struct CardReviewWithStickyFooter: View {
-    let coordinator: OnboardingInterviewCoordinator
-    let onGenerateCards: () -> Void
-    let onAdvanceToNextPhase: () -> Void
-
-    private var pendingCardCount: Int {
-        coordinator.knowledgeCardStore.pendingCards.count
-    }
-
-    private var pendingSkillCount: Int {
-        coordinator.skillStore.pendingSkills.count
-    }
-
-    private var isReadyForGeneration: Bool {
-        coordinator.ui.cardAssignmentsReadyForApproval
-    }
-
-    private var isMerging: Bool {
-        coordinator.ui.isMergingCards
-    }
-
-    private var isGenerating: Bool {
-        coordinator.ui.isGeneratingCards
-    }
-
-    var body: some View {
-        VStack(spacing: 0) {
-            // Scrollable content
-            ScrollView {
-                VStack(spacing: 12) {
-                    KnowledgeCardCollectionView(
-                        coordinator: coordinator,
-                        onGenerateCards: onGenerateCards,
-                        onAdvanceToNextPhase: onAdvanceToNextPhase,
-                        showApproveButton: false
-                    )
-
-                    PendingSkillsCollectionView(coordinator: coordinator)
-                }
-                .padding(.bottom, 8)
-            }
-
-            // Sticky footer with approve button
-            if isReadyForGeneration || isGenerating {
-                Divider()
-                stickyFooter
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 10)
-                    .background(Color(nsColor: .windowBackgroundColor))
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var stickyFooter: some View {
-        if isGenerating {
-            // Progress indicator during generation
-            HStack(spacing: 8) {
-                ProgressView()
-                    .scaleEffect(0.8)
-                    .frame(width: 16, height: 16)
-
-                Text("Generating knowledge cards...")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-
-                Spacer()
-            }
-            .padding(.vertical, 8)
-            .padding(.horizontal, 12)
-            .background(Color.accentColor.opacity(0.1))
-            .cornerRadius(8)
-        } else {
-            // Approve button
-            VStack(spacing: 6) {
-                Button(action: onGenerateCards) {
-                    HStack {
-                        Image(systemName: "checkmark.circle.fill")
-                        Text(approveButtonText)
-                    }
-                    .font(.callout.weight(.semibold))
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 4)
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.regular)
-                .tint(.green)
-                .disabled(pendingCardCount == 0 || isMerging)
-
-                Text("Click cards above to review details, use trash to remove")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            }
-        }
-    }
-
-    private var approveButtonText: String {
-        let cardText = "\(pendingCardCount) Card\(pendingCardCount == 1 ? "" : "s")"
-        if pendingSkillCount > 0 {
-            let skillText = "\(pendingSkillCount) Skill\(pendingSkillCount == 1 ? "" : "s")"
-            return "Approve & Add \(cardText) and \(skillText)"
-        } else {
-            return "Approve & Add \(cardText)"
-        }
-    }
-}
-
-// MARK: - Skip to Next Phase Card
-
-private struct SkipToNextPhaseCard: View {
-    let currentPhase: InterviewPhase
-    let onSkip: () -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Image(systemName: "forward.fill")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Text("Ready to move on?")
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(.secondary)
-            }
-
-            Text(nextPhaseDescription)
-                .font(.caption)
-                .foregroundStyle(.tertiary)
-                .fixedSize(horizontal: false, vertical: true)
-
-            Button(action: onSkip) {
-                HStack {
-                    Text("Skip to \(nextPhaseName)")
-                    Image(systemName: "chevron.right")
-                        .font(.caption)
-                }
-                .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
-        }
-        .padding(12)
-        .background(Color(nsColor: .controlBackgroundColor).opacity(0.5))
-        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-    }
-
-    private var nextPhaseName: String {
-        switch currentPhase {
-        case .phase1VoiceContext:
-            return "Career Story"
-        case .phase2CareerStory:
-            return "Evidence Collection"
-        case .phase3EvidenceCollection:
-            return "Strategic Synthesis"
-        case .phase4StrategicSynthesis:
-            return "Complete Interview"
-        case .complete:
-            return "Complete"
-        }
-    }
-
-    private var nextPhaseDescription: String {
-        switch currentPhase {
-        case .phase1VoiceContext:
-            return "Next: Map out your career timeline from your resume or through conversation."
-        case .phase2CareerStory:
-            return "Next: Upload documents, code repos, and other evidence to support your experience."
-        case .phase3EvidenceCollection:
-            return "Next: Synthesize your strengths, identify pitfalls, and finalize your candidate dossier."
-        case .phase4StrategicSynthesis:
-            return "Finish the interview and start building resumes and applications."
-        case .complete:
-            return "Interview complete."
-        }
     }
 }

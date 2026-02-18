@@ -98,6 +98,8 @@ final class ResumeDetailVM {
             sectionOrder = manifest.sectionOrder
             editorLabels = manifest.editorLabels ?? [:]
             editorPanels = manifest.editorPanels ?? [:]
+            // Repair schema flags on existing custom field nodes that predate the fix
+            repairCustomFieldSchema(manifest: manifest)
         } else {
             sectionVisibilityDefaults = [:]
             sectionVisibilityLabels = [:]
@@ -109,6 +111,24 @@ final class ResumeDetailVM {
             editorPanels = [:]
         }
     }
+
+    /// Reapply manifest descriptors to custom field nodes so that schema flags
+    /// (allowsManualMutations, repeatable, etc.) are present on trees built
+    /// before the descriptor was applied at tree-build time.
+    private func repairCustomFieldSchema(manifest: TemplateManifest) {
+        guard let root = resume.rootNode else { return }
+        guard let customContainer = root.children?.first(where: { $0.name == "custom" }) else { return }
+        guard let customSection = manifest.section(for: "custom") else { return }
+
+        for fieldDescriptor in customSection.fields {
+            guard let fieldNode = customContainer.children?.first(where: { $0.name == fieldDescriptor.key }) else { continue }
+            let needsRepair = fieldDescriptor.allowsManualMutations && !fieldNode.schemaAllowsChildMutation
+            if needsRepair {
+                fieldNode.applyDescriptor(fieldDescriptor)
+            }
+        }
+    }
+
     // MARK: - Intents -------------------------------------------------------
     /// Adds a new child node to the given parent. If the parent's existing children
     /// already include both non-empty names and values (i.e. compound entries),

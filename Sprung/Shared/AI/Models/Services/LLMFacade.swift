@@ -76,6 +76,7 @@ final class LLMFacade {
     private let streamingManager = LLMFacadeStreamingManager()
     private let capabilityValidator: LLMFacadeCapabilityValidator
     private let specializedAPIs = LLMFacadeSpecializedAPIs()
+    private let openAIToolsAdapter: LLMFacadeOpenAIToolsAdapter
 
     init(
         client: LLMClient,
@@ -92,6 +93,7 @@ final class LLMFacade {
             openRouterService: openRouterService,
             modelValidationService: modelValidationService
         )
+        self.openAIToolsAdapter = LLMFacadeOpenAIToolsAdapter(specializedAPIs: specializedAPIs)
         backendClients[.openRouter] = client
         conversationServices[.openRouter] = OpenRouterConversationService(service: llmService)
     }
@@ -631,8 +633,8 @@ final class LLMFacade {
             )
             result = try await llmService.executeToolRequest(parameters: parameters)
         } else {
-            // For OpenAI backend, delegate to specialized handler
-            result = try await executeToolsViaOpenAI(
+            // For OpenAI backend, delegate to specialized adapter
+            result = try await openAIToolsAdapter.execute(
                 messages: messages,
                 tools: tools,
                 toolChoice: toolChoice,
@@ -652,126 +654,6 @@ final class LLMFacade {
             responseContent: content, responseToolCalls: responseToolCalls, durationMs: elapsedMs(from: start)
         )
         return result
-    }
-
-    private func executeToolsViaOpenAI(
-        messages: [ChatCompletionParameters.Message],
-        tools: [ChatCompletionParameters.Tool],
-        toolChoice: ToolChoice?,
-        modelId: String,
-        reasoningEffort: String?
-    ) async throws -> ChatCompletionObject {
-        let openAIModelId = modelId.hasPrefix("openai/") ? String(modelId.dropFirst(7)) : modelId
-
-        var inputItems: [InputItem] = []
-        for message in messages {
-            let role: String
-            switch message.role {
-            case "system": role = "developer"
-            case "user": role = "user"
-            case "assistant": role = "assistant"
-            case "tool": role = "user"
-            default: role = "user"
-            }
-
-            switch message.content {
-            case .text(let text):
-                inputItems.append(.message(InputMessage(role: role, content: .text(text))))
-            case .contentArray:
-                break
-            }
-        }
-
-        let responsesTools: [Tool] = tools.compactMap { chatTool in
-            let function = chatTool.function
-            return Tool.function(Tool.FunctionTool(
-                name: function.name,
-                parameters: function.parameters ?? JSONSchema(type: .object),
-                strict: function.strict,
-                description: function.description
-            ))
-        }
-
-        let responsesToolChoice: ToolChoiceMode?
-        if let choice = toolChoice {
-            switch choice {
-            case .auto: responsesToolChoice = .auto
-            case .none: responsesToolChoice = ToolChoiceMode.none
-            case .required: responsesToolChoice = .required
-            case .function(_, let name): responsesToolChoice = .functionTool(FunctionTool(name: name))
-            }
-        } else {
-            responsesToolChoice = nil
-        }
-
-        let reasoning: Reasoning? = reasoningEffort.map { Reasoning(effort: $0) }
-
-        let parameters = ModelResponseParameter(
-            input: .array(inputItems),
-            model: .custom(openAIModelId),
-            reasoning: reasoning,
-            store: true,
-            toolChoice: responsesToolChoice,
-            tools: responsesTools.isEmpty ? nil : responsesTools
-        )
-
-        let stream = try await specializedAPIs.responseCreateStream(parameters: parameters)
-        var finalResponse: ResponseModel?
-        for try await event in stream {
-            if case .responseCompleted(let completed) = event {
-                finalResponse = completed.response
-            }
-        }
-        guard let response = finalResponse else {
-            throw LLMError.clientError("No response received from OpenAI")
-        }
-        return try convertResponseToCompletion(response)
-    }
-
-    private func convertResponseToCompletion(_ response: ResponseModel) throws -> ChatCompletionObject {
-        var toolCallsArray: [[String: Any]] = []
-        var content: String?
-
-        for item in response.output {
-            switch item {
-            case .message(let message):
-                for contentItem in message.content {
-                    if case let .outputText(textOutput) = contentItem {
-                        content = textOutput.text
-                    }
-                }
-            case .functionCall(let functionCall):
-                toolCallsArray.append([
-                    "id": functionCall.callId,
-                    "type": "function",
-                    "function": [
-                        "arguments": functionCall.arguments,
-                        "name": functionCall.name
-                    ]
-                ])
-            default:
-                break
-            }
-        }
-
-        var messageDict: [String: Any] = ["role": "assistant"]
-        if let content = content { messageDict["content"] = content }
-        if !toolCallsArray.isEmpty { messageDict["tool_calls"] = toolCallsArray }
-
-        let json: [String: Any] = [
-            "id": response.id,
-            "object": "chat.completion",
-            "created": Int(Date().timeIntervalSince1970),
-            "model": response.model,
-            "choices": [[
-                "index": 0,
-                "message": messageDict,
-                "finish_reason": toolCallsArray.isEmpty ? "stop" : "tool_calls"
-            ]]
-        ]
-
-        let jsonData = try JSONSerialization.data(withJSONObject: json)
-        return try JSONDecoder().decode(ChatCompletionObject.self, from: jsonData)
     }
 
     // MARK: - OpenAI Responses API (Specialized)
@@ -835,37 +717,17 @@ final class LLMFacade {
         modelId: String
     ) async throws -> String {
         let start = ContinuousClock.now
-        let parameters = AnthropicMessageParameter(
-            model: modelId,
-            messages: [.user(userPrompt)],
-            system: .blocks(systemContent),
-            maxTokens: 4096,
-            stream: false
+        let result = try await specializedAPIs.executeTextWithAnthropicCaching(
+            systemContent: systemContent,
+            userPrompt: userPrompt,
+            modelId: modelId
         )
-
-        let stream = try await specializedAPIs.anthropicMessagesStream(parameters: parameters)
-        var resultText = ""
-
-        for try await event in stream {
-            switch event {
-            case .contentBlockDelta(let delta):
-                if case .textDelta(let text) = delta.delta {
-                    resultText += text
-                }
-            case .messageStop:
-                break
-            default:
-                break
-            }
-        }
-
-        Logger.info("✅ Anthropic cached request completed: \(resultText.count) chars", category: .ai)
         LLMTranscriptLogger.logAnthropicCall(
             method: "executeTextWithAnthropicCaching", modelId: modelId,
             systemBlockCount: systemContent.count, userPrompt: userPrompt,
-            response: resultText, durationMs: elapsedMs(from: start)
+            response: result, durationMs: elapsedMs(from: start)
         )
-        return resultText
+        return result
     }
 
     /// Execute a structured JSON request via direct Anthropic API with prompt caching and schema enforcement.
@@ -885,54 +747,19 @@ final class LLMFacade {
         schema: [String: Any]
     ) async throws -> T {
         let start = ContinuousClock.now
-        let outputFormat = AnthropicOutputFormat.schema(
+        let result = try await specializedAPIs.executeStructuredWithAnthropicCaching(
+            systemContent: systemContent,
+            userPrompt: userPrompt,
+            modelId: modelId,
+            responseType: responseType,
             schema: schema
         )
-
-        let parameters = AnthropicMessageParameter(
-            model: modelId,
-            messages: [.user(userPrompt)],
-            system: .blocks(systemContent),
-            maxTokens: 4096,
-            stream: false,
-            outputFormat: outputFormat
-        )
-
-        let stream = try await specializedAPIs.anthropicMessagesStream(parameters: parameters)
-        var resultText = ""
-
-        for try await event in stream {
-            switch event {
-            case .contentBlockDelta(let delta):
-                if case .textDelta(let text) = delta.delta {
-                    resultText += text
-                }
-            case .messageStop:
-                break
-            default:
-                break
-            }
-        }
-
-        Logger.info("✅ Anthropic structured request completed: \(resultText.count) chars", category: .ai)
         LLMTranscriptLogger.logAnthropicCall(
             method: "executeStructuredWithAnthropicCaching", modelId: modelId,
             systemBlockCount: systemContent.count, userPrompt: userPrompt,
-            response: resultText, durationMs: elapsedMs(from: start)
+            response: String(describing: result), durationMs: elapsedMs(from: start)
         )
-
-        // Parse the response as the expected type
-        guard let data = resultText.data(using: .utf8) else {
-            throw LLMError.clientError("Failed to convert Anthropic response to data")
-        }
-
-        do {
-            return try JSONDecoder().decode(T.self, from: data)
-        } catch {
-            Logger.warning("Failed to parse Anthropic structured response as \(T.self): \(error)", category: .ai)
-            Logger.debug("Response was: \(resultText.prefix(500))", category: .ai)
-            throw LLMError.clientError("Failed to parse structured response: \(error.localizedDescription)")
-        }
+        return result
     }
 
     // MARK: - Gemini Document Extraction (Specialized)

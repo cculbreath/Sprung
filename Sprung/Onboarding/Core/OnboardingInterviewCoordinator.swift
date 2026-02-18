@@ -229,32 +229,7 @@ final class OnboardingInterviewCoordinator {
     /// Interrupt all pending UI tools, dismissing their UIs and returning cancelled results.
     /// Called when user presses interrupt button or escape key.
     func interruptPendingUITools() {
-        guard hasPendingUITools else {
-            Logger.info("🛑 Interrupt requested but no pending UI tools", category: .ai)
-            return
-        }
-
-        // Clear any visible UI prompts
-        toolRouter.clearChoicePrompt()
-        toolRouter.clearValidationPrompt()
-        toolRouter.clearPendingUploadRequests()
-        toolRouter.clearSectionToggle()
-
-        // Emit events to update UI state
-        // Note: uploadRequestCancelled requires an ID but handler ignores it for clearing state
-        Task {
-            await eventBus.publish(.toolpane(.choicePromptCleared))
-            await eventBus.publish(.toolpane(.validationPromptCleared))
-            for request in pendingUploadRequests {
-                await eventBus.publish(.toolpane(.uploadRequestCancelled(id: request.id)))
-            }
-            await eventBus.publish(.toolpane(.sectionToggleCleared))
-            await eventBus.publish(.toolpane(.applicantProfileIntakeCleared))
-        }
-
-        // Resume all continuations with cancelled result
-        uiToolContinuationManager.interruptAll()
-        Logger.info("🛑 Pending UI tools interrupted by user", category: .ai)
+        uiResponseCoordinator.interruptPendingUITools()
     }
 
     /// Check if there's any existing onboarding data (session, ResRefs, CoverRefs, or ExperienceDefaults)
@@ -566,76 +541,12 @@ final class OnboardingInterviewCoordinator {
         changes: JSON?,
         notes: String?
     ) async -> JSON? {
-        let pendingValidation = toolRouter.pendingValidationPrompt
-
-        // Emit knowledge card persisted event for in-memory tracking
-        if let validation = pendingValidation,
-           validation.dataType == "knowledge_card",
-           let data = updatedData,
-           data != .null,
-           ["approved", "modified"].contains(status.lowercased()) {
-            await eventBus.publish(.artifact(.knowledgeCardPersisted(card: data)))
-        }
-
-        let result = toolRouter.submitValidationResponse(
+        await uiResponseCoordinator.submitValidationResponse(
             status: status,
             updatedData: updatedData,
             changes: changes,
             notes: notes
         )
-
-        if result != nil {
-            Task {
-                await eventBus.publish(.toolpane(.validationPromptCleared))
-            }
-            // Mark skeleton_timeline objective as complete when user confirms validation
-            if let validation = pendingValidation,
-               validation.dataType == "skeleton_timeline",
-               ["confirmed", "confirmed_with_changes", "approved", "modified"].contains(status.lowercased()) {
-                await eventBus.publish(.objective(.statusUpdateRequested(
-                    id: OnboardingObjectiveId.skeletonTimelineComplete.rawValue,
-                    status: "completed",
-                    source: "ui_timeline_validated",
-                    notes: "Timeline validated by user",
-                    details: nil
-                )))
-                Logger.debug("✅ skeleton_timeline_complete objective marked complete after validation", category: .ai)
-
-                // Prompt for configure_enabled_sections as next step
-                // next_phase will be ungated when enabledSections objective completes
-                var payload = JSON()
-                payload["text"].string = """
-                    Timeline approved. Now configure which resume sections to include. \
-                    Call configure_enabled_sections with recommendations based on user's background.
-                    """
-                await eventBus.publish(.llm(.sendCoordinatorMessage(payload: payload)))
-                Logger.info("📋 Prompting configure_enabled_sections after timeline validation", category: .ai)
-            }
-
-            // Mark section_cards objective as complete when user confirms validation
-            if let validation = pendingValidation,
-               validation.dataType == "section_cards",
-               ["confirmed", "confirmed_with_changes", "approved", "modified"].contains(status.lowercased()) {
-                await eventBus.publish(.objective(.statusUpdateRequested(
-                    id: OnboardingObjectiveId.sectionCardsComplete.rawValue,
-                    status: "completed",
-                    source: "ui_section_cards_validated",
-                    notes: "Section cards validated by user",
-                    details: nil
-                )))
-                Logger.debug("✅ section_cards_complete objective marked complete after validation", category: .ai)
-
-                // Prompt for next_phase as next step
-                var payload = JSON()
-                payload["text"].string = """
-                    Section cards approved. Phase 2 is now complete. \
-                    Call next_phase to advance to Phase 3 (Evidence Collection).
-                    """
-                await eventBus.publish(.llm(.sendCoordinatorMessage(payload: payload)))
-                Logger.info("📋 Prompting next_phase after section cards validation", category: .ai)
-            }
-        }
-        return result
     }
 
     // MARK: - Applicant Profile Intake Facade Methods
@@ -742,8 +653,7 @@ final class OnboardingInterviewCoordinator {
             status: status,
             updatedData: updatedData,
             changes: changes,
-            notes: notes,
-            coordinator: self
+            notes: notes
         )
     }
     func confirmApplicantProfile(draft: ApplicantProfileDraft) async {
@@ -1100,51 +1010,7 @@ final class OnboardingInterviewCoordinator {
     }
 
     func resetAllOnboardingData() async {
-        Logger.info("🗑️ Resetting all onboarding data", category: .ai)
-        // Delete SwiftData session
-        deleteCurrentSession()
-        Logger.verbose("✅ SwiftData session deleted", category: .ai)
-        await MainActor.run {
-            // Delete onboarding knowledge cards
-            knowledgeCardStore.deleteOnboardingCards()
-            Logger.verbose("✅ Onboarding knowledge cards deleted", category: .ai)
-
-            let profile = applicantProfileStore.currentProfile()
-            profile.name = "John Doe"
-            profile.email = "applicant@example.com"
-            profile.phone = "(555) 123-4567"
-            profile.address = "123 Main Street"
-            profile.city = "Austin"
-            profile.state = "Texas"
-            profile.zip = "78701"
-            profile.websites = "example.com"
-            profile.pictureData = nil
-            profile.pictureMimeType = nil
-            profile.profiles.removeAll()
-            applicantProfileStore.save(profile)
-            applicantProfileStore.clearCache()
-            Logger.info("✅ ApplicantProfile reset and photo removed", category: .ai)
-        }
-        clearArtifacts()
-        Logger.info("✅ Upload artifacts cleared", category: .ai)
-        let uploadsDir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-            .appendingPathComponent("Sprung")
-            .appendingPathComponent("Onboarding")
-            .appendingPathComponent("Uploads")
-        if FileManager.default.fileExists(atPath: uploadsDir.path) {
-            do {
-                let files = try FileManager.default.contentsOfDirectory(at: uploadsDir, includingPropertiesForKeys: nil)
-                for file in files {
-                    try FileManager.default.removeItem(at: file)
-                }
-                Logger.info("✅ Deleted \(files.count) uploaded files from storage", category: .ai)
-            } catch {
-                Logger.error("❌ Failed to delete uploaded files: \(error.localizedDescription)", category: .ai)
-            }
-        }
-        await resetStore()
-        Logger.info("✅ Interview state reset", category: .ai)
-        Logger.info("🎉 All onboarding data has been reset", category: .ai)
+        await container.dataResetService.resetAllOnboardingData()
     }
     #endif
 }

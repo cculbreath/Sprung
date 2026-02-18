@@ -111,4 +111,11 @@ extension Notification.Name {
     static let navigateToModule = Notification.Name("navigateToModule")
     /// Navigate to a specific tab in the References module (userInfo: ["tab": String (ReferencesModuleView.Tab.rawValue)])
     static let navigateToReferencesTab = Notification.Name("navigateToReferencesTab")
+    // URL Scheme Notifications
+    static let captureJobFromURL = Notification.Name("captureJobFromURL")
+    /// Relay notification sent after sheet is shown, so the view can receive it
+    static let captureJobURLReady = Notification.Name("captureJobURLReady")
+    // Secondary Window Notifications
+    static let showDebugLogs = Notification.Name("showDebugLogs")
+    static let showSeedGeneration = Notification.Name("showSeedGeneration")
 }

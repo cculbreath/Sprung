@@ -294,17 +294,6 @@ final class OnboardingDependencyContainer {
         // 7b. Initialize guidance services
         self.voiceProfileService = VoiceProfileService(llmFacade: llmFacade)
 
-        // 7c. Initialize data reset service
-        self.dataResetService = OnboardingDataResetService(
-            sessionPersistenceHandler: sessionPersistenceHandler,
-            knowledgeCardStore: knowledgeCardStore,
-            skillStore: skillStore,
-            coverRefStore: coverRefStore,
-            experienceDefaultsStore: experienceDefaultsStore,
-            applicantProfileStore: applicantProfileStore,
-            artifactRecordStore: artifactRecordStore
-        )
-
         // 7d. Initialize artifact archive manager
         self.artifactArchiveManager = ArtifactArchiveManager(
             artifactRecordStore: artifactRecordStore,
@@ -350,6 +339,18 @@ final class OnboardingDependencyContainer {
         self.timelineManagementService = services.timelineManagementService
         self.sectionCardManagementService = services.sectionCardManagementService
         self.dataPersistenceService = services.dataPersistenceService
+
+        // 9a. Initialize data reset service (needs dataPersistenceService from step 9)
+        self.dataResetService = OnboardingDataResetService(
+            sessionPersistenceHandler: sessionPersistenceHandler,
+            knowledgeCardStore: knowledgeCardStore,
+            skillStore: skillStore,
+            coverRefStore: coverRefStore,
+            experienceDefaultsStore: experienceDefaultsStore,
+            applicantProfileStore: applicantProfileStore,
+            artifactRecordStore: artifactRecordStore,
+            dataPersistenceService: services.dataPersistenceService
+        )
 
         // 10. Initialize lifecycle controller (merged with session coordinator)
         self.lifecycleController = InterviewLifecycleController(

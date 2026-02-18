@@ -195,7 +195,7 @@
           <div class="contact-item contact-chip">{{basics.phone}}</div>
           {{/hasContent(basics.phone)}}
           {{#hasContent(basics.url)}}
-          <div class="contact-item contact-chip">{{{basics.url}}}</div>
+          <div class="contact-item contact-chip"><a href="{{{basics.url}}}">{{{basics.url}}}</a></div>
           {{/hasContent(basics.url)}}
           {{#basics.profiles}}
           <div class="contact-item contact-chip">{{network}}{{#hasContent(username)}} · {{username}}{{/hasContent(username)}}{{#hasContent(url)}} · {{{url}}}{{/hasContent(url)}}</div>

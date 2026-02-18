@@ -20,6 +20,7 @@ final class OnboardingDataResetService {
     private let experienceDefaultsStore: ExperienceDefaultsStore
     private let applicantProfileStore: ApplicantProfileStore
     private let artifactRecordStore: ArtifactRecordStore
+    private let dataPersistenceService: DataPersistenceService
 
     init(
         sessionPersistenceHandler: SwiftDataSessionPersistenceHandler,
@@ -28,7 +29,8 @@ final class OnboardingDataResetService {
         coverRefStore: CoverRefStore,
         experienceDefaultsStore: ExperienceDefaultsStore,
         applicantProfileStore: ApplicantProfileStore,
-        artifactRecordStore: ArtifactRecordStore
+        artifactRecordStore: ArtifactRecordStore,
+        dataPersistenceService: DataPersistenceService
     ) {
         self.sessionPersistenceHandler = sessionPersistenceHandler
         self.knowledgeCardStore = knowledgeCardStore
@@ -37,6 +39,7 @@ final class OnboardingDataResetService {
         self.experienceDefaultsStore = experienceDefaultsStore
         self.applicantProfileStore = applicantProfileStore
         self.artifactRecordStore = artifactRecordStore
+        self.dataPersistenceService = dataPersistenceService
     }
 
     /// Delete the current SwiftData session
@@ -128,6 +131,60 @@ final class OnboardingDataResetService {
         deleteCurrentSession()
         Logger.debug("🗑️ Session data cleared", category: .ai)
     }
+
+    // MARK: - Full Debug Reset
+
+    #if DEBUG
+    /// Reset all onboarding data including files on disk, profile, artifacts, and interview state.
+    /// Used from the debug menu for a complete fresh start.
+    func resetAllOnboardingData() async {
+        Logger.info("🗑️ Resetting all onboarding data", category: .ai)
+        // Delete SwiftData session
+        deleteCurrentSession()
+        Logger.verbose("✅ SwiftData session deleted", category: .ai)
+        await MainActor.run {
+            // Delete onboarding knowledge cards
+            knowledgeCardStore.deleteOnboardingCards()
+            Logger.verbose("✅ Onboarding knowledge cards deleted", category: .ai)
+
+            let profile = applicantProfileStore.currentProfile()
+            profile.name = "John Doe"
+            profile.email = "applicant@example.com"
+            profile.phone = "(555) 123-4567"
+            profile.address = "123 Main Street"
+            profile.city = "Austin"
+            profile.state = "Texas"
+            profile.zip = "78701"
+            profile.websites = "example.com"
+            profile.pictureData = nil
+            profile.pictureMimeType = nil
+            profile.profiles.removeAll()
+            applicantProfileStore.save(profile)
+            applicantProfileStore.clearCache()
+            Logger.info("✅ ApplicantProfile reset and photo removed", category: .ai)
+        }
+        await dataPersistenceService.clearArtifacts()
+        Logger.info("✅ Upload artifacts cleared", category: .ai)
+        let uploadsDir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+            .appendingPathComponent("Sprung")
+            .appendingPathComponent("Onboarding")
+            .appendingPathComponent("Uploads")
+        if FileManager.default.fileExists(atPath: uploadsDir.path) {
+            do {
+                let files = try FileManager.default.contentsOfDirectory(at: uploadsDir, includingPropertiesForKeys: nil)
+                for file in files {
+                    try FileManager.default.removeItem(at: file)
+                }
+                Logger.info("✅ Deleted \(files.count) uploaded files from storage", category: .ai)
+            } catch {
+                Logger.error("❌ Failed to delete uploaded files: \(error.localizedDescription)", category: .ai)
+            }
+        }
+        await dataPersistenceService.resetStore()
+        Logger.info("✅ Interview state reset", category: .ai)
+        Logger.info("🎉 All onboarding data has been reset", category: .ai)
+    }
+    #endif
 
     // MARK: - Private Helpers
 

@@ -76,8 +76,8 @@ final class OnboardingUIState {
     /// Set of section types that are enabled for this resume
     var enabledSectionTypes: Set<String> = []
     // MARK: - Wizard State
-    var wizardStep: StateCoordinator.WizardStep = .voice
-    var completedWizardSteps: Set<StateCoordinator.WizardStep> = []
+    var wizardStep: OnboardingWizardStep = .voice
+    var completedWizardSteps: Set<OnboardingWizardStep> = []
     var phase: InterviewPhase = .phase1VoiceContext
     // MARK: - Tool Pane State (Mirrored from ToolHandler)
     // Note: ToolHandler (via ToolRouter) manages its own state, but we might want to mirror it here
@@ -153,7 +153,7 @@ final class OnboardingUIState {
         let cardCount = timeline?["experiences"].array?.count ?? 0
         Logger.info("📊 OnboardingUIState.updateTimeline: token \(oldToken) → \(self.timelineUIChangeToken), cards=\(cardCount)", category: .ai)
     }
-    func updateWizardProgress(step: StateCoordinator.WizardStep, completed: Set<StateCoordinator.WizardStep>) {
+    func updateWizardProgress(step: OnboardingWizardStep, completed: Set<OnboardingWizardStep>) {
         self.wizardStep = step
         self.completedWizardSteps = completed
     }

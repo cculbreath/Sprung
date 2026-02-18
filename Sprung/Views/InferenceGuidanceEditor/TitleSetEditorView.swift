@@ -72,7 +72,7 @@ struct TitleSetEditorView: View {
             Text("Identity Vocabulary")
                 .font(.headline)
 
-            FlowLayout(spacing: 8) {
+            FlowStack(spacing: 8) {
                 ForEach(vocabulary) { term in
                     TermChip(term: term)
                 }
@@ -183,45 +183,3 @@ struct TitleSetRow: View {
     }
 }
 
-// MARK: - Flow Layout
-
-private struct FlowLayout: Layout {
-    var spacing: CGFloat = 8
-
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let sizes = subviews.map { $0.sizeThatFits(.unspecified) }
-        return layout(sizes: sizes, proposal: proposal).size
-    }
-
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        let sizes = subviews.map { $0.sizeThatFits(.unspecified) }
-        let result = layout(sizes: sizes, proposal: proposal)
-
-        for (index, subview) in subviews.enumerated() {
-            subview.place(at: CGPoint(x: bounds.minX + result.positions[index].x,
-                                       y: bounds.minY + result.positions[index].y),
-                          proposal: .unspecified)
-        }
-    }
-
-    private func layout(sizes: [CGSize], proposal: ProposedViewSize) -> (size: CGSize, positions: [CGPoint]) {
-        var positions: [CGPoint] = []
-        var x: CGFloat = 0
-        var y: CGFloat = 0
-        var rowHeight: CGFloat = 0
-        let maxWidth = proposal.width ?? .infinity
-
-        for size in sizes {
-            if x + size.width > maxWidth && x > 0 {
-                x = 0
-                y += rowHeight + spacing
-                rowHeight = 0
-            }
-            positions.append(CGPoint(x: x, y: y))
-            rowHeight = max(rowHeight, size.height)
-            x += size.width + spacing
-        }
-
-        return (CGSize(width: maxWidth, height: y + rowHeight), positions)
-    }
-}

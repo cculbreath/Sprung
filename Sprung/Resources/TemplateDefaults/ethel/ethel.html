@@ -436,7 +436,7 @@ margin-bottom: 0.5rem;
               {{basics.location.city}}, {{basics.location.region}}
             </li>
             
-            <li><i class="fa fa-globe"></i> {{basics.url}}</li>
+            <li><i class="fa fa-globe"></i> <a href="{{basics.url}}">{{basics.url}}</a></li>
             {{#basics.profiles}}
             <li><i class="fa fa-linkedin"></i> {{network}}({{username}})</li>
             {{/basics.profiles}}

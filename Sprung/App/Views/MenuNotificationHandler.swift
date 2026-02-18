@@ -208,61 +208,9 @@ class MenuNotificationHandler {
                 self?.handleRestartSpeaking()
             }
         }
-        // Window Commands (toolbar buttons that delegate to existing menu commands)
-        NotificationCenter.default.addObserver(
-            forName: .showSettings,
-            object: nil,
-            queue: .main
-        ) { _ in
-            // Delegate to AppDelegate via existing menu command mechanism
-            Task { @MainActor in
-                if let appDelegate = NSApplication.shared.delegate as? AppDelegate {
-                    appDelegate.showSettingsWindow()
-                }
-            }
-        }
-        NotificationCenter.default.addObserver(
-            forName: .showApplicantProfile,
-            object: nil,
-            queue: .main
-        ) { _ in
-            // Delegate to AppDelegate via existing menu command mechanism
-            if let appDelegate = NSApplication.shared.delegate as? AppDelegate {
-                appDelegate.showApplicantProfileWindow()
-            }
-        }
-        NotificationCenter.default.addObserver(
-            forName: .showTemplateEditor,
-            object: nil,
-            queue: .main
-        ) { _ in
-            // Delegate to AppDelegate via existing menu command mechanism
-            if let appDelegate = NSApplication.shared.delegate as? AppDelegate {
-                appDelegate.showTemplateEditorWindow()
-            }
-        }
-        NotificationCenter.default.addObserver(
-            forName: .showExperienceEditor,
-            object: nil,
-            queue: .main
-        ) { _ in
-            if let appDelegate = NSApplication.shared.delegate as? AppDelegate {
-                appDelegate.showExperienceEditorWindow()
-            }
-        }
-        NotificationCenter.default.addObserver(
-            forName: .startOnboardingInterview,
-            object: nil,
-            queue: .main
-        ) { _ in
-            Logger.info("📨 Received startOnboardingInterview notification", category: .ui)
-            if let appDelegate = NSApplication.shared.delegate as? AppDelegate {
-                Logger.debug("🎯 Dispatching to AppDelegate.showOnboardingInterviewWindow", category: .ui)
-                Task { @MainActor in
-                    appDelegate.showOnboardingInterviewWindow()
-                }
-            }
-        }
+        // Window-level commands (.showSettings, .showApplicantProfile, .showTemplateEditor,
+        // .showExperienceEditor, .startOnboardingInterview) are now observed directly by
+        // AppDelegate so they work regardless of which module is active.
         // Create New Resume
         NotificationCenter.default.addObserver(
             forName: .createNewResume,
