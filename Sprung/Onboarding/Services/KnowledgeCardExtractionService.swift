@@ -81,7 +81,6 @@ actor KnowledgeCardExtractionService {
             Logger.info("📖 Extracting narratives from: \(filename) (attempt \(attempt)/\(maxAttempts))", category: .ai)
 
             do {
-                // Use unified structured output API with Gemini backend
                 let response: KnowledgeCardExtractionResponse = try await facade.executeStructuredWithDictionarySchema(
                     prompt: prompt,
                     modelId: modelId,
@@ -89,7 +88,7 @@ actor KnowledgeCardExtractionService {
                     schema: KCExtractionPrompts.jsonSchema,
                     schemaName: "knowledge_card_extraction",
                     maxOutputTokens: 32768,
-                    backend: .gemini
+                    backend: .openRouter
                 )
                 Logger.info("📖 Extracted \(response.cards.count) narrative cards", category: .ai)
                 return response.cards

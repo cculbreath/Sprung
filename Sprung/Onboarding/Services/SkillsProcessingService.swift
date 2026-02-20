@@ -174,8 +174,8 @@ final class SkillsProcessingService {
                     as: DeduplicationResponse.self,
                     schema: SkillsProcessingPrompts.deduplicationSchema,
                     schemaName: "deduplication_analysis",
-                    maxOutputTokens: 65536,  // 64k - Gemini 2.5 Flash limit
-                    backend: .gemini
+                    maxOutputTokens: 65536,
+                    backend: .openRouter
                 )
 
                 allDuplicateGroups.append(contentsOf: response.duplicateGroups)
@@ -184,21 +184,6 @@ final class SkillsProcessingService {
                 partNumber += 1
 
                 Logger.info("🔧 Part \(partNumber - 1) complete: \(response.duplicateGroups.count) groups, hasMore: \(hasMore)", category: .ai)
-            } catch let error as GoogleContentGenerator.ContentGeneratorError {
-                // Handle MAX_TOKENS by forcing continuation
-                if case .extractionBlocked(let finishReason) = error, finishReason == "MAX_TOKENS" {
-                    Logger.warning("⚠️ Deduplication part \(partNumber) hit MAX_TOKENS, will retry with remaining skills", category: .ai)
-                    agentActivityTracker?.appendTranscript(
-                        agentId: agentId,
-                        entryType: .system,
-                        content: "Part \(partNumber) hit MAX_TOKENS, continuing with remaining skills"
-                    )
-                    // Force continuation - the next iteration will use a continuation prompt
-                    partNumber += 1
-                    hasMore = processedSkillIds.count < skills.count
-                    continue
-                }
-                throw error
             }
 
             // Safety limit
@@ -453,8 +438,8 @@ final class SkillsProcessingService {
             as: ATSExpansionResponse.self,
             schema: schema,
             schemaName: "ats_expansion",
-            maxOutputTokens: 65536,  // 64k - Gemini 2.5 Flash limit
-            backend: .gemini
+            maxOutputTokens: 65536,
+            backend: .openRouter
         )
 
         Logger.debug("🔧 ATS batch \(batchIndex): Generated variants for \(response.skills.count) skills", category: .ai)
@@ -483,8 +468,7 @@ final class SkillsProcessingService {
             as: SingleSkillATSResponse.self,
             schema: schema,
             schemaName: "single_skill_ats",
-            backend: .gemini,
-            thinkingLevel: "low"  // Simple transformation doesn't need heavy reasoning
+            backend: .openRouter
         )
 
         Logger.info("🔧 Generated \(response.variants.count) ATS variants for \(skill.canonical)", category: .ai)

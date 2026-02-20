@@ -3,7 +3,7 @@
 //  Sprung
 //
 //  Enriches KnowledgeCards with structured fact extraction.
-//  Fact extraction uses Gemini structured output.
+//  Fact extraction uses OpenRouter structured output.
 //
 
 import Foundation
@@ -43,7 +43,7 @@ actor CardEnrichmentService {
             schema: Self.factExtractionSchema,
             schemaName: "fact_extraction",
             maxOutputTokens: 32768,
-            backend: .gemini
+            backend: .openRouter
         )
 
         // Write results to card fields
@@ -167,7 +167,7 @@ actor CardEnrichmentService {
         """
     }
 
-    // MARK: - JSON Schema for Gemini Structured Output
+    // MARK: - JSON Schema for Structured Output
 
     static let factExtractionSchema: [String: Any] = [
         "type": "object",

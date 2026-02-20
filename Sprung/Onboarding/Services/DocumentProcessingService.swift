@@ -324,9 +324,20 @@ actor DocumentProcessingService {
             return DocumentSummary.fallback(from: extractedText, filename: filename)
         }
         do {
-            let summary = try await facade.generateDocumentSummary(
-                content: extractedText,
-                filename: filename
+            guard let modelId = UserDefaults.standard.string(forKey: "onboardingDocSummaryModelId"), !modelId.isEmpty else {
+                throw ModelConfigurationError.modelNotConfigured(
+                    settingKey: "onboardingDocSummaryModelId",
+                    operationName: "Document Summary Generation"
+                )
+            }
+            let summary: DocumentSummary = try await facade.executeStructuredWithDictionarySchema(
+                prompt: DocumentExtractionPrompts.summaryPrompt(filename: filename, content: extractedText),
+                modelId: modelId,
+                as: DocumentSummary.self,
+                schema: DocumentExtractionPrompts.summaryJsonSchema,
+                schemaName: "document_summary",
+                maxOutputTokens: 65536,
+                backend: .openRouter
             )
             Logger.info("✅ Summary generated for \(filename) (\(summary.summary.count) chars)", category: .ai)
             return summary

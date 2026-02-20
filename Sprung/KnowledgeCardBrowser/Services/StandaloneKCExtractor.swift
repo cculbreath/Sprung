@@ -169,9 +169,20 @@ class StandaloneKCExtractor {
         var briefDescription: String
         if let facade = llmFacade {
             do {
-                let docSummary = try await facade.generateDocumentSummary(
-                    content: artifact.extractedContent,
-                    filename: artifact.filename
+                guard let modelId = UserDefaults.standard.string(forKey: "onboardingDocSummaryModelId"), !modelId.isEmpty else {
+                    throw ModelConfigurationError.modelNotConfigured(
+                        settingKey: "onboardingDocSummaryModelId",
+                        operationName: "Document Summary Generation"
+                    )
+                }
+                let docSummary: DocumentSummary = try await facade.executeStructuredWithDictionarySchema(
+                    prompt: DocumentExtractionPrompts.summaryPrompt(filename: artifact.filename, content: artifact.extractedContent),
+                    modelId: modelId,
+                    as: DocumentSummary.self,
+                    schema: DocumentExtractionPrompts.summaryJsonSchema,
+                    schemaName: "document_summary",
+                    maxOutputTokens: 65536,
+                    backend: .openRouter
                 )
                 summaryText = docSummary.summary
                 briefDescription = docSummary.briefDescription

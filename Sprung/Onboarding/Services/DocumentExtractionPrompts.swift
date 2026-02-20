@@ -3,16 +3,16 @@
 //  Sprung
 //
 //  Centralized prompts for document extraction and summarization.
-//  Used by GoogleAIService for PDF/document text extraction and summary generation.
+//  Used for PDF text extraction (Gemini) and document summary generation (OpenRouter).
 //
 
 import Foundation
 
 enum DocumentExtractionPrompts {
 
-    // MARK: - JSON Schema for Gemini Structured Output
+    // MARK: - JSON Schema for Structured Output
 
-    /// JSON Schema for DocumentSummary to enable Gemini structured output mode
+    /// JSON Schema for DocumentSummary structured output
     static let summaryJsonSchema: [String: Any] = [
         "type": "object",
         "properties": [

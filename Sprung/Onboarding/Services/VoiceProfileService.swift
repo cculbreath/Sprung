@@ -51,8 +51,6 @@ final class VoiceProfileService {
 
         Logger.info("🎤 Extracting voice profile from \(samples.count) samples", category: .ai)
 
-        // Note: Gemini 2.5 Flash uses thinking tokens that count against maxOutputTokens.
-        // With ~4000 thinking tokens typical, we need generous headroom for actual output.
         // VoiceProfile has explicit CodingKeys for snake_case mapping, so use .useDefaultKeys
         let profile: VoiceProfile = try await facade.executeStructuredWithDictionarySchema(
             prompt: prompt,
@@ -62,7 +60,7 @@ final class VoiceProfileService {
             schemaName: "voice_profile",
             maxOutputTokens: 32768,
             keyDecodingStrategy: .useDefaultKeys,
-            backend: .gemini
+            backend: .openRouter
         )
 
         Logger.info(

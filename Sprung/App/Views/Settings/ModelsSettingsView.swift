@@ -139,8 +139,8 @@ struct ModelsSettingsView: View {
         modelRow(operation: "PDF Extraction", backend: .gemini) {
             geminiPicker(selection: $pdfExtractionModelId, minTokens: 64000)
         }
-        modelRow(operation: "Doc Summary", backend: .gemini) {
-            geminiPicker(selection: $docSummaryModelId, minTokens: 64000)
+        modelRow(operation: "Doc Summary", backend: .openRouter) {
+            openRouterPicker(selection: $docSummaryModelId)
         }
         modelRow(operation: "Card Merge", backend: .openRouter) {
             openRouterPicker(selection: $cardMergeModelId)
@@ -149,17 +149,17 @@ struct ModelsSettingsView: View {
         Divider().padding(.vertical, 4)
 
         // Skill Processing
-        modelRow(operation: "Skill Bank", backend: .gemini) {
-            geminiPicker(selection: $skillBankModelId, minTokens: 16000)
+        modelRow(operation: "Skill Bank", backend: .openRouter) {
+            openRouterPicker(selection: $skillBankModelId)
         }
-        modelRow(operation: "Narrative Cards", backend: .gemini) {
-            geminiPicker(selection: $kcExtractionModelId, minTokens: 32000)
+        modelRow(operation: "Narrative Cards", backend: .openRouter) {
+            openRouterPicker(selection: $kcExtractionModelId)
         }
-        modelRow(operation: "Inference Guidance", backend: .gemini) {
-            geminiPicker(selection: $guidanceExtractionModelId, minTokens: 4000)
+        modelRow(operation: "Inference Guidance", backend: .openRouter) {
+            openRouterPicker(selection: $guidanceExtractionModelId)
         }
-        modelRow(operation: "Skills Processing", backend: .gemini) {
-            geminiPicker(selection: $skillsProcessingModelId, minTokens: 64000)
+        modelRow(operation: "Skills Processing", backend: .openRouter) {
+            openRouterPicker(selection: $skillsProcessingModelId)
         }
         modelRow(operation: "Skill Curation", backend: .openRouter) {
             openRouterPicker(selection: $skillCurationModelId)

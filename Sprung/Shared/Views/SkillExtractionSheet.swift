@@ -16,10 +16,9 @@ struct SkillExtractionSheet: View {
 
     @Environment(\.dismiss) private var dismiss
 
-    // Model selection (Gemini backend, same key as SkillBankService)
+    // Model selection (OpenRouter backend, same key as SkillBankService)
     @AppStorage("skillBankModelId") private var skillBankModelId: String = ""
-    @State private var geminiModels: [GoogleAIService.GeminiModel] = []
-    @State private var isLoadingModels = false
+    @Environment(EnabledLLMStore.self) private var enabledLLMStore
 
     // Artifact selection
     @State private var selectedArtifactIds: Set<UUID> = []
@@ -45,8 +44,12 @@ struct SkillExtractionSheet: View {
         artifactRecordStore.archivedArtifacts
     }
 
-    private var hasGeminiKey: Bool {
-        APIKeyManager.get(.gemini) != nil
+    private var allOpenRouterModels: [EnabledLLM] {
+        enabledLLMStore.enabledModels
+            .sorted { lhs, rhs in
+                (lhs.displayName.isEmpty ? lhs.modelId : lhs.displayName)
+                    < (rhs.displayName.isEmpty ? rhs.modelId : rhs.displayName)
+            }
     }
 
     var body: some View {
@@ -60,9 +63,7 @@ struct SkillExtractionSheet: View {
             footerSection
         }
         .frame(width: 560, height: 560)
-        .onAppear {
-            loadModels()
-        }
+        .onAppear {}
         .confirmationDialog(
             "Clear All Skills?",
             isPresented: $showClearConfirmation,
@@ -121,32 +122,22 @@ struct SkillExtractionSheet: View {
 
     private var modelPickerSection: some View {
         GroupBox("Extraction Model") {
-            if !hasGeminiKey {
-                Text("No Gemini API key configured")
-                    .foregroundStyle(.secondary)
-                    .font(.caption)
-            } else if isLoadingModels {
-                HStack {
-                    ProgressView().controlSize(.small)
-                    Text("Loading models...")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            } else if geminiModels.isEmpty {
-                Text("No models available")
+            if allOpenRouterModels.isEmpty {
+                Text("No models enabled")
                     .foregroundStyle(.secondary)
                     .font(.caption)
             } else {
-                let selectedModel = geminiModels.first { $0.id == skillBankModelId }
+                let selectedModel = allOpenRouterModels.first { $0.modelId == skillBankModelId }
+                let displayName = selectedModel.map { $0.displayName.isEmpty ? $0.modelId : $0.displayName } ?? "Select model..."
                 Menu {
-                    ForEach(geminiModels) { model in
-                        Button(model.displayName) {
-                            skillBankModelId = model.id
+                    ForEach(allOpenRouterModels, id: \.modelId) { model in
+                        Button(model.displayName.isEmpty ? model.modelId : model.displayName) {
+                            skillBankModelId = model.modelId
                         }
                     }
                 } label: {
                     HStack(spacing: 4) {
-                        Text(selectedModel?.displayName ?? "Select model...")
+                        Text(displayName)
                         Image(systemName: "chevron.up.chevron.down")
                             .font(.caption2)
                             .foregroundStyle(.secondary)
@@ -336,25 +327,6 @@ struct SkillExtractionSheet: View {
     }
 
     // MARK: - Actions
-
-    private func loadModels() {
-        guard hasGeminiKey else { return }
-        isLoadingModels = true
-        Task {
-            do {
-                let service = GoogleAIService()
-                let models = try await service.fetchAvailableModels()
-                await MainActor.run {
-                    geminiModels = models.filter { $0.outputTokenLimit >= 16000 }
-                    isLoadingModels = false
-                }
-            } catch {
-                await MainActor.run {
-                    isLoadingModels = false
-                }
-            }
-        }
-    }
 
     private func performExtraction() {
         let selectedArtifacts = archivedArtifacts.filter { selectedArtifactIds.contains($0.id) }

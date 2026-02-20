@@ -169,8 +169,7 @@ extension SkillsBankBrowser {
                     as: RefineResponse.self,
                     schema: schema,
                     schemaName: "skill_refinements",
-                    backend: .gemini,
-                    thinkingLevel: "low"  // Use low thinking for simple transformations to reduce token usage
+                    backend: .openRouter
                 )
 
                 // Apply refinements

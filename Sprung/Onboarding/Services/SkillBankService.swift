@@ -3,7 +3,7 @@
 //  Sprung
 //
 //  Service for extracting comprehensive skill inventories from documents.
-//  Uses Gemini structured output for guaranteed valid JSON.
+//  Uses OpenRouter structured output for guaranteed valid JSON.
 //
 
 import Foundation
@@ -116,7 +116,6 @@ actor SkillBankService {
             Logger.info("🔧 Extracting skills from: \(filename) (attempt \(attempt)/\(maxAttempts))", category: .ai)
 
             do {
-                // Use unified structured output API with Gemini backend
                 let response: SkillExtractionResponse = try await facade.executeStructuredWithDictionarySchema(
                     prompt: prompt,
                     modelId: modelId,
@@ -124,7 +123,7 @@ actor SkillBankService {
                     schema: SkillBankPrompts.jsonSchema,
                     schemaName: "skill_extraction",
                     maxOutputTokens: 65536,
-                    backend: .gemini
+                    backend: .openRouter
                 )
                 Logger.info("🔧 Extracted \(response.skills.count) skills", category: .ai)
                 return response.skills

@@ -251,8 +251,7 @@ final class LLMFacade {
         schemaName: String,
         maxOutputTokens: Int = 32768,
         keyDecodingStrategy: JSONDecoder.KeyDecodingStrategy = .useDefaultKeys,
-        backend: Backend = .openRouter,
-        thinkingLevel: String? = nil
+        backend: Backend = .openRouter
     ) async throws -> T {
         let start = ContinuousClock.now
         let decoder = JSONDecoder()
@@ -260,19 +259,6 @@ final class LLMFacade {
 
         let result: T
         switch backend {
-        case .gemini:
-            let jsonString = try await specializedAPIs.generateStructuredJSON(
-                prompt: prompt,
-                modelId: modelId,
-                maxOutputTokens: maxOutputTokens,
-                jsonSchema: schema,
-                thinkingLevel: thinkingLevel
-            )
-            guard let data = jsonString.data(using: .utf8) else {
-                throw LLMError.clientError("Failed to convert Gemini response to data")
-            }
-            result = try decoder.decode(T.self, from: data)
-
         case .anthropic:
             let systemContent: [AnthropicSystemBlock] = [
                 AnthropicSystemBlock(text: "You are a helpful assistant that responds with well-structured JSON.")
@@ -285,7 +271,7 @@ final class LLMFacade {
                 schema: schema
             )
 
-        case .openRouter, .openAI:
+        case .openRouter, .openAI, .gemini:
             let jsonSchema = try JSONSchema.from(dictionary: schema)
             result = try await executeStructuredWithSchema(
                 prompt: prompt,
@@ -783,26 +769,6 @@ final class LLMFacade {
             method: "generateFromPDF", modelId: modelId ?? "(default)",
             prompt: prompt, attachmentInfo: "PDF: \(filename) (\(pdfData.count) bytes)",
             response: result.text, durationMs: elapsedMs(from: start)
-        )
-        return result
-    }
-
-    func generateDocumentSummary(
-        content: String,
-        filename: String,
-        modelId: String? = nil
-    ) async throws -> DocumentSummary {
-        let start = ContinuousClock.now
-        let result = try await specializedAPIs.generateDocumentSummary(
-            content: content,
-            filename: filename,
-            modelId: modelId
-        )
-        let jsonString = Self.jsonLogString(result)
-        LLMTranscriptLogger.logGeminiCall(
-            method: "generateDocumentSummary", modelId: modelId ?? "(default)",
-            prompt: "Summarize: \(filename)", attachmentInfo: "Text content: \(content.count) chars",
-            response: jsonString, durationMs: elapsedMs(from: start)
         )
         return result
     }

@@ -277,21 +277,6 @@ final class LLMFacadeSpecializedAPIs {
         )
     }
 
-    func generateDocumentSummary(
-        content: String,
-        filename: String,
-        modelId: String? = nil
-    ) async throws -> DocumentSummary {
-        guard let service = googleAIService else {
-            throw LLMError.clientError("Google AI service is not configured. Call registerGoogleAIService first.")
-        }
-        return try await service.generateSummary(
-            content: content,
-            filename: filename,
-            modelId: modelId
-        )
-    }
-
     func analyzeImagesWithGemini(
         images: [Data],
         prompt: String,
@@ -321,25 +306,6 @@ final class LLMFacadeSpecializedAPIs {
             prompt: prompt,
             jsonSchema: jsonSchema,
             modelId: modelId
-        )
-    }
-
-    func generateStructuredJSON(
-        prompt: String,
-        modelId: String,
-        maxOutputTokens: Int,
-        jsonSchema: [String: Any],
-        thinkingLevel: String? = nil
-    ) async throws -> String {
-        guard let service = googleAIService else {
-            throw LLMError.clientError("Google AI service is not configured. Call registerGoogleAIService first.")
-        }
-        return try await service.generateStructuredJSON(
-            prompt: prompt,
-            modelId: modelId,
-            maxOutputTokens: maxOutputTokens,
-            jsonSchema: jsonSchema,
-            thinkingLevel: thinkingLevel
         )
     }
 
