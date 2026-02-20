@@ -11,15 +11,7 @@ import SwiftUI
 struct PipelineView: View {
     let coordinator: DiscoveryCoordinator
 
-    @Environment(KnowledgeCardStore.self) private var knowledgeCardStore
-    @Environment(CoverRefStore.self) private var coverRefStore
-    @Environment(CandidateDossierStore.self) private var candidateDossierStore
-
     @State private var showingAddLead = false
-    @State private var isChoosing = false
-    @State private var selectionResult: JobSelectionsResult?
-    @State private var selectionError: String?
-    @State private var showingSelectionReport = false
 
     private var identifiedCount: Int {
         coordinator.jobAppStore.jobApps(forStatus: .new).count
@@ -50,16 +42,11 @@ struct PipelineView: View {
                     }
 
                     Button {
-                        Task { await chooseBestJobs() }
+                        NotificationCenter.default.post(name: .triggerBestJobButton, object: nil)
                     } label: {
-                        if isChoosing {
-                            ProgressView()
-                                .controlSize(.small)
-                        } else {
-                            Label("Choose Best", systemImage: "trophy")
-                        }
+                        Label("Choose Best", systemImage: "trophy")
                     }
-                    .disabled(identifiedCount < 1 || isChoosing)
+                    .disabled(identifiedCount < 1)
                     .help("Select best \(min(5, identifiedCount)) jobs from \(identifiedCount) identified")
 
                     Button {
@@ -95,57 +82,6 @@ struct PipelineView: View {
         .sheet(isPresented: $showingAddLead) {
             AddLeadView(coordinator: coordinator)
         }
-        .sheet(isPresented: $showingSelectionReport) {
-            if let result = selectionResult {
-                SelectionReportSheet(result: result)
-            } else if let error = selectionError {
-                SelectionErrorSheet(error: error)
-            }
-        }
-    }
-
-    private func chooseBestJobs() async {
-        isChoosing = true
-        selectionError = nil
-
-        // Build knowledge context from KnowledgeCards
-        let knowledgeContext = knowledgeCardStore.knowledgeCards
-            .map { card in
-                let typeLabel = "[\(card.cardType?.rawValue ?? "general")]"
-                return "\(typeLabel) \(card.title):\n\(card.narrative)"
-            }
-            .joined(separator: "\n\n")
-
-        // Build dossier context from CandidateDossier + writing samples
-        var dossierParts: [String] = []
-        if let dossier = candidateDossierStore.dossier {
-            dossierParts.append(dossier.exportForJobMatching())
-        }
-        // Append writing samples (CoverRefs) for additional context
-        let writingSamples = coverRefStore.storedCoverRefs
-            .filter { $0.type == .writingSample }
-            .prefix(5)  // Limit to avoid overwhelming context
-            .map { "<writing_sample name=\"\($0.name)\">\n\($0.content.prefix(500))...\n</writing_sample>" }
-            .joined(separator: "\n\n")
-        if !writingSamples.isEmpty {
-            dossierParts.append(writingSamples)
-        }
-        let dossierContext = dossierParts.joined(separator: "\n\n")
-
-        do {
-            let result = try await coordinator.chooseBestJobs(
-                knowledgeContext: knowledgeContext,
-                dossierContext: dossierContext,
-                count: 5
-            )
-            selectionResult = result
-            showingSelectionReport = true
-        } catch {
-            selectionError = error.localizedDescription
-            showingSelectionReport = true
-        }
-
-        isChoosing = false
     }
 
     private func advanceLead(_ lead: JobApp) {
@@ -413,6 +349,11 @@ struct AddLeadView: View {
 struct SelectionReportSheet: View {
     let result: JobSelectionsResult
     @Environment(\.dismiss) private var dismiss
+    @Environment(JobAppStore.self) private var jobAppStore
+
+    @State private var checkedJobIds: Set<UUID> = []
+
+    private var checkedCount: Int { checkedJobIds.count }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -422,13 +363,24 @@ struct SelectionReportSheet: View {
                     Text("Top \(result.selections.count) Job Matches")
                         .font(.title2)
                         .fontWeight(.semibold)
-                    Text("Selected and moved to Researching stage")
+                    Text("Check jobs to advance to Queued stage")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
-                Button("Done") { dismiss() }
+                HStack(spacing: 8) {
+                    Button("Cancel") { dismiss() }
+                        .buttonStyle(.bordered)
+                        .keyboardShortcut(.cancelAction)
+
+                    Button("Advance Selected (\(checkedCount))") {
+                        advanceCheckedJobs()
+                        dismiss()
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(checkedJobIds.isEmpty)
                     .keyboardShortcut(.defaultAction)
+                }
             }
             .padding()
             .background(Color(.windowBackgroundColor))
@@ -437,9 +389,25 @@ struct SelectionReportSheet: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    // Selections
+                    // Selections with checkboxes
                     ForEach(Array(result.selections.enumerated()), id: \.element.jobId) { index, selection in
-                        SelectionCard(selection: selection, rank: index + 1)
+                        HStack(alignment: .top, spacing: 8) {
+                            Toggle("", isOn: Binding(
+                                get: { checkedJobIds.contains(selection.jobId) },
+                                set: { isOn in
+                                    if isOn {
+                                        checkedJobIds.insert(selection.jobId)
+                                    } else {
+                                        checkedJobIds.remove(selection.jobId)
+                                    }
+                                }
+                            ))
+                            .toggleStyle(.checkbox)
+                            .labelsHidden()
+                            .padding(.top, 16)
+
+                            SelectionCard(selection: selection, rank: index + 1)
+                        }
                     }
 
                     // Overall Analysis
@@ -478,7 +446,20 @@ struct SelectionReportSheet: View {
                 .padding()
             }
         }
-        .frame(width: 600, height: 700)
+        .frame(width: 620, height: 700)
+        .onAppear {
+            // All selections checked by default
+            checkedJobIds = Set(result.selections.map(\.jobId))
+        }
+    }
+
+    private func advanceCheckedJobs() {
+        for selection in result.selections where checkedJobIds.contains(selection.jobId) {
+            if let job = jobAppStore.jobApps(forStatus: .new).first(where: { $0.id == selection.jobId }) {
+                jobAppStore.setStatus(job, to: .queued)
+                Logger.info("📋 Advanced '\(job.jobPosition)' at \(job.companyName) to Queued", category: .ai)
+            }
+        }
     }
 }
 

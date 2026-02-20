@@ -74,9 +74,11 @@ actor DiscoveryAgentService {
         systemPrompt: String,
         userMessage: String,
         enableTools: Bool = true,
-        backend: LLMFacade.Backend = .openAI
+        backend: LLMFacade.Backend = .openAI,
+        modelOverride: String? = nil
     ) async throws -> String {
-        let model = await modelId
+        let defaultModel = await modelId
+        let model = modelOverride ?? defaultModel
 
         var messages: [ChatCompletionParameters.Message] = [
             .init(role: .system, content: .text(systemPrompt)),
@@ -284,12 +286,12 @@ actor DiscoveryAgentService {
         )
     }
 
-    // TODO: Context source choice - may revisit (currently using knowledge cards + dossier)
     func chooseBestJobs(
         jobs: [(id: UUID, company: String, role: String, description: String)],
         knowledgeContext: String,
         dossierContext: String,
-        count: Int = 5
+        count: Int = 5,
+        modelOverride: String? = nil
     ) async throws -> JobSelectionsResult {
         let systemPrompt = loadPromptTemplate(named: "discovery_choose_best_jobs")
 
@@ -309,11 +311,12 @@ actor DiscoveryAgentService {
             """
         }
 
-        let response = try await runOpenAIRequest(
+        let response = try await runAgent(
             systemPrompt: systemPrompt,
             userMessage: userMessage,
-            modelId: await modelId,
-            reasoningEffort: await reasoningEffort
+            enableTools: false,
+            backend: .openRouter,
+            modelOverride: modelOverride
         )
         return try parser.parseJobSelections(response)
     }

@@ -215,7 +215,7 @@ final class DiscoveryCoordinator {
             knowledgeCardStore: knowledgeCardStore
         )
 
-        // Set agent service reference for workflows like chooseBestJobs
+        // Set agent service reference for coaching tool workflows
         coaching.agentService = agentService
 
         self.coachingService = coaching
@@ -426,60 +426,6 @@ final class DiscoveryCoordinator {
     /// Cancel ongoing sources discovery
     func cancelSourcesDiscovery() {
         sourcesDiscovery.cancel()
-    }
-
-    /// Choose best jobs from identified pool using LLM agent
-    /// - Parameters:
-    ///   - knowledgeContext: User's knowledge cards as text
-    ///   - dossierContext: User's dossier entries as text
-    ///   - count: Number of jobs to select (default 5)
-    /// - Returns: Selection result with reasoning, and advances selected jobs to researching
-    // TODO: Context source choice - may revisit (currently using knowledge cards + dossier)
-    func chooseBestJobs(
-        knowledgeContext: String,
-        dossierContext: String,
-        count: Int = 5
-    ) async throws -> JobSelectionsResult {
-        guard let agent = agentService else {
-            throw DiscoveryLLMError.toolExecutionFailed("Agent service not configured")
-        }
-
-        // Get all jobs in new (identified) status
-        let identifiedJobs = jobAppStore.jobApps(forStatus: .new)
-        guard !identifiedJobs.isEmpty else {
-            throw DiscoveryLLMError.toolExecutionFailed("No jobs in Identified status to choose from")
-        }
-
-        // Build job tuples for agent
-        let jobTuples = identifiedJobs.map { job in
-            (
-                id: job.id,
-                company: job.companyName,
-                role: job.jobPosition,
-                description: job.jobDescription
-            )
-        }
-
-        Logger.info("🎯 Choosing best \(count) jobs from \(identifiedJobs.count) identified", category: .ai)
-
-        // Call agent to select best jobs
-        let result = try await agent.chooseBestJobs(
-            jobs: jobTuples,
-            knowledgeContext: knowledgeContext,
-            dossierContext: dossierContext,
-            count: count
-        )
-
-        // Advance selected jobs to queued status
-        for selection in result.selections {
-            if let job = identifiedJobs.first(where: { $0.id == selection.jobId }) {
-                jobAppStore.setStatus(job, to: .queued)
-                Logger.info("📋 Advanced '\(job.jobPosition)' at \(job.companyName) to Queued", category: .ai)
-            }
-        }
-
-        Logger.info("✅ Selected \(result.selections.count) jobs for application", category: .ai)
-        return result
     }
 
     /// Generate an elevator pitch for an event using LLM agent

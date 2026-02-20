@@ -1,18 +1,26 @@
 // Sprung/App/Views/ToolbarButtons/BestJobButton.swift
 import SwiftUI
+
 struct BestJobButton: View {
-    @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
+    @Environment(JobAppStore.self) private var jobAppStore
+    @Environment(DiscoveryCoordinator.self) private var coordinator
+    @Environment(KnowledgeCardStore.self) private var knowledgeCardStore
+    @Environment(CandidateDossierStore.self) private var candidateDossierStore
+    @Environment(CoverRefStore.self) private var coverRefStore
     @Environment(LLMFacade.self) private var llmFacade
-    @State private var showBestJobModelSheet = false
-    @State private var selectedBestJobModel = ""
-    @State private var isProcessingBestJob = false
-    @State private var showBestJobAlert = false
-    @State private var bestJobResult: String?
+    @Environment(ReasoningStreamManager.self) private var reasoningStreamManager
+
+    @State private var showModelSheet = false
+    @State private var isProcessing = false
+    @State private var selectionResult: JobSelectionsResult?
+    @State private var selectionError: String?
+    @State private var showSelectionReport = false
+
     var body: some View {
         Button(action: {
-            showBestJobModelSheet = true
+            showModelSheet = true
         }, label: {
-            if isProcessingBestJob {
+            if isProcessing {
                 Label("Best Job", systemImage: "sparkle").fontWeight(.bold).foregroundColor(.blue)
                     .symbolEffect(.rotate.byLayer)
                     .font(.system(size: 14, weight: .light))
@@ -21,79 +29,136 @@ struct BestJobButton: View {
                     .font(.system(size: 14, weight: .light))
             }
         })
-        .buttonStyle( .automatic )
-        .help("Find the best job match based on your qualifications")
-        .disabled(isProcessingBestJob)
-        .sheet(isPresented: $showBestJobModelSheet) {
-            BestJobModelSelectionSheet(
-                isPresented: $showBestJobModelSheet,
-                onModelSelected: { modelId, includeResumeBackground, includeCoverLetterBackground in
-                    selectedBestJobModel = modelId
-                    showBestJobModelSheet = false
-                    isProcessingBestJob = true
+        .buttonStyle(.automatic)
+        .help("Find the best job matches based on your qualifications")
+        .disabled(isProcessing)
+        .sheet(isPresented: $showModelSheet) {
+            ChooseBestJobsSheet(
+                isPresented: $showModelSheet,
+                onModelSelected: { modelId in
+                    showModelSheet = false
+                    isProcessing = true
                     Task {
-                        await startBestJobRecommendation(
-                            modelId: modelId,
-                            includeResumeBackground: includeResumeBackground,
-                            includeCoverLetterBackground: includeCoverLetterBackground
-                        )
+                        await chooseBestJobs(modelId: modelId)
                     }
                 }
             )
         }
-        .alert("Job Recommendation", isPresented: $showBestJobAlert, actions: {
-            Button("OK") {
-                bestJobResult = nil
+        .sheet(isPresented: $showSelectionReport) {
+            if let result = selectionResult {
+                SelectionReportSheet(result: result)
+            } else if let error = selectionError {
+                SelectionErrorSheet(error: error)
             }
-        }, message: {
-            if let result = bestJobResult {
-                Text(result)
-            }
-        })
+        }
         .onReceive(NotificationCenter.default.publisher(for: .triggerBestJobButton)) { _ in
-            // Programmatically trigger the button action (from menu commands)
-            showBestJobModelSheet = true
+            showModelSheet = true
         }
     }
+
     @MainActor
-    private func startBestJobRecommendation(
-        modelId: String,
-        includeResumeBackground: Bool,
-        includeCoverLetterBackground: Bool
-    ) async {
-        do {
-            let service = JobRecommendationService(llmFacade: llmFacade)
-            let (jobId, reason) = try await service.fetchRecommendation(
-                jobApps: jobAppStore.jobApps,
-                modelId: modelId,
-                includeResumeBackground: includeResumeBackground,
-                includeCoverLetterBackground: includeCoverLetterBackground
-            )
-            if let recommendedJob = jobAppStore.jobApps.first(where: { $0.id == jobId }) {
-                jobAppStore.selectedApp = recommendedJob
-                bestJobResult = "Recommended: \(recommendedJob.jobPosition) at \(recommendedJob.companyName)\n\nReason: \(reason)"
-                showBestJobAlert = true
-            } else {
-                bestJobResult = "Recommended job not found"
-                showBestJobAlert = true
+    private func chooseBestJobs(modelId: String) async {
+        selectionError = nil
+
+        // Build knowledge context from KnowledgeCards
+        let knowledgeContext = knowledgeCardStore.knowledgeCards
+            .map { card in
+                let typeLabel = "[\(card.cardType?.rawValue ?? "general")]"
+                return "\(typeLabel) \(card.title):\n\(card.narrative)"
             }
-            isProcessingBestJob = false
-        } catch {
-            Logger.error("JobRecommendation Error: \(error)")
-            if let llmError = error as? LLMError {
-                switch llmError {
-                case .unauthorized(let modelId):
-                    bestJobResult = "Access denied for model '\(modelId)'.\n\nThis model may require special authorization or billing setup. Try using a different model like GPT-4.1 instead."
-                case .invalidModelId(let modelId):
-                    bestJobResult = "Model '\(modelId)' is no longer available. Choose a different model in Settings and try again."
-                default:
-                    bestJobResult = "Error: \(error.localizedDescription)"
-                }
-            } else {
-                bestJobResult = "Error: \(error.localizedDescription)"
-            }
-            showBestJobAlert = true
-            isProcessingBestJob = false
+            .joined(separator: "\n\n")
+
+        // Build dossier context from CandidateDossier + writing samples
+        var dossierParts: [String] = []
+        if let dossier = candidateDossierStore.dossier {
+            dossierParts.append(dossier.exportForJobMatching())
         }
+        let writingSamples = coverRefStore.storedCoverRefs
+            .filter { $0.type == .writingSample }
+            .prefix(5)
+            .map { "<writing_sample name=\"\($0.name)\">\n\($0.content.prefix(500))...\n</writing_sample>" }
+            .joined(separator: "\n\n")
+        if !writingSamples.isEmpty {
+            dossierParts.append(writingSamples)
+        }
+        let dossierContext = dossierParts.joined(separator: "\n\n")
+
+        // Build prompt (same as DiscoveryAgentService.chooseBestJobs)
+        let identifiedJobs = coordinator.jobAppStore.jobApps(forStatus: .new)
+        guard !identifiedJobs.isEmpty else {
+            selectionError = "No jobs in Identified status to choose from"
+            showSelectionReport = true
+            isProcessing = false
+            return
+        }
+
+        let systemPrompt = loadPromptTemplate(named: "discovery_choose_best_jobs")
+        var userMessage = "Please select the top 5 jobs from the following opportunities.\n\n"
+        userMessage += "## CANDIDATE KNOWLEDGE CARDS\n\(knowledgeContext)\n\n"
+        userMessage += "## CANDIDATE DOSSIER\n\(dossierContext)\n\n"
+        userMessage += "## JOB OPPORTUNITIES\n"
+        for job in identifiedJobs {
+            userMessage += """
+            ---
+            ID: \(job.id.uuidString)
+            Company: \(job.companyName)
+            Role: \(job.jobPosition)
+            Description: \(job.jobDescription)
+
+            """
+        }
+
+        do {
+            // Start reasoning stream overlay
+            reasoningStreamManager.startReasoning(modelName: modelId)
+
+            // Stream via OpenRouter with reasoning
+            let handle = try await llmFacade.startConversationStreaming(
+                systemPrompt: systemPrompt,
+                userMessage: userMessage,
+                modelId: modelId,
+                reasoning: .init(effort: "high"),
+                backend: .openRouter
+            )
+
+            // Process stream: forward reasoning, collect response
+            var fullResponse = ""
+            for try await chunk in handle.stream {
+                if let reasoningContent = chunk.allReasoningText {
+                    reasoningStreamManager.appendReasoning(reasoningContent)
+                }
+                if let content = chunk.content {
+                    fullResponse += content
+                }
+                if chunk.isFinished {
+                    reasoningStreamManager.isStreaming = false
+                    reasoningStreamManager.isVisible = false
+                }
+            }
+
+            // Parse the JSON response
+            let parser = DiscoveryResponseParser()
+            let result = try parser.parseJobSelections(fullResponse)
+
+            selectionResult = result
+            showSelectionReport = true
+            Logger.info("✅ Choose Best Jobs: selected \(result.selections.count) jobs", category: .ai)
+        } catch {
+            Logger.error("Choose Best Jobs Error: \(error)")
+            reasoningStreamManager.showError(error.localizedDescription)
+            selectionError = error.localizedDescription
+            showSelectionReport = true
+        }
+
+        isProcessing = false
+    }
+
+    private func loadPromptTemplate(named name: String) -> String {
+        guard let url = Bundle.main.url(forResource: name, withExtension: "txt", subdirectory: "Prompts"),
+              let content = try? String(contentsOf: url, encoding: .utf8) else {
+            Logger.error("Failed to load prompt template: \(name)", category: .ai)
+            return "Error loading prompt template"
+        }
+        return content
     }
 }
