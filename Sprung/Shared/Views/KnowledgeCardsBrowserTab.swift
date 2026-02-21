@@ -19,6 +19,7 @@ struct KnowledgeCardsBrowserTab: View {
     @State private var cardToDelete: KnowledgeCard?
     @State private var showAddSheet = false
     @State private var showIngestionSheet = false
+    @State private var refiningCard: KnowledgeCard?
     @State private var pipelineCoordinator: StandaloneKCCoordinator?
 
     enum CardTypeFilter: String, CaseIterable {
@@ -83,7 +84,8 @@ struct KnowledgeCardsBrowserTab: View {
                     card: card,
                     isTopCard: isTopCard,
                     onEdit: { editingCard = card },
-                    onDelete: { cardToDelete = card; showDeleteConfirmation = true }
+                    onDelete: { cardToDelete = card; showDeleteConfirmation = true },
+                    onRefine: llmFacade != nil ? { refiningCard = card } : nil
                 )
             } filterContent: { currentIndex in
                 // Filter bar
@@ -130,6 +132,16 @@ struct KnowledgeCardsBrowserTab: View {
                 onCardAdded(newCard)
             }
             .environment(knowledgeCardStore)
+        }
+        .sheet(item: $refiningCard) { card in
+            KCRefinementSheet(
+                card: card,
+                onComplete: {
+                    onCardUpdated(card)
+                    refiningCard = nil
+                },
+                onCancel: { refiningCard = nil }
+            )
         }
         .alert("Delete Card?", isPresented: $showDeleteConfirmation, presenting: cardToDelete) { card in
             Button("Delete", role: .destructive) { onCardDeleted(card) }

@@ -7,6 +7,7 @@ struct KnowledgeCardView: View {
     let isTopCard: Bool
     let onEdit: () -> Void
     let onDelete: () -> Void
+    var onRefine: (() -> Void)?
     var onRegenerateSummary: (() -> Void)?
 
     @State private var isHovering = false
@@ -330,6 +331,16 @@ struct KnowledgeCardView: View {
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.regular)
+
+            if let onRefine {
+                Button(action: onRefine) {
+                    Label("Refine", systemImage: "sparkles")
+                        .font(.subheadline.weight(.medium))
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.regular)
+                .tint(.purple)
+            }
 
             Button(action: onDelete) {
                 Label("Delete", systemImage: "trash")

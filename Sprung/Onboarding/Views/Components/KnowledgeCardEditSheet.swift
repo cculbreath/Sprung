@@ -24,6 +24,16 @@ struct KnowledgeCardEditSheet: View {
     @State private var technologies: [String] = []
     @State private var outcomes: [String] = []
     @State private var suggestedBullets: [String] = []
+    @State private var evidenceQuality: String = ""
+
+    // Facts
+    @State private var facts: [KnowledgeCardFact] = []
+
+    // Verbatim excerpts
+    @State private var verbatimExcerpts: [VerbatimExcerpt] = []
+
+    // Evidence anchors
+    @State private var evidenceAnchors: [EvidenceAnchor] = []
 
     @State private var showDiscardAlert = false
 
@@ -53,6 +63,10 @@ struct KnowledgeCardEditSheet: View {
             || technologies != card.technologies
             || outcomes != card.outcomes
             || suggestedBullets != card.suggestedBullets
+            || evidenceQuality != (card.evidenceQuality ?? "")
+            || facts.count != card.facts.count
+            || verbatimExcerpts.count != card.verbatimExcerpts.count
+            || evidenceAnchors.count != card.evidenceAnchors.count
     }
 
     private var wordCount: Int {
@@ -87,6 +101,12 @@ struct KnowledgeCardEditSheet: View {
             _technologies = State(initialValue: card.technologies)
             _outcomes = State(initialValue: card.outcomes)
             _suggestedBullets = State(initialValue: card.suggestedBullets)
+            _evidenceQuality = State(initialValue: card.evidenceQuality ?? "")
+
+            // Facts, verbatim excerpts, evidence anchors
+            _facts = State(initialValue: card.facts)
+            _verbatimExcerpts = State(initialValue: card.verbatimExcerpts)
+            _evidenceAnchors = State(initialValue: card.evidenceAnchors)
         }
     }
 
@@ -105,6 +125,9 @@ struct KnowledgeCardEditSheet: View {
                     contentSection
                     extractableSection
                     enrichmentSection
+                    if !facts.isEmpty || !isNewCard { factsSection }
+                    if !verbatimExcerpts.isEmpty || !isNewCard { verbatimExcerptsSection }
+                    if !evidenceAnchors.isEmpty || !isNewCard { evidenceAnchorsSection }
                     settingsSection
                 }
                 .padding(24)
@@ -115,7 +138,7 @@ struct KnowledgeCardEditSheet: View {
             // Footer with actions
             footerSection
         }
-        .frame(width: 600, height: 700)
+        .frame(width: 600, height: 800)
         .background(Color(nsColor: .windowBackgroundColor))
         .alert("Discard Changes?", isPresented: $showDiscardAlert) {
             Button("Discard", role: .destructive) {
@@ -305,9 +328,173 @@ struct KnowledgeCardEditSheet: View {
                 .font(.headline)
                 .foregroundStyle(.primary)
 
+            // Evidence quality picker
+            VStack(alignment: .leading, spacing: 6) {
+                Label("Evidence Quality", systemImage: "shield.checkered")
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(.secondary)
+
+                Picker("Evidence Quality", selection: $evidenceQuality) {
+                    Text("None").tag("")
+                    Text("Strong").tag("strong")
+                    Text("Moderate").tag("moderate")
+                    Text("Weak").tag("weak")
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+            }
+
             editableTagGroup("Technologies", systemImage: "cpu", items: $technologies, placeholder: "e.g., Kubernetes")
             editableListGroup("Outcomes", systemImage: "target", items: $outcomes, placeholder: "e.g., Reduced deploy time by 60%")
             editableListGroup("Suggested Bullets", systemImage: "list.bullet", items: $suggestedBullets, placeholder: "Resume bullet template")
+        }
+        .padding(16)
+        .background(Color(nsColor: .controlBackgroundColor))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+
+    // MARK: - Facts Section
+
+    private var factsSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Facts")
+                .font(.headline)
+                .foregroundStyle(.primary)
+
+            ForEach(Array(facts.enumerated()), id: \.offset) { index, fact in
+                HStack(alignment: .top, spacing: 8) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(fact.category.capitalized)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                        Text(fact.statement)
+                            .font(.caption)
+                            .lineLimit(3)
+                        if let confidence = fact.confidence, !confidence.isEmpty {
+                            Text("Confidence: \(confidence)")
+                                .font(.caption2)
+                                .foregroundStyle(.tertiary)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                    Button {
+                        facts.remove(at: index)
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.secondary)
+                            .font(.caption)
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(Color.secondary.opacity(0.05))
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+            }
+
+            AddFactField { category, statement in
+                facts.append(KnowledgeCardFact(
+                    category: category,
+                    statement: statement,
+                    confidence: nil,
+                    source: nil
+                ))
+            }
+        }
+        .padding(16)
+        .background(Color(nsColor: .controlBackgroundColor))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+
+    // MARK: - Verbatim Excerpts Section
+
+    private var verbatimExcerptsSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Verbatim Excerpts")
+                .font(.headline)
+                .foregroundStyle(.primary)
+
+            ForEach(Array(verbatimExcerpts.enumerated()), id: \.offset) { index, excerpt in
+                HStack(alignment: .top, spacing: 8) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(excerpt.context)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                        Text(excerpt.text)
+                            .font(.caption)
+                            .lineLimit(4)
+                        HStack(spacing: 8) {
+                            Text(excerpt.location)
+                                .font(.caption2)
+                                .foregroundStyle(.tertiary)
+                            Text(excerpt.preservationReason)
+                                .font(.caption2)
+                                .foregroundStyle(.tertiary)
+                                .lineLimit(1)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                    Button {
+                        verbatimExcerpts.remove(at: index)
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.secondary)
+                            .font(.caption)
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(Color.secondary.opacity(0.05))
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+            }
+        }
+        .padding(16)
+        .background(Color(nsColor: .controlBackgroundColor))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+
+    // MARK: - Evidence Anchors Section
+
+    private var evidenceAnchorsSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Evidence Anchors")
+                .font(.headline)
+                .foregroundStyle(.primary)
+
+            ForEach(Array(evidenceAnchors.enumerated()), id: \.offset) { index, anchor in
+                HStack(alignment: .top, spacing: 8) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(anchor.documentId)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                        Text(anchor.location)
+                            .font(.caption)
+                        if let excerpt = anchor.verbatimExcerpt, !excerpt.isEmpty {
+                            Text(excerpt)
+                                .font(.caption2)
+                                .foregroundStyle(.tertiary)
+                                .lineLimit(2)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                    Button {
+                        evidenceAnchors.remove(at: index)
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.secondary)
+                            .font(.caption)
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(Color.secondary.opacity(0.05))
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+            }
         }
         .padding(16)
         .background(Color(nsColor: .controlBackgroundColor))
@@ -455,6 +642,10 @@ struct KnowledgeCardEditSheet: View {
             existingCard.technologies = technologies
             existingCard.outcomes = outcomes
             existingCard.suggestedBullets = suggestedBullets
+            existingCard.evidenceQuality = evidenceQuality.isEmpty ? nil : evidenceQuality
+            existingCard.facts = facts
+            existingCard.verbatimExcerpts = verbatimExcerpts
+            existingCard.evidenceAnchors = evidenceAnchors
             onSave(existingCard)
         } else {
             // Create new card
@@ -506,5 +697,50 @@ private struct AddItemField: View {
         guard !trimmed.isEmpty else { return }
         onAdd(trimmed)
         text = ""
+    }
+}
+
+// MARK: - Add Fact Field
+
+private struct AddFactField: View {
+    let onAdd: (String, String) -> Void
+
+    @State private var category = ""
+    @State private var statement = ""
+
+    private var canAdd: Bool {
+        !category.trimmingCharacters(in: .whitespaces).isEmpty
+            && !statement.trimmingCharacters(in: .whitespaces).isEmpty
+    }
+
+    var body: some View {
+        HStack(spacing: 6) {
+            TextField("Category", text: $category)
+                .textFieldStyle(.roundedBorder)
+                .font(.caption)
+                .frame(maxWidth: 120)
+
+            TextField("Statement", text: $statement)
+                .textFieldStyle(.roundedBorder)
+                .font(.caption)
+                .onSubmit { addFact() }
+
+            Button(action: addFact) {
+                Image(systemName: "plus.circle.fill")
+                    .foregroundStyle(.blue)
+            }
+            .buttonStyle(.plain)
+            .disabled(!canAdd)
+        }
+    }
+
+    private func addFact() {
+        guard canAdd else { return }
+        onAdd(
+            category.trimmingCharacters(in: .whitespaces),
+            statement.trimmingCharacters(in: .whitespaces)
+        )
+        category = ""
+        statement = ""
     }
 }
