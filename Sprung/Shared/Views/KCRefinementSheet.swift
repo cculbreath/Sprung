@@ -8,6 +8,7 @@ struct KCRefinementSheet: View {
     let onCancel: () -> Void
 
     @Environment(LLMFacade.self) private var llmFacade
+    @Environment(ReasoningStreamManager.self) private var reasoningStreamManager
 
     @State private var instructions: String = ""
     @State private var selectedModel: String = ""
@@ -197,7 +198,10 @@ struct KCRefinementSheet: View {
 
         Task {
             do {
-                let service = KCRefinementService(llmFacade: llmFacade)
+                let service = KCRefinementService(
+                    llmFacade: llmFacade,
+                    reasoningStreamManager: reasoningStreamManager
+                )
                 let refined = try await service.refine(
                     card: card,
                     instructions: instructions.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -206,6 +210,7 @@ struct KCRefinementSheet: View {
                 service.apply(refined, to: card)
                 onComplete()
             } catch {
+                reasoningStreamManager.showError(error.localizedDescription)
                 errorMessage = error.localizedDescription
                 isRefining = false
             }

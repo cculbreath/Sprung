@@ -21,8 +21,6 @@ final class TTSAudioStreamer {
     private var completeAudioCache: Data = Data()
     /// Count of received chunks for monitoring
     private var chunkCount: Int = 0
-    /// Maximum number of chunks to allow before forcing cleanup
-    private let maxChunkCount: Int = 300
     /// Continuation for feeding audio data stream
     private var continuation: AsyncThrowingStream<Data, Error>.Continuation?
     /// Current AsyncThrowingStream instance (holds the stream for player.start)
@@ -142,26 +140,6 @@ final class TTSAudioStreamer {
             }
             return
         }
-        // Check if we've received too many chunks - but allow audio to continue playing
-        if chunkCount > maxChunkCount {
-            Logger.warning("TTSAudioStreamer: Many chunks accumulated (\(chunkCount)/\(maxChunkCount)). Forcing stream completion to prevent overflow.")
-            // Report overflow condition but CONTINUE playback of existing audio
-            // Create a specific overflow error that can be handled specially
-            let overflowError = NSError(
-                domain: "TTSAudioStreamer",
-                code: 1002,
-                userInfo: [
-                    NSLocalizedDescriptionKey: "Chunk limit exceeded, but continuing playback"
-                ]
-            )
-            Task { @MainActor in
-                // Call onError with the special error code that won't stop playback
-                self.onError?(overflowError)
-                // Reset buffer metrics but DON'T stop the stream
-                self.resetBufferMetrics()
-            }
-            return
-        }
         // New streaming session: buffer initial chunks up to threshold
         if continuation == nil {
             // First chunk: create stream and start buffering
@@ -224,6 +202,17 @@ final class TTSAudioStreamer {
             Logger.debug("TTSAudioStreamer: Yielding chunk directly to player, size: \(data.count), total: \(totalBufferedSize)")
             Task { @MainActor in
                 cont.yield(data)
+            }
+        }
+    }
+    /// Signal that no more audio data will arrive.
+    /// The player continues playing its buffer and fires `onFinish` when done.
+    func finishReceiving() {
+        Task { @MainActor in
+            Logger.debug("TTSAudioStreamer: Stream finished receiving data, closing continuation")
+            if let cont = continuation {
+                cont.finish()
+                continuation = nil
             }
         }
     }

@@ -1,15 +1,19 @@
 import Foundation
+import SwiftOpenAI
 
 /// Refines a single knowledge card using structured output from an LLM.
 @MainActor
 final class KCRefinementService {
     private let llmFacade: LLMFacade
+    private let reasoningStreamManager: ReasoningStreamManager
+    private var activeStreamingHandle: LLMStreamingHandle?
 
-    init(llmFacade: LLMFacade) {
+    init(llmFacade: LLMFacade, reasoningStreamManager: ReasoningStreamManager) {
         self.llmFacade = llmFacade
+        self.reasoningStreamManager = reasoningStreamManager
     }
 
-    /// Refine a knowledge card with the given instructions.
+    /// Refine a knowledge card with streaming reasoning display.
     /// Returns the LLM's refined version of the card.
     func refine(
         card: KnowledgeCard,
@@ -46,13 +50,65 @@ final class KCRefinementService {
         - Return the complete refined card with ALL fields populated
         """
 
-        return try await llmFacade.executeStructuredWithDictionarySchema(
+        let jsonSchema = try JSONSchema.from(dictionary: KCRefinementSchema.schema)
+        let userEffort = UserDefaults.standard.string(forKey: "reasoningEffort") ?? "medium"
+        let reasoning = OpenRouterReasoning(effort: userEffort, includeReasoning: true)
+
+        cancelActiveStreaming()
+
+        let handle = try await llmFacade.executeStructuredStreaming(
             prompt: prompt,
             modelId: modelId,
             as: RefinedKnowledgeCard.self,
-            schema: KCRefinementSchema.schema,
-            schemaName: "refined_knowledge_card"
+            reasoning: reasoning,
+            jsonSchema: jsonSchema
         )
+        activeStreamingHandle = handle
+
+        let responseText = try await processStreamWithReasoning(handle: handle, modelName: modelId)
+        return try LLMResponseParser.parseJSON(responseText, as: RefinedKnowledgeCard.self)
+    }
+
+    /// Cancel any active streaming operation.
+    func cancelActiveStreaming() {
+        activeStreamingHandle?.cancel()
+        activeStreamingHandle = nil
+    }
+
+    // MARK: - Stream Processing
+
+    private func processStreamWithReasoning(
+        handle: LLMStreamingHandle,
+        modelName: String
+    ) async throws -> String {
+        reasoningStreamManager.clear()
+        reasoningStreamManager.startReasoning(modelName: modelName)
+
+        var fullResponse = ""
+        var collectingJSON = false
+        var jsonResponse = ""
+
+        for try await chunk in handle.stream {
+            if let reasoningContent = chunk.allReasoningText {
+                reasoningStreamManager.reasoningText += reasoningContent
+            }
+
+            if let content = chunk.content {
+                fullResponse += content
+                if content.contains("{") || collectingJSON {
+                    collectingJSON = true
+                    jsonResponse += content
+                }
+            }
+
+            if chunk.isFinished {
+                reasoningStreamManager.isStreaming = false
+                reasoningStreamManager.isVisible = false
+            }
+        }
+
+        cancelActiveStreaming()
+        return jsonResponse.isEmpty ? fullResponse : jsonResponse
     }
 
     /// Apply a refined card's fields onto an existing KnowledgeCard.

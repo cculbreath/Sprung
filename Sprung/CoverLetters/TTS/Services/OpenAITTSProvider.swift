@@ -11,30 +11,57 @@ import SwiftUI
 import SwiftOpenAI // For the TTS functionality from your SwiftOpenAI fork
 /// Provides Text-to-Speech functionality using the OpenAI API
 class OpenAITTSProvider {
+    /// Available TTS models
+    enum TTSModel: String, CaseIterable {
+        case tts1 = "tts-1"
+        case tts1HD = "tts-1-hd"
+        case gpt4oMiniTTS = "gpt-4o-mini-tts"
+        var displayName: String {
+            switch self {
+            case .tts1: return "TTS-1 (Fast)"
+            case .tts1HD: return "TTS-1 HD (High Fidelity)"
+            case .gpt4oMiniTTS: return "GPT-4o Mini TTS (Best)"
+            }
+        }
+        var supportsInstructions: Bool {
+            self == .gpt4oMiniTTS
+        }
+        var supportedVoices: [Voice] {
+            switch self {
+            case .tts1, .tts1HD:
+                return [.alloy, .ash, .coral, .echo, .fable, .nova, .onyx, .sage, .shimmer]
+            case .gpt4oMiniTTS:
+                return Voice.allCases
+            }
+        }
+    }
     /// Available voices for TTS
     enum Voice: String, CaseIterable {
         case alloy
         case ash
         case ballad
+        case cedar
         case coral
         case echo
         case fable
-        case onyx
+        case marin
         case nova
+        case onyx
         case sage
         case shimmer
         case verse
-        /// Returns a user-friendly display name for the voice
         var displayName: String {
             switch self {
             case .alloy: return "Alloy (Female, Professional)"
             case .ash: return "Ash (Male, Authoritative)"
             case .ballad: return "Ballad (Male, Young British)"
+            case .cedar: return "Cedar (Male, Conversational)"
             case .coral: return "Coral (Female, Expressive)"
             case .echo: return "Echo (Male, Engaging)"
             case .fable: return "Fable (Neutral, British Professional)"
-            case .onyx: return "Onyx (Male, Professional)"
+            case .marin: return "Marin (Female, Warm)"
             case .nova: return "Nova (Female, Professional)"
+            case .onyx: return "Onyx (Male, Professional)"
             case .sage: return "Sage (Female, Engaging)"
             case .shimmer: return "Shimmer (Female, Authoritative)"
             case .verse: return "Verse (Neutral, Energetic)"
@@ -142,7 +169,7 @@ class OpenAITTSProvider {
     ///   - voice: The voice to use
     ///   - instructions: Custom voice instructions (optional)
     ///   - onComplete: Called when audio playback is complete or fails
-    func speakText(_ text: String, voice: Voice = .nova, instructions _: String? = nil, onComplete: @escaping (Error?) -> Void) {
+    func speakText(_ text: String, model: TTSModel = .tts1, voice: Voice = .nova, instructions: String? = nil, onComplete: @escaping (Error?) -> Void) {
         // OpenAI TTS has a 4096 character limit
         let maxLength = 4096
         var textToSpeak = text
@@ -156,10 +183,12 @@ class OpenAITTSProvider {
             }
             Logger.debug("Truncated text to \(textToSpeak.count) characters")
         }
-        // Call the TTS-capable client with the voice and instructions
+        let effectiveInstructions = model.supportsInstructions ? instructions : nil
         ttsClient.sendTTSRequest(
             text: textToSpeak,
+            model: model.rawValue,
             voice: voice.rawValue,
+            instructions: effectiveInstructions,
             onComplete: { [weak self] result in
                 switch result {
                 case let .success(audioData):
@@ -274,25 +303,28 @@ class OpenAITTSProvider {
     ///   - onComplete: Called when playback finishes or errors.
     func streamAndPlayText(
         _ text: String,
+        model: TTSModel = .tts1,
         voice: Voice = .nova,
         instructions: String? = nil,
         onStart: (() -> Void)? = nil,
         onComplete: @escaping (Error?) -> Void
     ) {
+        let effectiveInstructions = model.supportsInstructions ? instructions : nil
         // Split text into chunks if needed
         let textChunks = splitTextIntoChunks(text)
         if textChunks.count == 1 {
-            streamSingleChunk(textChunks[0], voice: voice, instructions: instructions,
+            streamSingleChunk(textChunks[0], model: model, voice: voice, instructions: effectiveInstructions,
                              onStart: onStart, onComplete: onComplete)
         } else {
             Logger.info("🎵 Starting multi-chunk TTS streaming with \(textChunks.count) chunks")
-            streamMultipleChunks(textChunks, voice: voice, instructions: instructions,
+            streamMultipleChunks(textChunks, model: model, voice: voice, instructions: effectiveInstructions,
                                 onStart: onStart, onComplete: onComplete)
         }
     }
     /// Streams multiple text chunks with seamless playback transitions
     private func streamMultipleChunks(
         _ chunks: [String],
+        model: TTSModel,
         voice: Voice,
         instructions: String?,
         onStart: (() -> Void)?,
@@ -317,9 +349,10 @@ class OpenAITTSProvider {
                 Logger.debug("🎵 Streaming chunk \(chunkIndex + 1)/\(chunks.count) (\(currentChunk.count) chars)")
                 streamSingleChunk(
                     currentChunk,
+                    model: model,
                     voice: voice,
                     instructions: instructions,
-                    onStart: hasStarted ? nil : onStart, // Only call onStart for the first chunk
+                    onStart: hasStarted ? nil : onStart,
                     onComplete: { error in
                         if let error = error {
                             Logger.error("❌ Chunk \(chunkIndex + 1) failed: \(error.localizedDescription)")
@@ -344,8 +377,9 @@ class OpenAITTSProvider {
     /// Streams a single chunk of text using ChunkedAudioPlayer
     private func streamSingleChunk(
         _ text: String,
+        model: TTSModel,
         voice: Voice,
-        instructions _: String?,
+        instructions: String?,
         onStart: (() -> Void)?,
         onComplete: @escaping (Error?) -> Void
     ) {
@@ -416,23 +450,17 @@ class OpenAITTSProvider {
                 guard let self = self else { return }
                 self.isInStreamSetup = false
                 Logger.error("Stream error: \(error.localizedDescription)")
-                self.cancelTimeoutTimer() // Ensure timer is cancelled
+                self.cancelTimeoutTimer()
                 self.setBufferingState(false)
-                // If it's a chunk overflow error, handle it gracefully by completing normally
-                let nsError = error as NSError
-                if nsError.domain == "TTSAudioStreamer" && nsError.code == 1002 {
-                    Logger.debug("Handling chunk overflow gracefully - completing stream")
-                    self.onFinish?()
-                    onComplete(nil)
-                } else {
-                    self.onError?(error)
-                    onComplete(error)
-                }
+                self.onError?(error)
+                onComplete(error)
             }
         }
         ttsClient.sendTTSStreamingRequest(
             text: text,
+            model: model.rawValue,
             voice: voice.rawValue,
+            instructions: instructions,
             onChunk: { [weak self] result in
                 guard let self,
                       self.currentStreamID == streamID,
@@ -453,6 +481,9 @@ class OpenAITTSProvider {
                     self.cancelTimeoutTimer()
                     self.setBufferingState(false)
                     self.streamer.onError?(error)
+                } else {
+                    Logger.debug("API finished sending all audio data, signaling end of stream")
+                    self.streamer.finishReceiving()
                 }
             }
         )

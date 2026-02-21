@@ -93,12 +93,6 @@ class TTSViewModel {
                 Logger.debug("[TTSViewModel] Ignoring provider finish event during initial setup")
                 return
             }
-            // Special case: If we're still speaking or paused when onFinish is called, this is likely
-            // from the chunk overflow handler, and we should NOT stop playback
-            if (self.isSpeaking || self.isPaused) && !self.isBuffering {
-                Logger.debug("[TTSViewModel] Received onFinish while speaking/paused - likely from chunk overflow handler, maintaining playback state")
-                return
-            }
             self.isSpeaking = false
             self.isPaused = false
             self.isBuffering = false
@@ -176,7 +170,7 @@ class TTSViewModel {
     ///   - content: The text content to speak
     ///   - voice: The voice to use for speech
     ///   - instructions: Optional voice tuning instructions
-    func speakContent(_ content: String, voice: OpenAITTSProvider.Voice, instructions: String?) {
+    func speakContent(_ content: String, model: OpenAITTSProvider.TTSModel, voice: OpenAITTSProvider.Voice, instructions: String?) {
         Logger.info("🎯 [TTSViewModel] Starting TTS playback. Content empty: \(content.isEmpty)")
         logCurrentState("at start of speakContent")
         guard !content.isEmpty else {
@@ -209,6 +203,7 @@ class TTSViewModel {
         // Implemented with weak self to prevent retain cycles
         ttsProvider.streamAndPlayText(
             cleanContent,
+            model: model,
             voice: voice,
             instructions: instructions,
             onStart: { [weak self] in // This is onReady from the provider

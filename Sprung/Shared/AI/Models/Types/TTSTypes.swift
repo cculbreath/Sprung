@@ -1,4 +1,4 @@
-// 
+//
 //  TTSTypes.swift
 //  Sprung
 //
@@ -7,16 +7,19 @@ import Foundation
 /// Protocol that marks an LLM client as capable of handling Text-to-Speech requests
 protocol TTSCapable {
     /// Sends a non-streaming TTS request and calls the completion handler with the result
-    /// Sends a non-streaming TTS request and calls the completion handler with the result
     func sendTTSRequest(
         text: String,
+        model: String,
         voice: String,
+        instructions: String?,
         onComplete: @escaping (Result<Data, Error>) -> Void
     )
     /// Sends a streaming TTS request with callbacks for audio chunks and completion
     func sendTTSStreamingRequest(
         text: String,
+        model: String,
         voice: String,
+        instructions: String?,
         onChunk: @escaping (Result<Data, Error>) -> Void,
         onComplete: @escaping (Error?) -> Void
     )
@@ -30,7 +33,9 @@ final class UnavailableTTSClient: TTSCapable {
     }
     func sendTTSRequest(
         text: String,
+        model: String,
         voice: String,
+        instructions: String?,
         onComplete: @escaping (Result<Data, Error>) -> Void
     ) {
         Logger.warning(
@@ -41,7 +46,9 @@ final class UnavailableTTSClient: TTSCapable {
     }
     func sendTTSStreamingRequest(
         text: String,
+        model: String,
         voice: String,
+        instructions: String?,
         onChunk: @escaping (Result<Data, Error>) -> Void,
         onComplete: @escaping (Error?) -> Void
     ) {

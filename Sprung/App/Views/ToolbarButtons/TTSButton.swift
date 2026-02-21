@@ -10,6 +10,7 @@ struct TTSButton: View {
     @Environment(AppState.self) private var appState
     @Environment(LLMFacade.self) private var llmFacade
     @AppStorage("ttsEnabled") private var ttsEnabled: Bool = false
+    @AppStorage("ttsModel") private var ttsModel: String = "gpt-4o-mini-tts"
     @AppStorage("ttsVoice") private var ttsVoice: String = "nova"
     @AppStorage("ttsInstructions") private var ttsInstructions: String = ""
     @State private var ttsViewModel: TTSViewModel?
@@ -136,9 +137,10 @@ struct TTSButton: View {
               let coverLetter = coverLetterStore.cL,
               coverLetter.generated,
               !coverLetter.content.isEmpty else { return }
+        let model = OpenAITTSProvider.TTSModel(rawValue: ttsModel) ?? .gpt4oMiniTTS
         let voice = OpenAITTSProvider.Voice(rawValue: ttsVoice) ?? .nova
         let instructions = ttsInstructions.isEmpty ? nil : ttsInstructions
-        viewModel.speakContent(coverLetter.content, voice: voice, instructions: instructions)
+        viewModel.speakContent(coverLetter.content, model: model, voice: voice, instructions: instructions)
     }
     private func restartTTS() {
         guard let viewModel = ttsViewModel else { return }

@@ -14,15 +14,18 @@ final class OpenAIServiceTTSWrapper: TTSCapable {
     }
     func sendTTSRequest(
         text: String,
+        model: String,
         voice: String,
+        instructions: String?,
         onComplete: @escaping (Result<Data, Error>) -> Void
     ) {
         Task {
             do {
                 let parameters = AudioSpeechParameters(
-                    model: .tts1,
+                    model: Self.ttsModel(from: model),
                     input: text,
                     voice: .init(rawValue: voice) ?? .nova,
+                    instructions: instructions,
                     responseFormat: .mp3,
                     speed: 1.0
                 )
@@ -35,16 +38,19 @@ final class OpenAIServiceTTSWrapper: TTSCapable {
     }
     func sendTTSStreamingRequest(
         text: String,
+        model: String,
         voice: String,
+        instructions: String?,
         onChunk: @escaping (Result<Data, Error>) -> Void,
         onComplete: @escaping (Error?) -> Void
     ) {
         Task {
             do {
                 let parameters = AudioSpeechParameters(
-                    model: .tts1,
+                    model: Self.ttsModel(from: model),
                     input: text,
                     voice: .init(rawValue: voice) ?? .nova,
+                    instructions: instructions,
                     responseFormat: .mp3,
                     speed: 1.0
                 )
@@ -56,6 +62,14 @@ final class OpenAIServiceTTSWrapper: TTSCapable {
             } catch {
                 onComplete(error)
             }
+        }
+    }
+    private static func ttsModel(from id: String) -> AudioSpeechParameters.TTSModel {
+        switch id {
+        case "tts-1": .tts1
+        case "tts-1-hd": .tts1HD
+        case "gpt-4o-mini-tts": .gpt4oMiniTTS
+        default: .custom(model: id)
         }
     }
 }
