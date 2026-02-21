@@ -22,22 +22,12 @@ final class KCRefinementService {
     ) async throws -> RefinedKnowledgeCard {
         let cardJSON = try encodeCard(card)
 
-        let prompt = """
+        let systemPrompt = """
         You are refining a knowledge card based on the user's instructions.
 
         A knowledge card is a structured narrative about a professional experience, project, \
         achievement, or education credential. It contains a rich narrative (500-2000 words) along \
         with structured metadata used for resume generation and job matching.
-
-        ## Current Card
-
-        ```json
-        \(cardJSON)
-        ```
-
-        ## Refinement Instructions
-
-        \(instructions)
 
         ## Guidelines
 
@@ -50,16 +40,28 @@ final class KCRefinementService {
         - Return the complete refined card with ALL fields populated
         """
 
+        let userMessage = """
+        ## Current Card
+
+        ```json
+        \(cardJSON)
+        ```
+
+        ## Refinement Instructions
+
+        \(instructions)
+        """
+
         let jsonSchema = try JSONSchema.from(dictionary: KCRefinementSchema.schema)
         let userEffort = UserDefaults.standard.string(forKey: "reasoningEffort") ?? "medium"
         let reasoning = OpenRouterReasoning(effort: userEffort, includeReasoning: true)
 
         cancelActiveStreaming()
 
-        let handle = try await llmFacade.executeStructuredStreaming(
-            prompt: prompt,
+        let handle = try await llmFacade.startConversationStreaming(
+            systemPrompt: systemPrompt,
+            userMessage: userMessage,
             modelId: modelId,
-            as: RefinedKnowledgeCard.self,
             reasoning: reasoning,
             jsonSchema: jsonSchema
         )
