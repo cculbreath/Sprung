@@ -11,6 +11,7 @@ struct KnowledgeCardsBrowserTab: View {
 
     @Environment(ArtifactRecordStore.self) private var artifactRecordStore
     @Environment(SkillStore.self) private var skillStore
+    @Environment(ReasoningStreamManager.self) private var reasoningStreamManager
 
     @State private var selectedFilter: CardTypeFilter = .all
     @State private var searchText = ""
@@ -136,9 +137,9 @@ struct KnowledgeCardsBrowserTab: View {
         .sheet(item: $refiningCard) { card in
             KCRefinementSheet(
                 card: card,
-                onComplete: {
-                    onCardUpdated(card)
+                onRefine: { instructions, modelId in
                     refiningCard = nil
+                    runRefinement(card: card, instructions: instructions, modelId: modelId)
                 },
                 onCancel: { refiningCard = nil }
             )
@@ -249,6 +250,31 @@ struct KnowledgeCardsBrowserTab: View {
         .buttonStyle(.plain)
         .disabled(cards.count < 2 || isProcessing)
         .help("Merge similar cards using AI-powered deduplication")
+    }
+
+    // MARK: - Refinement
+
+    private func runRefinement(card: KnowledgeCard, instructions: String, modelId: String) {
+        guard let llmFacade else { return }
+
+        Task {
+            do {
+                let service = KCRefinementService(
+                    llmFacade: llmFacade,
+                    reasoningStreamManager: reasoningStreamManager
+                )
+                let refined = try await service.refine(
+                    card: card,
+                    instructions: instructions,
+                    modelId: modelId
+                )
+                service.apply(refined, to: card)
+                onCardUpdated(card)
+            } catch {
+                reasoningStreamManager.showError(error.localizedDescription)
+                Logger.error("KC Refinement failed: \(error.localizedDescription)", category: .ai)
+            }
+        }
     }
 
     // MARK: - Pipeline Actions

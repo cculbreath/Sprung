@@ -1,24 +1,19 @@
 import SwiftUI
 
-/// Sheet for refining a single knowledge card with AI.
-/// Collects refinement instructions and model selection, then runs the LLM call.
+/// Sheet for collecting KC refinement instructions and model selection.
+/// Passes inputs back to parent via onRefine; parent runs the LLM call
+/// so the reasoning overlay renders above the (dismissed) sheet.
 struct KCRefinementSheet: View {
     let card: KnowledgeCard
-    let onComplete: () -> Void
+    let onRefine: (_ instructions: String, _ modelId: String) -> Void
     let onCancel: () -> Void
-
-    @Environment(LLMFacade.self) private var llmFacade
-    @Environment(ReasoningStreamManager.self) private var reasoningStreamManager
 
     @State private var instructions: String = ""
     @State private var selectedModel: String = ""
-    @State private var isRefining = false
-    @State private var errorMessage: String?
 
     private var canRefine: Bool {
         !instructions.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             && !selectedModel.isEmpty
-            && !isRefining
     }
 
     var body: some View {
@@ -34,9 +29,6 @@ struct KCRefinementSheet: View {
                     cardPreviewSection
                     instructionsSection
                     modelSection
-                    if let error = errorMessage {
-                        errorSection(error)
-                    }
                 }
                 .padding(24)
             }
@@ -49,7 +41,6 @@ struct KCRefinementSheet: View {
         .frame(width: 520, height: 520)
         .background(Color(nsColor: .windowBackgroundColor))
         .onAppear {
-            // Restore last-used model
             if let saved = UserDefaults.standard.string(forKey: "kcRefinementModelId"), !saved.isEmpty {
                 selectedModel = saved
             }
@@ -147,73 +138,24 @@ struct KCRefinementSheet: View {
         )
     }
 
-    private func errorSection(_ message: String) -> some View {
-        HStack(spacing: 8) {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .foregroundStyle(.red)
-            Text(message)
-                .font(.caption)
-                .foregroundStyle(.red)
-        }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.red.opacity(0.08))
-        .clipShape(RoundedRectangle(cornerRadius: 8))
-    }
-
     private var footerSection: some View {
         HStack {
-            if isRefining {
-                HStack(spacing: 8) {
-                    ProgressView()
-                        .controlSize(.small)
-                    Text("Refining...")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-
             Spacer()
 
             Button("Cancel", action: onCancel)
                 .buttonStyle(.bordered)
-                .disabled(isRefining)
 
-            Button("Refine", action: runRefinement)
-                .buttonStyle(.borderedProminent)
-                .disabled(!canRefine)
-                .keyboardShortcut(.return, modifiers: .command)
+            Button("Refine") {
+                UserDefaults.standard.set(selectedModel, forKey: "kcRefinementModelId")
+                onRefine(
+                    instructions.trimmingCharacters(in: .whitespacesAndNewlines),
+                    selectedModel
+                )
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(!canRefine)
+            .keyboardShortcut(.return, modifiers: .command)
         }
         .padding(20)
-    }
-
-    // MARK: - Actions
-
-    private func runRefinement() {
-        errorMessage = nil
-        isRefining = true
-
-        // Persist model selection
-        UserDefaults.standard.set(selectedModel, forKey: "kcRefinementModelId")
-
-        Task {
-            do {
-                let service = KCRefinementService(
-                    llmFacade: llmFacade,
-                    reasoningStreamManager: reasoningStreamManager
-                )
-                let refined = try await service.refine(
-                    card: card,
-                    instructions: instructions.trimmingCharacters(in: .whitespacesAndNewlines),
-                    modelId: selectedModel
-                )
-                service.apply(refined, to: card)
-                onComplete()
-            } catch {
-                reasoningStreamManager.showError(error.localizedDescription)
-                errorMessage = error.localizedDescription
-                isRefining = false
-            }
-        }
     }
 }

@@ -14,7 +14,7 @@ final class KCRefinementService {
     }
 
     /// Refine a knowledge card with streaming reasoning display.
-    /// Returns the LLM's refined version of the card.
+    /// Falls back to non-streaming if the streaming path yields no content.
     func refine(
         card: KnowledgeCard,
         instructions: String,
@@ -52,6 +52,45 @@ final class KCRefinementService {
         \(instructions)
         """
 
+        let prompt = systemPrompt + "\n\n" + userMessage
+
+        // Try streaming with reasoning first
+        do {
+            let result = try await refineStreaming(
+                systemPrompt: systemPrompt,
+                userMessage: userMessage,
+                modelId: modelId
+            )
+            if let result { return result }
+            Logger.info("KC Refine: streaming produced no content, falling back to non-streaming", category: .ai)
+        } catch {
+            Logger.info("KC Refine: streaming failed (\(error.localizedDescription)), falling back to non-streaming", category: .ai)
+        }
+
+        // Fallback: non-streaming structured output (always works)
+        reasoningStreamManager.hideAndClear()
+        return try await llmFacade.executeStructuredWithDictionarySchema(
+            prompt: prompt,
+            modelId: modelId,
+            as: RefinedKnowledgeCard.self,
+            schema: KCRefinementSchema.schema,
+            schemaName: "refined_knowledge_card"
+        )
+    }
+
+    /// Cancel any active streaming operation.
+    func cancelActiveStreaming() {
+        activeStreamingHandle?.cancel()
+        activeStreamingHandle = nil
+    }
+
+    // MARK: - Streaming Path
+
+    private func refineStreaming(
+        systemPrompt: String,
+        userMessage: String,
+        modelId: String
+    ) async throws -> RefinedKnowledgeCard? {
         let jsonSchema = try JSONSchema.from(dictionary: KCRefinementSchema.schema)
         let userEffort = UserDefaults.standard.string(forKey: "reasoningEffort") ?? "medium"
         let reasoning = OpenRouterReasoning(effort: userEffort, includeReasoning: true)
@@ -68,13 +107,9 @@ final class KCRefinementService {
         activeStreamingHandle = handle
 
         let responseText = try await processStreamWithReasoning(handle: handle, modelName: modelId)
-        return try LLMResponseParser.parseJSON(responseText, as: RefinedKnowledgeCard.self)
-    }
 
-    /// Cancel any active streaming operation.
-    func cancelActiveStreaming() {
-        activeStreamingHandle?.cancel()
-        activeStreamingHandle = nil
+        guard !responseText.isEmpty else { return nil }
+        return try LLMResponseParser.parseJSON(responseText, as: RefinedKnowledgeCard.self)
     }
 
     // MARK: - Stream Processing
@@ -89,13 +124,20 @@ final class KCRefinementService {
         var fullResponse = ""
         var collectingJSON = false
         var jsonResponse = ""
+        var chunkCount = 0
+        var reasoningChunks = 0
+        var contentChunks = 0
 
         for try await chunk in handle.stream {
+            chunkCount += 1
+
             if let reasoningContent = chunk.allReasoningText {
+                reasoningChunks += 1
                 reasoningStreamManager.reasoningText += reasoningContent
             }
 
             if let content = chunk.content {
+                contentChunks += 1
                 fullResponse += content
                 if content.contains("{") || collectingJSON {
                     collectingJSON = true
@@ -104,6 +146,7 @@ final class KCRefinementService {
             }
 
             if chunk.isFinished {
+                Logger.debug("KC Refine stream finished: \(chunkCount) chunks, \(reasoningChunks) reasoning, \(contentChunks) content, response=\(fullResponse.count) chars", category: .ai)
                 reasoningStreamManager.isStreaming = false
                 reasoningStreamManager.isVisible = false
             }
@@ -159,7 +202,6 @@ final class KCRefinementService {
     // MARK: - Private
 
     private func encodeCard(_ card: KnowledgeCard) throws -> String {
-        // Build a dictionary representation with all editable fields
         var dict: [String: Any] = [
             "title": card.title,
             "narrative": card.narrative
