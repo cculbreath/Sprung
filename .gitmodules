@@ -1,6 +1,3 @@
-[submodule "resumeapi"]
-	path = resumeapi
-	url = https://github.com/cculbreath/resumeapi.git
 [submodule "SwiftOpenAI"]
 	path = SwiftOpenAI
 	url = https://github.com/cculbreath/SwiftOpenAI.git
