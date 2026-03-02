@@ -19,7 +19,27 @@ Sprung is a native macOS application that streamlines every stage of a job searc
 
 > **Status:** Actively developed. Clone and build from source to try it.
 
-<!-- screenshots -->
+## Screenshots
+
+<p align="center">
+  <img src="docs/images/screenshot-resume-editor.png" alt="Resume Editor" width="800">
+  <br><em>Resume Editor — section editor with live PDF preview</em>
+</p>
+
+<p align="center">
+  <img src="docs/images/screenshot-pipeline.png" alt="Application Pipeline" width="800">
+  <br><em>Application Pipeline — Kanban board for tracking job applications</em>
+</p>
+
+<p align="center">
+  <img src="docs/images/screenshot-knowledge-cards.png" alt="Knowledge Cards" width="800">
+  <br><em>Knowledge Cards — browsable career knowledge base</em>
+</p>
+
+<p align="center">
+  <img src="docs/images/screenshot-discovery.png" alt="Discovery" width="800">
+  <br><em>Discovery — AI career coach and daily task management</em>
+</p>
 
 ## Features
 
