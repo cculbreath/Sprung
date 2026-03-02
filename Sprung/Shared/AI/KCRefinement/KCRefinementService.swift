@@ -14,7 +14,6 @@ final class KCRefinementService {
     }
 
     /// Refine a knowledge card with streaming reasoning display.
-    /// Falls back to non-streaming if the streaming path yields no content.
     func refine(
         card: KnowledgeCard,
         instructions: String,
@@ -52,29 +51,10 @@ final class KCRefinementService {
         \(instructions)
         """
 
-        let prompt = systemPrompt + "\n\n" + userMessage
-
-        // Try streaming with reasoning first
-        do {
-            let result = try await refineStreaming(
-                systemPrompt: systemPrompt,
-                userMessage: userMessage,
-                modelId: modelId
-            )
-            if let result { return result }
-            Logger.info("KC Refine: streaming produced no content, falling back to non-streaming", category: .ai)
-        } catch {
-            Logger.info("KC Refine: streaming failed (\(error.localizedDescription)), falling back to non-streaming", category: .ai)
-        }
-
-        // Fallback: non-streaming structured output (always works)
-        reasoningStreamManager.hideAndClear()
-        return try await llmFacade.executeStructuredWithDictionarySchema(
-            prompt: prompt,
-            modelId: modelId,
-            as: RefinedKnowledgeCard.self,
-            schema: KCRefinementSchema.schema,
-            schemaName: "refined_knowledge_card"
+        return try await refineStreaming(
+            systemPrompt: systemPrompt,
+            userMessage: userMessage,
+            modelId: modelId
         )
     }
 
@@ -90,7 +70,7 @@ final class KCRefinementService {
         systemPrompt: String,
         userMessage: String,
         modelId: String
-    ) async throws -> RefinedKnowledgeCard? {
+    ) async throws -> RefinedKnowledgeCard {
         let jsonSchema = try JSONSchema.from(dictionary: KCRefinementSchema.schema)
         let userEffort = UserDefaults.standard.string(forKey: "reasoningEffort") ?? "medium"
         let reasoning = OpenRouterReasoning(effort: userEffort, includeReasoning: true)
@@ -107,8 +87,6 @@ final class KCRefinementService {
         activeStreamingHandle = handle
 
         let responseText = try await processStreamWithReasoning(handle: handle, modelName: modelId)
-
-        guard !responseText.isEmpty else { return nil }
         return try LLMResponseParser.parseJSON(responseText, as: RefinedKnowledgeCard.self)
     }
 

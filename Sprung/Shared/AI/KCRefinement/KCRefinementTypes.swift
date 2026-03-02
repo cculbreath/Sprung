@@ -72,9 +72,8 @@ enum KCRefinementSchema {
     private static var cardTypeSchema: [String: Any] {
         [
             "type": ["string", "null"],
-            "enum": ["employment", "project", "achievement", "education", nil] as [Any?],
-            "description": "Card type"
-        ] as [String: Any]
+            "description": "Card type: employment, project, achievement, or education"
+        ]
     }
 
     private static func nullableString(_ description: String) -> [String: Any] {

@@ -7,6 +7,7 @@ struct SkillsBankBrowser: View {
     var llmFacade: LLMFacade?
 
     @Environment(ArtifactRecordStore.self) private var artifactRecordStore
+    @Environment(ReasoningStreamManager.self) var reasoningStreamManager
 
     @State var expandedCategories: Set<String> = []
     @State var expandedSkills: Set<UUID> = []

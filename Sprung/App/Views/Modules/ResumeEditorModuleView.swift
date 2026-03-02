@@ -61,31 +61,6 @@ struct ResumeEditorModuleView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .animation(.easeInOut(duration: 0.2), value: isSidebarExpanded)
-        // Reasoning stream overlay
-        .overlay {
-            if reasoningStreamManager.isVisible && !resumeReviseViewModel.showResumeRevisionSheet {
-                ReasoningStreamView(
-                    isVisible: Binding(
-                        get: { reasoningStreamManager.isVisible },
-                        set: { reasoningStreamManager.isVisible = $0 }
-                    ),
-                    reasoningText: Binding(
-                        get: { reasoningStreamManager.reasoningText },
-                        set: { reasoningStreamManager.reasoningText = $0 }
-                    ),
-                    isStreaming: Binding(
-                        get: { reasoningStreamManager.isStreaming },
-                        set: { reasoningStreamManager.isStreaming = $0 }
-                    ),
-                    errorMessage: Binding(
-                        get: { reasoningStreamManager.errorMessage },
-                        set: { reasoningStreamManager.errorMessage = $0 }
-                    ),
-                    modelName: reasoningStreamManager.modelName
-                )
-                .zIndex(1000)
-            }
-        }
         // Headless toolbar button views: stay in the view hierarchy so their
         // notification-driven sheets/alerts continue to present from menu and toolbar commands
         // Processing logo overlay (shown when LLM is working but thinking/review dialogs are hidden)

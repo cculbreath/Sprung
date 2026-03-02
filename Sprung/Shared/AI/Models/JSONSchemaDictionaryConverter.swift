@@ -77,8 +77,14 @@ extension JSONSchema {
         // Parse additionalProperties (default to false for strict mode)
         let additionalProperties = dictionary["additionalProperties"] as? Bool ?? false
 
-        // Parse enum
-        let enumValues = dictionary["enum"] as? [String]
+        // Parse enum — handle [String], [Any?] (with nil for nullable enums), or [Any]
+        let enumValues: [String]? = {
+            if let values = dictionary["enum"] as? [String] { return values }
+            if let values = dictionary["enum"] as? [Any?] {
+                return values.compactMap { $0 as? String }
+            }
+            return nil
+        }()
 
         // Parse $ref
         let ref = dictionary["$ref"] as? String

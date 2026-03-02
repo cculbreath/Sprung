@@ -166,7 +166,8 @@ final class OnboardingDependencyContainer {
         sessionStore: OnboardingSessionStore,
         dataStore: InterviewDataStore,
         candidateDossierStore: CandidateDossierStore,
-        preferences: OnboardingPreferences
+        preferences: OnboardingPreferences,
+        reasoningStreamManager: ReasoningStreamManager
     ) {
         // Store external dependencies
         self.llmFacade = llmFacade
@@ -292,7 +293,7 @@ final class OnboardingDependencyContainer {
         )
 
         // 7b. Initialize guidance services
-        self.voiceProfileService = VoiceProfileService(llmFacade: llmFacade)
+        self.voiceProfileService = VoiceProfileService(llmFacade: llmFacade, reasoningStreamManager: reasoningStreamManager)
 
         // 7d. Initialize artifact archive manager
         self.artifactArchiveManager = ArtifactArchiveManager(

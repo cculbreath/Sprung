@@ -6,12 +6,15 @@
 //
 
 import Foundation
+import SwiftOpenAI
 
 /// Extracts voice characteristics from writing samples.
 /// Called after Phase 1 writing sample collection completes.
 @MainActor
 final class VoiceProfileService {
     private var llmFacade: LLMFacade?
+    private let reasoningStreamManager: ReasoningStreamManager
+    private var activeStreamingHandle: LLMStreamingHandle?
 
     private func getModelId() throws -> String {
         guard let modelId = UserDefaults.standard.string(forKey: "voiceProfileModelId"), !modelId.isEmpty else {
@@ -23,8 +26,9 @@ final class VoiceProfileService {
         return modelId
     }
 
-    init(llmFacade: LLMFacade?) {
+    init(llmFacade: LLMFacade?, reasoningStreamManager: ReasoningStreamManager) {
         self.llmFacade = llmFacade
+        self.reasoningStreamManager = reasoningStreamManager
     }
 
     func updateLLMFacade(_ facade: LLMFacade?) {
@@ -51,23 +55,60 @@ final class VoiceProfileService {
 
         Logger.info("🎤 Extracting voice profile from \(samples.count) samples", category: .ai)
 
-        // VoiceProfile has explicit CodingKeys for snake_case mapping, so use .useDefaultKeys
-        let profile: VoiceProfile = try await facade.executeStructuredWithDictionarySchema(
-            prompt: prompt,
-            modelId: modelId,
-            as: VoiceProfile.self,
-            schema: VoiceProfileSchemas.schema,
-            schemaName: "voice_profile",
-            maxOutputTokens: 32768,
-            keyDecodingStrategy: .useDefaultKeys,
-            backend: .openRouter
-        )
+        let jsonSchema = try JSONSchema.from(dictionary: VoiceProfileSchemas.schema)
+        let userEffort = UserDefaults.standard.string(forKey: "reasoningEffort") ?? "medium"
+        let reasoning = OpenRouterReasoning(effort: userEffort, includeReasoning: true)
 
-        Logger.info(
-            "🎤 Extracted voice profile: \(profile.enthusiasm.displayName), first person: \(profile.useFirstPerson)",
-            category: .ai
-        )
-        return profile
+        activeStreamingHandle?.cancel()
+        reasoningStreamManager.clear()
+        reasoningStreamManager.startReasoning(modelName: modelId)
+
+        do {
+            let handle = try await facade.startConversationStreaming(
+                userMessage: prompt,
+                modelId: modelId,
+                reasoning: reasoning,
+                jsonSchema: jsonSchema
+            )
+            activeStreamingHandle = handle
+
+            var fullResponse = ""
+            var collectingJSON = false
+            var jsonResponse = ""
+
+            for try await chunk in handle.stream {
+                if let reasoningContent = chunk.allReasoningText {
+                    reasoningStreamManager.reasoningText += reasoningContent
+                }
+                if let content = chunk.content {
+                    fullResponse += content
+                    if content.contains("{") || collectingJSON {
+                        collectingJSON = true
+                        jsonResponse += content
+                    }
+                }
+                if chunk.isFinished {
+                    reasoningStreamManager.isStreaming = false
+                    reasoningStreamManager.isVisible = false
+                }
+            }
+
+            activeStreamingHandle = nil
+
+            let responseText = jsonResponse.isEmpty ? fullResponse : jsonResponse
+            let profile: VoiceProfile = try LLMResponseParser.parseJSON(responseText, as: VoiceProfile.self)
+
+            Logger.info(
+                "🎤 Extracted voice profile: \(profile.enthusiasm.displayName), first person: \(profile.useFirstPerson)",
+                category: .ai
+            )
+            return profile
+        } catch {
+            activeStreamingHandle = nil
+            reasoningStreamManager.isStreaming = false
+            reasoningStreamManager.isVisible = false
+            throw error
+        }
     }
 
     /// Store extracted voice profile in guidance store

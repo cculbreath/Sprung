@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftOpenAI
 
 // MARK: - Refine Response Type
 
@@ -120,23 +121,21 @@ extension SkillsBankBrowser {
                 let allSkills = skillStore.skills
                 let totalSkills = allSkills.count
 
-                // Build the prompt with all skills
                 let skillList = allSkills.enumerated().map { index, skill in
                     "\(index + 1). \(skill.id.uuidString): \(skill.canonical)"
                 }.joined(separator: "\n")
 
-                let prompt = """
-                    You are a professional resume skills editor. Refine the following skill names according to this instruction:
+                let systemPrompt = """
+                    You are a professional resume skills editor. You refine skill names according to \
+                    user instructions. Return a JSON object with a "refinements" array containing \
+                    objects with "skillId" and "newName" fields. Only include skills whose names should change.
+                    """
 
+                let userMessage = """
                     **Instruction:** \(instruction)
 
                     **Skills to refine:**
                     \(skillList)
-
-                    For each skill, provide the refined name. If a skill name already meets the criteria, keep it unchanged.
-
-                    Return a JSON object with a "refinements" array containing objects with "skillId" and "newName" fields.
-                    Only include skills whose names should change.
                     """
 
                 let schema: [String: Any] = [
@@ -163,14 +162,45 @@ extension SkillsBankBrowser {
 
                 processingMessage = "AI is refining \(totalSkills) skills..."
 
-                let response: RefineResponse = try await facade.executeStructuredWithDictionarySchema(
-                    prompt: prompt,
+                let jsonSchema = try JSONSchema.from(dictionary: schema)
+                let userEffort = UserDefaults.standard.string(forKey: "reasoningEffort") ?? "medium"
+                let reasoning = OpenRouterReasoning(effort: userEffort, includeReasoning: true)
+
+                reasoningStreamManager.clear()
+                reasoningStreamManager.startReasoning(modelName: modelId)
+
+                let handle = try await facade.startConversationStreaming(
+                    systemPrompt: systemPrompt,
+                    userMessage: userMessage,
                     modelId: modelId,
-                    as: RefineResponse.self,
-                    schema: schema,
-                    schemaName: "skill_refinements",
-                    backend: .openRouter
+                    reasoning: reasoning,
+                    jsonSchema: jsonSchema
                 )
+
+                // Process stream with reasoning display
+                var fullResponse = ""
+                var collectingJSON = false
+                var jsonResponse = ""
+
+                for try await chunk in handle.stream {
+                    if let reasoningContent = chunk.allReasoningText {
+                        reasoningStreamManager.reasoningText += reasoningContent
+                    }
+                    if let content = chunk.content {
+                        fullResponse += content
+                        if content.contains("{") || collectingJSON {
+                            collectingJSON = true
+                            jsonResponse += content
+                        }
+                    }
+                    if chunk.isFinished {
+                        reasoningStreamManager.isStreaming = false
+                        reasoningStreamManager.isVisible = false
+                    }
+                }
+
+                let responseText = jsonResponse.isEmpty ? fullResponse : jsonResponse
+                let response: RefineResponse = try LLMResponseParser.parseJSON(responseText, as: RefineResponse.self)
 
                 // Apply refinements
                 var modifiedCount = 0
@@ -199,6 +229,8 @@ extension SkillsBankBrowser {
                     showResultAlert = true
                 }
             } catch {
+                reasoningStreamManager.isStreaming = false
+                reasoningStreamManager.isVisible = false
                 await MainActor.run {
                     errorMessage = error.localizedDescription
                     isProcessing = false

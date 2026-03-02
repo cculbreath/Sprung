@@ -30,6 +30,31 @@ struct UnifiedAppLayout: View {
             ModuleContentView(module: navigation.selectedModule)
         }
         .frame(minWidth: 1000, minHeight: 650)
+        // Global reasoning stream overlay (shared across all modules)
+        .overlay {
+            if reasoningStreamManager.isVisible && !resumeReviseViewModel.showResumeRevisionSheet {
+                ReasoningStreamView(
+                    isVisible: Binding(
+                        get: { reasoningStreamManager.isVisible },
+                        set: { reasoningStreamManager.isVisible = $0 }
+                    ),
+                    reasoningText: Binding(
+                        get: { reasoningStreamManager.reasoningText },
+                        set: { reasoningStreamManager.reasoningText = $0 }
+                    ),
+                    isStreaming: Binding(
+                        get: { reasoningStreamManager.isStreaming },
+                        set: { reasoningStreamManager.isStreaming = $0 }
+                    ),
+                    errorMessage: Binding(
+                        get: { reasoningStreamManager.errorMessage },
+                        set: { reasoningStreamManager.errorMessage = $0 }
+                    ),
+                    modelName: reasoningStreamManager.modelName
+                )
+                .zIndex(1000)
+            }
+        }
         // Module navigation keyboard shortcuts
         .moduleNavigationShortcuts()
         // Template setup overlay

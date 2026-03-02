@@ -159,7 +159,8 @@ final class OnboardingInterviewCoordinator {
         sessionStore: OnboardingSessionStore,
         dataStore: InterviewDataStore,
         candidateDossierStore: CandidateDossierStore,
-        preferences: OnboardingPreferences
+        preferences: OnboardingPreferences,
+        reasoningStreamManager: ReasoningStreamManager
     ) {
         // Create dependency container with all service wiring
         self.container = OnboardingDependencyContainer(
@@ -174,7 +175,8 @@ final class OnboardingInterviewCoordinator {
             sessionStore: sessionStore,
             dataStore: dataStore,
             candidateDossierStore: candidateDossierStore,
-            preferences: preferences
+            preferences: preferences,
+            reasoningStreamManager: reasoningStreamManager
         )
         // Complete late initialization (components requiring self reference)
         container.completeInitialization(

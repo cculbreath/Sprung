@@ -182,7 +182,8 @@ final class AppDependencies {
             sessionStore: onboardingSessionStore,
             dataStore: interviewDataStore,
             candidateDossierStore: candidateDossierStore,
-            preferences: preferences
+            preferences: preferences,
+            reasoningStreamManager: reasoningStreamManager
         )
         self.onboardingCoordinator = onboardingCoordinator
 
