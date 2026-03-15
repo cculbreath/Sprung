@@ -8,7 +8,6 @@
 
 import Foundation
 import SwiftData
-import SwiftyJSON
 import SwiftOpenAI
 
 @Observable
@@ -239,6 +238,10 @@ final class CoachingService {
 
     // MARK: - Private Implementation
 
+    private func encodeToJSON<T: Encodable>(_ value: T) -> String {
+        (try? String(data: JSONEncoder().encode(value), encoding: .utf8)) ?? "{}"
+    }
+
     private func sendInitialMessage() async throws {
         guard let convId = conversationId else { return }
 
@@ -291,8 +294,7 @@ final class CoachingService {
 
                     if toolName == CoachingToolSchemas.multipleChoiceToolName {
                         // Parse and queue the question
-                        let arguments = JSON(parseJSON: toolCall.function.arguments)
-                        if let question = CoachingToolSchemas.parseQuestionFromJSON(arguments) {
+                        if let question = CoachingToolSchemas.parseQuestion(from: toolCall.function.arguments) {
                             questionToolCalls.append((toolCallId: toolCallId, question: question))
                         } else {
                             // Send error response for unparseable question
@@ -363,28 +365,26 @@ final class CoachingService {
 
     /// Handle background research tool calls (knowledge cards, job descriptions, resumes)
     private func handleBackgroundTool(name: String, arguments: String) async -> String {
-        let args = JSON(parseJSON: arguments)
-
         switch name {
         case CoachingToolSchemas.getKnowledgeCardToolName:
-            return toolHandler.handleGetKnowledgeCard(args, knowledgeCards: knowledgeCardStore.knowledgeCards)
+            return toolHandler.handleGetKnowledgeCard(arguments: arguments, knowledgeCards: knowledgeCardStore.knowledgeCards)
 
         case CoachingToolSchemas.getJobDescriptionToolName:
-            return toolHandler.handleGetJobDescription(args)
+            return toolHandler.handleGetJobDescription(arguments: arguments)
 
         case CoachingToolSchemas.getResumeToolName:
-            return await toolHandler.handleGetResume(args)
+            return await toolHandler.handleGetResume(arguments: arguments)
 
         case CoachingToolSchemas.chooseBestJobsToolName:
             return await toolHandler.handleChooseBestJobs(
-                args,
+                arguments: arguments,
                 agentService: agentService,
                 knowledgeCards: knowledgeCardStore.knowledgeCards,
                 dossier: candidateDossierStore.dossier
             )
 
         default:
-            return JSON(["error": "Unknown tool: \(name)"]).rawString() ?? "{}"
+            return encodeToJSON(ToolErrorResult(error: "Unknown tool: \(name)"))
         }
     }
 
@@ -394,10 +394,10 @@ final class CoachingService {
         state = .waitingForAnswer
 
         // Send tool result for this answer
-        let toolResult = JSON([
-            "selected_value": answer.selectedValue,
-            "selected_label": answer.selectedLabel
-        ])
+        let toolResultString = encodeToJSON(ToolAnswerResult(
+            selectedValue: answer.selectedValue,
+            selectedLabel: answer.selectedLabel
+        ))
 
         // Get the tool call ID for this question (it was just answered, so it's the one we just showed)
         // The current question's tool call ID was removed from the queue when we showed it
@@ -406,7 +406,7 @@ final class CoachingService {
             llmService.addToolResult(
                 conversationId: convId,
                 toolCallId: toolCallId,
-                result: toolResult.rawString() ?? "{}"
+                result: toolResultString
             )
             currentQuestionToolCallId = nil
         }
@@ -497,8 +497,7 @@ final class CoachingService {
 
                 // Now handle the follow-up question if present
                 if let toolCallId = questionToolCallId, let argsString = questionToolArgs {
-                    let arguments = JSON(parseJSON: argsString)
-                    if var question = CoachingToolSchemas.parseQuestionFromJSON(arguments) {
+                    if var question = CoachingToolSchemas.parseQuestion(from: argsString) {
                         // Ensure it's marked as follow-up type
                         question = CoachingQuestion(
                             questionText: question.questionText,
@@ -557,14 +556,11 @@ final class CoachingService {
         currentQuestionToolCallId = nil
 
         // Send tool result for the follow-up question
-        let toolResult = JSON([
-            "selected_value": value,
-            "selected_label": label
-        ])
+        let followUpResultString = encodeToJSON(ToolAnswerResult(selectedValue: value, selectedLabel: label))
         llmService.addToolResult(
             conversationId: convId,
             toolCallId: toolCallId,
-            result: toolResult.rawString() ?? "{}"
+            result: followUpResultString
         )
 
         // Map the answer to an action

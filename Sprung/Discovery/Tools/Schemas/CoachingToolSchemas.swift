@@ -9,7 +9,186 @@
 
 import Foundation
 import SwiftOpenAI
-import SwiftyJSON
+
+// MARK: - Tool Argument Codable Structs
+
+struct CoachingMultipleChoiceArgs: Codable {
+    let question: String
+    let options: [CoachingMultipleChoiceOptionArgs]
+    let questionType: String
+
+    enum CodingKeys: String, CodingKey {
+        case question
+        case options
+        case questionType = "question_type"
+    }
+}
+
+struct CoachingMultipleChoiceOptionArgs: Codable {
+    let value: Int
+    let label: String
+    let emoji: String?
+}
+
+struct GetKnowledgeCardArgs: Codable {
+    let cardId: String
+    let startLine: Int?
+    let endLine: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case cardId = "card_id"
+        case startLine = "start_line"
+        case endLine = "end_line"
+    }
+}
+
+struct GetJobDescriptionArgs: Codable {
+    let jobAppId: String
+
+    enum CodingKeys: String, CodingKey {
+        case jobAppId = "job_app_id"
+    }
+}
+
+struct GetResumeArgs: Codable {
+    let resumeId: String
+    let section: String?
+
+    enum CodingKeys: String, CodingKey {
+        case resumeId = "resume_id"
+        case section
+    }
+}
+
+struct UpdateDailyTasksArgs: Codable {
+    let tasks: [UpdateDailyTaskEntry]
+}
+
+struct UpdateDailyTaskEntry: Codable {
+    let taskType: String
+    let title: String
+    let description: String
+    let priority: Int
+    let estimatedMinutes: Int
+    let relatedId: String?
+
+    enum CodingKeys: String, CodingKey {
+        case taskType = "task_type"
+        case title
+        case description
+        case priority
+        case estimatedMinutes = "estimated_minutes"
+        case relatedId = "related_id"
+    }
+}
+
+struct ChooseBestJobsArgs: Codable {
+    let count: Int
+    let reason: String
+}
+
+// MARK: - Tool Result Codable Structs
+
+struct KnowledgeCardToolResult: Encodable {
+    let cardId: String
+    let title: String
+    let type: String?
+    let organization: String?
+    let dateRange: String?
+    let content: String
+    let wordCount: Int
+
+    enum CodingKeys: String, CodingKey {
+        case cardId = "card_id"
+        case title, type, organization
+        case dateRange = "date_range"
+        case content
+        case wordCount = "word_count"
+    }
+}
+
+struct JobDescriptionToolResult: Encodable {
+    let jobAppId: String
+    let company: String
+    let position: String
+    let status: String
+    let jobDescription: String
+    let jobUrl: String
+    let notes: String
+    let appliedDate: String?
+
+    enum CodingKeys: String, CodingKey {
+        case jobAppId = "job_app_id"
+        case company, position, status
+        case jobDescription = "job_description"
+        case jobUrl = "job_url"
+        case notes
+        case appliedDate = "applied_date"
+    }
+}
+
+struct CoachingResumeToolResult: Encodable {
+    let resumeId: String
+    let template: String
+    let section: String?
+    let content: String?
+    let availableSections: [String]?
+    let summary: String?
+
+    enum CodingKeys: String, CodingKey {
+        case resumeId = "resume_id"
+        case template, section, content
+        case availableSections = "available_sections"
+        case summary
+    }
+}
+
+struct ChooseBestJobsToolResult: Encodable {
+    let success: Bool
+    let selectedCount: Int?
+    let identifiedCount: Int?
+    let selections: [ChooseBestJobsSelectionResult]?
+    let overallAnalysis: String?
+    let considerations: [String]?
+    let error: String?
+
+    enum CodingKeys: String, CodingKey {
+        case success
+        case selectedCount = "selected_count"
+        case identifiedCount = "identified_count"
+        case selections
+        case overallAnalysis = "overall_analysis"
+        case considerations
+        case error
+    }
+}
+
+struct ChooseBestJobsSelectionResult: Encodable {
+    let company: String
+    let role: String
+    let matchScore: Double
+    let reasoning: String
+
+    enum CodingKeys: String, CodingKey {
+        case company, role
+        case matchScore = "match_score"
+        case reasoning
+    }
+}
+
+struct ToolAnswerResult: Encodable {
+    let selectedValue: Int
+    let selectedLabel: String
+
+    enum CodingKeys: String, CodingKey {
+        case selectedValue = "selected_value"
+        case selectedLabel = "selected_label"
+    }
+}
+
+struct ToolErrorResult: Encodable {
+    let error: String
+}
 
 enum CoachingToolSchemas {
 
@@ -107,28 +286,27 @@ enum CoachingToolSchemas {
 
     // MARK: - Tool Response Parsing
 
-    /// Parse a tool call response from SwiftyJSON
-    static func parseQuestionFromJSON(_ json: SwiftyJSON.JSON) -> CoachingQuestion? {
-        let questionText = json["question"].stringValue
-        let questionTypeRaw = json["question_type"].stringValue
-
-        guard !questionText.isEmpty,
-              let questionType = CoachingQuestionType(rawValue: questionTypeRaw) else {
+    /// Parse a coaching question from raw JSON arguments string
+    static func parseQuestion(from arguments: String) -> CoachingQuestion? {
+        guard let data = arguments.data(using: .utf8),
+              let args = try? JSONDecoder().decode(CoachingMultipleChoiceArgs.self, from: data) else {
             return nil
         }
 
-        let options = json["options"].arrayValue.compactMap { optionJSON -> QuestionOption? in
-            let value = optionJSON["value"].intValue
-            let label = optionJSON["label"].stringValue
-            guard !label.isEmpty else { return nil }
-            let emoji = optionJSON["emoji"].string
-            return QuestionOption(value: value, label: label, emoji: emoji)
+        guard !args.question.isEmpty,
+              let questionType = CoachingQuestionType(rawValue: args.questionType) else {
+            return nil
+        }
+
+        let options = args.options.compactMap { opt -> QuestionOption? in
+            guard !opt.label.isEmpty else { return nil }
+            return QuestionOption(value: opt.value, label: opt.label, emoji: opt.emoji)
         }
 
         guard !options.isEmpty else { return nil }
 
         return CoachingQuestion(
-            questionText: questionText,
+            questionText: args.question,
             options: options,
             questionType: questionType
         )

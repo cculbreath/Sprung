@@ -8,7 +8,6 @@
 
 import Foundation
 import SwiftData
-import SwiftyJSON
 
 /// Handles tool calls for the coaching service
 @MainActor
@@ -21,20 +20,29 @@ struct CoachingToolHandler {
         self.jobAppStore = jobAppStore
     }
 
-    /// Handle get_knowledge_card tool call
-    func handleGetKnowledgeCard(_ args: JSON, knowledgeCards: [KnowledgeCard]) -> String {
-        let cardId = args["card_id"].stringValue
-        let startLine = args["start_line"].int
-        let endLine = args["end_line"].int
+    // MARK: - JSON Encoding Helper
 
-        guard let card = knowledgeCards.first(where: { $0.id.uuidString == cardId }) else {
-            return JSON(["error": "Knowledge card not found: \(cardId)"]).rawString() ?? "{}"
+    private func encodeToJSON<T: Encodable>(_ value: T) -> String {
+        (try? String(data: JSONEncoder().encode(value), encoding: .utf8)) ?? "{}"
+    }
+
+    // MARK: - Tool Handlers
+
+    /// Handle get_knowledge_card tool call
+    func handleGetKnowledgeCard(arguments: String, knowledgeCards: [KnowledgeCard]) -> String {
+        guard let data = arguments.data(using: .utf8),
+              let args = try? JSONDecoder().decode(GetKnowledgeCardArgs.self, from: data) else {
+            return encodeToJSON(ToolErrorResult(error: "Failed to parse get_knowledge_card arguments"))
+        }
+
+        guard let card = knowledgeCards.first(where: { $0.id.uuidString == args.cardId }) else {
+            return encodeToJSON(ToolErrorResult(error: "Knowledge card not found: \(args.cardId)"))
         }
 
         var content = card.narrative
 
         // Apply line range if specified
-        if let start = startLine, let end = endLine {
+        if let start = args.startLine, let end = args.endLine {
             let lines = content.components(separatedBy: "\n")
             let safeStart = max(0, start - 1)  // 1-indexed to 0-indexed
             let safeEnd = min(lines.count, end)
@@ -43,104 +51,122 @@ struct CoachingToolHandler {
             }
         }
 
-        var result = JSON()
-        result["card_id"].string = cardId
-        result["title"].string = card.title
-        result["type"].string = card.cardType?.rawValue
-        result["organization"].string = card.organization
-        result["date_range"].string = card.dateRange
-        result["content"].string = content
-        result["word_count"].int = card.narrative.split(separator: " ").count
-
-        return result.rawString() ?? "{}"
+        let result = KnowledgeCardToolResult(
+            cardId: args.cardId,
+            title: card.title,
+            type: card.cardType?.rawValue,
+            organization: card.organization,
+            dateRange: card.dateRange,
+            content: content,
+            wordCount: card.narrative.split(separator: " ").count
+        )
+        return encodeToJSON(result)
     }
 
     /// Handle get_job_description tool call
-    func handleGetJobDescription(_ args: JSON) -> String {
-        let jobAppId = args["job_app_id"].stringValue
-
-        guard let uuid = UUID(uuidString: jobAppId),
-              let jobApp = jobAppStore.jobApps.first(where: { $0.id == uuid }) else {
-            return JSON(["error": "Job application not found: \(jobAppId)"]).rawString() ?? "{}"
+    func handleGetJobDescription(arguments: String) -> String {
+        guard let data = arguments.data(using: .utf8),
+              let args = try? JSONDecoder().decode(GetJobDescriptionArgs.self, from: data) else {
+            return encodeToJSON(ToolErrorResult(error: "Failed to parse get_job_description arguments"))
         }
 
-        var result = JSON()
-        result["job_app_id"].string = jobAppId
-        result["company"].string = jobApp.companyName
-        result["position"].string = jobApp.jobPosition
-        result["status"].string = jobApp.status.displayName
-        result["job_description"].string = jobApp.jobDescription
-        result["job_url"].string = jobApp.postingURL.isEmpty ? jobApp.jobApplyLink : jobApp.postingURL
-        result["notes"].string = jobApp.notes
-        result["applied_date"].string = jobApp.appliedDate?.ISO8601Format()
+        guard let uuid = UUID(uuidString: args.jobAppId),
+              let jobApp = jobAppStore.jobApps.first(where: { $0.id == uuid }) else {
+            return encodeToJSON(ToolErrorResult(error: "Job application not found: \(args.jobAppId)"))
+        }
 
-        return result.rawString() ?? "{}"
+        let result = JobDescriptionToolResult(
+            jobAppId: args.jobAppId,
+            company: jobApp.companyName,
+            position: jobApp.jobPosition,
+            status: jobApp.status.displayName,
+            jobDescription: jobApp.jobDescription,
+            jobUrl: jobApp.postingURL.isEmpty ? jobApp.jobApplyLink : jobApp.postingURL,
+            notes: jobApp.notes,
+            appliedDate: jobApp.appliedDate?.ISO8601Format()
+        )
+        return encodeToJSON(result)
     }
 
     /// Handle get_resume tool call
-    func handleGetResume(_ args: JSON) async -> String {
-        let resumeId = args["resume_id"].stringValue
-        let section = args["section"].string
+    func handleGetResume(arguments: String) async -> String {
+        guard let data = arguments.data(using: .utf8),
+              let args = try? JSONDecoder().decode(GetResumeArgs.self, from: data) else {
+            return encodeToJSON(ToolErrorResult(error: "Failed to parse get_resume arguments"))
+        }
 
         let descriptor = FetchDescriptor<Resume>()
         guard let resumes = try? modelContext.fetch(descriptor),
-              let uuid = UUID(uuidString: resumeId),
+              let uuid = UUID(uuidString: args.resumeId),
               let resume = resumes.first(where: { $0.id == uuid }) else {
-            return JSON(["error": "Resume not found: \(resumeId)"]).rawString() ?? "{}"
+            return encodeToJSON(ToolErrorResult(error: "Resume not found: \(args.resumeId)"))
         }
 
-        var result = JSON()
-        result["resume_id"].string = resumeId
-        result["template"].string = resume.template?.name ?? "Unknown Template"
+        var sectionName: String?
+        var content: String?
+        var availableSections: [String]?
+        var summary: String?
 
         // Get resume content from TreeNode
         if let rootNode = resume.rootNode {
-            if let section = section {
+            if let requestedSection = args.section {
                 // Get specific section
-                if let sectionNode = rootNode.children?.first(where: { $0.label == section }) {
-                    result["section"].string = section
-                    result["content"].string = extractNodeText(sectionNode)
+                if let sectionNode = rootNode.children?.first(where: { $0.label == requestedSection }) {
+                    sectionName = requestedSection
+                    content = extractNodeText(sectionNode)
                 }
             } else {
                 // Get summary of all sections
-                var sections: [String] = []
-                for child in rootNode.children ?? [] {
-                    sections.append(child.label)
-                }
-                result["available_sections"].arrayObject = sections
-                if let summaryNode = resume.rootNode?.children?.first(where: { $0.label == "summary" }) {
-                    result["summary"].string = extractNodeText(summaryNode)
+                availableSections = (rootNode.children ?? []).map { $0.label }
+                if let summaryNode = rootNode.children?.first(where: { $0.label == "summary" }) {
+                    summary = extractNodeText(summaryNode)
                 }
             }
         }
 
-        return result.rawString() ?? "{}"
+        let result = CoachingResumeToolResult(
+            resumeId: args.resumeId,
+            template: resume.template?.name ?? "Unknown Template",
+            section: sectionName,
+            content: content,
+            availableSections: availableSections,
+            summary: summary
+        )
+        return encodeToJSON(result)
     }
 
     /// Handle choose_best_jobs tool call - triggers the job selection workflow
     func handleChooseBestJobs(
-        _ args: JSON,
+        arguments: String,
         agentService: DiscoveryAgentService?,
         knowledgeCards: [KnowledgeCard],
         dossier: CandidateDossier?
     ) async -> String {
         guard let agent = agentService else {
-            return JSON(["error": "Agent service not configured"]).rawString() ?? "{}"
+            return encodeToJSON(ToolErrorResult(error: "Agent service not configured"))
         }
 
-        let count = min(max(args["count"].intValue, 1), 10)
-        let reason = args["reason"].stringValue
+        guard let data = arguments.data(using: .utf8),
+              let args = try? JSONDecoder().decode(ChooseBestJobsArgs.self, from: data) else {
+            return encodeToJSON(ToolErrorResult(error: "Failed to parse choose_best_jobs arguments"))
+        }
 
-        Logger.info("🎯 Coaching: triggering choose best jobs (count: \(count), reason: \(reason))", category: .ai)
+        let count = min(max(args.count, 1), 10)
+
+        Logger.info("Coaching: triggering choose best jobs (count: \(count), reason: \(args.reason))", category: .ai)
 
         // Get all jobs in new (identified) status
         let identifiedJobs = jobAppStore.jobApps(forStatus: .new)
         guard !identifiedJobs.isEmpty else {
-            return JSON([
-                "success": false,
-                "error": "No jobs in Identified status to choose from",
-                "identified_count": 0
-            ]).rawString() ?? "{}"
+            return encodeToJSON(ChooseBestJobsToolResult(
+                success: false,
+                selectedCount: nil,
+                identifiedCount: 0,
+                selections: nil,
+                overallAnalysis: nil,
+                considerations: nil,
+                error: "No jobs in Identified status to choose from"
+            ))
         }
 
         // Build job tuples for agent
@@ -179,35 +205,38 @@ struct CoachingToolHandler {
                 }
             }
 
-            // Build response for LLM
-            var response = JSON()
-            response["success"].bool = true
-            response["selected_count"].int = result.selections.count
-            response["identified_count"].int = identifiedJobs.count
-
-            var selections: [JSON] = []
-            for selection in result.selections {
-                var sel = JSON()
-                sel["company"].string = selection.company
-                sel["role"].string = selection.role
-                sel["match_score"].double = selection.matchScore
-                sel["reasoning"].string = selection.reasoning
-                selections.append(sel)
+            let selections = result.selections.map { selection in
+                ChooseBestJobsSelectionResult(
+                    company: selection.company,
+                    role: selection.role,
+                    matchScore: selection.matchScore,
+                    reasoning: selection.reasoning
+                )
             }
-            response["selections"].arrayObject = selections.map { $0.object }
-            response["overall_analysis"].string = result.overallAnalysis
-            response["considerations"].arrayObject = result.considerations
 
-            Logger.info("✅ Choose best jobs completed: \(result.selections.count) selected", category: .ai)
-            return response.rawString() ?? "{}"
+            Logger.info("Choose best jobs completed: \(result.selections.count) selected", category: .ai)
+
+            return encodeToJSON(ChooseBestJobsToolResult(
+                success: true,
+                selectedCount: result.selections.count,
+                identifiedCount: identifiedJobs.count,
+                selections: selections,
+                overallAnalysis: result.overallAnalysis,
+                considerations: result.considerations,
+                error: nil
+            ))
 
         } catch {
             Logger.error("Failed to choose best jobs: \(error)", category: .ai)
-            return JSON([
-                "success": false,
-                "error": error.localizedDescription,
-                "identified_count": identifiedJobs.count
-            ]).rawString() ?? "{}"
+            return encodeToJSON(ChooseBestJobsToolResult(
+                success: false,
+                selectedCount: nil,
+                identifiedCount: identifiedJobs.count,
+                selections: nil,
+                overallAnalysis: nil,
+                considerations: nil,
+                error: error.localizedDescription
+            ))
         }
     }
 
