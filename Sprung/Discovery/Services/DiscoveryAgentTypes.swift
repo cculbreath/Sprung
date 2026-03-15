@@ -9,72 +9,120 @@ import Foundation
 
 // MARK: - Result Types
 
-struct DailyTasksResult {
+struct DailyTasksResult: Codable {
     let tasks: [GeneratedDailyTask]
 }
 
-struct JobSourcesResult {
+struct JobSourcesResult: Codable {
     let sources: [GeneratedJobSource]
 }
 
-struct NetworkingEventsResult {
+struct NetworkingEventsResult: Codable {
     let events: [GeneratedNetworkingEvent]
 }
 
-struct JobSelectionsResult {
+struct JobSelectionsResult: Codable {
     let selections: [JobSelection]
     let overallAnalysis: String
     let considerations: [String]
+
+    enum CodingKeys: String, CodingKey {
+        case selections
+        case overallAnalysis = "overall_analysis"
+        case considerations
+    }
 }
 
-struct JobSelection {
+struct JobSelection: Codable {
     let jobId: UUID
     let company: String
     let role: String
     let matchScore: Double
     let reasoning: String
+
+    enum CodingKeys: String, CodingKey {
+        case jobId = "job_id"
+        case company, role
+        case matchScore = "match_score"
+        case reasoning
+    }
 }
 
-struct EventPrepResult {
+struct EventPrepResult: Codable {
     let goal: String
     let pitchScript: String
     let talkingPoints: [TalkingPointResult]
     let targetCompanies: [TargetCompanyResult]
     let conversationStarters: [String]
     let thingsToAvoid: [String]
+
+    enum CodingKeys: String, CodingKey {
+        case goal
+        case pitchScript = "pitch_script"
+        case talkingPoints = "talking_points"
+        case targetCompanies = "target_companies"
+        case conversationStarters = "conversation_starters"
+        case thingsToAvoid = "things_to_avoid"
+    }
 }
 
-struct DebriefOutcomesResult {
+struct DebriefOutcomesResult: Codable {
     let summary: String
     let keyTakeaways: [String]
     let followUpActions: [DebriefFollowUpAction]
     let opportunitiesIdentified: [String]
     let nextSteps: [String]
+
+    enum CodingKeys: String, CodingKey {
+        case summary
+        case keyTakeaways = "key_takeaways"
+        case followUpActions = "follow_up_actions"
+        case opportunitiesIdentified = "opportunities_identified"
+        case nextSteps = "next_steps"
+    }
 }
 
-struct DebriefFollowUpAction {
+struct DebriefFollowUpAction: Codable {
     let contactName: String
     let action: String
     let deadline: String
     let priority: String
+
+    enum CodingKeys: String, CodingKey {
+        case contactName = "contact_name"
+        case action, deadline, priority
+    }
 }
 
-struct TalkingPointResult {
+struct TalkingPointResult: Codable {
     let topic: String
     let relevance: String
     let yourAngle: String
+
+    enum CodingKeys: String, CodingKey {
+        case topic, relevance
+        case yourAngle = "your_angle"
+    }
 
     func toTalkingPoint() -> TalkingPoint {
         TalkingPoint(topic: topic, relevance: relevance, yourAngle: yourAngle)
     }
 }
 
-struct TargetCompanyResult {
+struct TargetCompanyResult: Codable {
     let company: String
     let whyRelevant: String
     let recentNews: String?
     let openRoles: [String]
     let possibleOpeners: [String]
+
+    enum CodingKeys: String, CodingKey {
+        case company
+        case whyRelevant = "why_relevant"
+        case recentNews = "recent_news"
+        case openRoles = "open_roles"
+        case possibleOpeners = "possible_openers"
+    }
 
     func toTargetCompanyContext() -> TargetCompanyContext {
         TargetCompanyContext(
@@ -94,10 +142,7 @@ struct GeneratedDailyTask: Codable {
     let title: String
     let description: String?
     let priority: Int
-    let relatedJobSourceId: String?
-    let relatedJobAppId: String?
-    let relatedContactId: String?
-    let relatedEventId: String?
+    let relatedId: String?
     let estimatedMinutes: Int?
 
     enum CodingKeys: String, CodingKey {
@@ -105,10 +150,7 @@ struct GeneratedDailyTask: Codable {
         case title
         case description
         case priority
-        case relatedJobSourceId = "related_job_source_id"
-        case relatedJobAppId = "related_job_app_id"
-        case relatedContactId = "related_contact_id"
-        case relatedEventId = "related_event_id"
+        case relatedId = "related_id"
         case estimatedMinutes = "estimated_minutes"
     }
 
@@ -120,28 +162,30 @@ struct GeneratedDailyTask: Codable {
         task.estimatedMinutes = estimatedMinutes
         task.isLLMGenerated = true
 
+        let dailyTaskType: DailyTaskType
         switch taskType.lowercased() {
-        case "gather": task.taskType = .gatherLeads
-        case "customize": task.taskType = .customizeMaterials
-        case "apply": task.taskType = .submitApplication
-        case "follow_up": task.taskType = .followUp
-        case "networking": task.taskType = .networking
-        case "event_prep": task.taskType = .eventPrep
-        case "debrief": task.taskType = .eventDebrief
-        default: task.taskType = .gatherLeads
+        case "gather": dailyTaskType = .gatherLeads
+        case "customize": dailyTaskType = .customizeMaterials
+        case "apply": dailyTaskType = .submitApplication
+        case "follow_up": dailyTaskType = .followUp
+        case "networking": dailyTaskType = .networking
+        case "event_prep": dailyTaskType = .eventPrep
+        case "debrief": dailyTaskType = .eventDebrief
+        default: dailyTaskType = .gatherLeads
         }
+        task.taskType = dailyTaskType
 
-        if let sourceId = relatedJobSourceId, let uuid = UUID(uuidString: sourceId) {
-            task.relatedJobSourceId = uuid
-        }
-        if let jobAppId = relatedJobAppId, let uuid = UUID(uuidString: jobAppId) {
-            task.relatedJobAppId = uuid
-        }
-        if let contactId = relatedContactId, let uuid = UUID(uuidString: contactId) {
-            task.relatedContactId = uuid
-        }
-        if let eventId = relatedEventId, let uuid = UUID(uuidString: eventId) {
-            task.relatedEventId = uuid
+        if let relatedId = relatedId, let uuid = UUID(uuidString: relatedId) {
+            switch dailyTaskType {
+            case .gatherLeads:
+                task.relatedJobSourceId = uuid
+            case .customizeMaterials, .submitApplication, .followUp:
+                task.relatedJobAppId = uuid
+            case .networking:
+                task.relatedContactId = uuid
+            case .eventPrep, .eventDebrief:
+                task.relatedEventId = uuid
+            }
         }
 
         return task
@@ -189,7 +233,7 @@ struct GeneratedJobSource: Codable {
     }
 }
 
-struct GeneratedNetworkingEvent {
+struct GeneratedNetworkingEvent: Codable {
     let name: String
     let date: String
     let time: String?
@@ -200,6 +244,15 @@ struct GeneratedNetworkingEvent {
     let estimatedAttendance: String?
     let cost: String?
     let relevanceReason: String?
+
+    enum CodingKeys: String, CodingKey {
+        case name, date, time, location, url
+        case eventType = "event_type"
+        case organizer
+        case estimatedAttendance = "estimated_attendance"
+        case cost
+        case relevanceReason = "relevance_reason"
+    }
 
     func toNetworkingEventOpportunity() -> NetworkingEventOpportunity {
         let event = NetworkingEventOpportunity()
