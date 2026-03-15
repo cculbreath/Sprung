@@ -8,7 +8,6 @@
 
 import Foundation
 import SwiftOpenAI
-import SwiftyJSON
 
 /// Service for LLM interactions in Discovery module.
 /// Uses LLMFacade with ChatCompletions/OpenRouter backend.
