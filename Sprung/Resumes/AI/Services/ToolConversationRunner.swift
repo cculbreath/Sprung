@@ -169,38 +169,12 @@ class ToolConversationRunner {
 extension ToolConversationRunner {
     /// Parse revisions from a raw LLM response string
     func parseRevisionsFromResponse(_ response: String) throws -> RevisionsContainer {
-        // Try to extract JSON from the response
-        // The response may contain markdown code blocks or just raw JSON
-        let jsonString: String
-        if let jsonStart = response.range(of: "["),
-           let jsonEnd = response.range(of: "]", options: .backwards) {
-            // Extract the JSON array portion
-            jsonString = String(response[jsonStart.lowerBound...jsonEnd.upperBound])
-        } else if let jsonStart = response.range(of: "{"),
-                  let jsonEnd = response.range(of: "}", options: .backwards) {
-            // Try object format (the container might be an object with revArray)
-            jsonString = String(response[jsonStart.lowerBound...jsonEnd.upperBound])
-        } else {
-            jsonString = response
-        }
-
-        guard let data = jsonString.data(using: .utf8) else {
-            throw LLMError.clientError("Failed to convert response to data")
-        }
-
-        // Try to decode as RevisionsContainer first
         do {
-            return try JSONDecoder().decode(RevisionsContainer.self, from: data)
+            return try JSONResponseParser.parseFlexibleFromText(response, as: RevisionsContainer.self)
         } catch {
-            // Try to decode as an array of revisions directly
-            do {
-                let revisions = try JSONDecoder().decode([ProposedRevisionNode].self, from: data)
-                return RevisionsContainer(revArray: revisions)
-            } catch {
-                Logger.error("Failed to parse revisions from response: \(error.localizedDescription)")
-                Logger.debug("Response was: \(response.prefix(500))...")
-                throw LLMError.clientError("Failed to parse revision response: \(error.localizedDescription)")
-            }
+            // LLM may return a bare array instead of a container object
+            let revisions = try JSONResponseParser.parseFlexibleFromText(response, as: [ProposedRevisionNode].self)
+            return RevisionsContainer(revArray: revisions)
         }
     }
 }

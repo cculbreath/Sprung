@@ -22,9 +22,14 @@ struct JSONResponseParser {
         guard let content = response.choices.first?.message?.text else {
             throw LLMError.unexpectedResponseFormat
         }
-        Logger.debug("🔍 Parsing flexible JSON response (\(content.count) chars): \(content.prefix(500))...")
-        // Try to parse JSON from the response content with enhanced fallback strategies
-        return try parseJSONFromTextFlexible(content, as: type)
+        return try parseFlexibleFromText(content, as: type)
+    }
+    /// Parse flexible JSON from raw text with enhanced error handling and recovery strategies.
+    /// Use this when you have a raw LLM response string (e.g. from tool-enabled conversations)
+    /// rather than a full `LLMResponseDTO`.
+    static func parseFlexibleFromText<T: Codable>(_ text: String, as type: T.Type) throws -> T {
+        Logger.debug("🔍 Parsing flexible JSON response (\(text.count) chars): \(text.prefix(500))...")
+        return try parseJSONFromTextFlexible(text, as: type)
     }
     /// Extract and parse JSON from text response
     private static func parseJSONFromText<T: Codable>(_ text: String, as type: T.Type) throws -> T {
