@@ -511,7 +511,7 @@ class FixOverflowService {
         }
         // Parse the JSON response using shared parser
         let responseText = jsonResponse.isEmpty ? fullResponse : jsonResponse
-        return try LLMResponseParser.parseJSON(responseText, as: T.self)
+        return try JSONResponseParser.parseText(responseText, as: T.self)
     }
 }
 // MARK: - Error Types

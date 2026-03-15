@@ -220,8 +220,8 @@ final class CoverLetterService {
             return text.trimmingCharacters(in: .whitespacesAndNewlines)
         }
 
-        // Use shared JSON extraction logic from LLMResponseParser
-        let extractedJSON = LLMResponseParser.extractJSONFromText(text)
+        // Use shared JSON extraction logic
+        let extractedJSON = JSONResponseParser.extractJSON(from: text)
 
         // If we got the same text back, it's not JSON - return as-is
         if extractedJSON == text {

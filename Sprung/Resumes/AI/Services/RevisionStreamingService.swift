@@ -51,7 +51,7 @@ class RevisionStreamingService {
         // Process stream and collect full response
         let responseText = try await processStreamWithReasoning(handle: handle, modelName: modelId)
         // Parse the JSON response
-        let response = try LLMResponseParser.parseJSON(responseText, as: responseType)
+        let response = try JSONResponseParser.parseText(responseText, as: responseType)
         return (response, conversationId)
     }
 
@@ -86,7 +86,7 @@ class RevisionStreamingService {
         // Process stream and collect full response
         let responseText = try await processStreamWithReasoning(handle: handle, modelName: modelId)
         // Parse the JSON response
-        let revisions = try LLMResponseParser.parseJSON(responseText, as: RevisionsContainer.self)
+        let revisions = try JSONResponseParser.parseText(responseText, as: RevisionsContainer.self)
         return (revisions, conversationId)
     }
     /// Continue an existing conversation with streaming (generic version)
@@ -120,7 +120,7 @@ class RevisionStreamingService {
         // Process stream and collect full response
         let responseText = try await processStreamWithReasoning(handle: handle, modelName: modelId)
         // Parse the JSON response
-        return try LLMResponseParser.parseJSON(responseText, as: responseType)
+        return try JSONResponseParser.parseText(responseText, as: responseType)
     }
 
     /// Continue an existing conversation with streaming
@@ -152,7 +152,7 @@ class RevisionStreamingService {
         // Process stream and collect full response
         let responseText = try await processStreamWithReasoning(handle: handle, modelName: modelId)
         // Parse the JSON response
-        return try LLMResponseParser.parseJSON(responseText, as: RevisionsContainer.self)
+        return try JSONResponseParser.parseText(responseText, as: RevisionsContainer.self)
     }
     /// Cancel any active streaming operation
     func cancelActiveStreaming() {
