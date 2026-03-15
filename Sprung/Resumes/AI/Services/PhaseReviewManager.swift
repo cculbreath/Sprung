@@ -205,27 +205,7 @@ class PhaseReviewManager {
 
     /// Parse PhaseReviewContainer from a raw LLM response string (used with tool-enabled conversations)
     private func parsePhaseReviewFromResponse(_ response: String) throws -> PhaseReviewContainer {
-        // Try to extract JSON from the response
-        // The response may contain markdown code blocks or just raw JSON
-        let jsonString: String
-        if let jsonStart = response.range(of: "{"),
-           let jsonEnd = response.range(of: "}", options: .backwards) {
-            jsonString = String(response[jsonStart.lowerBound...jsonEnd.upperBound])
-        } else {
-            jsonString = response
-        }
-
-        guard let data = jsonString.data(using: .utf8) else {
-            throw LLMError.clientError("Failed to convert response to data")
-        }
-
-        do {
-            return try JSONDecoder().decode(PhaseReviewContainer.self, from: data)
-        } catch {
-            Logger.error("Failed to parse phase review from response: \(error.localizedDescription)")
-            Logger.debug("Response was: \(response.prefix(500))...")
-            throw LLMError.clientError("Failed to parse phase review response: \(error.localizedDescription)")
-        }
+        return try JSONResponseParser.parseFlexibleFromText(response, as: PhaseReviewContainer.self)
     }
 
     /// Build system prompt augmentation for tool-enabled phase review
