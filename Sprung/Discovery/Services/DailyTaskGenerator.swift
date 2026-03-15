@@ -7,7 +7,6 @@
 //
 
 import Foundation
-import SwiftyJSON
 
 /// Handles generation and management of daily tasks from coaching sessions
 @MainActor
@@ -52,30 +51,31 @@ struct DailyTaskGenerator {
     /// Handle the update_daily_tasks tool call and save tasks
     /// Returns the count of tasks saved
     func handleUpdateDailyTasksToolCall(arguments: String, session: CoachingSession?) -> Int {
-        let json = JSON(parseJSON: arguments)
-        let tasksArray = json["tasks"].arrayValue
+        guard let data = arguments.data(using: .utf8),
+              let parsed = try? JSONDecoder().decode(UpdateDailyTasksArgs.self, from: data) else {
+            Logger.warning("Coaching: Failed to decode update_daily_tasks arguments", category: .ai)
+            return 0
+        }
 
         var tasks: [DailyTask] = []
-        for taskJSON in tasksArray {
-            let taskTypeStr = taskJSON["task_type"].stringValue
-            guard let taskType = mapTaskType(taskTypeStr) else {
-                Logger.warning("Coaching: Unknown task type '\(taskTypeStr)'", category: .ai)
+        for entry in parsed.tasks {
+            guard let taskType = mapTaskType(entry.taskType) else {
+                Logger.warning("Coaching: Unknown task type '\(entry.taskType)'", category: .ai)
                 continue
             }
 
-            let title = taskJSON["title"].stringValue
-            guard !title.isEmpty else { continue }
+            guard !entry.title.isEmpty else { continue }
 
             let task = DailyTask()
             task.taskType = taskType
-            task.title = title
-            task.taskDescription = taskJSON["description"].string
-            task.priority = taskJSON["priority"].intValue
-            task.estimatedMinutes = taskJSON["estimated_minutes"].int
+            task.title = entry.title
+            task.taskDescription = entry.description.isEmpty ? nil : entry.description
+            task.priority = entry.priority
+            task.estimatedMinutes = entry.estimatedMinutes
             task.isLLMGenerated = true
 
             // Handle related_id if present
-            if let relatedIdStr = taskJSON["related_id"].string,
+            if let relatedIdStr = entry.relatedId,
                let relatedId = UUID(uuidString: relatedIdStr) {
                 switch taskType {
                 case .gatherLeads:
@@ -95,7 +95,7 @@ struct DailyTaskGenerator {
         if !tasks.isEmpty {
             saveDailyTasks(tasks)
             session?.generatedTaskCount = tasks.count
-            Logger.info("📋 Saved \(tasks.count) daily tasks from coaching", category: .ai)
+            Logger.info("Saved \(tasks.count) daily tasks from coaching", category: .ai)
         } else {
             Logger.warning("No valid tasks found in update_daily_tasks call", category: .ai)
         }
