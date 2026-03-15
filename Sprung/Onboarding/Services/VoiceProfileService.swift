@@ -96,7 +96,7 @@ final class VoiceProfileService {
             activeStreamingHandle = nil
 
             let responseText = jsonResponse.isEmpty ? fullResponse : jsonResponse
-            let profile: VoiceProfile = try LLMResponseParser.parseJSON(responseText, as: VoiceProfile.self)
+            let profile: VoiceProfile = try JSONResponseParser.parseText(responseText, as: VoiceProfile.self)
 
             Logger.info(
                 "🎤 Extracted voice profile: \(profile.enthusiasm.displayName), first person: \(profile.useFirstPerson)",

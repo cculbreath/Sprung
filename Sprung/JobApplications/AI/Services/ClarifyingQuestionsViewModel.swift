@@ -125,7 +125,7 @@ class ClarifyingQuestionsViewModel {
                 cancelActiveStreaming()
                 // Parse the JSON response using shared parser
                 let responseText = jsonResponse.isEmpty ? fullResponse : jsonResponse
-                let questionsRequest = try LLMResponseParser.parseJSON(responseText, as: ClarifyingQuestionsRequest.self)
+                let questionsRequest = try JSONResponseParser.parseText(responseText, as: ClarifyingQuestionsRequest.self)
                 // Continue with the parsed questions
                 await handleClarifyingQuestionsResponse(questionsRequest, resume: resume, modelId: modelId)
             } else {

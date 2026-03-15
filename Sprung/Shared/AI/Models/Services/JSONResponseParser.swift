@@ -9,6 +9,7 @@ import Foundation
 /// - Important: This is an internal implementation type. Use `LLMFacade` as the
 ///   public entry point for LLM operations.
 struct JSONResponseParser {
+    // MARK: - LLMResponseDTO Entry Points
     /// Parse structured response with fallback strategies
     static func parseStructured<T: Codable>(_ response: LLMResponseDTO, as type: T.Type) throws -> T {
         guard let content = response.choices.first?.message?.text else {
@@ -26,6 +27,64 @@ struct JSONResponseParser {
         // Try to parse JSON from the response content with enhanced fallback strategies
         return try parseJSONFromTextFlexible(content, as: type)
     }
+    // MARK: - Raw Text Entry Points
+    /// Parse JSON from raw text with fallback strategies for code blocks and embedded JSON
+    static func parseText<T: Codable>(_ text: String, as type: T.Type) throws -> T {
+        return try parseJSONFromText(text, as: type)
+    }
+    /// Extract the first JSON object or array from text that may contain surrounding content.
+    /// Handles markdown code blocks, standalone JSON objects, and arrays.
+    /// Returns the extracted JSON string, or the original text if no JSON is found.
+    static func extractJSON(from text: String) -> String {
+        // Strategy 1: Look for JSON between markdown code blocks (```json...```)
+        if let range = text.range(of: "```json") {
+            let afterStart = text[range.upperBound...]
+            if let endRange = afterStart.range(of: "```") {
+                return String(afterStart[..<endRange.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+        }
+        // Strategy 2: Look for JSON between generic code blocks (```...```)
+        if let range = text.range(of: "```") {
+            let afterStart = text[range.upperBound...]
+            if let endRange = afterStart.range(of: "```") {
+                let extracted = String(afterStart[..<endRange.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
+                if extracted.hasPrefix("{") || extracted.hasPrefix("[") {
+                    return extracted
+                }
+            }
+        }
+        // Strategy 3: Find balanced JSON object using brace counting
+        if let startRange = text.range(of: "{") {
+            var braceCount = 1
+            var index = text.index(after: startRange.lowerBound)
+            while index < text.endIndex && braceCount > 0 {
+                let char = text[index]
+                if char == "{" { braceCount += 1 }
+                else if char == "}" { braceCount -= 1 }
+                index = text.index(after: index)
+            }
+            if braceCount == 0 {
+                return String(text[startRange.lowerBound..<index])
+            }
+        }
+        // Strategy 4: Find balanced JSON array using bracket counting
+        if let startRange = text.range(of: "[") {
+            var bracketCount = 1
+            var index = text.index(after: startRange.lowerBound)
+            while index < text.endIndex && bracketCount > 0 {
+                let char = text[index]
+                if char == "[" { bracketCount += 1 }
+                else if char == "]" { bracketCount -= 1 }
+                index = text.index(after: index)
+            }
+            if bracketCount == 0 {
+                return String(text[startRange.lowerBound..<index])
+            }
+        }
+        // Fallback: return original text
+        return text
+    }
+    // MARK: - Private Implementation
     /// Extract and parse JSON from text response
     private static func parseJSONFromText<T: Codable>(_ text: String, as type: T.Type) throws -> T {
         Logger.debug("🔍 Attempting to parse JSON from text: \(text.prefix(500))...")

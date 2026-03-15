@@ -200,7 +200,7 @@ extension SkillsBankBrowser {
                 }
 
                 let responseText = jsonResponse.isEmpty ? fullResponse : jsonResponse
-                let response: RefineResponse = try LLMResponseParser.parseJSON(responseText, as: RefineResponse.self)
+                let response: RefineResponse = try JSONResponseParser.parseText(responseText, as: RefineResponse.self)
 
                 // Apply refinements
                 var modifiedCount = 0

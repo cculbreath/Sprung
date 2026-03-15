@@ -87,7 +87,7 @@ final class KCRefinementService {
         activeStreamingHandle = handle
 
         let responseText = try await processStreamWithReasoning(handle: handle, modelName: modelId)
-        return try LLMResponseParser.parseJSON(responseText, as: RefinedKnowledgeCard.self)
+        return try JSONResponseParser.parseText(responseText, as: RefinedKnowledgeCard.self)
     }
 
     // MARK: - Stream Processing
