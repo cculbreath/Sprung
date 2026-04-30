@@ -38,7 +38,6 @@ struct ExperienceEditorView: View {
             Divider()
             content
         }
-        .frame(minWidth: 1080, minHeight: 780)
         .background(Color(NSColor.windowBackgroundColor))
         .task {
             await loadDraft()
@@ -107,7 +106,6 @@ struct ExperienceEditorView: View {
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
-            .padding(.top, 8)
 
             if case .saved = saveState {
                 Text("Changes saved")
