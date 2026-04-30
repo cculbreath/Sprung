@@ -116,7 +116,7 @@ actor ParallelLLMExecutor {
                 result: .failure(error)
             )
         }
-        await releaseSlot()
+        releaseSlot()
         return result
     }
 

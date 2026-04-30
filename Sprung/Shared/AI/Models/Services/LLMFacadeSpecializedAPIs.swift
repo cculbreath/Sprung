@@ -197,9 +197,7 @@ final class LLMFacadeSpecializedAPIs {
         responseType: T.Type,
         schema: [String: Any]
     ) async throws -> T {
-        let outputFormat = AnthropicOutputFormat.schema(
-            schema: schema
-        )
+        let outputConfig = AnthropicOutputConfig.schema(schema)
 
         let parameters = AnthropicMessageParameter(
             model: modelId,
@@ -207,7 +205,7 @@ final class LLMFacadeSpecializedAPIs {
             system: .blocks(systemContent),
             maxTokens: 4096,
             stream: false,
-            outputFormat: outputFormat
+            outputConfig: outputConfig
         )
 
         let stream = try await anthropicMessagesStream(parameters: parameters)

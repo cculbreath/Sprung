@@ -70,7 +70,7 @@ struct CreateSectionCardTool: InterviewTool {
         }
 
         // Build normalized fields JSON
-        var normalizedFields = params["fields"]
+        let normalizedFields = params["fields"]
 
         // Create section card via service
         let result = await coordinator.sectionCards.createSectionCard(

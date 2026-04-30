@@ -17,7 +17,7 @@ actor OperationTracker {
 
     /// Register a new tool operation
     func register(_ operation: ToolOperation) async {
-        let callId = await operation.callId
+        let callId = operation.callId
         operations[callId] = operation
         Logger.debug("OperationTracker: Registered operation \(callId.prefix(8))", category: .ai)
     }

@@ -34,7 +34,7 @@ struct RevisionStreamProcessor {
     /// Process an Anthropic stream event and return domain events.
     mutating func process(_ event: AnthropicStreamEvent) -> [RevisionStreamEvent] {
         switch event {
-        case .messageStart(let startEvent):
+        case .messageStart:
             accumulatedText = ""
             pendingToolCalls = []
             currentToolCall = nil

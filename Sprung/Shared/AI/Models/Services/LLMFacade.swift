@@ -632,7 +632,7 @@ final class LLMFacade {
         let firstChoice = result.choices?.first
         let content = firstChoice?.message?.content
         let responseToolCalls = firstChoice?.message?.toolCalls?.map {
-            "\($0.function.name)(\($0.function.arguments.prefix(200)))"
+            "\($0.function.name ?? "<unknown>")(\($0.function.arguments.prefix(200)))"
         } ?? []
         LLMTranscriptLogger.logToolCall(
             method: "executeWithTools", modelId: modelId, backend: backend.displayName,
@@ -717,7 +717,7 @@ final class LLMFacade {
     }
 
     /// Execute a structured JSON request via direct Anthropic API with prompt caching and schema enforcement.
-    /// Uses Anthropic's structured outputs feature with the output_format parameter.
+    /// Uses Anthropic's structured outputs feature via the `output_config.format` parameter.
     /// - Parameters:
     ///   - systemContent: Array of system content blocks (some may have cache_control)
     ///   - userPrompt: The user's request/prompt
