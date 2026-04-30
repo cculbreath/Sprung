@@ -16,7 +16,8 @@ struct ResumeSettingsSection: View {
         ("minimal", "Minimal", "Lightweight reasoning"),
         ("low", "Low", "Light reasoning for moderately complex tasks"),
         ("medium", "Medium", "Balanced speed and reasoning depth"),
-        ("high", "High", "Maximum reasoning; best for complex tasks")
+        ("high", "High", "Maximum reasoning; best for complex tasks"),
+        ("xhigh", "Extra High", "GPT-5.2+ only; deepest reasoning for the hardest tasks")
     ]
 
     var body: some View {

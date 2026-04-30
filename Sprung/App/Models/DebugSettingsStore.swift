@@ -16,6 +16,7 @@ final class DebugSettingsStore {
         case low = 1
         case medium = 2
         case high = 3
+        case xhigh = 4
 
         var id: Int { rawValue }
 
@@ -25,6 +26,7 @@ final class DebugSettingsStore {
             case .low: return "Low"
             case .medium: return "Medium"
             case .high: return "High"
+            case .xhigh: return "Extra High"
             }
         }
 
@@ -35,6 +37,7 @@ final class DebugSettingsStore {
             case .low: return "low"
             case .medium: return "medium"
             case .high: return "high"
+            case .xhigh: return "xhigh"
             }
         }
     }
