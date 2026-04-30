@@ -19,11 +19,6 @@ enum OnboardingLLMConfig {
     /// Maximum context tokens for the model
     static let maxContextTokens = 100_000
 
-    // MARK: - Generation Parameters
-
-    /// Top-P for nucleus sampling (1.0 = consider all tokens)
-    static let topP: Double = 1.0
-
     // MARK: - Retry Configuration
 
     /// Maximum number of retry attempts for transient errors
