@@ -382,7 +382,6 @@ import SwiftUI
     ///   - fieldPath: The field path pattern (e.g., "skills.*.name")
     ///   - nodes: The exported nodes to review
     ///   - isBundled: Whether all nodes are bundled into one review
-    ///   - coverRefs: Cover letter references for writing sample extraction (optional)
     /// - Returns: The prompt string for the LLM
     @MainActor
     func phaseReviewPrompt(
@@ -390,8 +389,7 @@ import SwiftUI
         phaseNumber: Int,
         fieldPath: String,
         nodes: [ExportedReviewNode],
-        isBundled: Bool,
-        coverRefs: [CoverRef] = []
+        isBundled: Bool
     ) async -> String {
         try? await exportCoordinator.ensureFreshRenderedText(for: res)
 
@@ -411,51 +409,10 @@ import SwiftUI
         // Get the text template content
         let textTemplate = res.template?.textContent ?? "(No text template available)"
 
-        // Check if we have preprocessed data for v2 template
-        let hasPreprocessedData = res.jobApp?.hasPreprocessingComplete ?? false
-
-        if hasPreprocessedData && !coverRefs.isEmpty {
-            // Use v2 template with structured requirements and voice context
-            let voiceContext = coverRefs.voiceContextForPrompt(maxSamples: 2)
-            let extractedRequirements = res.jobApp?.extractedRequirements
-            let formattedRequirements = formatRequirementsForPrompt(
-                extractedRequirements,
-                fallbackJobListing: jobListing
-            )
-            let cardsToInclude = selectCardsForContext(allCards: allKnowledgeCards, jobApp: res.jobApp)
-            let filteredCards = formatCardsForPrompt(cardsToInclude)
-
-            let prompt = loadPromptTemplateWithSubstitutions(named: "resume_phase_review_v2", substitutions: [
-                "phaseNumber": String(phaseNumber),
-                "sectionUppercase": section.uppercased(),
-                "fieldPath": fieldPath,
-                "applicantName": applicant.name,
-                "formattedRequirements": formattedRequirements,
-                "voiceContext": voiceContext,
-                "resumeText": resumeText,
-                "textTemplate": textTemplate,
-                "filteredCards": filteredCards,
-                "nodesJson": nodesJson,
-                "bundleDescription": bundleDescription,
-                "itemTypeDescription": itemTypeDescription,
-                "section": section,
-                "isBundled": String(isBundled)
-            ])
-
-            // Inject inference guidance if available
-            let finalPrompt = injectGuidance(into: prompt, for: section, fieldPath: fieldPath)
-
-            if saveDebugPrompt {
-                savePromptToDownloads(content: finalPrompt, fileName: "phaseReviewPrompt_v2_\(section)_phase\(phaseNumber).txt")
-            }
-
-            return finalPrompt
-        }
-
-        // Fallback to v1 template
         var prompt = loadPromptTemplateWithSubstitutions(named: "resume_phase_review", substitutions: [
             "phaseNumber": String(phaseNumber),
-            "sectionUppercase": section.uppercased(),
+            "sectionDisplayHeader": sectionDisplayHeader(for: section),
+            "sectionLabelMap": sectionLabelMap(),
             "fieldPath": fieldPath,
             "applicantName": applicant.name,
             "jobListing": jobListing,
@@ -508,71 +465,48 @@ import SwiftUI
         """
     }
 
-    // MARK: - Knowledge Card Selection
-
-    /// Select cards based on token limit setting
-    private func selectCardsForContext(allCards: [KnowledgeCard], jobApp: JobApp?) -> [KnowledgeCard] {
-        let tokenLimit = UserDefaults.standard.integer(forKey: "knowledgeCardTokenLimit")
-        guard tokenLimit > 0 else { return allCards }
-
-        let totalTokens = allCards.compactMap { $0.tokenCount }.reduce(0, +)
-
-        // Under limit: include all cards
-        if totalTokens <= tokenLimit {
-            return allCards
+    /// Resolve the schema-key → display-header map the resume's renderer is using.
+    /// Prefers TreeNode-side overrides (`template.sectionLabels`), then falls back to the
+    /// template manifest, so the LLM sees exactly what the user sees in the rendered resume.
+    @MainActor
+    private func resolvedSectionLabels() -> [String: String] {
+        var labels: [String: String] = [:]
+        if let rootNode = res.rootNode,
+           let templateNode = rootNode.findChildByName("template"),
+           let sectionLabelsNode = templateNode.findChildByName("sectionLabels") {
+            for child in sectionLabelsNode.orderedChildren where !child.name.isEmpty {
+                let value = child.value.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !value.isEmpty else { continue }
+                labels[child.name] = value
+            }
         }
-
-        // Over limit: filter to relevant cards if preprocessing is complete
-        if let relevantIds = jobApp?.relevantCardIds, !relevantIds.isEmpty {
-            let relevantIdSet = Set(relevantIds)
-            let filtered = allCards.filter { relevantIdSet.contains($0.id.uuidString) }
-            Logger.info("📊 [ResumeQuery] Token limit exceeded (\(totalTokens)/\(tokenLimit)), using \(filtered.count) relevant cards", category: .ai)
-            return filtered
+        if let manifestLabels = res.template?.manifest?.sectionVisibilityLabels {
+            for (key, value) in manifestLabels where labels[key] == nil {
+                labels[key] = value
+            }
         }
-
-        // Fallback: include all cards (preprocessing not complete)
-        return allCards
+        return labels
     }
 
-    /// Format cards for prompt inclusion
-    private func formatCardsForPrompt(_ cards: [KnowledgeCard]) -> String {
-        if cards.isEmpty {
-            return "(No knowledge cards available)"
-        }
-
-        return cards.map { card in
-            "### \(card.title)\n\(card.narrative)"
-        }.joined(separator: "\n\n---\n\n")
+    /// Display header for a single section key (e.g., "work" → "Work Experience"),
+    /// falling back to the capitalized key when no override is present.
+    @MainActor
+    private func sectionDisplayHeader(for section: String) -> String {
+        resolvedSectionLabels()[section] ?? section.capitalized
     }
 
-    /// Format requirements for prompt inclusion
-    private func formatRequirementsForPrompt(
-        _ requirements: ExtractedRequirements?,
-        fallbackJobListing: String
-    ) -> String {
-        guard let req = requirements, req.isValid else {
-            return "JOB LISTING:\n\(fallbackJobListing)"
+    /// Multi-line "schema key → resume header" mapping for the prompt.
+    /// `path` and `fieldPath` segments use schema keys; the resume body shows these headers.
+    @MainActor
+    private func sectionLabelMap() -> String {
+        let labels = resolvedSectionLabels()
+        guard !labels.isEmpty else {
+            return "(no overrides; section keys are also the resume headers)"
         }
-
-        var sections: [String] = []
-
-        if !req.mustHave.isEmpty {
-            sections.append("MUST-HAVE (explicitly required):\n" + req.mustHave.map { "- \($0)" }.joined(separator: "\n"))
-        }
-        if !req.strongSignal.isEmpty {
-            sections.append("STRONG SIGNAL (emphasized):\n" + req.strongSignal.map { "- \($0)" }.joined(separator: "\n"))
-        }
-        if !req.preferred.isEmpty {
-            sections.append("PREFERRED (nice-to-have):\n" + req.preferred.map { "- \($0)" }.joined(separator: "\n"))
-        }
-        if !req.cultural.isEmpty {
-            sections.append("CULTURAL/SOFT:\n" + req.cultural.map { "- \($0)" }.joined(separator: "\n"))
-        }
-        if !req.atsKeywords.isEmpty {
-            sections.append("ATS KEYWORDS:\n" + req.atsKeywords.joined(separator: ", "))
-        }
-
-        return sections.joined(separator: "\n\n")
+        return labels
+            .sorted { $0.key < $1.key }
+            .map { "  \($0.key) → \"\($0.value)\"" }
+            .joined(separator: "\n")
     }
 
     /// Build JSON representation of nodes
@@ -645,7 +579,8 @@ import SwiftUI
         // resumeText reflects the current resume state with accepted changes already applied
         let prompt = loadPromptTemplateWithSubstitutions(named: "resume_phase_resubmission", substitutions: [
             "phaseNumber": String(phaseNumber),
-            "sectionUppercase": section.uppercased(),
+            "sectionDisplayHeader": sectionDisplayHeader(for: section),
+            "sectionLabelMap": sectionLabelMap(),
             "fieldPath": fieldPath,
             "jobListing": jobListing,
             "resumeText": resumeText,

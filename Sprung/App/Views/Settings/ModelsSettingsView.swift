@@ -36,6 +36,7 @@ struct ModelsSettingsView: View {
 
     // MARK: - Additional Models
     @AppStorage("voicePrimerExtractionModelId") private var voicePrimerModelId: String = ""
+    @AppStorage("voiceProfileModelId") private var voiceProfileModelId: String = ""
     @AppStorage("onboardingKCAgentModelId") private var kcAgentModelId: String = ""
     @AppStorage("onboardingGitIngestModelId") private var gitIngestModelId: String = ""
     @AppStorage("backgroundProcessingModelId") private var backgroundProcessingModelId: String = ""
@@ -170,6 +171,9 @@ struct ModelsSettingsView: View {
         // Additional Models
         modelRow(operation: "Voice Primer", backend: .openRouter) {
             openRouterPicker(selection: $voicePrimerModelId)
+        }
+        modelRow(operation: "Voice Profile", backend: .openRouter) {
+            openRouterPicker(selection: $voiceProfileModelId)
         }
         modelRow(operation: "KC Agent", backend: .openRouter) {
             openRouterPicker(selection: $kcAgentModelId)

@@ -9,7 +9,6 @@
 import SwiftUI
 
 struct OnboardingProcessingSettingsView: View {
-    @AppStorage("knowledgeCardTokenLimit") private var knowledgeCardTokenLimit: Int = 8000
     @AppStorage("onboardingMaxConcurrentExtractions") private var maxConcurrentExtractions: Int = 5
     @AppStorage("maxConcurrentPDFExtractions") private var maxConcurrentPDFExtractions: Int = 30
     @AppStorage("pdfJudgeUseFourUp") private var pdfJudgeUseFourUp: Bool = false
@@ -20,7 +19,6 @@ struct OnboardingProcessingSettingsView: View {
     var body: some View {
         Form {
             Section {
-                knowledgeCardTokenLimitPicker
                 maxConcurrentExtractionsPicker
                 ephemeralTurnsPicker
                 Toggle("Allow web search during interviews", isOn: $onboardingWebSearchAllowed)
@@ -32,23 +30,6 @@ struct OnboardingProcessingSettingsView: View {
     }
 
     // MARK: - Pickers
-
-    private var knowledgeCardTokenLimitPicker: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Stepper(value: $knowledgeCardTokenLimit, in: 2000...20000, step: 1000) {
-                HStack {
-                    Text("Knowledge Card Token Limit")
-                    Spacer()
-                    Text("\(knowledgeCardTokenLimit)")
-                        .foregroundStyle(.secondary)
-                        .monospacedDigit()
-                }
-            }
-            Text("When total knowledge card tokens exceed this limit, only job-relevant cards are included.")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-        }
-    }
 
     private var maxConcurrentExtractionsPicker: some View {
         VStack(alignment: .leading, spacing: 8) {

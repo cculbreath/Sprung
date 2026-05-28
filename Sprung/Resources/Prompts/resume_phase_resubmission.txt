@@ -1,6 +1,11 @@
 ================================================================================
-PHASE {phaseNumber} RESUBMISSION: {sectionUppercase} - {fieldPath}
+PHASE {phaseNumber} RESUBMISSION: {sectionDisplayHeader} ({fieldPath})
 ================================================================================
+
+SECTION KEY → RESUME HEADER
+Path segments use schema keys; the rendered resume uses the headers on the right.
+Treat them as the same section.
+{sectionLabelMap}
 
 CONTEXT:
 The user has rejected some of your previous proposals. Please provide revised suggestions

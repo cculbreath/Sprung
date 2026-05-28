@@ -480,35 +480,17 @@ actor DocumentArtifactMessenger: OnboardingEventEmitter {
     private func sendGitArtifact(_ record: JSON) async {
         let artifactId = record["id"].stringValue
         let filename = record["filename"].stringValue
-        let analysis = record["analysis"]
+        let extractedText = record["extractedText"].stringValue
+            .trimmingCharacters(in: .whitespacesAndNewlines)
 
-        // Build a concise summary message (not full analysis)
         var messageText = "### Git Repository Analysis: \(filename)\n\n"
-        messageText += "- **Artifact ID**: `\(artifactId)`\n"
+        messageText += "- **Artifact ID**: `\(artifactId)`\n\n"
 
-        // Repository summary (brief)
-        let repoSummary = analysis["repositorySummary"]
-        if repoSummary.exists() {
-            messageText += "- **Project**: \(repoSummary["name"].stringValue)\n"
-            messageText += "- **Domain**: \(repoSummary["primaryDomain"].stringValue)\n"
-            messageText += "- **Type**: \(repoSummary["projectType"].stringValue)\n\n"
-            if let description = repoSummary["description"].string, !description.isEmpty {
-                messageText += "\(description)\n\n"
-            }
+        if extractedText.isEmpty {
+            messageText += "_(No content extracted from this repository.)_\n\n"
+        } else {
+            messageText += extractedText + "\n\n"
         }
-
-        // Key skills (just names, not full details)
-        if let skills = analysis["technicalSkills"].array, !skills.isEmpty {
-            let skillNames = skills.prefix(10).compactMap { $0["skillName"].string }
-            if !skillNames.isEmpty {
-                messageText += "**Key Technologies**: \(skillNames.joined(separator: ", "))\n\n"
-            }
-        }
-
-        // Achievement count
-        let achievementCount = analysis["notableAchievements"].arrayValue.count
-        let competencyCount = analysis["architecturalCompetencies"].arrayValue.count
-        messageText += "**Analysis includes**: \(achievementCount) notable achievements, \(competencyCount) architectural competencies\n\n"
 
         messageText += """
             ---

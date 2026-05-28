@@ -1,6 +1,11 @@
 ================================================================================
-PHASE {phaseNumber} REVIEW: {sectionUppercase} - {fieldPath}
+PHASE {phaseNumber} REVIEW: {sectionDisplayHeader} ({fieldPath})
 ================================================================================
+
+SECTION KEY → RESUME HEADER
+Path segments use schema keys; the rendered resume uses the headers on the right.
+Treat them as the same section.
+{sectionLabelMap}
 
 CONTEXT:
 We are customizing {applicantName}'s resume for the following position:

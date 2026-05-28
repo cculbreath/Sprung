@@ -28,11 +28,20 @@ class LinkedInSessionManager {
     var isLoggedIn = false
     var sessionExpired = false
     private var webView: WKWebView?
+    private let cookieObserver = LinkedInCookieObserver()
 
     init() {
         let config = WKWebViewConfiguration()
         config.websiteDataStore = .default()
         webView = WKWebView(frame: .zero, configuration: config)
+
+        cookieObserver.onChange = { [weak self] in
+            Task { @MainActor in
+                self?.refreshLoginStateFromCookies()
+            }
+        }
+        WKWebsiteDataStore.default().httpCookieStore.add(cookieObserver)
+        refreshLoginStateFromCookies()
     }
 
     func clearSession() {
@@ -46,6 +55,29 @@ class LinkedInSessionManager {
 
     func getAuthenticatedWebView() -> WKWebView? {
         return webView
+    }
+
+    func refreshLoginStateFromCookies() {
+        WKWebsiteDataStore.default().httpCookieStore.getAllCookies { [weak self] cookies in
+            let hasAuth = cookies.contains { cookie in
+                cookie.domain.contains("linkedin.com") && cookie.name == "li_at"
+            }
+            Task { @MainActor in
+                guard let self = self else { return }
+                if self.isLoggedIn != hasAuth {
+                    Logger.info("🔗 [LinkedIn Session] li_at cookie \(hasAuth ? "present" : "missing") — isLoggedIn=\(hasAuth)")
+                    self.isLoggedIn = hasAuth
+                }
+            }
+        }
+    }
+}
+
+private final class LinkedInCookieObserver: NSObject, WKHTTPCookieStoreObserver {
+    var onChange: (() -> Void)?
+
+    func cookiesDidChange(in cookieStore: WKHTTPCookieStore) {
+        onChange?()
     }
 }
 

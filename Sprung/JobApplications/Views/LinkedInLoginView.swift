@@ -8,9 +8,7 @@ import ObjectiveC
 /// Interactive LinkedIn login view that handles Google SSO and other authentication methods
 struct LinkedInLoginView: NSViewRepresentable {
     @Binding var isPresented: Bool
-    @Binding var isLoggedIn: Bool
     let sessionManager: LinkedInSessionManager
-    var onSuccess: (() -> Void)?
     func makeCoordinator() -> Coordinator {
         Coordinator(parent: self)
     }
@@ -39,55 +37,25 @@ struct LinkedInLoginView: NSViewRepresentable {
             self.parent = parent
         }
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-            // Get current URL to determine if we should check login status
-            webView.evaluateJavaScript("window.location.href") { result, _ in
-                if let urlString = result as? String {
-                    Logger.debug("🔗 [LinkedIn Login] Page loaded: \(urlString)")
-                    // Only check login status if we're on LinkedIn and not on login pages
-                    if urlString.contains("linkedin.com") &&
-                       !urlString.contains("/login") &&
-                       !urlString.contains("/challenge") &&
-                       !urlString.contains("/signup") {
-                        // Give more time for Google SSO and dynamic content to load
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
-                            self.checkLoginStatus(webView)
-                        }
-                    }
-                }
-            }
-            // Only inject login helpers on LinkedIn pages
             webView.evaluateJavaScript("window.location.href") { result, _ in
                 if let urlString = result as? String, urlString.contains("linkedin.com") {
+                    Logger.debug("🔗 [LinkedIn Login] Page loaded: \(urlString)")
                     self.injectLoginHelpers(webView)
                 }
             }
         }
         func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
-            // Allow all navigation - this includes Google SSO redirects
             decisionHandler(.allow)
-            // Check if we're navigating to a page that indicates successful login
             if let url = navigationAction.request.url {
                 Logger.debug("🔗 LinkedIn navigation to: \(url.absoluteString)")
-                // Check for Google OAuth completion in popup windows
+                // Detect Google OAuth completion so we can close the popup window
                 if url.absoluteString.contains("accounts.google.com") &&
                    (url.absoluteString.contains("oauth") || url.absoluteString.contains("signin/oauth")) {
                     Logger.debug("🔗 Google OAuth flow detected in popup")
-                    // Check if this is a popup webview
                     if let window = objc_getAssociatedObject(webView, "popupWindow") as? NSWindow {
-                        // Monitor for completion and close popup when done
                         DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
                             self.checkForOAuthCompletion(webView, window: window)
                         }
-                    }
-                }
-                // Check for successful login indicators (main webview)
-                if url.absoluteString.contains("linkedin.com/feed") ||
-                   url.absoluteString.contains("linkedin.com/jobs") ||
-                   url.absoluteString.contains("linkedin.com/in/") ||
-                   url.absoluteString.contains("linkedin.com/mynetwork") {
-                    // Delay check to ensure cookies are set
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-                        self.checkLoginStatus(webView)
                     }
                 }
             }
@@ -161,12 +129,6 @@ struct LinkedInLoginView: NSViewRepresentable {
                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                                 objc_setAssociatedObject(webView, "popupWindow", nil, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
                             }
-                            // Check login status in main window after a brief delay
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                                if let mainWebView = self.parent.sessionManager.getAuthenticatedWebView() {
-                                    self.checkLoginStatus(mainWebView)
-                                }
-                            }
                         }
                     } else {
                         // Continue monitoring only if window is still visible
@@ -182,130 +144,6 @@ struct LinkedInLoginView: NSViewRepresentable {
         func webView(_ webView: WKWebView, runJavaScriptAlertPanelWithMessage message: String, initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping () -> Void) {
             Logger.debug("⚠️ [LinkedIn Login] JavaScript alert: \(message)")
             completionHandler()
-        }
-        private func checkLoginStatus(_ webView: WKWebView) {
-            Logger.debug("🔍 [LinkedIn Login] Checking login status...")
-            // Only check login status on LinkedIn pages
-            webView.evaluateJavaScript("window.location.href") { result, _ in
-                if let urlString = result as? String, !urlString.contains("linkedin.com") {
-                    Logger.debug("🔍 [LinkedIn Login] Skipping login check - not on LinkedIn page: \(urlString)")
-                    return
-                }
-                // First check page content for login indicators
-                self.checkPageContent(webView) { [weak self] isLoggedInByContent in
-                    guard let self = self else { return }
-                    if isLoggedInByContent {
-                        // If page content indicates login, verify with cookies
-                        webView.configuration.websiteDataStore.httpCookieStore.getAllCookies { cookies in
-                            let hasLinkedInAuth = cookies.contains { cookie in
-                                cookie.domain.contains("linkedin.com") &&
-                                (cookie.name == "li_at" || cookie.name == "JSESSIONID" || cookie.name == "liap")
-                            }
-                            let cookieNames = cookies.filter { $0.domain.contains("linkedin.com") }.map { $0.name }
-                            Logger.debug("🔍 [LinkedIn Login] Found LinkedIn cookies: \(cookieNames)")
-                            DispatchQueue.main.async {
-                                if hasLinkedInAuth {
-                                    Logger.info("✅ LinkedIn login successful - verified by both content and cookies")
-                                    self.parent.sessionManager.isLoggedIn = true
-                                    self.parent.isLoggedIn = true
-                                    self.parent.onSuccess?()
-                                    // Auto-dismiss after showing success message
-                                    DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
-                                        self.parent.isPresented = false
-                                    }
-                                } else {
-                                    Logger.warning("⚠️ Page content suggests login but no auth cookies found - staying on login page")
-                                }
-                            }
-                        }
-                    } else {
-                        Logger.debug("🔍 [LinkedIn Login] Page content does not indicate successful login")
-                    }
-                }
-            }
-        }
-        private func checkPageContent(_ webView: WKWebView, completion: @escaping (Bool) -> Void) {
-            webView.evaluateJavaScript("""
-                (function() {
-                    // Early exit if not on LinkedIn
-                    if (!window.location.href.includes('linkedin.com')) {
-                        return {
-                            isLoggedIn: false,
-                            foundSelector: '',
-                            currentURL: window.location.href,
-                            title: document.title,
-                            isOnLoginPage: false,
-                            isOnLinkedIn: false
-                        };
-                    }
-                    // Check for elements that indicate we're logged in
-                    const indicators = [
-                        '.global-nav__me',
-                        '[data-test-id="nav-me-tab"]',
-                        '.nav-item__profile-member-photo',
-                        '.feed-identity-module',
-                        'button[aria-label*="View profile"]',
-                        '.global-nav__primary-link--me',
-                        '.global-nav__me-content',
-                        '.artdeco-dropdown--placement-bottom.artdeco-dropdown--me'
-                    ];
-                    // Also check that we're NOT on login pages
-                    const currentURL = window.location.href;
-                    const isOnLinkedIn = currentURL.includes('linkedin.com');
-                    const isOnLoginPage = currentURL.includes('/login') ||
-                                        currentURL.includes('/signup') ||
-                                        currentURL.includes('/challenge') ||
-                                        document.title.toLowerCase().includes('sign in');
-                    let found = false;
-                    let foundSelector = '';
-                    // Only check for login indicators if we're on LinkedIn and not on a login page
-                    if (isOnLinkedIn && !isOnLoginPage) {
-                        for (const selector of indicators) {
-                            const element = document.querySelector(selector);
-                            if (element && element.offsetParent !== null) { // Ensure element is visible
-                                found = true;
-                                foundSelector = selector;
-                                break;
-                            }
-                        }
-                    }
-                    return {
-                        isLoggedIn: found && isOnLinkedIn && !isOnLoginPage,
-                        foundSelector: foundSelector,
-                        currentURL: currentURL,
-                        title: document.title,
-                        isOnLoginPage: isOnLoginPage,
-                        isOnLinkedIn: isOnLinkedIn
-                    };
-                })();
-            """) { result, error in
-                if let error = error {
-                    Logger.error("🚨 [LinkedIn Login] JavaScript error: \(error)")
-                    completion(false)
-                    return
-                }
-                if let result = result as? [String: Any] {
-                    let isLoggedIn = result["isLoggedIn"] as? Bool ?? false
-                    let foundSelector = result["foundSelector"] as? String ?? ""
-                    let currentURL = result["currentURL"] as? String ?? ""
-                    let title = result["title"] as? String ?? ""
-                    let isOnLoginPage = result["isOnLoginPage"] as? Bool ?? false
-                    let isOnLinkedIn = result["isOnLinkedIn"] as? Bool ?? false
-                    Logger.debug("🔍 [LinkedIn Login] Page analysis:")
-                    Logger.debug("   URL: \(currentURL)")
-                    Logger.debug("   Title: \(title)")
-                    Logger.debug("   Is on LinkedIn: \(isOnLinkedIn)")
-                    Logger.debug("   Is on login page: \(isOnLoginPage)")
-                    Logger.debug("   Is logged in: \(isLoggedIn)")
-                    if !foundSelector.isEmpty {
-                        Logger.debug("   Found login indicator: \(foundSelector)")
-                    }
-                    completion(isLoggedIn)
-                } else {
-                    Logger.warning("⚠️ [LinkedIn Login] Unexpected JavaScript result")
-                    completion(false)
-                }
-            }
         }
         private func injectLoginHelpers(_ webView: WKWebView) {
             // Inject helpful CSS and JavaScript for better login experience (LinkedIn only)
@@ -350,7 +188,6 @@ struct LinkedInLoginView: NSViewRepresentable {
 struct LinkedInLoginSheet: View {
     @Binding var isPresented: Bool
     var sessionManager: LinkedInSessionManager
-    @State private var isLoggedIn = false
     var onSuccess: (() -> Void)?
     var body: some View {
         VStack(spacing: 0) {
@@ -393,9 +230,7 @@ struct LinkedInLoginSheet: View {
             // Web View
             LinkedInLoginView(
                 isPresented: $isPresented,
-                isLoggedIn: $isLoggedIn,
-                sessionManager: sessionManager,
-                onSuccess: onSuccess
+                sessionManager: sessionManager
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             // Footer with status
@@ -434,8 +269,10 @@ struct LinkedInLoginSheet: View {
         .frame(minWidth: 600, idealWidth: 800, maxWidth: .infinity,
                minHeight: 700, idealHeight: 900, maxHeight: .infinity)
         .onChange(of: sessionManager.isLoggedIn) { _, newValue in
-            if newValue {
-                isLoggedIn = true
+            guard newValue else { return }
+            onSuccess?()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+                isPresented = false
             }
         }
     }
