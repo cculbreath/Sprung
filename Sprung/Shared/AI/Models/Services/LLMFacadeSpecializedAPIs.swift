@@ -2,28 +2,23 @@
 //  LLMFacadeSpecializedAPIs.swift
 //  Sprung
 //
-//  Handles specialized API operations (Gemini vision, TTS, Anthropic streams).
+//  Handles specialized API operations (Anthropic streams/files, OpenAI Responses, TTS).
 //  Extracted from LLMFacade for single responsibility.
 //
 
 import Foundation
 import SwiftOpenAI
 
-/// Handles specialized API operations (Gemini vision, TTS, Anthropic streams)
+/// Handles specialized API operations (Anthropic streams/files, OpenAI Responses, TTS)
 @MainActor
 final class LLMFacadeSpecializedAPIs {
     private var openAIService: OpenAIService?
-    private var googleAIService: GoogleAIService?
     private var anthropicService: AnthropicService?
 
     // MARK: - Service Registration
 
     func registerOpenAIService(_ service: OpenAIService) {
         self.openAIService = service
-    }
-
-    func registerGoogleAIService(_ service: GoogleAIService) {
-        self.googleAIService = service
     }
 
     func registerAnthropicService(_ service: AnthropicService) {
@@ -153,6 +148,88 @@ final class LLMFacadeSpecializedAPIs {
         return try await service.listModels()
     }
 
+    // MARK: - Anthropic Files API & Token Counting
+
+    /// Upload a file to the Anthropic Files API (`POST /v1/files`).
+    /// The fork attaches the `files-api-2025-04-14` beta header automatically.
+    func anthropicUploadFile(data: Data, filename: String, mimeType: String) async throws -> AnthropicFileMetadata {
+        guard let service = anthropicService else {
+            throw LLMError.clientError("Anthropic service is not configured. Call registerAnthropicService first.")
+        }
+        return try await service.uploadFile(data: data, filename: filename, mimeType: mimeType)
+    }
+
+    /// Delete a file from the Anthropic Files API (`DELETE /v1/files/{id}`).
+    func anthropicDeleteFile(id: String) async throws -> AnthropicFileDeletedResponse {
+        guard let service = anthropicService else {
+            throw LLMError.clientError("Anthropic service is not configured. Call registerAnthropicService first.")
+        }
+        return try await service.deleteFile(id: id)
+    }
+
+    /// Count tokens for a prospective Anthropic Messages API request.
+    func anthropicCountTokens(parameters: AnthropicTokenCountParameter) async throws -> AnthropicTokenCountResponse {
+        guard let service = anthropicService else {
+            throw LLMError.clientError("Anthropic service is not configured. Call registerAnthropicService first.")
+        }
+        return try await service.countTokens(parameters: parameters)
+    }
+
+    // MARK: - Anthropic Execution Helpers
+
+    /// Drives the Anthropic streaming event loop and returns the accumulated text.
+    /// Logs cache telemetry per request — this is the regression signal for the
+    /// document-analysis caching design (cache_read should cover the shared
+    /// document prefix on every pass after the first).
+    private func runAnthropicRequest(parameters: AnthropicMessageParameter) async throws -> String {
+        let stream = try await anthropicMessagesStream(parameters: parameters)
+        var resultText = ""
+        var inputTokens = 0
+        var outputTokens = 0
+        var cacheRead = 0
+        var cacheCreation = 0
+
+        for try await event in stream {
+            switch event {
+            case .contentBlockDelta(let delta):
+                if case .textDelta(let text) = delta.delta {
+                    resultText += text
+                }
+            case .messageStop:
+                break
+            default:
+                break
+            }
+            if let usage = event.usage {
+                inputTokens = max(inputTokens, usage.inputTokens ?? 0)
+                outputTokens = max(outputTokens, usage.outputTokens ?? 0)
+                cacheRead = max(cacheRead, usage.cacheReadInputTokens ?? 0)
+                cacheCreation = max(cacheCreation, usage.cacheCreationInputTokens ?? 0)
+            }
+        }
+
+        Logger.info(
+            "Anthropic usage (\(parameters.model)): input=\(inputTokens) cache_read=\(cacheRead) cache_create=\(cacheCreation) output=\(outputTokens)",
+            category: .ai
+        )
+        return resultText
+    }
+
+    /// Decodes accumulated Anthropic response text into the requested Codable type.
+    private func decodeAnthropicResponse<T: Codable>(_ resultText: String, as type: T.Type) throws -> T {
+        guard let data = resultText.data(using: .utf8) else {
+            throw LLMError.clientError("Failed to convert Anthropic response to data")
+        }
+
+        do {
+            return try JSONDecoder().decode(T.self, from: data)
+        } catch {
+            Logger.warning("Failed to parse Anthropic structured response as \(T.self): \(error)", category: .ai)
+            Logger.debug("Response was: \(resultText.prefix(500))", category: .ai)
+            throw LLMError.clientError("Failed to parse structured response: \(error.localizedDescription)")
+        }
+    }
+
     /// Execute a text prompt via direct Anthropic API with prompt caching.
     /// Builds the request parameters, drives the streaming event loop, and returns the accumulated text.
     func executeTextWithAnthropicCaching(
@@ -168,22 +245,7 @@ final class LLMFacadeSpecializedAPIs {
             stream: false
         )
 
-        let stream = try await anthropicMessagesStream(parameters: parameters)
-        var resultText = ""
-
-        for try await event in stream {
-            switch event {
-            case .contentBlockDelta(let delta):
-                if case .textDelta(let text) = delta.delta {
-                    resultText += text
-                }
-            case .messageStop:
-                break
-            default:
-                break
-            }
-        }
-
+        let resultText = try await runAnthropicRequest(parameters: parameters)
         Logger.info("Anthropic cached request completed: \(resultText.count) chars", category: .ai)
         return resultText
     }
@@ -197,114 +259,42 @@ final class LLMFacadeSpecializedAPIs {
         responseType: T.Type,
         schema: [String: Any]
     ) async throws -> T {
-        let outputConfig = AnthropicOutputConfig.schema(schema)
-
         let parameters = AnthropicMessageParameter(
             model: modelId,
             messages: [.user(userPrompt)],
             system: .blocks(systemContent),
             maxTokens: 4096,
             stream: false,
-            outputConfig: outputConfig
+            outputConfig: AnthropicOutputConfig.schema(schema)
         )
 
-        let stream = try await anthropicMessagesStream(parameters: parameters)
-        var resultText = ""
-
-        for try await event in stream {
-            switch event {
-            case .contentBlockDelta(let delta):
-                if case .textDelta(let text) = delta.delta {
-                    resultText += text
-                }
-            case .messageStop:
-                break
-            default:
-                break
-            }
-        }
-
+        let resultText = try await runAnthropicRequest(parameters: parameters)
         Logger.info("Anthropic structured request completed: \(resultText.count) chars", category: .ai)
-
-        guard let data = resultText.data(using: .utf8) else {
-            throw LLMError.clientError("Failed to convert Anthropic response to data")
-        }
-
-        do {
-            return try JSONDecoder().decode(T.self, from: data)
-        } catch {
-            Logger.warning("Failed to parse Anthropic structured response as \(T.self): \(error)", category: .ai)
-            Logger.debug("Response was: \(resultText.prefix(500))", category: .ai)
-            throw LLMError.clientError("Failed to parse structured response: \(error.localizedDescription)")
-        }
+        return try decodeAnthropicResponse(resultText, as: responseType)
     }
 
-    // MARK: - Gemini Vision & Documents
-
-    func generateFromPDF(
-        pdfData: Data,
-        filename: String,
-        prompt: String,
-        modelId: String? = nil,
-        maxOutputTokens: Int = 65536
-    ) async throws -> (text: String, tokenUsage: GoogleAIService.GeminiTokenUsage?) {
-        guard let service = googleAIService else {
-            throw LLMError.clientError("Google AI service is not configured. Call registerGoogleAIService first.")
-        }
-
-        // Use provided model or require configuration
-        let effectiveModelId: String
-        if let providedModelId = modelId, !providedModelId.isEmpty {
-            effectiveModelId = providedModelId
-        } else {
-            guard let configuredModelId = UserDefaults.standard.string(forKey: "onboardingPDFExtractionModelId"), !configuredModelId.isEmpty else {
-                throw ModelConfigurationError.modelNotConfigured(
-                    settingKey: "onboardingPDFExtractionModelId",
-                    operationName: "LLM Facade Image Analysis"
-                )
-            }
-            effectiveModelId = configuredModelId
-        }
-
-        return try await service.generateFromPDF(
-            pdfData: pdfData,
-            filename: filename,
-            prompt: prompt,
-            modelId: effectiveModelId,
-            maxOutputTokens: maxOutputTokens
+    /// Execute a structured JSON request whose user content is arbitrary content blocks
+    /// (document blocks with cache control, cached text blocks, instructions).
+    func executeStructuredWithAnthropicBlocks<T: Codable>(
+        systemContent: [AnthropicSystemBlock],
+        userBlocks: [AnthropicContentBlock],
+        modelId: String,
+        responseType: T.Type,
+        schema: [String: Any],
+        maxTokens: Int = 8192
+    ) async throws -> T {
+        let parameters = AnthropicMessageParameter(
+            model: modelId,
+            messages: [AnthropicMessage(role: "user", content: .blocks(userBlocks))],
+            system: .blocks(systemContent),
+            maxTokens: maxTokens,
+            stream: false,
+            outputConfig: AnthropicOutputConfig.schema(schema)
         )
-    }
 
-    func analyzeImagesWithGemini(
-        images: [Data],
-        prompt: String,
-        modelId: String? = nil
-    ) async throws -> String {
-        guard let service = googleAIService else {
-            throw LLMError.clientError("Google AI service is not configured. Call registerGoogleAIService first.")
-        }
-        return try await service.analyzeImages(
-            images: images,
-            prompt: prompt,
-            modelId: modelId
-        )
-    }
-
-    func analyzeImagesWithGeminiStructured(
-        images: [Data],
-        prompt: String,
-        jsonSchema: [String: Any],
-        modelId: String? = nil
-    ) async throws -> String {
-        guard let service = googleAIService else {
-            throw LLMError.clientError("Google AI service is not configured. Call registerGoogleAIService first.")
-        }
-        return try await service.analyzeImagesStructured(
-            images: images,
-            prompt: prompt,
-            jsonSchema: jsonSchema,
-            modelId: modelId
-        )
+        let resultText = try await runAnthropicRequest(parameters: parameters)
+        Logger.info("Anthropic structured block request completed: \(resultText.count) chars", category: .ai)
+        return try decodeAnthropicResponse(resultText, as: responseType)
     }
 
     // MARK: - Text-to-Speech

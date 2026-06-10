@@ -690,11 +690,10 @@ final class UIResponseCoordinator {
         // If glow is off (not streaming), any remaining blocks are definitionally stale.
         drainGate.clearAllBlocks()
 
-        // Add the message to chat transcript IMMEDIATELY so user sees it in the UI
-        guard let messageId = await state.appendUserMessage(text, isSystemGenerated: false) else {
-            Logger.error("❌ Chatbox message unexpectedly queued - this should never happen", category: .ai)
-            return
-        }
+        // Add the message to chat transcript IMMEDIATELY so user sees it in the UI.
+        // The returned entry id rides through the user-action queue into the send
+        // payload so the wire-text capture is keyed to this exact entry.
+        let messageId = await state.appendUserMessage(text, isSystemGenerated: false)
 
         // Emit event so coordinator can sync its messages array to UI
         await eventBus.publish(.llm(.chatboxUserMessageAdded(messageId: messageId.uuidString)))

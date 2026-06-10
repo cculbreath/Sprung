@@ -32,7 +32,6 @@ final class AppDependencies {
     let artifactRecordStore: ArtifactRecordStore
     let onboardingCoordinator: OnboardingInterviewCoordinator
     let reasoningStreamManager: ReasoningStreamManager
-    let resumeReviseViewModel: ResumeReviseViewModel
     let searchOpsCoordinator: DiscoveryCoordinator
     let guidanceStore: InferenceGuidanceStore
     let titleSetStore: TitleSetStore
@@ -126,8 +125,8 @@ final class AppDependencies {
             modelValidationService: appState.modelValidationService
         )
         appState.llmService = llmService
-        // Create DocumentExtractionService with LLMFacade (unified LLM interface)
-        let documentExtractionService = DocumentExtractionService(llmFacade: llmFacade)
+        // Create DocumentExtractionService (PDFKit/native text extraction for storage)
+        let documentExtractionService = DocumentExtractionService()
         // Register OpenAI backend if API key is configured
         if let openAIKey = APIKeyManager.get(.openAI)?.trimmingCharacters(in: .whitespacesAndNewlines),
            !openAIKey.isEmpty {
@@ -148,26 +147,12 @@ final class AppDependencies {
             )
         }
 
-        // Register Gemini backend for document extraction
-        // GoogleAIService handles API key internally via APIKeyManager
-        _ = LLMFacadeFactory.registerGemini(facade: llmFacade)
         let coverLetterService = CoverLetterService(
             llmFacade: llmFacade,
             exportCoordinator: resumeExportCoordinator,
             applicantProfileStore: applicantProfileStore,
             coverRefStore: coverRefStore
         )
-        let resumeReviseViewModel = ResumeReviseViewModel(
-            llmFacade: llmFacade,
-            openRouterService: openRouterService,
-            reasoningStreamManager: reasoningStreamManager,
-            exportCoordinator: resumeExportCoordinator,
-            applicantProfileStore: applicantProfileStore,
-            knowledgeCardStore: knowledgeCardStore,
-            guidanceStore: guidanceStore,
-            titleSetStore: titleSetStore
-        )
-        self.resumeReviseViewModel = resumeReviseViewModel
         let interviewDataStore = InterviewDataStore()
         let preferences = OnboardingPreferences()
         let onboardingCoordinator = OnboardingInterviewCoordinator(
@@ -276,6 +261,19 @@ final class AppDependencies {
         } else {
             // Key removed or empty - components will fail gracefully when trying to use OpenAI features
             Logger.info("⚠️ OpenAI API key not configured", category: .appLifecycle)
+        }
+
+        // Re-check Anthropic key and update facade (interview + document analysis)
+        if let anthropicKey = APIKeyManager.get(.anthropic)?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !anthropicKey.isEmpty {
+            _ = LLMFacadeFactory.registerAnthropic(
+                facade: appEnvironment.llmFacade,
+                apiKey: anthropicKey,
+                debugEnabled: Logger.isDebugEnabled
+            )
+            Logger.info("✅ Anthropic service registered with LLMFacade (new key)", category: .appLifecycle)
+        } else {
+            Logger.info("⚠️ Anthropic API key not configured", category: .appLifecycle)
         }
     }
 }

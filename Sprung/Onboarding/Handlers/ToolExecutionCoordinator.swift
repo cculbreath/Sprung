@@ -92,17 +92,29 @@ actor ToolExecutionCoordinator: OnboardingEventEmitter {
             } catch {
                 Logger.error("Tool execution failed: \(error)", category: .ai)
                 await operation.fail(error: error)
-                await emitToolError(callId: call.callId, toolName: call.name, message: "Tool execution failed: \(error.localizedDescription)")
+                await emitToolFailure(
+                    callId: call.callId,
+                    toolName: call.name,
+                    code: "tool_execution_failed",
+                    reason: error.localizedDescription
+                )
             }
 
         case .blocked(let reason):
-            // Tool is blocked - emit error telling LLM to wait for user
+            // Tool is blocked - structured result tells the LLM to wait for the user
             Logger.warning("🚫 Tool call '\(call.name)' blocked: \(reason)", category: .ai)
-            await emitToolError(callId: call.callId, toolName: call.name, message: reason)
+            await emitToolFailure(callId: call.callId, toolName: call.name, code: "tool_not_available", reason: reason)
+
+        case .notAvailableYet(let reason):
+            // Tool is in the phase schema (kept stable for prompt caching) but its
+            // subphase conditions aren't met. Return a structured tool_result so
+            // the model self-corrects instead of removing the tool from the schema.
+            Logger.warning("⏳ Tool call '\(call.name)' not available yet: \(reason)", category: .ai)
+            await emitToolFailure(callId: call.callId, toolName: call.name, code: "tool_not_available", reason: reason)
         }
     }
     /// Handle tool execution result
-    private func handleToolResult(_ result: ToolResult, callId: String, toolName: String?, operation: ToolOperation) async {
+    private func handleToolResult(_ result: ToolResult, callId: String, toolName: String, operation: ToolOperation) async {
         switch result {
         case .immediate(let output):
             let outputString = output.rawString() ?? "{}"
@@ -110,9 +122,7 @@ actor ToolExecutionCoordinator: OnboardingEventEmitter {
             await operation.complete(output: outputString)
 
             // Fill ConversationLog slot immediately (enables batch send when all slots filled)
-            if let name = toolName {
-                await stateCoordinator.addCompletedToolResult(callId: callId, toolName: name, output: outputString)
-            }
+            await stateCoordinator.addCompletedToolResult(callId: callId, toolName: toolName, output: outputString)
 
             // Special handling for extract_document tool - emit artifact record produced event
             // DocumentArtifactMessenger will batch and send the extracted content to the LLM
@@ -125,26 +135,20 @@ actor ToolExecutionCoordinator: OnboardingEventEmitter {
 
             // Special handling for bootstrap tools - remove from allowed tools after use
             if output["disableAfterUse"].bool == true {
-                if let name = toolName {
-                    await stateCoordinator.excludeTool(name)
-                    Logger.info("🚀 Bootstrap tool '\(name)' excluded from future tool calls", category: .ai)
-                }
+                await stateCoordinator.excludeTool(toolName)
+                Logger.info("🚀 Bootstrap tool '\(toolName)' excluded from future tool calls", category: .ai)
             }
         case .error(let error):
             // Mark operation as failed
             await operation.fail(error: error)
 
-            // Tool execution error - store in ConversationLog
-            var errorOutput = JSON()
-            errorOutput["error"].string = error.localizedDescription
-            errorOutput["status"].string = "incomplete"
-            let errorOutputString = errorOutput.rawString() ?? "{}"
-
-            if let name = toolName {
-                await stateCoordinator.addCompletedToolResult(callId: callId, toolName: name, output: errorOutputString)
-            }
-
-            await emitToolResponse(callId: callId, toolName: toolName)
+            // Tool execution error - structured result stored in ConversationLog
+            await emitToolFailure(
+                callId: callId,
+                toolName: toolName,
+                code: "tool_execution_failed",
+                reason: error.localizedDescription
+            )
         }
     }
     // MARK: - Event Emission
@@ -161,15 +165,20 @@ actor ToolExecutionCoordinator: OnboardingEventEmitter {
         await emit(.llm(.toolResponseMessage(payload: payload)))
         Logger.info("📤 Tool response sent to LLM (call: \(callId.prefix(8)))", category: .ai)
     }
-    /// Emit tool error
-    private func emitToolError(callId: String, toolName: String, message: String) async {
-        var errorOutput = JSON()
-        errorOutput["error"].string = message
-        errorOutput["status"].string = "incomplete"
-        let errorOutputString = errorOutput.rawString() ?? "{}"
+    /// Store a structured tool-failure result and notify the LLM.
+    ///
+    /// ONE machine-readable schema for every failure shape: {"error":<code>,"reason":<message>}
+    /// (compact serialization, no "status" key). Codes:
+    /// - "tool_not_available"   — tool is blocked or its subphase conditions aren't met
+    /// - "tool_execution_failed" — the tool ran and threw / returned an error
+    private func emitToolFailure(callId: String, toolName: String, code: String, reason: String) async {
+        var output = JSON()
+        output["error"].string = code
+        output["reason"].string = reason
+        let outputString = output.rawString(.utf8, options: [.sortedKeys]) ?? #"{"error":"\#(code)"}"#
 
         // Store in ConversationLog first, then emit response
-        await stateCoordinator.addCompletedToolResult(callId: callId, toolName: toolName, output: errorOutputString)
+        await stateCoordinator.addCompletedToolResult(callId: callId, toolName: toolName, output: outputString)
         await emitToolResponse(callId: callId, toolName: toolName)
     }
 }

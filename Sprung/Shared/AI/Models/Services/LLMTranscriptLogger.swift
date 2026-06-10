@@ -126,28 +126,6 @@ enum LLMTranscriptLogger {
         """
         appendEntry(entry)
     }
-    static func logGeminiCall(
-        method: String,
-        modelId: String,
-        prompt: String,
-        attachmentInfo: String,
-        response: String,
-        durationMs: Int
-    ) {
-        guard isEnabled else { return }
-        let entry = """
-        METHOD: \(method)
-        MODEL: \(modelId) | BACKEND: Gemini | DURATION: \(durationMs)ms
-        ATTACHMENT: \(attachmentInfo)
-
-        --- REQUEST ---
-        \(prompt)
-
-        --- RESPONSE ---
-        \(response)
-        """
-        appendEntry(entry)
-    }
     // MARK: - File I/O
     private static func transcriptFileURL() -> URL {
         let downloads = FileManager.default.homeDirectoryForCurrentUser

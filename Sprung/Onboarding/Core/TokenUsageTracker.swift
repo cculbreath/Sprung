@@ -12,14 +12,18 @@ import SwiftOpenAI
 
 // MARK: - Usage Entry
 
-/// A single usage record from an API call
+/// A single usage record from an API call.
+/// Note on semantics: for Anthropic, `inputTokens` EXCLUDES cache reads/creation
+/// (the API reports them separately); cacheReadTokens were served from the prompt
+/// cache at 0.1x cost and cacheCreationTokens were written to it.
 struct TokenUsageEntry: Identifiable, Codable {
     let id: UUID
     let timestamp: Date
     let modelId: String
     let inputTokens: Int
     let outputTokens: Int
-    let cachedTokens: Int
+    let cacheReadTokens: Int
+    let cacheCreationTokens: Int
     let reasoningTokens: Int
     let source: UsageSource
 
@@ -33,7 +37,8 @@ struct TokenUsageEntry: Identifiable, Codable {
         modelId: String,
         inputTokens: Int,
         outputTokens: Int,
-        cachedTokens: Int = 0,
+        cacheReadTokens: Int = 0,
+        cacheCreationTokens: Int = 0,
         reasoningTokens: Int = 0,
         source: UsageSource
     ) {
@@ -42,7 +47,8 @@ struct TokenUsageEntry: Identifiable, Codable {
         self.modelId = modelId
         self.inputTokens = inputTokens
         self.outputTokens = outputTokens
-        self.cachedTokens = cachedTokens
+        self.cacheReadTokens = cacheReadTokens
+        self.cacheCreationTokens = cacheCreationTokens
         self.reasoningTokens = reasoningTokens
         self.source = source
     }
@@ -83,7 +89,8 @@ enum UsageSource: String, Codable, CaseIterable {
 struct TokenUsageStats: Codable {
     var inputTokens: Int = 0
     var outputTokens: Int = 0
-    var cachedTokens: Int = 0
+    var cacheReadTokens: Int = 0
+    var cacheCreationTokens: Int = 0
     var reasoningTokens: Int = 0
     var requestCount: Int = 0
 
@@ -91,15 +98,24 @@ struct TokenUsageStats: Codable {
         inputTokens + outputTokens
     }
 
+    /// Total prompt tokens processed, including cache reads and creation
+    var totalPromptTokens: Int {
+        inputTokens + cacheReadTokens + cacheCreationTokens
+    }
+
+    /// Fraction of all prompt tokens that were served from cache (0.1x cost).
+    /// Denominator includes cache reads/creation since Anthropic reports them
+    /// separately from inputTokens.
     var cacheHitRate: Double {
-        guard inputTokens > 0 else { return 0 }
-        return Double(cachedTokens) / Double(inputTokens)
+        guard totalPromptTokens > 0 else { return 0 }
+        return Double(cacheReadTokens) / Double(totalPromptTokens)
     }
 
     mutating func add(_ entry: TokenUsageEntry) {
         inputTokens += entry.inputTokens
         outputTokens += entry.outputTokens
-        cachedTokens += entry.cachedTokens
+        cacheReadTokens += entry.cacheReadTokens
+        cacheCreationTokens += entry.cacheCreationTokens
         reasoningTokens += entry.reasoningTokens
         requestCount += 1
     }
@@ -107,7 +123,8 @@ struct TokenUsageStats: Codable {
     mutating func add(_ other: TokenUsageStats) {
         inputTokens += other.inputTokens
         outputTokens += other.outputTokens
-        cachedTokens += other.cachedTokens
+        cacheReadTokens += other.cacheReadTokens
+        cacheCreationTokens += other.cacheCreationTokens
         reasoningTokens += other.reasoningTokens
         requestCount += other.requestCount
     }
@@ -186,13 +203,14 @@ class TokenUsageTracker {
         Task { @MainActor [weak self] in
             for await event in await eventBus.stream(topic: .llm) {
                 guard let self = self else { return }
-                if case .llm(.tokenUsageReceived(let modelId, let inputTokens, let outputTokens, let cachedTokens, let reasoningTokens, let source)) = event {
+                if case .llm(.tokenUsageReceived(let modelId, let inputTokens, let outputTokens, let cacheReadTokens, let cacheCreationTokens, let reasoningTokens, let source)) = event {
                     self.recordUsage(
                         modelId: modelId,
                         source: source,
                         inputTokens: inputTokens,
                         outputTokens: outputTokens,
-                        cachedTokens: cachedTokens,
+                        cacheReadTokens: cacheReadTokens,
+                        cacheCreationTokens: cacheCreationTokens,
                         reasoningTokens: reasoningTokens
                     )
                 }
@@ -229,14 +247,16 @@ class TokenUsageTracker {
         source: UsageSource,
         inputTokens: Int,
         outputTokens: Int,
-        cachedTokens: Int = 0,
+        cacheReadTokens: Int = 0,
+        cacheCreationTokens: Int = 0,
         reasoningTokens: Int = 0
     ) {
         let entry = TokenUsageEntry(
             modelId: modelId,
             inputTokens: inputTokens,
             outputTokens: outputTokens,
-            cachedTokens: cachedTokens,
+            cacheReadTokens: cacheReadTokens,
+            cacheCreationTokens: cacheCreationTokens,
             reasoningTokens: reasoningTokens,
             source: source
         )

@@ -127,10 +127,10 @@ actor GitIngestionKernel {
             await appendTranscript(.system, "Starting repository analysis", details: repoPath)
 
             // Step 1: Gather raw git data
-            Logger.info("🔬 [GitIngest] About to call gatherGitData for: \(repoPath)", category: .ai)
-            let gitData = try await gatherGitData(repoPath: repoPath)
+            Logger.info("🔬 [GitIngest] About to gather git evidence for: \(repoPath)", category: .ai)
+            let gitData = try await GitEvidenceCollector.gather(repoPath: repoPath)
             let contributorCount = gitData["contributors"].arrayValue.count
-            Logger.info("🔬 [GitIngest] gatherGitData completed, contributors: \(contributorCount)", category: .ai)
+            Logger.info("🔬 [GitIngest] Git evidence gathering completed, contributors: \(contributorCount)", category: .ai)
             await appendTranscript(.system, "Gathered repository metadata", details: "\(contributorCount) contributor(s) found")
 
             // Note: extractionStateChanged not emitted - agent tracker handles status
@@ -234,119 +234,9 @@ actor GitIngestionKernel {
         agentIds[pendingId] = nil
     }
 
-    // MARK: - Git Data Gathering
-
-    private func gatherGitData(repoPath: String) async throws -> JSON {
-        var data = JSON()
-
-        // Get contributors
-        let contributors = try await runGitCommand(["shortlog", "-sne", "HEAD"], in: repoPath)
-        data["contributors"] = parseContributors(contributors)
-
-        // Get file types breakdown
-        let files = try await runGitCommand(["ls-files"], in: repoPath)
-        data["fileTypes"] = parseFileTypes(files)
-
-        // Get recent commits (last 50)
-        let commits = try await runGitCommand([
-            "log", "--oneline", "-50", "--format=%h|%an|%s"
-        ], in: repoPath)
-        data["recentCommits"] = parseCommits(commits)
-
-        // Get branch info
-        let branches = try await runGitCommand(["branch", "-a"], in: repoPath)
-        data["branches"] = JSON(branches.split(separator: "\n").map { String($0).trimmingCharacters(in: .whitespaces) })
-
-        // Get repo stats
-        let totalCommits = try await runGitCommand(["rev-list", "--count", "HEAD"], in: repoPath)
-        data["totalCommits"].int = Int(totalCommits.trimmingCharacters(in: .whitespacesAndNewlines)) ?? 0
-
-        // Get first and last commit dates
-        let firstCommit = try await runGitCommand(["log", "--reverse", "--format=%ci", "-1"], in: repoPath)
-        let lastCommit = try await runGitCommand(["log", "--format=%ci", "-1"], in: repoPath)
-        data["firstCommit"].string = firstCommit.trimmingCharacters(in: .whitespacesAndNewlines)
-        data["lastCommit"].string = lastCommit.trimmingCharacters(in: .whitespacesAndNewlines)
-
-        return data
-    }
-
-    private func parseContributors(_ output: String) -> JSON {
-        var contributors: [[String: Any]] = []
-        for line in output.split(separator: "\n") {
-            let trimmed = line.trimmingCharacters(in: .whitespaces)
-            let parts = trimmed.split(separator: "\t", maxSplits: 1)
-            if parts.count == 2 {
-                let commits = Int(parts[0].trimmingCharacters(in: .whitespaces)) ?? 0
-                let authorPart = String(parts[1])
-                var name = authorPart
-                var email = ""
-                if let emailStart = authorPart.firstIndex(of: "<"),
-                   let emailEnd = authorPart.firstIndex(of: ">") {
-                    name = String(authorPart[..<emailStart]).trimmingCharacters(in: .whitespaces)
-                    email = String(authorPart[authorPart.index(after: emailStart)..<emailEnd])
-                }
-                contributors.append([
-                    "name": name,
-                    "email": email,
-                    "commits": commits
-                ])
-            }
-        }
-        return JSON(contributors)
-    }
-
-    private func parseFileTypes(_ output: String) -> JSON {
-        var extensionCounts: [String: Int] = [:]
-        for line in output.split(separator: "\n") {
-            let ext = (String(line) as NSString).pathExtension.lowercased()
-            if !ext.isEmpty {
-                extensionCounts[ext, default: 0] += 1
-            }
-        }
-        let sorted = extensionCounts.sorted { $0.value > $1.value }.prefix(20)
-        return JSON(sorted.map { ["extension": $0.key, "count": $0.value] })
-    }
-
-    private func parseCommits(_ output: String) -> JSON {
-        var commits: [[String: String]] = []
-        for line in output.split(separator: "\n") {
-            let parts = String(line).split(separator: "|", maxSplits: 2)
-            if parts.count == 3 {
-                commits.append([
-                    "hash": String(parts[0]),
-                    "author": String(parts[1]),
-                    "message": String(parts[2])
-                ])
-            }
-        }
-        return JSON(commits)
-    }
-
-    private func runGitCommand(_ args: [String], in directory: String) async throws -> String {
-        // Run process in detached task to avoid blocking the actor
-        try await Task.detached {
-            let process = Process()
-            process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-            process.arguments = ["git"] + args
-            process.currentDirectoryURL = URL(fileURLWithPath: directory)
-
-            let pipe = Pipe()
-            process.standardOutput = pipe
-            process.standardError = FileHandle.nullDevice
-
-            // IMPORTANT: Read output BEFORE waitUntilExit to avoid deadlock
-            // If we wait first, the pipe buffer can fill up and block the process
-            try process.run()
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
-            process.waitUntilExit()
-
-            return String(data: data, encoding: .utf8) ?? ""
-        }.value
-    }
-
     // MARK: - LLM Analysis Agent
 
-    private func runAnalysisAgent(gitData _: JSON, repoName _: String, repoURL: URL, agentId: String, tracker: AgentActivityTracker?) async throws -> GitAnalysisResult {
+    private func runAnalysisAgent(gitData: JSON, repoName _: String, repoURL: URL, agentId: String, tracker: AgentActivityTracker?) async throws -> GitAnalysisResult {
         Logger.info("🔬 [GitIngest] runAnalysisAgent entered, checking llmFacade...", category: .ai)
         guard let facade = llmFacade else {
             Logger.error("🔬 [GitIngest] llmFacade is nil!", category: .ai)
@@ -370,12 +260,16 @@ actor GitIngestionKernel {
 
         Logger.info("🤖 Starting multi-turn git analysis agent with model: \(modelId)", category: .ai)
 
+        // Render the deterministic git evidence for the agent's initial context
+        let gitEvidence = GitEvidenceCollector.render(gitData)
+
         // Run the multi-turn analysis agent - returns DocumentInventory directly
         let analysisResult = try await runGitAnalysisAgent(
             facade: facade,
             repoPath: repoURL,
             authorFilter: authorFilter,
             modelId: modelId,
+            gitEvidence: gitEvidence,
             eventBus: eventBus,
             agentId: agentId,
             tracker: tracker
@@ -393,6 +287,7 @@ actor GitIngestionKernel {
         repoPath: URL,
         authorFilter: String?,
         modelId: String,
+        gitEvidence: String,
         eventBus: EventCoordinator,
         agentId: String,
         tracker: AgentActivityTracker?
@@ -401,6 +296,7 @@ actor GitIngestionKernel {
             repoPath: repoPath,
             authorFilter: authorFilter,
             modelId: modelId,
+            gitEvidence: gitEvidence,
             facade: facade,
             eventBus: eventBus,
             agentId: agentId,

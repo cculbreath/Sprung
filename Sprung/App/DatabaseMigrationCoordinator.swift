@@ -24,6 +24,8 @@ final class DatabaseMigrationCoordinator {
     func performStartupMigrations() {
         migrateSelectedModelsFromUserDefaults()
         migrateReasoningCapabilities()
+        migrateAISelectionV1()
+        migrateDocAnalysisModelKeysV1()
         scheduleModelValidation()
     }
     private func migrateSelectedModelsFromUserDefaults() {
@@ -78,6 +80,52 @@ final class DatabaseMigrationCoordinator {
         } catch {
             Logger.error("❌ Failed to save reasoning capabilities migration: \(error)", category: .migration)
         }
+    }
+    @MainActor
+    private func migrateAISelectionV1() {
+        let migrationKey = "aiSelectionMigrationCompleted_v1"
+        guard !UserDefaults.standard.bool(forKey: migrationKey) else { return }
+        let modelContext = enabledLLMStore.modelContext
+        let allNodes = try? modelContext.fetch(FetchDescriptor<TreeNode>())
+        var promoted = 0
+        for node in allNodes ?? [] {
+            let hasBundled = (node.legacyBundledAttributes?.isEmpty == false)
+            let hasEnumerated = (node.legacyEnumeratedAttributes?.isEmpty == false)
+            if (hasBundled || hasEnumerated), node.status != .aiToReplace {
+                node.status = .aiToReplace
+                promoted += 1
+            }
+        }
+        if promoted > 0 {
+            do {
+                try modelContext.save()
+            } catch {
+                Logger.error("❌ aiSelectionMigrationV1 save failed: \(error)", category: .migration)
+                return  // Leave the flag unset so the migration retries on next launch.
+            }
+        }
+        UserDefaults.standard.set(true, forKey: migrationKey)
+        Logger.debug("✅ aiSelectionMigrationV1: promoted \(promoted) nodes", category: .migration)
+    }
+    /// Removes the four legacy per-pass document model keys replaced by the
+    /// single Anthropic document-analysis model ("onboardingDocAnalysisModelId"),
+    /// plus the dead OpenAI-era interview key (the interview reads
+    /// "onboardingAnthropicModelId"; the old key may hold a stale gpt-* value).
+    private func migrateDocAnalysisModelKeysV1() {
+        let migrationKey = "docAnalysisModelKeysMigrationCompleted_v1"
+        guard !UserDefaults.standard.bool(forKey: migrationKey) else { return }
+        let legacyKeys = [
+            "onboardingPDFExtractionModelId",
+            "onboardingDocSummaryModelId",
+            "skillBankModelId",
+            "kcExtractionModelId",
+            "onboardingInterviewDefaultModelId"
+        ]
+        for key in legacyKeys {
+            UserDefaults.standard.removeObject(forKey: key)
+        }
+        UserDefaults.standard.set(true, forKey: migrationKey)
+        Logger.debug("✅ docAnalysisModelKeysMigrationV1: removed \(legacyKeys.count) legacy document model keys", category: .migration)
     }
     private func scheduleModelValidation() {
         Task { [weak self] in

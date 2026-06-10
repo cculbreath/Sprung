@@ -54,7 +54,7 @@ enum KCRefinementSchema {
                 "keywords": stringArray("High-level terms for job matching"),
                 "technologies": stringArray("Technologies, tools, and frameworks"),
                 "outcomes": stringArray("Quantified outcomes"),
-                "suggestedBullets": stringArray("Resume bullet templates"),
+                "suggestedBullets": stringArray("Draft resume bullets in the author's natural register — concrete and specific, not formulaic templates"),
                 "evidenceQuality": nullableString("Evidence quality: 'strong', 'moderate', or 'weak'"),
                 "facts": factsSchema,
                 "verbatimExcerpts": excerptsSchema

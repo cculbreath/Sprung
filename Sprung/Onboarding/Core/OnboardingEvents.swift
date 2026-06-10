@@ -103,7 +103,11 @@ extension OnboardingEvent {
 
         // Status and usage
         case status(LLMStatus)
-        case tokenUsageReceived(modelId: String, inputTokens: Int, outputTokens: Int, cachedTokens: Int, reasoningTokens: Int, source: UsageSource)
+        /// Token usage for one completed request.
+        /// cacheReadTokens / cacheCreationTokens are reported distinctly (Anthropic
+        /// excludes both from inputTokens; OpenAI-style emitters pass cached reads
+        /// as cacheReadTokens with cacheCreationTokens = 0).
+        case tokenUsageReceived(modelId: String, inputTokens: Int, outputTokens: Int, cacheReadTokens: Int, cacheCreationTokens: Int, reasoningTokens: Int, source: UsageSource)
 
         // Conversation log
         case conversationEntryAppended(entry: ConversationEntry)

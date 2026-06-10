@@ -76,26 +76,21 @@ final class ContextPreviewService {
     func buildPreview() async -> ContextPreviewSnapshot {
         var items: [ContextPreviewItem] = []
 
-        // 1. System prompt
+        // 1. System prompt (static per phase - cached prefix; todo list lives in
+        //    the interview context, same as AnthropicRequestBuilder)
         let phase = await stateCoordinator.phase
-        var systemPrompt = phaseRegistry.buildSystemPrompt(for: phase)
-
-        // Add todo list if present (same as AnthropicRequestBuilder does)
-        if let todoList = await todoStore.renderForSystemPrompt() {
-            systemPrompt += "\n\n" + todoList
-            systemPrompt += "\n\nUse the update_todo_list tool to manage your task list. Mark items in_progress before starting work, and completed when done."
-        }
+        let systemPrompt = phaseRegistry.buildSystemPrompt(for: phase)
 
         items.append(ContextPreviewItem(
             type: .systemPrompt,
-            label: "System Prompt",
+            label: "System Prompt (cached)",
             content: systemPrompt,
             estimatedTokens: estimateTokens(systemPrompt),
             byteSize: systemPrompt.utf8.count
         ))
 
         // 2. Build interview context (what would be prepended to user messages)
-        let workingMemoryBuilder = WorkingMemoryBuilder(stateCoordinator: stateCoordinator)
+        let workingMemoryBuilder = WorkingMemoryBuilder(stateCoordinator: stateCoordinator, todoStore: todoStore)
         if let interviewContext = await workingMemoryBuilder.buildInterviewContext() {
             items.append(ContextPreviewItem(
                 type: .interviewContext,

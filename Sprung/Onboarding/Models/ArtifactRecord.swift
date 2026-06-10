@@ -193,32 +193,6 @@ final class ArtifactRecord {
         return nil
     }
 
-    /// True if graphics extraction failed for this PDF
-    var graphicsExtractionFailed: Bool {
-        metadataString("graphics_extraction_status") == "failed"
-    }
-
-    /// Error message from graphics extraction (if failed)
-    var graphicsExtractionError: String? {
-        metadataString("graphics_extraction_error")
-    }
-
-    /// True if this artifact has graphics content descriptions
-    var hasGraphicsContent: Bool {
-        guard let graphics = metadataString("graphics_content") else { return false }
-        return !graphics.isEmpty
-    }
-
-    /// Plain text content from PDFKit extraction (Pass 1)
-    var plainTextContent: String? {
-        metadataString("plain_text_content")
-    }
-
-    /// Graphics content descriptions from LLM extraction (Pass 2)
-    var graphicsContent: String? {
-        metadataString("graphics_content")
-    }
-
     // MARK: - Initialization
 
     init(

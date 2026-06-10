@@ -71,21 +71,6 @@ struct ArtifactRowHeader: View {
                         }
                     }
 
-                    // Graphics extraction status (PDFs only)
-                    if artifact.isPDF {
-                        if artifact.graphicsExtractionFailed {
-                            Image(systemName: "photo.badge.exclamationmark")
-                                .foregroundStyle(.orange)
-                                .font(.caption)
-                                .help("Graphics analysis failed: \(artifact.graphicsExtractionError ?? "Unknown error")")
-                        } else if artifact.hasGraphicsContent {
-                            Image(systemName: "photo.badge.checkmark")
-                                .foregroundStyle(.green)
-                                .font(.caption)
-                                .help("Visual content analyzed")
-                        }
-                    }
-
                     Image(systemName: "chevron.right")
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.secondary)

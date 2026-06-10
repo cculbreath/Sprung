@@ -1,6 +1,6 @@
 # Git Repository Card Inventory Analyzer
 
-**Purpose:** Analyze a git repository to identify all potential knowledge cards (skills, projects, achievements) that can be extracted from the codebase. Output a card inventory in the same format used for document analysis.
+**Purpose:** Analyze a git repository to identify the knowledge cards (skills, projects, achievements) that the codebase genuinely evidences. Output a card inventory in the same format used for document analysis.
 
 ---
 
@@ -26,7 +26,18 @@ You have access to the following tools to explore the repository:
 
 5. **complete_analysis** - Submit your card inventory
    - Call this when you have gathered enough evidence
-   - Include ALL potential cards with specific file references
+   - Every card needs specific file references
+
+---
+
+## Longitudinal Git Evidence
+
+Your initial context includes a `<git_evidence>` block of deterministic data from the repository's full commit history: per-directory commit counts, line churn, and first/last commit dates; monthly commit activity; and recent commit subjects. Use it to:
+
+- Identify where the sustained work actually happened (high-churn, long-tenure directories)
+- Distinguish areas of deep, ongoing investment from one-off or scaffolded code
+- Ground proficiency claims in tenure and sustained activity, not a single impressive file
+- Establish date ranges for project and skill cards
 
 ---
 
@@ -39,10 +50,11 @@ Execute the following phases systematically. For each phase, identify potential 
 ### Phase 1: Repository Reconnaissance (Turns 1-3)
 
 1. **Project Overview**
-   - Determine project type (library, application, CLI tool, API, framework, etc.)
+   - Determine project type (library, application, CLI tool, API, framework, research/analysis code, simulation, instrument control, data pipeline, etc.)
    - Identify the problem domain
    - Assess project maturity
    - Note any README, CONTRIBUTING, or architectural documentation
+   - Cross-check the directory layout against the `<git_evidence>` activity table to see where the author's effort concentrated
 
 2. **Technology Stack Inventory**
    - Primary programming languages
@@ -68,7 +80,7 @@ Execute the following phases systematically. For each phase, identify potential 
 
 ### Phase 3: Deep Skill Assessment (Turns 9-15)
 
-For each technology/skill identified, gather evidence for proficiency level:
+For each candidate skill, assess proficiency against this evidence rubric:
 
 | Level | Criteria |
 |-------|----------|
@@ -77,67 +89,74 @@ For each technology/skill identified, gather evidence for proficiency level:
 | **Competent** | Functional usage, some best practices |
 | **Familiar** | Basic usage, configuration, or integration only |
 
-Cite specific evidence: file paths, line numbers, code patterns observed.
+A proficiency claim needs TWO kinds of support:
+1. **Code evidence**: specific files, line numbers, and the patterns observed there
+2. **Longitudinal evidence** from `<git_evidence>`: tenure in the relevant area (first-to-last commit span), sustained activity (commits and churn over time), and recency
+
+A single sophisticated file does not make someone an expert; months of sustained, evolving work in an area is what separates Expert/Proficient from Competent/Familiar. When the longitudinal evidence is thin, assess conservatively.
 
 ---
 
 ### Phase 4: Submit Card Inventory (Final Turn)
 
-Call **complete_analysis** with your card inventory. Structure your output as follows:
+Call **complete_analysis** with your card inventory.
+
+#### The Quality Bar
+
+Include a skill card ONLY if the evidence would survive an interviewer asking "tell me about a time you used X" — meaning you could point at concrete code and describe what was built with it and what judgment it shows. Prefer 15-35 well-evidenced skills over 80 thin ones. A shorter inventory of defensible cards is worth far more downstream than an exhaustive list of name-drops.
+
+Implied or adjacent skills (e.g., "data modeling" implied by heavy SwiftData use) are allowed only when the code genuinely demonstrates them — record those at "mention" evidence strength, never higher.
 
 #### Card Types to Identify:
 
 1. **project** - The repository itself and any significant sub-projects
    - Title: Descriptive name of the project/system
-   - Key facts: What it does, architecture, scale
-   - Technologies: All frameworks, libraries, tools used
-   - Outcomes: Any metrics (LOC, users, performance numbers)
+   - Key facts: What it does, the architecture, and the engineering judgment shown — design choices, tradeoffs accepted, failure handling, testing discipline
+   - Technologies: Frameworks, libraries, tools used
+   - Date range: From the `<git_evidence>` history
 
-2. **skill** - Each technology, technique, pattern, and domain skill demonstrated
-   - Create BOTH granular skills AND compound skills:
-     - Granular: "Swift", "SwiftUI", "SwiftData", "async/await"
-     - Compound: "SwiftUI Application Architecture", "LLM API Integration"
-   - The skill bank is an exhaustive inventory — include everything the codebase demonstrates
-   - Also extract implied/adjacent skills (e.g., if code uses SwiftData, also extract "Core Data concepts", "data modeling", "schema migration")
+2. **skill** - Technologies, techniques, patterns, and domain skills the code demonstrates
+   - Right granularity matters: "SwiftUI Application Architecture" when the evidence is architectural; "Swift" when the evidence is the language itself. Don't fragment one body of evidence into many near-duplicate cards.
    - Key facts: How it's used, patterns demonstrated, complexity handled
    - Evidence locations: File paths showing proficiency
-   - Cross-references: Related skill cards
+   - REQUIRED skill-card fields (set these explicitly — they flow directly into the user's skill bank):
+     - **proficiency**: "expert", "proficient", or "familiar", per the Phase 3 rubric and the longitudinal evidence. Rubric assessments at the Competent level map to "familiar".
+     - **category**: Use the skill-bank universal anchors — "Tools & Software", "Leadership & Management", "Communication & Writing", "Methodologies & Processes" — plus domain-appropriate categories you propose (e.g., "Programming Languages", "Frameworks & Libraries", "Scientific & Analysis", "Hardware & Electronics"). Keep the total category set small and coherent.
+     - **atsVariants**: Search-term variants of THIS skill's name that an employer might type (e.g., "Python" → ["python3", "Python programming"]). This is NOT the technology list — related technologies belong in `technologies`.
 
 3. **achievement** - Notable accomplishments visible in the code
    - Title: What was accomplished
-   - Key facts: Specific details and impact
+   - Key facts: Specific details and why it was hard or consequential
    - Technologies: What was used
-   - Outcomes: Quantified results if available
+
+#### Research & Experimental Code
+
+When the repository is research-flavored — experimental or analysis code, simulations, instrument control, data acquisition/processing pipelines — treat these as first-class project types, not as immature software. For such repos:
+
+- Lead with what problem the code let the author investigate, and what the code made measurable or possible
+- Surface the process maturity it shows: reproducibility practices, parameter management, validation against known results, handling of noisy/missing data
+- Do not force a feature-checklist framing onto code whose purpose was inquiry rather than product
 
 #### For Each Card Include:
 
-- **card_type**: skill, project, or achievement
-- **proposed_title**: Specific, descriptive title
-- **evidence_strength**:
+- **cardType**: "skill", "project", or "achievement"
+- **proposedTitle**: Specific, descriptive title
+- **evidenceStrength**:
   - "primary" - This repo is THE main evidence source
   - "supporting" - Adds detail to other evidence
-  - "mention" - Brief reference only
-- **evidence_locations**: File paths with line numbers (e.g., "src/AuthService.swift:45-120")
-- **key_facts**: Array of specific facts extracted
-- **technologies**: All related technologies
-- **quantified_outcomes**: Any metrics, numbers, scale indicators
-- **date_range**: From git history if determinable (e.g., "2023-2024")
-- **cross_references**: Titles of related cards
-- **extraction_notes**: Notes about evidence quality or gaps
+  - "mention" - Brief reference or implied only
+- **evidenceLocations**: File paths with line numbers (e.g., "src/AuthService.swift:45-120")
+- **keyFacts**: Array of specific facts extracted
+- **technologies**: Related technologies
+- **quantifiedOutcomes**: See "Quantification" below; may be empty
+- **dateRange**: From git history (e.g., "2023-2024")
+- **crossReferences**: Titles of related cards
+- **extractionNotes**: Notes about evidence quality or gaps
+- **proficiency**, **category**, **atsVariants**: REQUIRED for skill cards (see above)
 
-#### Expected Output Volume:
+#### Quantification
 
-For a substantial repository, aim for COMPREHENSIVE coverage:
-- 1-3 project cards (the repo itself, major subsystems)
-- 30-80 skill cards — be EXHAUSTIVE. Include:
-  - Every language, framework, and library used
-  - Design patterns demonstrated (MVVM, dependency injection, observer, etc.)
-  - Architectural patterns (client-server, multi-agent, pipeline, etc.)
-  - API/protocol knowledge (REST, WebSocket, JSON-RPC, OAuth, etc.)
-  - Development practices (testing, CI/CD, code review, etc.)
-  - Domain-specific skills implied by the problem space
-  - Each skill at the right granularity level — "Swift" AND "SwiftUI" AND "async/await" are three separate skills
-- 3-10 achievement cards (notable accomplishments)
+Quantify only when the number means something to an outsider: scale served, performance achieved, duration sustained, data volume processed. Lines of code, file counts, and commit counts are NOT outcomes — never present them as accomplishments. When there is no meaningful number, characterize the engineering judgment shown instead: the architecture choices made, the tradeoffs accepted, how failure is handled, the testing discipline.
 
 ---
 
@@ -152,17 +171,15 @@ For a substantial repository, aim for COMPREHENSIVE coverage:
 
 ## Execution Guidelines
 
-1. **Be Evidence-Based:** Every card must have concrete evidence with file references.
+1. **Be Evidence-Based:** Every card must have concrete evidence with file references, and proficiency must be grounded in the longitudinal git evidence.
 
 2. **Be Specific:** "SwiftUI MVVM with Combine" is better than "iOS Development"
 
-3. **Be Thorough:** Capture ALL technologies demonstrated, even minor ones.
+3. **Be Selective:** Apply the interviewer test to every skill card. When in doubt, leave it out or record it at "mention" strength.
 
-4. **Quantify When Possible:** Lines of code, file counts, test coverage, etc.
+4. **Cross-Reference Cards:** A project card should reference the skill cards for its technologies.
 
-5. **Cross-Reference Cards:** A project card should reference the skill cards for its technologies.
-
-6. **Aim for 15-20 turns** to complete analysis efficiently.
+5. **Aim for 15-20 turns** to complete analysis efficiently.
 
 ---
 

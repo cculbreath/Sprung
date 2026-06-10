@@ -22,13 +22,10 @@ struct ModelsSettingsView: View {
     @AppStorage("resumeRevisionModelId") private var resumeRevisionModelId: String = ""
 
     // MARK: - Document Processing
-    @AppStorage("onboardingPDFExtractionModelId") private var pdfExtractionModelId: String = ""
-    @AppStorage("onboardingDocSummaryModelId") private var docSummaryModelId: String = ""
+    @AppStorage("onboardingDocAnalysisModelId") private var docAnalysisModelId: String = ""
     @AppStorage("onboardingCardMergeModelId") private var cardMergeModelId: String = ""
 
     // MARK: - Skill Processing
-    @AppStorage("skillBankModelId") private var skillBankModelId: String = ""
-    @AppStorage("kcExtractionModelId") private var kcExtractionModelId: String = ""
     @AppStorage("guidanceExtractionModelId") private var guidanceExtractionModelId: String = ""
     @AppStorage("skillsProcessingModelId") private var skillsProcessingModelId: String = ""
     @AppStorage("skillCurationModelId") private var skillCurationModelId: String = ""
@@ -54,10 +51,6 @@ struct ModelsSettingsView: View {
     @State private var isLoadingAnthropicModels = false
     @State private var anthropicModelError: String?
 
-    @State private var geminiModels: [GoogleAIService.GeminiModel] = []
-    @State private var isLoadingGeminiModels = false
-    @State private var geminiModelError: String?
-
     @State private var openAIModels: [ModelObject] = []
     @State private var isLoadingOpenAIModels = false
     @State private var openAIModelError: String?
@@ -65,8 +58,6 @@ struct ModelsSettingsView: View {
     // Discovery state synced with coordinator
     @State private var discoveryLLMModelId: String = ""
     @State private var discoveryReasoningEffort: String = "low"
-
-    private let googleAIService = GoogleAIService()
 
     // Column widths
     private let operationWidth: CGFloat = 180
@@ -137,12 +128,13 @@ struct ModelsSettingsView: View {
         Divider().padding(.vertical, 4)
 
         // Document Processing
-        modelRow(operation: "PDF Extraction", backend: .gemini) {
-            geminiPicker(selection: $pdfExtractionModelId, minTokens: 64000)
+        modelRow(operation: "Document Analysis", backend: .anthropic) {
+            anthropicPicker(selection: $docAnalysisModelId)
         }
-        modelRow(operation: "Doc Summary", backend: .openRouter) {
-            openRouterPicker(selection: $docSummaryModelId)
-        }
+        Text("Powers all document ingestion passes: summary, narrative cards, skill bank, and enrichment. An Opus-tier model is recommended.")
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+            .padding(.leading, operationWidth + backendWidth)
         modelRow(operation: "Card Merge", backend: .openRouter) {
             openRouterPicker(selection: $cardMergeModelId)
         }
@@ -150,12 +142,6 @@ struct ModelsSettingsView: View {
         Divider().padding(.vertical, 4)
 
         // Skill Processing
-        modelRow(operation: "Skill Bank", backend: .openRouter) {
-            openRouterPicker(selection: $skillBankModelId)
-        }
-        modelRow(operation: "Narrative Cards", backend: .openRouter) {
-            openRouterPicker(selection: $kcExtractionModelId)
-        }
         modelRow(operation: "Inference Guidance", backend: .openRouter) {
             openRouterPicker(selection: $guidanceExtractionModelId)
         }
@@ -316,12 +302,11 @@ struct ModelsSettingsView: View {
     // MARK: - Backend Badge
 
     private enum Backend {
-        case anthropic, gemini, openRouter, openAI
+        case anthropic, openRouter, openAI
 
         var name: String {
             switch self {
             case .anthropic: return "Anthropic"
-            case .gemini: return "Gemini"
             case .openRouter: return "OpenRouter"
             case .openAI: return "OpenAI"
             }
@@ -330,7 +315,6 @@ struct ModelsSettingsView: View {
         var color: Color {
             switch self {
             case .anthropic: return .orange
-            case .gemini: return .blue
             case .openRouter: return .purple
             case .openAI: return .green
             }
@@ -366,41 +350,6 @@ struct ModelsSettingsView: View {
             let selectedModel = filteredAnthropicModels.first { $0.id == selection.wrappedValue }
             Menu {
                 ForEach(filteredAnthropicModels) { model in
-                    Button(model.displayName) {
-                        selection.wrappedValue = model.id
-                    }
-                }
-            } label: {
-                HStack(spacing: 4) {
-                    Text(selectedModel?.displayName ?? "Select...")
-                    Image(systemName: "chevron.up.chevron.down")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .menuStyle(.borderlessButton)
-        }
-    }
-
-    @ViewBuilder
-    private func geminiPicker(selection: Binding<String>, minTokens: Int) -> some View {
-        if !hasGeminiKey {
-            Text("No API key")
-                .foregroundStyle(.secondary)
-        } else if isLoadingGeminiModels {
-            ProgressView().controlSize(.small)
-        } else if let error = geminiModelError {
-            Label(error, systemImage: "exclamationmark.triangle.fill")
-                .foregroundStyle(.red)
-                .font(.caption)
-        } else if geminiModels.isEmpty {
-            Text("No models")
-                .foregroundStyle(.secondary)
-        } else {
-            let filtered = geminiModels.filter { $0.outputTokenLimit >= minTokens }
-            let selectedModel = filtered.first { $0.id == selection.wrappedValue }
-            Menu {
-                ForEach(filtered) { model in
                     Button(model.displayName) {
                         selection.wrappedValue = model.id
                     }
@@ -487,10 +436,6 @@ struct ModelsSettingsView: View {
         APIKeyManager.get(.anthropic) != nil
     }
 
-    private var hasGeminiKey: Bool {
-        APIKeyManager.get(.gemini) != nil
-    }
-
     private var hasOpenAIKey: Bool {
         guard let key = APIKeyManager.get(.openAI) else { return false }
         return !key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -537,9 +482,8 @@ private extension ModelsSettingsView {
 private extension ModelsSettingsView {
     func refreshAllModelLists() async {
         async let anthropic: () = loadAnthropicModels()
-        async let gemini: () = loadGeminiModels()
         async let openai: () = loadOpenAIModels()
-        _ = await (anthropic, gemini, openai)
+        _ = await (anthropic, openai)
     }
 
     @MainActor
@@ -564,19 +508,6 @@ private extension ModelsSettingsView {
             anthropicModelError = error.localizedDescription
         }
         isLoadingAnthropicModels = false
-    }
-
-    @MainActor
-    func loadGeminiModels() async {
-        guard hasGeminiKey else { return }
-        isLoadingGeminiModels = true
-        geminiModelError = nil
-        do {
-            geminiModels = try await googleAIService.fetchAvailableModels()
-        } catch {
-            geminiModelError = error.localizedDescription
-        }
-        isLoadingGeminiModels = false
     }
 
     @MainActor

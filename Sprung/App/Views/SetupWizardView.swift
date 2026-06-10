@@ -3,7 +3,7 @@
 //  Sprung
 //
 //  First-run wizard to collect API keys, enable OpenRouter models,
-//  and choose default models for onboarding, PDF extraction, and Git ingest.
+//  and choose default models for onboarding, document analysis, and Git ingest.
 //
 import SwiftUI
 import Observation
@@ -14,16 +14,17 @@ struct SetupWizardView: View {
     @Environment(AppState.self) private var appState
     @Environment(EnabledLLMStore.self) private var enabledLLMStore
     @Environment(OpenRouterService.self) private var openRouterService
+    @Environment(LLMFacade.self) private var llmFacade
 
     @AppStorage("hasCompletedSetupWizard") private var hasCompletedSetupWizard = false
-    @AppStorage("onboardingInterviewDefaultModelId") private var onboardingModelId: String = "gpt-5"
-    @AppStorage("onboardingPDFExtractionModelId") private var pdfExtractionModelId: String = "gemini-2.5-flash"
+    @AppStorage("onboardingAnthropicModelId") private var interviewModelId: String = ""
+    @AppStorage("onboardingDocAnalysisModelId") private var docAnalysisModelId: String = ""
     @AppStorage("onboardingGitIngestModelId") private var gitIngestModelId: String = ""
     @AppStorage("discoveryCoachingModelId") private var coachingModelId: String = ""
 
     @State private var openRouterApiKey: String = APIKeyManager.get(.openRouter) ?? ""
     @State private var openAiApiKey: String = APIKeyManager.get(.openAI) ?? ""
-    @State private var geminiApiKey: String = APIKeyManager.get(.gemini) ?? ""
+    @State private var anthropicApiKey: String = APIKeyManager.get(.anthropic) ?? ""
     @State private var currentStep: Int = 0
     @State private var showModelPicker = false
     @State private var showExitAlert = false
@@ -33,16 +34,10 @@ struct SetupWizardView: View {
     @State private var isLoadingModels = false
     @State private var modelLoadError: String?
 
-    // Gemini models (lazy-loaded)
-    @State private var geminiModels: [GoogleAIService.GeminiModel] = []
-    @State private var isLoadingGeminiModels = false
-    @State private var geminiModelError: String?
-    private let googleAIService = GoogleAIService()
-
-    // Interview models from OpenAI (lazy-loaded)
-    @State private var interviewModels: [ModelObject] = []
-    @State private var isLoadingInterviewModels = false
-    @State private var interviewModelError: String?
+    // Anthropic models for document analysis (lazy-loaded)
+    @State private var anthropicModels: [AnthropicModel] = []
+    @State private var isLoadingAnthropicModels = false
+    @State private var anthropicModelError: String?
 
     // Provider prefixes for grouping
     private static let targetProviders = ["google", "openai", "anthropic", "x-ai", "deepseek"]
@@ -74,7 +69,7 @@ struct SetupWizardView: View {
                 Text("You can rerun the wizard from Settings at any time.")
             }
             .task {
-                await preloadGeminiModelsIfPossible()
+                await preloadAnthropicModelsIfPossible()
             }
         }
     }
@@ -143,9 +138,9 @@ private extension SetupWizardView {
             Text("A quick guided setup to get you drafting quickly.")
                 .font(.headline)
             VStack(alignment: .leading, spacing: 10) {
-                Label("Add API keys for OpenRouter, OpenAI (interview + TTS), and Gemini (PDF extraction).", systemImage: "key.fill")
+                Label("Add API keys for OpenRouter, OpenAI (interview + TTS), and Anthropic (document analysis).", systemImage: "key.fill")
                 Label("Choose OpenRouter models to enable.", systemImage: "switch.2")
-                Label("Set defaults for onboarding, PDF extraction, and Git ingest.", systemImage: "slider.horizontal.3")
+                Label("Set defaults for onboarding, document analysis, and Git ingest.", systemImage: "slider.horizontal.3")
                 Label("Optional: revisit this wizard anytime from Settings.", systemImage: "clock.arrow.circlepath")
             }
             .labelStyle(.titleAndIcon)
@@ -176,11 +171,11 @@ private extension SetupWizardView {
                         help: "Used for onboarding interview and streaming text-to-speech."
                     )
                     keyField(
-                        title: "Google Gemini (PDF extraction)",
-                        placeholder: "AIza…",
-                        value: $geminiApiKey,
+                        title: "Anthropic (document analysis)",
+                        placeholder: "sk-ant-…",
+                        value: $anthropicApiKey,
                         isRequired: false,
-                        help: "Needed for document ingestion and PDF/Doc text extraction."
+                        help: "Needed for document ingestion: summaries, narrative cards, skill bank, and enrichment."
                     )
                 }
             }
@@ -360,7 +355,7 @@ private extension SetupWizardView {
                 VStack(alignment: .leading, spacing: 16) {
                     onboardingModelPicker
                     Divider()
-                    pdfExtractionPicker
+                    docAnalysisPicker
                     Divider()
                     gitIngestPicker
                     Divider()
@@ -402,120 +397,93 @@ private extension SetupWizardView {
 
     var onboardingModelPicker: some View {
         VStack(alignment: .leading, spacing: 8) {
-            if openAiApiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                Label("Add OpenAI API key to enable interview model selection.", systemImage: "exclamationmark.triangle.fill")
-                    .foregroundStyle(.orange)
-                    .font(.callout)
-            } else if isLoadingInterviewModels {
-                HStack(spacing: 8) {
-                    ProgressView().controlSize(.small)
-                    Text("Loading interview models...")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                }
-            } else if let error = interviewModelError {
-                VStack(alignment: .leading, spacing: 4) {
-                    Label(error, systemImage: "exclamationmark.triangle.fill")
-                        .foregroundStyle(.red)
-                        .font(.callout)
-                    Button("Retry") {
-                        Task { await loadInterviewModels() }
-                    }
-                }
-            } else if filteredInterviewModels.isEmpty {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("No interview models found.")
-                        .foregroundStyle(.secondary)
-                    Button("Load Models") {
-                        Task { await loadInterviewModels() }
-                    }
-                }
-            } else {
-                Picker("Onboarding Interview Model", selection: $onboardingModelId) {
-                    ForEach(filteredInterviewModels, id: \.id) { model in
-                        Text(model.id).tag(model.id)
-                    }
-                }
-                .pickerStyle(.menu)
-            }
-            Text("Used for the three-phase onboarding interview (OpenAI Responses API).")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-        }
-        .task {
-            let hasKey = !openAiApiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            if hasKey && interviewModels.isEmpty {
-                await loadInterviewModels()
-            }
-        }
-    }
-
-    /// Filtered interview models: gpt-5*, gpt-6*, gpt-7* (dynamically fetched from OpenAI)
-    private var filteredInterviewModels: [ModelObject] {
-        interviewModels
-            .filter { model in
-                let id = model.id.lowercased()
-                return id.hasPrefix("gpt-5") || id.hasPrefix("gpt-6") || id.hasPrefix("gpt-7")
-            }
-            .sorted { $0.id < $1.id }
-    }
-
-    func loadInterviewModels() async {
-        let apiKey = openAiApiKey.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !apiKey.isEmpty else { return }
-        isLoadingInterviewModels = true
-        interviewModelError = nil
-        do {
-            let service = OpenAIServiceFactory.service(apiKey: apiKey)
-            let response = try await service.listModels()
-            interviewModels = response.data
-            // Validate current selection is still available
-            if !filteredInterviewModels.contains(where: { $0.id == onboardingModelId }) {
-                if let first = filteredInterviewModels.first {
-                    onboardingModelId = first.id
-                }
-            }
-        } catch {
-            interviewModelError = error.localizedDescription
-        }
-        isLoadingInterviewModels = false
-    }
-
-    var pdfExtractionPicker: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            if geminiModels.isEmpty {
+            if filteredAnthropicModels.isEmpty {
                 VStack(alignment: .leading, spacing: 6) {
-                    TextField("PDF Extraction Model", text: $pdfExtractionModelId)
-                        .textFieldStyle(.roundedBorder)
                     HStack(spacing: 8) {
-                        Button("Load Gemini models") {
-                            Task { await preloadGeminiModelsIfPossible(force: true) }
+                        Button("Load Anthropic models") {
+                            Task { await preloadAnthropicModelsIfPossible(force: true) }
                         }
-                        .disabled(isLoadingGeminiModels || geminiApiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                        if isLoadingGeminiModels {
+                        .disabled(isLoadingAnthropicModels || anthropicApiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        if isLoadingAnthropicModels {
                             ProgressView().scaleEffect(0.7)
                         }
                     }
-                    if let geminiModelError {
-                        Text(geminiModelError)
+                    if let anthropicModelError {
+                        Text(anthropicModelError)
                             .font(.footnote)
                             .foregroundStyle(.red)
-                    } else {
-                        Text("Using Gemini for PDF/Doc text extraction. Enter a model ID or load available models.")
+                    } else if anthropicApiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        Text("Add an Anthropic API key to choose an interview model.")
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                     }
                 }
             } else {
-                Picker("PDF Extraction Model", selection: $pdfExtractionModelId) {
-                    ForEach(geminiModels, id: \.id) { model in
+                Picker("Onboarding Interview Model", selection: $interviewModelId) {
+                    Text("Select a model…").tag("")
+                    ForEach(filteredAnthropicModels, id: \.id) { model in
                         Text(model.displayName).tag(model.id)
                     }
                 }
                 .pickerStyle(.menu)
-                Text("Select a Gemini model for document ingestion.").font(.footnote).foregroundStyle(.secondary)
+            }
+            Text("Used for the onboarding interview (Anthropic Messages API). An Opus-tier model is recommended.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    var docAnalysisPicker: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if filteredAnthropicModels.isEmpty {
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 8) {
+                        Button("Load Anthropic models") {
+                            Task { await preloadAnthropicModelsIfPossible(force: true) }
+                        }
+                        .disabled(isLoadingAnthropicModels || anthropicApiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        if isLoadingAnthropicModels {
+                            ProgressView().scaleEffect(0.7)
+                        }
+                    }
+                    if let anthropicModelError {
+                        Text(anthropicModelError)
+                            .font(.footnote)
+                            .foregroundStyle(.red)
+                    } else if anthropicApiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        Text("Add an Anthropic API key to choose a document analysis model.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            } else {
+                Picker("Document Analysis Model", selection: $docAnalysisModelId) {
+                    Text("Select a model…").tag("")
+                    ForEach(filteredAnthropicModels, id: \.id) { model in
+                        Text(model.displayName).tag(model.id)
+                    }
+                }
+                .pickerStyle(.menu)
+            }
+            Text("Powers all document ingestion passes: summary, narrative cards, skill bank, and enrichment. An Opus-tier model is recommended.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        }
+        .task {
+            if anthropicModels.isEmpty {
+                await preloadAnthropicModelsIfPossible()
             }
         }
+    }
+
+    /// Filtered Anthropic models for document analysis.
+    private var filteredAnthropicModels: [AnthropicModel] {
+        anthropicModels
+            .filter { model in
+                let id = model.id.lowercased()
+                return id.hasPrefix("claude-") && !id.contains("instant")
+            }
+            .sorted { $0.displayName < $1.displayName }
     }
 
     var gitIngestPicker: some View {
@@ -628,7 +596,7 @@ private extension SetupWizardView {
     func saveKeys() {
         let router = openRouterApiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         let openai = openAiApiKey.trimmingCharacters(in: .whitespacesAndNewlines)
-        let gemini = geminiApiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        let anthropic = anthropicApiKey.trimmingCharacters(in: .whitespacesAndNewlines)
 
         if router.isEmpty {
             APIKeyManager.delete(.openRouter)
@@ -640,10 +608,10 @@ private extension SetupWizardView {
         } else {
             _ = APIKeyManager.set(.openAI, value: openai)
         }
-        if gemini.isEmpty {
-            APIKeyManager.delete(.gemini)
+        if anthropic.isEmpty {
+            APIKeyManager.delete(.anthropic)
         } else {
-            _ = APIKeyManager.set(.gemini, value: gemini)
+            _ = APIKeyManager.set(.anthropic, value: anthropic)
         }
         NotificationCenter.default.post(name: .apiKeysChanged, object: nil)
         appState.reconfigureOpenRouterService()
@@ -668,28 +636,26 @@ private extension SetupWizardView {
         onFinish?()
     }
 
-    func preloadGeminiModelsIfPossible(force: Bool = false) async {
-        guard !isLoadingGeminiModels else { return }
-        let hasKey = !(geminiApiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+    @MainActor
+    func preloadAnthropicModelsIfPossible(force: Bool = false) async {
+        guard !isLoadingAnthropicModels else { return }
+        let hasKey = !(anthropicApiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         guard force || hasKey else { return }
-        isLoadingGeminiModels = true
-        geminiModelError = nil
+        isLoadingAnthropicModels = true
+        anthropicModelError = nil
         do {
-            let models = try await googleAIService.fetchAvailableModels()
-            await MainActor.run {
-                geminiModels = models
-                if let first = models.first, !models.contains(where: { $0.id == pdfExtractionModelId }) {
-                    pdfExtractionModelId = first.id
-                }
+            let response = try await llmFacade.anthropicListModels()
+            anthropicModels = response.data
+            if !filteredAnthropicModels.contains(where: { $0.id == docAnalysisModelId }) {
+                docAnalysisModelId = ""
+            }
+            if !filteredAnthropicModels.contains(where: { $0.id == interviewModelId }) {
+                interviewModelId = ""
             }
         } catch {
-            await MainActor.run {
-                geminiModelError = error.localizedDescription
-            }
+            anthropicModelError = error.localizedDescription
         }
-        await MainActor.run {
-            isLoadingGeminiModels = false
-        }
+        isLoadingAnthropicModels = false
     }
 
 }

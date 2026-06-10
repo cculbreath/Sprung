@@ -3,7 +3,7 @@
 //  Sprung
 //
 //  Prompt builder and JSON schema for narrative knowledge card extraction.
-//  Uses Gemini's native structured output mode for guaranteed valid JSON.
+//  Uses Anthropic structured output (output_config schema) for guaranteed valid JSON.
 //
 
 import Foundation
@@ -11,24 +11,34 @@ import Foundation
 /// Builds prompts and schemas for narrative knowledge card extraction
 enum KCExtractionPrompts {
 
-    /// Build the extraction prompt for a document
+    /// Build the extraction instructions for a document. The document content
+    /// itself is provided as a preceding content block (PDF document block or
+    /// cached text block), not inlined into the prompt.
     /// Loads template from Resources/Prompts/kc_extraction.txt
+    /// - Parameter isPagedSource: true when the source is page-addressable (PDF);
+    ///   evidence anchors must then be page-anchored ("p. 14", "p. 3, Fig. 2").
     static func extractionPrompt(
         documentId: String,
         filename: String,
-        content: String
+        isPagedSource: Bool
     ) -> String {
+        let locationGuidance = isPagedSource
+            ? """
+            - Locations MUST be page-anchored: cite the page for every anchor ("p. 14", "p. 3, Fig. 2")
+            - Every verbatim excerpt must cite the page it appears on
+            """
+            : "- Page numbers or section references"
         return PromptLibrary.substitute(
             template: PromptLibrary.kcExtractionTemplate,
             replacements: [
                 "DOC_ID": documentId,
                 "FILENAME": filename,
-                "EXTRACTED_CONTENT": content
+                "LOCATION_GUIDANCE": locationGuidance
             ]
         )
     }
 
-    /// JSON Schema for narrative KC extraction - used by Gemini's native structured output
+    /// JSON Schema for narrative KC extraction - enforced via Anthropic structured output (output_config)
     static let jsonSchema: [String: Any] = [
         "type": "object",
         "properties": [
@@ -75,7 +85,7 @@ enum KCExtractionPrompts {
                                     ],
                                     "verbatim_excerpt": [
                                         "type": "string",
-                                        "description": "Verbatim excerpt capturing voice (20-50 words)"
+                                        "description": "Verbatim excerpt showing the author's reasoning and voice, not just achievement statements (20-50 words)"
                                     ]
                                 ],
                                 "required": ["document_id", "location"]

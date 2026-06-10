@@ -13,7 +13,6 @@ struct UnifiedAppLayout: View {
     @Environment(WindowCoordinator.self) private var windowCoordinator
     @Environment(AppEnvironment.self) private var appEnvironment
     @Environment(ReasoningStreamManager.self) private var reasoningStreamManager
-    @Environment(ResumeReviseViewModel.self) private var resumeReviseViewModel
     @Environment(AppState.self) private var appState
     @Environment(EnabledLLMStore.self) private var enabledLLMStore
 
@@ -32,7 +31,7 @@ struct UnifiedAppLayout: View {
         .frame(minWidth: 1000, minHeight: 650)
         // Global reasoning stream overlay (shared across all modules)
         .overlay {
-            if reasoningStreamManager.isVisible && !resumeReviseViewModel.showResumeRevisionSheet {
+            if reasoningStreamManager.isVisible {
                 ReasoningStreamView(
                     isVisible: Binding(
                         get: { reasoningStreamManager.isVisible },
@@ -113,9 +112,9 @@ struct UnifiedAppLayout: View {
 
         guard !hasCompletedSetupWizard else { return false }
 
-        let hasGeminiKey = !(APIKeyManager.get(.gemini)?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
+        let hasAnthropicKey = !(APIKeyManager.get(.anthropic)?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
         let hasModels = !enabledLLMStore.enabledModels.isEmpty
-        return !hasGeminiKey || !hasModels
+        return !hasAnthropicKey || !hasModels
     }
 
     private func openTemplateEditor() {
@@ -170,5 +169,6 @@ private struct SetupWizardSheetUnified: View {
             .environment(appState)
             .environment(enabledLLMStore)
             .environment(appEnvironment.openRouterService)
+            .environment(appEnvironment.llmFacade)
     }
 }

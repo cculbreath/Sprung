@@ -360,9 +360,15 @@ actor StateCoordinator: OnboardingEventEmitter {
         case .llm(.enqueueUserMessage(let payload, let isSystemGenerated, let chatboxMessageId, let originalText)):
             // Add system-generated messages to ConversationLog NOW to preserve ordering
             // Chatbox messages are already added in sendChatMessage() before enqueueing
+            // (their payloads carry entryId from QueueDrainCoordinator).
+            var payload = payload
             if isSystemGenerated {
                 let text = payload["text"].stringValue
-                await conversationLog.appendUser(text: text, isSystemGenerated: isSystemGenerated)
+                let entryId = await conversationLog.appendUser(text: text, isSystemGenerated: isSystemGenerated)
+                // PROMPT-CACHE INVARIANT: capture the pending entry's id so the
+                // request build can key its wire-text write to THIS entry, even if
+                // another entry lands in the log before the request is built.
+                payload["entryId"].string = entryId.uuidString
                 Logger.debug("StateCoordinator: system-generated message added to ConversationLog at enqueue time", category: .ai)
             }
 
@@ -818,20 +824,59 @@ actor StateCoordinator: OnboardingEventEmitter {
         }
     }
     /// Append user message - gated by ConversationLog (fills pending tool slots first)
-    /// - Returns: Message ID (always appends, gating is internal)
-    func appendUserMessage(_ text: String, isSystemGenerated: Bool = false) async -> UUID? {
+    /// - Returns: The appended entry's id. Callers that enqueue this message for
+    ///   sending MUST carry the id into the payload ("entryId") so the request
+    ///   build can key its wire-text capture to this exact entry.
+    func appendUserMessage(_ text: String, isSystemGenerated: Bool = false) async -> UUID {
         // ConversationLog is the sole source of truth - handles gating for pending tool calls
         await conversationLog.appendUser(text: text, isSystemGenerated: isSystemGenerated)
-
-        // Return a UUID for backwards compatibility (ConversationLog doesn't expose IDs)
-        // TODO: Clean up callers that depend on this return value
-        return UUID()
     }
 
     func appendAssistantMessage(_ text: String) async -> UUID {
         let id = UUID()
         await conversationLog.appendAssistant(id: id, text: text, toolCalls: nil)
         return id
+    }
+
+    // MARK: - Wire-Text Capture (Prompt-Cache Byte Stability)
+    // History must replay byte-identically across requests or prompt caching breaks.
+    // These delegate to ConversationLog, which stores the exact wire text sent to
+    // the API alongside the display text. See ConversationLog for the invariant.
+
+    /// Record the final merged wire text for a pending user entry, keyed by the
+    /// entry id captured at append/enqueue time (never by log position — another
+    /// entry can land between append and request build).
+    /// Returns false if no user entry with that id exists.
+    @discardableResult
+    func setUserMessageWireText(entryId: UUID, _ wireText: String) async -> Bool {
+        await conversationLog.setWireText(forUserEntryId: entryId, text: wireText)
+    }
+
+    /// Record the chatbox attachment (image or PDF) sent with a user entry, keyed
+    /// by the same entry id as the wire text so history replays include the
+    /// attachment block in its original position.
+    /// Returns false if no user entry with that id exists.
+    @discardableResult
+    func setUserMessageAttachment(entryId: UUID, _ attachment: ConversationLog.WireAttachment) async -> Bool {
+        await conversationLog.setAttachment(forUserEntryId: entryId, attachment)
+    }
+
+    /// Record the context text block appended after the last assistant entry's
+    /// tool results in the wire user message.
+    @discardableResult
+    func setToolTurnContextWireText(_ wireText: String) async -> Bool {
+        await conversationLog.setToolContextTextForLastAssistantEntry(wireText)
+    }
+
+    /// Record a wire-only user turn for a standalone coordinator message
+    /// (these never appear in the UI transcript but must replay in history).
+    func recordCoordinatorWireTurn(_ wireText: String) async {
+        await conversationLog.recordCoordinatorWireTurn(text: wireText)
+    }
+
+    /// Snapshot of the conversation in exact wire form for history replay.
+    func getWireConversation() async -> [ConversationLog.WireEntry] {
+        await conversationLog.getWireSnapshot()
     }
     // UI State delegation
     func setActiveState(_ active: Bool) async {
@@ -841,18 +886,40 @@ actor StateCoordinator: OnboardingEventEmitter {
     func publishAllowedToolsNow() async {
         await uiState.publishToolPermissionsNow()
     }
-    /// Check tool availability using centralized gating logic
+    /// Check tool availability using centralized gating logic.
+    ///
+    /// Two layers:
+    /// 1. Phase/waiting-state gating (ToolGating) — hard blocks.
+    /// 2. Subphase gating — the request schema always carries the full phase tool
+    ///    union (prompt-cache requirement), so out-of-subphase calls are caught
+    ///    here and answered with a structured "tool_not_available" result that
+    ///    lets the model self-correct.
     /// - Parameter toolName: Name of the tool to check
-    /// - Returns: Availability status with reason if blocked
+    /// - Returns: Availability status with reason if blocked or not yet available
     func checkToolAvailability(_ toolName: String) async -> ToolAvailability {
         let waitingState = await uiState.getWaitingState()
         let phaseTools = phasePolicy.allowedTools[phase] ?? []
-        return ToolGating.availability(
+        let gating = ToolGating.availability(
             for: toolName,
             waitingState: waitingState,
             phaseAllowedTools: phaseTools,
             excludedTools: excludedTools
         )
+        guard case .available = gating else { return gating }
+
+        // Subphase gating: infer the current subphase from objectives + UI state
+        let subphase = ToolBundlePolicy.inferSubphase(
+            phase: phase,
+            toolPaneCard: await llmStateManager.getCurrentToolPaneCard(),
+            objectives: await getObjectiveStatusMap(),
+            phase4Context: await uiState.getPhase4UIContext()
+        )
+        if !ToolBundlePolicy.availableTools(in: subphase).contains(toolName) {
+            return .notAvailableYet(
+                reason: ToolBundlePolicy.unavailabilityReason(for: toolName, currentSubphase: subphase)
+            )
+        }
+        return .available
     }
 
     /// Remove a tool from the allowed tools list (e.g., after one-time use)

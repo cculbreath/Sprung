@@ -9,6 +9,20 @@
 //  tool_result block with matching tool_use_id in the immediately following
 //  user message. Orphaned tool calls are cleaned up at ConversationLog.restore() time.
 //
+//  PROMPT-CACHE INVARIANT: history must replay byte-identically across requests
+//  or prompt caching breaks. The input items come from ConversationLog's WIRE
+//  snapshot (exact merged text as sent). Nothing here may inject content that
+//  varies between requests for the same logged turn: PDF re-inclusion is
+//  deterministic (same file -> same base64), chatbox attachments replay from the
+//  recorded base64 in their original position (text block first, then
+//  attachment), tool_use input parsing is deterministic, and message merging is
+//  order-stable.
+//
+//  ACCEPTANCE INVARIANT: building the same request twice with no new
+//  ConversationLog entries must produce byte-identical messages JSON; building
+//  turn N+1 must reproduce turn N's messages as an exact prefix (modulo
+//  cache_control placement, which the API ignores for prefix matching).
+//
 
 import Foundation
 import SwiftOpenAI
@@ -26,7 +40,7 @@ struct AnthropicHistoryBuilder {
 
     /// Build Anthropic message history from conversation transcript
     func buildAnthropicHistory() async -> [AnthropicMessage] {
-        let inputItems = await contextAssembler.buildConversationHistory()
+        let historyItems = await contextAssembler.buildConversationHistory()
 
         var messages: [AnthropicMessage] = []
         var pendingAssistantBlocks: [AnthropicContentBlock] = []
@@ -38,62 +52,64 @@ struct AnthropicHistoryBuilder {
             pendingAssistantBlocks = []
         }
 
-        for item in inputItems {
+        for item in historyItems {
             switch item {
-            case .message(let inputMessage):
-                switch inputMessage.role {
-                case "user":
-                    flushAssistantBlocks()
-                    if case .text(let text) = inputMessage.content {
-                        guard !text.isEmpty else {
-                            Logger.warning("⚠️ Skipping empty user message in Anthropic history", category: .ai)
-                            continue
-                        }
-
-                        // Check for PDF attachment that needs to be re-included (resume uploads)
-                        // The user message text contains <ui-action-result> with pdfAttachment.storageUrl
-                        if let pdfBlocks = extractPDFFromUserMessage(text) {
-                            var contentBlocks: [AnthropicContentBlock] = [.text(AnthropicTextBlock(text: text))]
-                            contentBlocks.append(contentsOf: pdfBlocks)
-                            messages.append(AnthropicMessage(role: "user", content: .blocks(contentBlocks)))
-                        } else {
-                            messages.append(.user(text))
-                        }
-                    }
-                case "assistant":
-                    if case .text(let text) = inputMessage.content {
-                        guard !text.isEmpty else {
-                            Logger.debug("📝 Skipping empty assistant text block", category: .ai)
-                            continue
-                        }
-                        pendingAssistantBlocks.append(.text(AnthropicTextBlock(text: text)))
-                    }
-                default:
-                    break
+            case .userMessage(let text, let attachment):
+                flushAssistantBlocks()
+                guard !text.isEmpty || attachment != nil else {
+                    Logger.warning("⚠️ Skipping empty user message in Anthropic history", category: .ai)
+                    continue
                 }
 
-            case .functionToolCall(let toolCall):
-                var inputDict: [String: Any] = [:]
-                if let argsData = toolCall.arguments.data(using: .utf8),
-                   let parsed = try? JSONSerialization.jsonObject(with: argsData) as? [String: Any] {
-                    inputDict = parsed
+                // Block order is fixed and matches the original send: text block
+                // first, then ui-action-result PDF re-inclusion, then the chatbox
+                // attachment recorded at send time. A turn must never carry both a
+                // ui-action PDF marker AND a recorded chatbox attachment — producers
+                // of pdfAttachment.storageUrl markers (DocumentArtifactHandler.
+                // sendPDFDirectlyToLLM) must not also set payload["pdfData"], or the
+                // document would be sent twice on every request.
+                var contentBlocks: [AnthropicContentBlock] = []
+                if !text.isEmpty {
+                    contentBlocks.append(.text(AnthropicTextBlock(text: text)))
                 }
+                if let pdfBlocks = extractPDFFromUserMessage(text) {
+                    contentBlocks.append(contentsOf: pdfBlocks)
+                }
+                if let attachment {
+                    contentBlocks.append(attachmentBlock(for: attachment))
+                }
+
+                if contentBlocks.count == 1, case .text = contentBlocks[0] {
+                    messages.append(.user(text))
+                } else {
+                    messages.append(AnthropicMessage(role: "user", content: .blocks(contentBlocks)))
+                }
+
+            case .assistantMessage(let text):
+                guard !text.isEmpty else {
+                    Logger.debug("📝 Skipping empty assistant text block", category: .ai)
+                    continue
+                }
+                pendingAssistantBlocks.append(.text(AnthropicTextBlock(text: text)))
+
+            case .toolCall(let callId, let name, let argumentsJSON):
                 pendingAssistantBlocks.append(.toolUse(AnthropicToolUseBlock(
-                    id: toolCall.callId,
-                    name: toolCall.name,
-                    input: inputDict
+                    id: callId,
+                    name: name,
+                    input: Self.deterministicToolInput(fromArgumentsJSON: argumentsJSON)
                 )))
 
-            case .functionToolCallOutput(let output):
+            case .toolResult(let callId, let output):
                 flushAssistantBlocks()
-                let resultContent = output.output.isEmpty ? "{\"status\":\"completed\"}" : output.output
-
+                // `output` is the exact recorded wire string (ConversationLog
+                // substitutes placeholders/empty outputs at recording time) —
+                // serialize it verbatim.
                 var contentBlocks: [AnthropicContentBlock] = [
-                    .toolResult(AnthropicToolResultBlock(toolUseId: output.callId, content: resultContent))
+                    .toolResult(AnthropicToolResultBlock(toolUseId: callId, content: output))
                 ]
 
                 // Check for PDF attachment that needs to be re-included
-                if let outputData = output.output.data(using: .utf8) {
+                if let outputData = output.data(using: .utf8) {
                     let json = JSON(outputData)
                     if json["pdfAttachment"].exists(),
                        let storagePath = json["pdfAttachment"]["storageUrl"].string,
@@ -107,9 +123,6 @@ struct AnthropicHistoryBuilder {
                 }
 
                 messages.append(AnthropicMessage(role: "user", content: .blocks(contentBlocks)))
-
-            default:
-                break
             }
         }
 
@@ -132,6 +145,45 @@ struct AnthropicHistoryBuilder {
         AnthropicMessageValidator.logMessageDump(messages, label: "Anthropic History")
 
         return messages
+    }
+
+    // MARK: - Chatbox Attachment Replay
+
+    /// Build the content block for a recorded chatbox attachment.
+    /// Shared by the replay path (above) and the request builder's defensive
+    /// fallback path so send and replay always produce identical block shapes.
+    func attachmentBlock(for attachment: ConversationLog.WireAttachment) -> AnthropicContentBlock {
+        if attachment.mediaType == "application/pdf" {
+            let source = AnthropicDocumentSource(mediaType: attachment.mediaType, data: attachment.base64Data)
+            return .document(AnthropicDocumentBlock(source: source))
+        }
+        let source = AnthropicImageSource(mediaType: attachment.mediaType, data: attachment.base64Data)
+        return .image(AnthropicImageBlock(source: source))
+    }
+
+    // MARK: - Deterministic Tool Input
+
+    /// Parse a recorded tool_use arguments string into the input dictionary,
+    /// deterministically.
+    ///
+    /// PROMPT-CACHE INVARIANT: identical recorded arguments must yield identical
+    /// wire bytes on every rebuild. The recorded string never changes for a turn;
+    /// we additionally round-trip through JSONSerialization with .sortedKeys so
+    /// the dictionary is always constructed from the same canonical bytes in the
+    /// same insertion order, making the encoded key order stable across rebuilds
+    /// within a process. (Cross-process order may differ with Swift's per-process
+    /// hash seed, but the wire side tables — and the 5-minute prompt cache — never
+    /// survive a restart, so only within-process stability matters.)
+    static func deterministicToolInput(fromArgumentsJSON argumentsJSON: String) -> [String: Any] {
+        guard let argsData = argumentsJSON.data(using: .utf8),
+              let parsed = try? JSONSerialization.jsonObject(with: argsData) as? [String: Any] else {
+            return [:]
+        }
+        guard let canonicalData = try? JSONSerialization.data(withJSONObject: parsed, options: [.sortedKeys]),
+              let canonical = try? JSONSerialization.jsonObject(with: canonicalData) as? [String: Any] else {
+            return parsed
+        }
+        return canonical
     }
 
     // MARK: - Message Merging

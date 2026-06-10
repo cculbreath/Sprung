@@ -3,7 +3,7 @@
 //  Sprung
 //
 //  Unified protocol for artifact ingestion from any source.
-//  Document extraction (Gemini) and Git analysis (async agent) share this interface.
+//  Document analysis (Anthropic) and Git analysis (async agent) share this interface.
 //
 import Foundation
 import SwiftyJSON

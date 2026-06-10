@@ -4,7 +4,9 @@
 //
 //  Manages the LLM-visible todo list for tracking interview progress.
 //  The LLM can add, remove, and check off items via the update_todo_list tool.
-//  Current state is injected into the system prompt as <todo-list> tags.
+//  Current state is rendered as <todo-list> tags inside the <interview_context>
+//  block of the latest user message (NOT the system prompt — the system prompt
+//  must stay byte-identical within a phase for prompt caching).
 //
 
 import Foundation
@@ -153,12 +155,13 @@ actor InterviewTodoStore {
         Logger.info("📋 Todo list cleared", category: .ai)
     }
 
-    // MARK: - Rendering for System Prompt
+    // MARK: - Rendering for Interview Context
 
-    /// Render the current todo list as XML for injection into system prompt.
+    /// Render the current todo list as XML for injection into the
+    /// <interview_context> block of the latest user message.
     /// Returns nil if the list is empty (no need to inject).
     /// Items marked with 📌 are required and cannot be removed (only status can change).
-    func renderForSystemPrompt() -> String? {
+    func renderTodoList() -> String? {
         guard !items.isEmpty else { return nil }
 
         var lines: [String] = ["<todo-list>"]

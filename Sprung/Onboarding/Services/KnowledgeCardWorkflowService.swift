@@ -307,9 +307,9 @@ final class KnowledgeCardWorkflowService {
             return
         }
 
-        // Check if enrichment model is configured before spawning task
-        guard let modelId = UserDefaults.standard.string(forKey: "kcExtractionModelId"), !modelId.isEmpty else {
-            Logger.warning("⚠️ Enrichment skipped - kcExtractionModelId not configured", category: .ai)
+        // Check if the document-analysis model is configured before spawning task
+        guard (try? AnthropicDocumentAnalysisService.configuredModelId(operationName: "Card Enrichment")) != nil else {
+            Logger.warning("⚠️ Enrichment skipped - onboardingDocAnalysisModelId not configured", category: .ai)
             return
         }
 

@@ -35,13 +35,11 @@ final class LLMFacade {
     enum Backend: CaseIterable {
         case openRouter
         case openAI
-        case gemini
         case anthropic
         var displayName: String {
             switch self {
             case .openRouter: return "OpenRouter"
             case .openAI: return "OpenAI"
-            case .gemini: return "Gemini"
             case .anthropic: return "Anthropic"
             }
         }
@@ -108,10 +106,6 @@ final class LLMFacade {
 
     func registerOpenAIService(_ service: OpenAIService) {
         specializedAPIs.registerOpenAIService(service)
-    }
-
-    func registerGoogleAIService(_ service: GoogleAIService) {
-        specializedAPIs.registerGoogleAIService(service)
     }
 
     func registerAnthropicService(_ service: AnthropicService) {
@@ -271,7 +265,7 @@ final class LLMFacade {
                 schema: schema
             )
 
-        case .openRouter, .openAI, .gemini:
+        case .openRouter, .openAI:
             let jsonSchema = try JSONSchema.from(dictionary: schema)
             result = try await executeStructuredWithSchema(
                 prompt: prompt,
@@ -690,6 +684,23 @@ final class LLMFacade {
         try await specializedAPIs.anthropicListModels()
     }
 
+    /// Upload a file to the Anthropic Files API for use in document blocks
+    /// (`{"type": "document", "source": {"type": "file", "file_id": ...}}`).
+    func anthropicUploadFile(data: Data, filename: String, mimeType: String) async throws -> AnthropicFileMetadata {
+        try await specializedAPIs.anthropicUploadFile(data: data, filename: filename, mimeType: mimeType)
+    }
+
+    /// Delete a file from the Anthropic Files API.
+    func anthropicDeleteFile(id: String) async throws -> AnthropicFileDeletedResponse {
+        try await specializedAPIs.anthropicDeleteFile(id: id)
+    }
+
+    /// Count tokens for a prospective Anthropic Messages API request.
+    /// Counted requests carry the same beta headers as the request that will be sent.
+    func anthropicCountTokens(parameters: AnthropicTokenCountParameter) async throws -> AnthropicTokenCountResponse {
+        try await specializedAPIs.anthropicCountTokens(parameters: parameters)
+    }
+
     /// Execute a text prompt via direct Anthropic API with prompt caching.
     /// The system content blocks can include cache_control for server-side caching.
     /// - Parameters:
@@ -748,67 +759,30 @@ final class LLMFacade {
         return result
     }
 
-    // MARK: - Gemini Document Extraction (Specialized)
-
-    func generateFromPDF(
-        pdfData: Data,
-        filename: String,
-        prompt: String,
-        modelId: String? = nil,
-        maxOutputTokens: Int = 65536
-    ) async throws -> (text: String, tokenUsage: GoogleAIService.GeminiTokenUsage?) {
+    /// Execute a structured JSON request whose user content is arbitrary Anthropic content blocks.
+    /// Supports document blocks (Files API or base64) with cache control so multiple analysis
+    /// passes can share one cached document prefix.
+    func executeStructuredWithAnthropicBlocks<T: Codable>(
+        systemContent: [AnthropicSystemBlock],
+        userBlocks: [AnthropicContentBlock],
+        modelId: String,
+        responseType: T.Type,
+        schema: [String: Any],
+        maxTokens: Int = 8192
+    ) async throws -> T {
         let start = ContinuousClock.now
-        let result = try await specializedAPIs.generateFromPDF(
-            pdfData: pdfData,
-            filename: filename,
-            prompt: prompt,
+        let result = try await specializedAPIs.executeStructuredWithAnthropicBlocks(
+            systemContent: systemContent,
+            userBlocks: userBlocks,
             modelId: modelId,
-            maxOutputTokens: maxOutputTokens
+            responseType: responseType,
+            schema: schema,
+            maxTokens: maxTokens
         )
-        LLMTranscriptLogger.logGeminiCall(
-            method: "generateFromPDF", modelId: modelId ?? "(default)",
-            prompt: prompt, attachmentInfo: "PDF: \(filename) (\(pdfData.count) bytes)",
-            response: result.text, durationMs: elapsedMs(from: start)
-        )
-        return result
-    }
-
-    func analyzeImagesWithGemini(
-        images: [Data],
-        prompt: String,
-        modelId: String? = nil
-    ) async throws -> String {
-        let start = ContinuousClock.now
-        let result = try await specializedAPIs.analyzeImagesWithGemini(
-            images: images,
-            prompt: prompt,
-            modelId: modelId
-        )
-        LLMTranscriptLogger.logGeminiCall(
-            method: "analyzeImagesWithGemini", modelId: modelId ?? "(default)",
-            prompt: prompt, attachmentInfo: "\(images.count) images",
-            response: result, durationMs: elapsedMs(from: start)
-        )
-        return result
-    }
-
-    func analyzeImagesWithGeminiStructured(
-        images: [Data],
-        prompt: String,
-        jsonSchema: [String: Any],
-        modelId: String? = nil
-    ) async throws -> String {
-        let start = ContinuousClock.now
-        let result = try await specializedAPIs.analyzeImagesWithGeminiStructured(
-            images: images,
-            prompt: prompt,
-            jsonSchema: jsonSchema,
-            modelId: modelId
-        )
-        LLMTranscriptLogger.logGeminiCall(
-            method: "analyzeImagesWithGeminiStructured", modelId: modelId ?? "(default)",
-            prompt: prompt, attachmentInfo: "\(images.count) images (structured)",
-            response: result, durationMs: elapsedMs(from: start)
+        LLMTranscriptLogger.logAnthropicCall(
+            method: "executeStructuredWithAnthropicBlocks", modelId: modelId,
+            systemBlockCount: systemContent.count, userPrompt: "[\(userBlocks.count) content blocks]",
+            response: String(describing: result), durationMs: elapsedMs(from: start)
         )
         return result
     }

@@ -82,6 +82,13 @@ enum CardMergeAgentPrompts {
         6. If cards contain negative content (performance criticisms, failure
            admissions, negative feedback), prefer the version that frames the
            experience positively — or drop the negative framing entirely
+        7. Preserve process and reasoning content: the WHY (motivation, problem
+           framing) and HOW (methodology, decisions, pivots) must survive the
+           merge intact — they are the substance, not filler to trim
+        8. Do NOT normalize prose toward resume-formula phrasing when
+           synthesizing ("[verbed] [system] achieving [outcome]", "leveraging X
+           to deliver Y") — keep the author's natural register and sentence
+           variety from the source narratives
 
         ## CARD JSON FORMAT
 

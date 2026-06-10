@@ -7,7 +7,7 @@ Extract knowledge cards that capture the STORY, not just facts.
 - Filename: {FILENAME}
 
 ## Content
-{EXTRACTED_CONTENT}
+The full document content is provided in the preceding attachment.
 
 ---
 
@@ -42,6 +42,23 @@ Write 500-2000 words per card capturing:
 **ALSO BAD** (ATS keyword dump):
 > "Designed precision mechanical system. Achieved ±60nm stability. Used SolidWorks and CNC machining."
 
+### Anti-Slop Rules
+
+The bad examples above fail because they strip out the thinking. Hard rules:
+- If a sentence could appear unchanged in any LinkedIn profile in the field, it is too generic — rewrite with the specifics that make it this person's work
+- Ban resume-formula constructions: "leveraging X to deliver Y", "spearheaded", "results-driven", "[verbed] [system] achieving [outcome]"
+- Never compress reasoning into a bare outcome claim; the WHY behind a decision is the content, not filler
+- Keep numbers only where the source gives them meaning; do not decorate sentences with metrics
+
+### Research & R&D Material
+
+When the document is research- or R&D-flavored (papers, dissertations, lab reports,
+experimental work, instrument building), lead the narrative with WHY the problem
+mattered and HOW the author navigated it. The intellectual contribution, the process
+maturity, and the judgment shown are the story — do not compress research work into
+business-outcome claims. Match the register of the source material: research should
+read as research.
+
 ## Extractable Metadata
 
 For job matching, extract:
@@ -53,8 +70,10 @@ Note: Individual skills go in Skill Bank, not here.
 
 ## Evidence Anchors
 
-- Page numbers or section references
+{LOCATION_GUIDANCE}
 - 1-2 verbatim excerpts capturing voice (20-50 words each)
+- Favor passages that show the author's reasoning and voice — why a decision was made,
+  how a problem was framed — not just achievement statements
 
 ## Content Selection: Applicant Advocacy
 

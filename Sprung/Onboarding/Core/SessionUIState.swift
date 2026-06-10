@@ -7,6 +7,11 @@ import SwiftyJSON
 enum ToolAvailability {
     case available
     case blocked(reason: String)
+    /// Tool is in the current phase's schema but its subphase conditions aren't met yet.
+    /// The dispatcher returns a structured {"error":"tool_not_available","reason":...}
+    /// tool result so the model can self-correct (the schema itself never changes
+    /// mid-phase — that would invalidate the prompt cache).
+    case notAvailableYet(reason: String)
 }
 
 /// Centralized tool gating logic (pure function - no side effects)

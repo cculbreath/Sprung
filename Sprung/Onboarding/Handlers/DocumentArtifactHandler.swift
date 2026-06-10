@@ -290,6 +290,12 @@ actor DocumentArtifactHandler: OnboardingEventEmitter {
             let userMessage: String
             if let extractionError = error as? DocumentExtractionService.ExtractionError {
                 userMessage = extractionError.userFacingMessage
+            } else if error is ModelConfigurationError {
+                // Repo standard: missing model config surfaces the settings picker.
+                userMessage = "Document analysis model not configured. Choose one in Settings → Models, then re-upload \(filename)."
+                await MainActor.run {
+                    NotificationCenter.default.post(name: .showSettings, object: nil)
+                }
             } else {
                 userMessage = "Failed to extract \(filename)"
             }
@@ -343,7 +349,11 @@ actor DocumentArtifactHandler: OnboardingEventEmitter {
     /// Used for resume uploads to allow the LLM to read the document natively
     /// without skills extraction or knowledge card generation.
     ///
-    /// The PDF is sent as a user message with PDF data attachment.
+    /// The PDF rides on the pdfAttachment.storageUrl marker in the ui-action-result:
+    /// AnthropicHistoryBuilder re-includes the document block from disk on the send
+    /// path and on every replay via the same code path (byte-stable, survives
+    /// session restore). Do NOT also attach payload["pdfData"] — that would record
+    /// a wire attachment and the document would be sent twice per request.
     private func sendPDFDirectlyToLLM(
         file: ProcessedUploadInfo,
         requestKind: String,
@@ -354,13 +364,11 @@ actor DocumentArtifactHandler: OnboardingEventEmitter {
 
         Logger.info("📄 Sending resume PDF directly to LLM: \(filename)", category: .ai)
 
-        // Read PDF file as base64
         guard let pdfData = try? Data(contentsOf: file.storageURL) else {
             Logger.error("❌ Failed to read PDF file: \(filename)", category: .ai)
             return
         }
 
-        let pdfBase64 = pdfData.base64EncodedString()
         let sizeKB = pdfData.count / 1024
 
         // Build UI action result with PDF attachment info
@@ -375,14 +383,11 @@ actor DocumentArtifactHandler: OnboardingEventEmitter {
 
         let resultString = result.rawString() ?? "{}"
 
-        // Build user message with ui-action-result tags and PDF data
+        // Build user message with ui-action-result tags; the pdfAttachment marker
+        // above is what delivers the document (see doc comment).
         let taggedMessage = "<ui-action-result tool=\"\(OnboardingToolName.getUserUpload.rawValue)\">\n\(resultString)\n</ui-action-result>"
         var payload = JSON()
         payload["text"].string = taggedMessage
-        // Include PDF data for LLM to see the document
-        payload["pdfData"].string = pdfBase64
-        payload["pdfFilename"].string = filename
-        payload["pdfSizeKb"].int = sizeKB
 
         await emit(.llm(.sendUserMessage(payload: payload, isSystemGenerated: true)))
         Logger.info("✅ Resume PDF sent as ui-action-result: \(filename) (\(sizeKB) KB)", category: .ai)

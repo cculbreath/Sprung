@@ -167,6 +167,7 @@ final class DataResetService {
     private func resetAPIKeys() {
         APIKeyManager.delete(.openRouter)
         APIKeyManager.delete(.openAI)
+        APIKeyManager.delete(.anthropic)
         APIKeyManager.delete(.gemini)
         Logger.debug("✅ API keys cleared from Keychain", category: .appLifecycle)
     }
@@ -178,8 +179,8 @@ final class DataResetService {
         defaults.removeObject(forKey: "hasCompletedSetupWizard")
 
         // Reset onboarding interview settings
-        defaults.removeObject(forKey: "onboardingInterviewDefaultModelId")
-        defaults.removeObject(forKey: "onboardingPDFExtractionModelId")
+        defaults.removeObject(forKey: "onboardingAnthropicModelId")
+        defaults.removeObject(forKey: "onboardingDocAnalysisModelId")
         defaults.removeObject(forKey: "onboardingGitIngestModelId")
         defaults.removeObject(forKey: "onboardingInterviewAllowWebSearchDefault")
         defaults.removeObject(forKey: "onboardingInterviewReasoningEffort")

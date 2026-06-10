@@ -3,23 +3,19 @@
 //  Sprung
 //
 //  Service for extracting comprehensive skill inventories from documents.
-//  Uses OpenRouter structured output for guaranteed valid JSON.
+//  Uses Anthropic structured output (output_config schema) against a cached
+//  source block — either the actual PDF (Files API document block) or text.
 //
 
 import Foundation
+import SwiftOpenAI
 
 /// Service for generating per-document skill inventories
 actor SkillBankService {
     private var llmFacade: LLMFacade?
 
     private func getModelId() throws -> String {
-        guard let modelId = UserDefaults.standard.string(forKey: "skillBankModelId"), !modelId.isEmpty else {
-            throw ModelConfigurationError.modelNotConfigured(
-                settingKey: "skillBankModelId",
-                operationName: "Skill Bank Extraction"
-            )
-        }
-        return modelId
+        try AnthropicDocumentAnalysisService.configuredModelId(operationName: "Skill Bank Extraction")
     }
 
     init(llmFacade: LLMFacade?) {
@@ -31,83 +27,35 @@ actor SkillBankService {
         self.llmFacade = facade
     }
 
-    /// Maximum characters per chunk for skill extraction
-    private let maxChunkSize = 100_000
-
-    /// Extract skills from a single document
+    /// Extract skills from raw document text.
+    /// Text documents are capped at 200K characters upstream and go in one pass.
     func extractSkills(
         documentId: String,
         filename: String,
         content: String
     ) async throws -> [Skill] {
+        try await extractSkills(
+            documentId: documentId,
+            filename: filename,
+            source: .text(AnthropicDocumentAnalysisService.sourceTextBlock(filename: filename, text: content))
+        )
+    }
+
+    /// Extract skills from an analysis source (uploaded PDF or text block).
+    func extractSkills(
+        documentId: String,
+        filename: String,
+        source: DocumentAnalysisSource
+    ) async throws -> [Skill] {
         guard let facade = llmFacade else {
             throw SkillBankError.llmNotConfigured
         }
 
-        // For large documents, chunk and merge
-        if content.count > maxChunkSize {
-            return try await extractSkillsFromLargeDocument(
-                documentId: documentId,
-                filename: filename,
-                content: content,
-                facade: facade
-            )
-        }
-
-        return try await extractSkillsSingleChunk(
-            documentId: documentId,
-            filename: filename,
-            content: content,
-            facade: facade
-        )
-    }
-
-    /// Extract skills from a large document by chunking
-    private func extractSkillsFromLargeDocument(
-        documentId: String,
-        filename: String,
-        content: String,
-        facade: LLMFacade
-    ) async throws -> [Skill] {
-        let chunks = chunkContent(content, maxSize: maxChunkSize)
-        Logger.info("🔧 Large document (\(content.count) chars) split into \(chunks.count) chunks", category: .ai)
-
-        var allSkills: [Skill] = []
-
-        for (index, chunk) in chunks.enumerated() {
-            do {
-                let chunkSkills = try await extractSkillsSingleChunk(
-                    documentId: documentId,
-                    filename: "\(filename) (part \(index + 1))",
-                    content: chunk,
-                    facade: facade
-                )
-                allSkills.append(contentsOf: chunkSkills)
-                Logger.info("🔧 Chunk \(index + 1)/\(chunks.count): \(chunkSkills.count) skills", category: .ai)
-            } catch {
-                Logger.warning("🔧 Chunk \(index + 1) failed: \(error.localizedDescription)", category: .ai)
-                // Continue with other chunks
-            }
-        }
-
-        // Deduplicate skills across chunks
-        let merged = deduplicateSkills(allSkills)
-        Logger.info("🔧 Merged skills: \(merged.count) total from \(chunks.count) chunks", category: .ai)
-        return merged
-    }
-
-    /// Extract skills from a single chunk
-    private func extractSkillsSingleChunk(
-        documentId: String,
-        filename: String,
-        content: String,
-        facade: LLMFacade
-    ) async throws -> [Skill] {
         let modelId = try getModelId()
-        let prompt = SkillBankPrompts.extractionPrompt(
+        let instructions = SkillBankPrompts.extractionPrompt(
             documentId: documentId,
             filename: filename,
-            content: content
+            isPagedSource: source.isPaged
         )
 
         let maxAttempts = 3
@@ -116,17 +64,18 @@ actor SkillBankService {
             Logger.info("🔧 Extracting skills from: \(filename) (attempt \(attempt)/\(maxAttempts))", category: .ai)
 
             do {
-                let response: SkillExtractionResponse = try await facade.executeStructuredWithDictionarySchema(
-                    prompt: prompt,
+                let response: SkillExtractionResponse = try await facade.executeStructuredWithAnthropicBlocks(
+                    systemContent: DocumentAnalysisPrompts.systemBlocks,
+                    userBlocks: DocumentAnalysisPrompts.userBlocks(source: source, instructions: instructions),
                     modelId: modelId,
-                    as: SkillExtractionResponse.self,
+                    responseType: SkillExtractionResponse.self,
                     schema: SkillBankPrompts.jsonSchema,
-                    schemaName: "skill_extraction",
-                    maxOutputTokens: 65536,
-                    backend: .openRouter
+                    maxTokens: 32768
                 )
                 Logger.info("🔧 Extracted \(response.skills.count) skills", category: .ai)
                 return response.skills
+            } catch let error as ModelConfigurationError {
+                throw error
             } catch {
                 Logger.warning("🔧 Error on attempt \(attempt): \(error.localizedDescription)", category: .ai)
                 if attempt < maxAttempts { continue }
@@ -135,29 +84,6 @@ actor SkillBankService {
         }
 
         throw SkillBankError.invalidResponse
-    }
-
-    /// Split content into chunks at paragraph boundaries
-    private func chunkContent(_ content: String, maxSize: Int) -> [String] {
-        var chunks: [String] = []
-        var currentChunk = ""
-
-        let paragraphs = content.components(separatedBy: "\n\n")
-        for paragraph in paragraphs {
-            if currentChunk.count + paragraph.count + 2 > maxSize && !currentChunk.isEmpty {
-                chunks.append(currentChunk)
-                currentChunk = paragraph
-            } else {
-                if !currentChunk.isEmpty {
-                    currentChunk += "\n\n"
-                }
-                currentChunk += paragraph
-            }
-        }
-        if !currentChunk.isEmpty {
-            chunks.append(currentChunk)
-        }
-        return chunks
     }
 
     /// Deduplicate skills by canonical name

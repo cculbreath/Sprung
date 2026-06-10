@@ -30,7 +30,7 @@ class StandaloneKCExtractor {
     init(llmFacade: LLMFacade?, artifactRecordStore: ArtifactRecordStore?) {
         self.llmFacade = llmFacade
         self.artifactRecordStore = artifactRecordStore
-        self.extractionService = DocumentExtractionService(llmFacade: llmFacade, eventBus: nil)
+        self.extractionService = DocumentExtractionService()
     }
 
     // MARK: - Public API
@@ -164,29 +164,41 @@ class StandaloneKCExtractor {
             artifactJSON["metadata"]["title"].string = title
         }
 
-        // Generate LLM-powered summary (fall back to local if unavailable)
+        // Generate LLM-powered summary (fall back to local if unavailable).
+        // PDFs are summarized from the actual PDF via the Anthropic document path.
         var summaryText: String
         var briefDescription: String
         if let facade = llmFacade {
             do {
-                guard let modelId = UserDefaults.standard.string(forKey: "onboardingDocSummaryModelId"), !modelId.isEmpty else {
-                    throw ModelConfigurationError.modelNotConfigured(
-                        settingKey: "onboardingDocSummaryModelId",
-                        operationName: "Document Summary Generation"
+                let analysisService = AnthropicDocumentAnalysisService(
+                    llmFacade: facade,
+                    skillBankService: SkillBankService(llmFacade: facade),
+                    kcExtractionService: KnowledgeCardExtractionService(llmFacade: facade)
+                )
+                let analysis: AnthropicDocumentAnalysisService.AnalysisResult
+                if url.pathExtension.lowercased() == "pdf", let pdfData = try? Data(contentsOf: url) {
+                    analysis = try await analysisService.analyzePDF(
+                        documentId: artifact.id,
+                        filename: artifact.filename,
+                        pdfData: pdfData,
+                        passes: .summaryOnly
+                    )
+                } else {
+                    analysis = try await analysisService.analyzeText(
+                        documentId: artifact.id,
+                        filename: artifact.filename,
+                        text: artifact.extractedContent,
+                        passes: .summaryOnly
                     )
                 }
-                let docSummary: DocumentSummary = try await facade.executeStructuredWithDictionarySchema(
-                    prompt: DocumentExtractionPrompts.summaryPrompt(filename: artifact.filename, content: artifact.extractedContent),
-                    modelId: modelId,
-                    as: DocumentSummary.self,
-                    schema: DocumentExtractionPrompts.summaryJsonSchema,
-                    schemaName: "document_summary",
-                    maxOutputTokens: 65536,
-                    backend: .openRouter
-                )
-                summaryText = docSummary.summary
-                briefDescription = docSummary.briefDescription
-                Logger.info("StandaloneKCExtractor: LLM summary generated for \(artifact.filename)", category: .ai)
+                if let docSummary = analysis.summary {
+                    summaryText = docSummary.summary
+                    briefDescription = docSummary.briefDescription
+                    Logger.info("StandaloneKCExtractor: LLM summary generated for \(artifact.filename)", category: .ai)
+                } else {
+                    summaryText = generateLocalSummary(from: artifact.extractedContent, filename: artifact.filename)
+                    briefDescription = String(artifact.extractedContent.prefix(200))
+                }
             } catch {
                 Logger.warning("StandaloneKCExtractor: LLM summary failed, using local: \(error.localizedDescription)", category: .ai)
                 summaryText = generateLocalSummary(from: artifact.extractedContent, filename: artifact.filename)
@@ -232,10 +244,16 @@ class StandaloneKCExtractor {
 
         Logger.info("StandaloneKCExtractor: Running GitAnalysisAgent on \(repoName) with model \(modelId)", category: .ai)
 
+        // Gather deterministic longitudinal evidence (cheap git commands, no LLM)
+        // for the agent's initial <git_evidence> context block
+        let gitData = try await GitEvidenceCollector.gather(repoPath: url.path)
+        let gitEvidence = GitEvidenceCollector.render(gitData)
+
         // Run the full GitAnalysisAgent with turn progress reporting
         let agent = GitAnalysisAgent(
             repoPath: url,
             modelId: modelId,
+            gitEvidence: gitEvidence,
             facade: facade
         )
         agent.onTurnUpdate = { @Sendable turn, maxTurns, action in

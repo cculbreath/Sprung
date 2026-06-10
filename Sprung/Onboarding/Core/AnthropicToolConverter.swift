@@ -21,45 +21,37 @@ struct AnthropicToolConverter {
 
     // MARK: - Tool Retrieval
 
-    /// Get Anthropic tools based on current state and subphase
+    /// Get the Anthropic tool set for the current PHASE.
+    ///
+    /// PROMPT-CACHE INVARIANT: the tool list must be byte-identical on every
+    /// request within a phase (tools render at position 0 of the prompt; any
+    /// add/remove/reorder invalidates the entire cache). We therefore send the
+    /// union of all subphase bundles for the current phase, sorted by tool name.
+    /// Subphase gating is enforced app-side at dispatch time
+    /// (StateCoordinator.checkToolAvailability), where an out-of-subphase call
+    /// returns a structured "tool_not_available" result instead of executing.
     func getAnthropicTools() async -> [AnthropicTool] {
-        // Get current state for subphase inference
         let phase = await stateCoordinator.phase
-        let toolPaneCard = await stateCoordinator.getCurrentToolPaneCard()
-        let objectives = await stateCoordinator.getObjectiveStatusMap()
+        let phaseToolNames = (ToolBundlePolicy.allowedToolsByPhase[phase] ?? []).sorted()
 
-        // Get Phase 4 UI context for title set curation gating
-        let phase4Context = await stateCoordinator.getPhase4UIContext()
-
-        // Infer current subphase from objectives + UI state
-        let subphase = ToolBundlePolicy.inferSubphase(
-            phase: phase,
-            toolPaneCard: toolPaneCard,
-            objectives: objectives,
-            phase4Context: phase4Context
-        )
-
-        // Select tools based on subphase
-        let bundledNames = ToolBundlePolicy.selectBundleForSubphase(subphase)
-
-        if bundledNames.isEmpty {
-            Logger.debug("🔧 Anthropic tool bundling: subphase=\(subphase.rawValue), sending 0 tools", category: .ai)
-            return []
+        var anthropicTools: [AnthropicTool] = []
+        for name in phaseToolNames {
+            guard let tool = toolRegistry.tool(named: name) else { continue }
+            let funcTool = Tool.FunctionTool(
+                name: tool.name,
+                parameters: tool.parameters,
+                strict: tool.isStrict,
+                description: tool.description
+            )
+            anthropicTools.append(convertToAnthropicTool(funcTool))
         }
 
-        // Get tool schemas and convert to Anthropic format
-        let openAITools = await toolRegistry.toolSchemas(filteredBy: bundledNames)
-        var anthropicTools: [AnthropicTool] = openAITools.compactMap { tool -> AnthropicTool? in
-            guard case .function(let funcTool) = tool else { return nil }
-            return convertToAnthropicTool(funcTool)
-        }
-
-        // Add server-side tools
+        // Add server-side tools (fixed order, after sorted function tools)
         anthropicTools.append(.serverTool(.webSearch()))
         anthropicTools.append(.serverTool(.webFetch()))
 
         Logger.debug(
-            "🔧 Anthropic tool bundling: subphase=\(subphase.rawValue), sending \(anthropicTools.count) tools (incl. web_search, web_fetch)",
+            "🔧 Anthropic tools: phase=\(phase.rawValue), sending \(anthropicTools.count) tools (incl. web_search, web_fetch)",
             category: .ai
         )
 

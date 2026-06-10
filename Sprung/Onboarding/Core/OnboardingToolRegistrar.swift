@@ -30,20 +30,8 @@ final class OnboardingToolRegistrar {
         self.artifactFilesystemContext = artifactFilesystemContext
         self.candidateDossierStore = candidateDossierStore
     }
-    func registerTools(
-        documentExtractionService: DocumentExtractionService,
-        onModelAvailabilityIssue: @escaping (String) -> Void
-    ) {
+    func registerTools() {
         guard let coordinator = coordinator else { return }
-        // Set up extraction progress handler
-        Task {
-            await documentExtractionService.setInvalidModelHandler { [weak self] modelId in
-                Task { @MainActor in
-                    guard self != nil else { return }
-                    onModelAvailabilityIssue("Your selected model (\(modelId)) is not available. Choose another model in Settings.")
-                }
-            }
-        }
         // Register all tools with coordinator reference
         toolRegistry.register(GetUserOptionTool(coordinator: coordinator))
         toolRegistry.register(GetUserUploadTool(coordinator: coordinator))

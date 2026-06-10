@@ -10,7 +10,6 @@ struct APIKeysSettingsView: View {
     @Environment(OpenRouterService.self) private var openRouterService: OpenRouterService
     @State private var openRouterApiKey: String = APIKeyManager.get(.openRouter) ?? ""
     @State private var openAiTTSApiKey: String = APIKeyManager.get(.openAI) ?? ""
-    @State private var geminiApiKey: String = APIKeyManager.get(.gemini) ?? ""
     @State private var anthropicApiKey: String = APIKeyManager.get(.anthropic) ?? ""
     @State private var showModelSelectionSheet = false
     var body: some View {
@@ -28,29 +27,20 @@ struct APIKeysSettingsView: View {
                 onSave: handleOpenRouterSave
             )
             APIKeyEditor(
-                title: "OpenAI (Voice and Onboarding Interview)",
+                title: "OpenAI (Voice)",
                 systemImage: "speaker.wave.2",
                 value: $openAiTTSApiKey,
                 placeholder: "sk-…",
-                help: "Used for text-to-speech previews and onboarding interview conversations.",
+                help: "Used for text-to-speech previews.",
                 testEndpoint: .openAI,
                 onSave: handleOpenAITTSSave
-            )
-            APIKeyEditor(
-                title: "Google Gemini (PDF Extraction)",
-                systemImage: "doc.viewfinder",
-                value: $geminiApiKey,
-                placeholder: "AIza…",
-                help: "Used for native PDF extraction via Google's Files API. Handles large PDFs up to 2GB.",
-                testEndpoint: .gemini,
-                onSave: handleGeminiSave
             )
             APIKeyEditor(
                 title: "Anthropic (Claude)",
                 systemImage: "brain.head.profile",
                 value: $anthropicApiKey,
                 placeholder: "sk-ant-…",
-                help: "Used for onboarding interview when Anthropic provider is selected.",
+                help: "Used for the onboarding interview and all document analysis (summaries, narrative cards, skill bank, enrichment).",
                 testEndpoint: .anthropic,
                 onSave: handleAnthropicSave
             )
@@ -114,17 +104,6 @@ struct APIKeysSettingsView: View {
         }
         NotificationCenter.default.post(name: .apiKeysChanged, object: nil)
     }
-    private func handleGeminiSave(_ newValue: String) {
-        let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.isEmpty {
-            APIKeyManager.delete(.gemini)
-            geminiApiKey = ""
-        } else {
-            _ = APIKeyManager.set(.gemini, value: trimmed)
-            geminiApiKey = trimmed
-        }
-        NotificationCenter.default.post(name: .apiKeysChanged, object: nil)
-    }
     private func handleAnthropicSave(_ newValue: String) {
         let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty {
@@ -139,7 +118,6 @@ struct APIKeysSettingsView: View {
     private func refreshKeys() {
         openRouterApiKey = APIKeyManager.get(.openRouter) ?? ""
         openAiTTSApiKey = APIKeyManager.get(.openAI) ?? ""
-        geminiApiKey = APIKeyManager.get(.gemini) ?? ""
         anthropicApiKey = APIKeyManager.get(.anthropic) ?? ""
     }
 }
@@ -148,7 +126,6 @@ struct APIKeysSettingsView: View {
 enum APITestEndpoint {
     case openRouter
     case openAI
-    case gemini
     case anthropic
 
     var testURL: URL {
@@ -157,8 +134,6 @@ enum APITestEndpoint {
             return URL(string: "https://openrouter.ai/api/v1/models")!
         case .openAI:
             return URL(string: "https://api.openai.com/v1/models")!
-        case .gemini:
-            return URL(string: "https://generativelanguage.googleapis.com/v1beta/models")!
         case .anthropic:
             return URL(string: "https://api.anthropic.com/v1/models")!
         }
@@ -173,11 +148,6 @@ enum APITestEndpoint {
             request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         case .openAI:
             request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-        case .gemini:
-            // Gemini uses query parameter for API key
-            var components = URLComponents(url: testURL, resolvingAgainstBaseURL: false)!
-            components.queryItems = [URLQueryItem(name: "key", value: apiKey)]
-            request.url = components.url
         case .anthropic:
             // Anthropic uses x-api-key header
             request.setValue(apiKey, forHTTPHeaderField: "x-api-key")

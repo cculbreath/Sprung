@@ -179,12 +179,7 @@ final class OnboardingInterviewCoordinator {
             reasoningStreamManager: reasoningStreamManager
         )
         // Complete late initialization (components requiring self reference)
-        container.completeInitialization(
-            coordinator: self,
-            onModelAvailabilityIssue: { [weak self] message in
-                self?.ui.modelAvailabilityMessage = message
-            }
-        )
+        container.completeInitialization(coordinator: self)
         // Configure lifecycle controller with state update subscriber
         container.lifecycleController.setStateUpdateSubscriber { [weak self] in
             self?.subscribeToStateUpdates()

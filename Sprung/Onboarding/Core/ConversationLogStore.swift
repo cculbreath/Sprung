@@ -23,7 +23,8 @@ enum ConversationLogEntryType: String {
 struct EntryTokenUsage {
     let input: Int
     let output: Int
-    let cached: Int
+    let cacheRead: Int
+    let cacheCreation: Int
 }
 
 /// A single entry in the conversation log
@@ -55,8 +56,11 @@ struct ConversationLogEntry: Identifiable {
         var tokenString = ""
         if let usage = tokenUsage {
             tokenString = " | tokens: in=\(usage.input), out=\(usage.output)"
-            if usage.cached > 0 {
-                tokenString += ", cached=\(usage.cached)"
+            if usage.cacheRead > 0 {
+                tokenString += ", cacheRead=\(usage.cacheRead)"
+            }
+            if usage.cacheCreation > 0 {
+                tokenString += ", cacheCreate=\(usage.cacheCreation)"
             }
         }
         if let total = runningTotal {
@@ -150,7 +154,7 @@ final class ConversationLogStore {
             }
 
         // Token usage events (correlate with recent assistant messages)
-        case .llm(.tokenUsageReceived(_, let inputTokens, let outputTokens, let cachedTokens, _, let source)):
+        case .llm(.tokenUsageReceived(_, let inputTokens, let outputTokens, let cacheReadTokens, let cacheCreationTokens, _, let source)):
             // Only track main coordinator tokens for conversation correlation
             guard source == .mainCoordinator else { break }
 
@@ -161,7 +165,8 @@ final class ConversationLogStore {
             let tokenUsage = EntryTokenUsage(
                 input: inputTokens,
                 output: outputTokens,
-                cached: cachedTokens
+                cacheRead: cacheReadTokens,
+                cacheCreation: cacheCreationTokens
             )
 
             // Correlate with recent assistant message

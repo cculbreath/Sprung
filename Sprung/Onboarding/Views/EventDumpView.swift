@@ -410,10 +410,15 @@ struct EventDumpView: View {
             Text("Out:")
                 .foregroundStyle(.tertiary)
             Text(TokenUsageTracker.formatTokenCount(tokens.output))
-            if tokens.cached > 0 {
-                Text("Cache:")
+            if tokens.cacheRead > 0 {
+                Text("CacheRead:")
                     .foregroundStyle(.tertiary)
-                Text(TokenUsageTracker.formatTokenCount(tokens.cached))
+                Text(TokenUsageTracker.formatTokenCount(tokens.cacheRead))
+            }
+            if tokens.cacheCreation > 0 {
+                Text("CacheCreate:")
+                    .foregroundStyle(.tertiary)
+                Text(TokenUsageTracker.formatTokenCount(tokens.cacheCreation))
             }
         }
         .font(.caption2.monospacedDigit())
@@ -639,8 +644,11 @@ struct EventDumpView: View {
             lines.append("  Total Tokens:    \(TokenUsageTracker.formatTokenCount(stats.totalTokens))")
             lines.append("  Input Tokens:    \(TokenUsageTracker.formatTokenCount(stats.inputTokens))")
             lines.append("  Output Tokens:   \(TokenUsageTracker.formatTokenCount(stats.outputTokens))")
-            if stats.cachedTokens > 0 {
-                lines.append("  Cached Tokens:   \(TokenUsageTracker.formatTokenCount(stats.cachedTokens)) (\(TokenUsageTracker.formatPercentage(stats.cacheHitRate)) hit rate)")
+            if stats.cacheReadTokens > 0 {
+                lines.append("  Cache Reads:     \(TokenUsageTracker.formatTokenCount(stats.cacheReadTokens)) (\(TokenUsageTracker.formatPercentage(stats.cacheHitRate)) hit rate)")
+            }
+            if stats.cacheCreationTokens > 0 {
+                lines.append("  Cache Writes:    \(TokenUsageTracker.formatTokenCount(stats.cacheCreationTokens))")
             }
             if stats.reasoningTokens > 0 {
                 lines.append("  Reasoning:       \(TokenUsageTracker.formatTokenCount(stats.reasoningTokens))")

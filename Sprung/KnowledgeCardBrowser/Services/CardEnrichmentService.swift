@@ -3,10 +3,12 @@
 //  Sprung
 //
 //  Enriches KnowledgeCards with structured fact extraction.
-//  Fact extraction uses OpenRouter structured output.
+//  Fact extraction uses Anthropic structured output against a cached source
+//  block — either the actual PDF (Files API document block) or text.
 //
 
 import Foundation
+import SwiftOpenAI
 
 /// Service that enriches knowledge cards with structured facts.
 actor CardEnrichmentService {
@@ -18,7 +20,7 @@ actor CardEnrichmentService {
 
     // MARK: - Public API
 
-    /// Enrich a single card with structured fact extraction.
+    /// Enrich a single card with structured fact extraction from source text.
     /// - Parameters:
     ///   - card: The card to enrich (must have narrative content)
     ///   - sourceText: Source document text for evidence extraction
@@ -26,24 +28,38 @@ actor CardEnrichmentService {
         _ card: KnowledgeCard,
         sourceText: String
     ) async throws {
-        try await extractFacts(for: card, sourceText: sourceText)
+        try await enrichCard(
+            card,
+            source: .text(AnthropicDocumentAnalysisService.sourceTextBlock(
+                filename: card.title,
+                text: String(sourceText.prefix(150_000))
+            ))
+        )
+    }
+
+    /// Enrich a single card with structured fact extraction from an analysis source
+    /// (uploaded PDF or text block).
+    func enrichCard(
+        _ card: KnowledgeCard,
+        source: DocumentAnalysisSource
+    ) async throws {
+        try await extractFacts(for: card, source: source)
     }
 
     // MARK: - Fact Extraction
 
-    private func extractFacts(for card: KnowledgeCard, sourceText: String) async throws {
-        let modelId = try getModelId(key: "kcExtractionModelId", operation: "Fact Extraction")
+    private func extractFacts(for card: KnowledgeCard, source: DocumentAnalysisSource) async throws {
+        let modelId = try AnthropicDocumentAnalysisService.configuredModelId(operationName: "Fact Extraction")
 
-        let prompt = buildFactExtractionPrompt(card: card, sourceText: sourceText)
+        let instructions = buildFactExtractionPrompt(card: card, isPagedSource: source.isPaged)
 
-        let result: FactExtractionResult = try await llmFacade.executeStructuredWithDictionarySchema(
-            prompt: prompt,
+        let result: FactExtractionResult = try await llmFacade.executeStructuredWithAnthropicBlocks(
+            systemContent: DocumentAnalysisPrompts.systemBlocks,
+            userBlocks: DocumentAnalysisPrompts.userBlocks(source: source, instructions: instructions),
             modelId: modelId,
-            as: FactExtractionResult.self,
+            responseType: FactExtractionResult.self,
             schema: Self.factExtractionSchema,
-            schemaName: "fact_extraction",
-            maxOutputTokens: 32768,
-            backend: .openRouter
+            maxTokens: 32768
         )
 
         // Write results to card fields
@@ -71,22 +87,17 @@ actor CardEnrichmentService {
         Logger.info("CardEnrichmentService: Extracted \(result.facts.count) facts, \(result.suggestedBullets.count) bullets for \(card.title)", category: .ai)
     }
 
-    // MARK: - Helpers
-
-    private func getModelId(key: String, operation: String) throws -> String {
-        guard let modelId = UserDefaults.standard.string(forKey: key), !modelId.isEmpty else {
-            throw ModelConfigurationError.modelNotConfigured(
-                settingKey: key,
-                operationName: operation
-            )
-        }
-        return modelId
-    }
-
     // MARK: - Prompt Building
 
-    private func buildFactExtractionPrompt(card: KnowledgeCard, sourceText: String) -> String {
-        """
+    private func buildFactExtractionPrompt(card: KnowledgeCard, isPagedSource: Bool) -> String {
+        let locationGuidance = isPagedSource
+            ? "`location` MUST be page-anchored — cite the page for every fact (\"p. 14\", \"p. 3, Fig. 2\")"
+            : "`location` (section/paragraph)"
+        let excerptLocationGuidance = isPagedSource
+            ? "Where in the source — MUST cite the page the passage appears on (\"p. 14\")"
+            : "Where in the source"
+
+        return """
         You are a FACT EXTRACTION agent. Extract STRUCTURED FACTS from the source text for the \
         knowledge card described below.
 
@@ -115,6 +126,17 @@ actor CardEnrichmentService {
         | `collaboration` | Team/stakeholder interaction |
         | `recognition` | External validation |
         | `context` | Situation, constraints, environment |
+        | `research_process` | How an investigation was structured, iterated, and validated |
+        | `experimental_design` | Design of experiments, controls, and validity reasoning |
+        | `ambiguity_navigated` | Progress made under unclear requirements or unknowns |
+        | `instrument_built` | Apparatus or measurement capability constructed for the work |
+        | `analysis_method` | Analytical or computational technique applied or developed |
+        | `cross_disciplinary_synthesis` | Methods or insight connected across fields |
+
+        When the source material is research/R&D-flavored, the intellectual contribution, \
+        the process maturity, and the judgment shown ARE the extractable value — prefer the \
+        research-oriented categories above and match the register of the source rather than \
+        distilling to quantitative business metrics.
 
         ## Resume Fitness Filter
 
@@ -136,12 +158,16 @@ actor CardEnrichmentService {
         - `category`: One of the categories above
         - `statement`: The factual observation
         - `confidence`: "high", "medium", or "low"
-        - `source`: Object with `artifact_id` (use "source_doc"), `location` (section/paragraph), \
+        - `source`: Object with `artifact_id` (use "source_doc"), \(locationGuidance), \
         `verbatim_quote` (30-100 chars from source)
 
         ### suggested_bullets[]
-        3-5 resume bullet TEMPLATES with [BRACKETED_PLACEHOLDERS] for customization. \
-        Combine related facts into impact-oriented statements. Adapt style to work type \
+        3-5 draft resume bullets combining related facts. Each should read like a sentence \
+        the author would actually say about their work — concrete and specific. Include a \
+        metric only when the number itself carries information an outsider needs. Never \
+        force an "[verbed] [task] resulting in [number]% improvement" mold; vary sentence \
+        structure across bullets. Use [BRACKETED_PLACEHOLDERS] only for genuinely unknown \
+        specifics, never as a sentence skeleton. Match the register of the source \
         (research vs corporate vs academic).
 
         ### outcomes[]
@@ -153,15 +179,13 @@ actor CardEnrichmentService {
         ### verbatim_excerpts[]
         1-3 passages (100-500 words each) worth preserving verbatim. Each with:
         - `context`: What this excerpt demonstrates
-        - `location`: Where in the source
+        - `location`: \(excerptLocationGuidance)
         - `text`: The verbatim passage
         - `preservation_reason`: Why this matters
 
         ## Source Document
 
-        ---
-        \(sourceText.prefix(150_000))
-        ---
+        The source document is provided at the start of this message.
 
         Extract facts now.
         """
@@ -182,7 +206,9 @@ actor CardEnrichmentService {
                             "type": "string",
                             "enum": ["technical_decision", "problem_solved", "capability_built",
                                      "artifact_produced", "responsibility", "scope_indicator",
-                                     "collaboration", "recognition", "context"],
+                                     "collaboration", "recognition", "context",
+                                     "research_process", "experimental_design", "ambiguity_navigated",
+                                     "instrument_built", "analysis_method", "cross_disciplinary_synthesis"],
                             "description": "Fact category"
                         ],
                         "statement": [
@@ -209,7 +235,7 @@ actor CardEnrichmentService {
             ],
             "suggested_bullets": [
                 "type": "array",
-                "description": "Resume bullet templates with [PLACEHOLDERS]",
+                "description": "Draft resume bullets in the author's natural register; placeholders only for genuinely unknown specifics",
                 "items": ["type": "string"]
             ],
             "outcomes": [

@@ -117,6 +117,11 @@ actor QueueDrainCoordinator {
         // Build payload for sendUserMessage event with <chatbox> wrapper
         var payload = JSON()
         payload["text"].string = "<chatbox>\(text)</chatbox>"
+        // PROMPT-CACHE INVARIANT: `id` is the ConversationLog entry id assigned at
+        // append time (sendChatMessage). Carrying it here lets the request build
+        // key its wire-text write to THIS entry even if another entry lands in the
+        // log before the request is built.
+        payload["entryId"].string = id.uuidString
 
         // Emit processing state change for UI feedback
         await eventBus.publish(.processing(.stateChanged(isProcessing: true, statusMessage: "Processing your message...")))

@@ -1,9 +1,5 @@
-Analyze this document and provide a structured summary for job application context.
+Analyze the document provided in the preceding attachment and provide a structured summary for job application context.
 Document filename: {FILENAME}
-
---- DOCUMENT CONTENT ---
-{CONTENT}
---- END DOCUMENT ---
 
 Output as JSON with this exact structure:
 {
@@ -41,6 +37,7 @@ SUMMARY GUIDELINES:
 - Note leadership scope (team sizes, budget responsibility, geographic span)
 - Identify key technical skills and domain expertise
 - Preserve important quotes or specific phrases that capture accomplishments
+- For research/technical documents: preserve the nature of the contribution (method developed, instrument built, analysis performed, finding established) — do not compress the work to outcomes only
 
 APPLICANT ADVOCACY:
 - This summary gates what enters the knowledge card pipeline

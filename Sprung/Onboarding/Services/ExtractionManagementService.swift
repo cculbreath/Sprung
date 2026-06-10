@@ -47,7 +47,7 @@ final class ExtractionManagementService: OnboardingEventEmitter {
         case (.fileAnalysis, .active):
             return update.detail ?? "Analyzing document..."
         case (.aiExtraction, .active):
-            return update.detail ?? "Processing with Gemini AI..."
+            return update.detail ?? "Processing document..."
         case (.artifactSave, .active):
             return "Saving extracted content..."
         case (.assistantHandoff, .active):

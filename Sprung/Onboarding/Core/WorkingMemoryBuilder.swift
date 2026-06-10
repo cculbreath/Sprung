@@ -10,12 +10,17 @@
 import Foundation
 import SwiftyJSON
 
-/// Builds interview context XML from StateCoordinator for user messages
+/// Builds interview context XML from StateCoordinator for user messages.
+/// The todo list lives here (volatile tail of the latest user message), NOT in the
+/// system prompt — the system prompt must stay byte-identical within a phase so the
+/// prompt-cache prefix (tools + system) survives todo-state changes.
 struct WorkingMemoryBuilder {
     private let stateCoordinator: StateCoordinator
+    private let todoStore: InterviewTodoStore
 
-    init(stateCoordinator: StateCoordinator) {
+    init(stateCoordinator: StateCoordinator, todoStore: InterviewTodoStore) {
         self.stateCoordinator = stateCoordinator
+        self.todoStore = todoStore
     }
 
     // MARK: - Interview Context (XML for user messages)
@@ -103,6 +108,13 @@ struct WorkingMemoryBuilder {
             xml.append("  </completed_agents>")
         }
 
+        // Todo list (volatile - lives here, never in the system prompt, so todo
+        // state changes don't invalidate the cached tools+system prefix)
+        if let todoList = await todoStore.renderTodoList() {
+            xml.append(todoList)
+            xml.append("  <note>Use the update_todo_list tool to manage your task list. Mark items in_progress before starting work, and completed when done.</note>")
+        }
+
         xml.append("</interview_context>")
 
         let context = xml.joined(separator: "\n")
@@ -113,11 +125,6 @@ struct WorkingMemoryBuilder {
 
         Logger.debug("📋 InterviewContext: \(context.count) chars", category: .ai)
         return context
-    }
-
-    /// Legacy method - now delegates to buildInterviewContext for backwards compatibility
-    func buildWorkingMemory() async -> String? {
-        await buildInterviewContext()
     }
 
     // MARK: - XML Helpers

@@ -11,6 +11,38 @@
 //  - User messages cannot append until all slots are filled
 //  - On interrupt, pending slots are filled with synthetic results
 //
+//  PROMPT-CACHE INVARIANT (wire-text capture):
+//  History must replay byte-identically across requests or prompt caching breaks.
+//  At request-build time, volatile content (<interview_context>, <coordinator>,
+//  todo list) is merged into the latest user message. The exact merged text is
+//  written back here at send time (separate from the display text, which would
+//  otherwise pollute the UI transcript):
+//  - userWireText[entryId]      — final merged text of a sent user message
+//                                 (keyed by the id captured at append/enqueue time,
+//                                 never by log position — appends race the build)
+//  - userAttachments[entryId]   — chatbox attachment (image/PDF base64) sent with
+//                                 a user message, replayed in the exact position
+//                                 the original request used (text first, then
+//                                 attachment)
+//  - toolContextText[entryId]   — context text block appended after an assistant
+//                                 entry's tool_results in the wire user message
+//  - toolResultWireText[callId] — exact tool_result content string as FIRST
+//                                 serialized to the wire (pending placeholder if
+//                                 the tool hadn't finished); reused on every
+//                                 rebuild so the prefix never flips between
+//                                 placeholder and real result mid-history
+//  - coordinatorWireTurns       — standalone coordinator user turns that have no
+//                                 ConversationEntry at all (wire-only)
+//  getWireSnapshot() interleaves these so AnthropicHistoryBuilder reproduces the
+//  exact bytes previously sent. The side tables are in-memory only: after a
+//  session restore the replay falls back to display text (the 5-minute cache
+//  never survives an app restart, so nothing is lost).
+//
+//  ACCEPTANCE INVARIANT: building the same request twice with no new entries must
+//  produce byte-identical messages JSON; building turn N+1 must reproduce turn N's
+//  messages as an exact prefix (modulo cache_control placement, which the API
+//  ignores for prefix matching).
+//
 
 import Foundation
 
@@ -104,6 +136,30 @@ actor ConversationLog {
     private let operations: OperationTracker
     private let eventBus: EventCoordinator
 
+    // MARK: - Wire-Text State (see PROMPT-CACHE INVARIANT in file header)
+
+    /// Exact wire text sent for a user entry (keyed by entry id)
+    private var userWireText: [UUID: String] = [:]
+    /// Chatbox attachment (image/PDF) sent with a user entry (keyed by entry id)
+    private var userAttachments: [UUID: WireAttachment] = [:]
+    /// Context text block appended after an assistant entry's tool_results (keyed by entry id)
+    private var toolContextText: [UUID: String] = [:]
+    /// Exact tool_result content string as first serialized to the wire (keyed by callId)
+    private var toolResultWireText: [String: String] = [:]
+    /// Wire-only coordinator user turns, anchored after the entry that preceded them
+    /// (nil anchor = before the first entry)
+    private var coordinatorWireTurns: [(afterEntryId: UUID?, text: String)] = []
+
+    /// Placeholder serialized for a tool_result whose tool hasn't finished when the
+    /// request is built. Recorded into `toolResultWireText` so the same bytes replay
+    /// until the real result arrives (one documented cache-busting upgrade).
+    static let pendingToolResultPlaceholder = #"{"status":"pending","reason":"Tool execution in progress"}"#
+
+    /// Serialized in place of an empty tool output (Anthropic rejects empty
+    /// tool_result content). Substituted at recording time so `toolResultWireText`
+    /// is the exact wire string in all cases.
+    static let emptyToolResultSubstitute = #"{"status":"completed"}"#
+
     // MARK: - Initialization
 
     init(operations: OperationTracker, eventBus: EventCoordinator) {
@@ -142,7 +198,11 @@ actor ConversationLog {
 
     /// Append user message - fills pending tool slots first if needed
     /// This is the gating mechanism that ensures the log is always valid
-    func appendUser(text: String, isSystemGenerated: Bool) async {
+    /// - Returns: The new entry's id. Callers that later send this entry MUST
+    ///   carry this id to `setWireText(forUserEntryId:text:)` so the wire-text
+    ///   capture can never land on a different entry (see PROMPT-CACHE INVARIANT).
+    @discardableResult
+    func appendUser(text: String, isSystemGenerated: Bool) async -> UUID {
         // If there are pending tool calls, resolve them first
         if hasPendingToolCalls {
             let pendingIds = pendingToolCallIds
@@ -165,8 +225,9 @@ actor ConversationLog {
         }
 
         // Now safe to append user message
+        let id = UUID()
         let entry = ConversationEntry.user(
-            id: UUID(),
+            id: id,
             text: text,
             isSystemGenerated: isSystemGenerated,
             timestamp: Date()
@@ -177,6 +238,7 @@ actor ConversationLog {
 
         // Publish event for persistence
         await eventBus.publish(.llm(.conversationEntryAppended(entry: entry)))
+        return id
     }
 
     // MARK: - Assistant Message
@@ -275,6 +337,186 @@ actor ConversationLog {
         return toolCalls.allSatisfy { $0.isResolved }
     }
 
+    // MARK: - Wire-Text Capture (Prompt-Cache Byte Stability)
+
+    /// A chatbox attachment (image or PDF) in exact wire form. The base64 string is
+    /// stored verbatim so replays are byte-identical with the original send.
+    /// In-memory only, like the other wire side tables (cleared on restore/reset).
+    struct WireAttachment: Sendable, Equatable {
+        let base64Data: String
+        let mediaType: String
+    }
+
+    /// A tool call in exact wire form: `result` is the tool_result content string as
+    /// first serialized to the wire (never optional — pending calls carry the
+    /// recorded placeholder), so rebuilds replay identical bytes.
+    struct WireToolCall: Sendable {
+        let callId: String
+        let name: String
+        let arguments: String
+        let result: String
+    }
+
+    /// A conversation turn in exact wire form, for byte-identical history replay.
+    enum WireEntry: Sendable {
+        /// User turn — `text` is the exact wire text (merged context + message) when
+        /// the turn has been sent, otherwise the display text. `attachment` is the
+        /// chatbox image/PDF sent with the turn, replayed after the text block in
+        /// the same order the original request used.
+        case user(text: String, attachment: WireAttachment?)
+        /// Assistant turn with its tool calls. `toolContextText` is the context text
+        /// block appended after this turn's tool_results in the wire user message.
+        case assistant(text: String, toolCalls: [WireToolCall]?, toolContextText: String?)
+    }
+
+    /// Record the final merged wire text for a pending user entry (called at send time).
+    ///
+    /// Keyed by entry id — NOT by log position. Appends happen outside the serialized
+    /// send queue (chatbox appends immediately; system-generated messages append at
+    /// enqueue time; the stream queue reorders chatbox/tool-response requests), so
+    /// another entry can land between this entry's append and its request build.
+    /// Keying by id guarantees the wire text can never be attributed to that other
+    /// entry, which would permanently corrupt history replay.
+    func setWireText(forUserEntryId id: UUID, text: String) -> Bool {
+        guard let entry = entries.last(where: { $0.id == id }), entry.isUser else {
+            Logger.warning("ConversationLog: setWireText — no user entry with id \(id.uuidString.prefix(8))", category: .ai)
+            return false
+        }
+        userWireText[id] = text
+        return true
+    }
+
+    /// Record the chatbox attachment (image or PDF) sent with a user entry, called at
+    /// request-build time alongside `setWireText(forUserEntryId:text:)`. Without this
+    /// record the attachment blocks would be silently dropped from every later
+    /// history rebuild — a permanent prefix divergence from that turn onward.
+    func setAttachment(forUserEntryId id: UUID, _ attachment: WireAttachment) -> Bool {
+        guard let entry = entries.last(where: { $0.id == id }), entry.isUser else {
+            Logger.warning("ConversationLog: setAttachment — no user entry with id \(id.uuidString.prefix(8))", category: .ai)
+            return false
+        }
+        userAttachments[id] = attachment
+        return true
+    }
+
+    /// Record the context text appended after the last assistant entry's tool_results
+    /// in the wire user message (called at tool-response send time).
+    ///
+    /// FIRST-WRITE-WINS (prompt-cache invariant): a stream-error retry rebuilds the
+    /// request and recomputes the interview context, which contains time-varying
+    /// content. The retry must replay the bytes the first attempt sent, so a
+    /// recorded value is never overwritten (mirrors toolResultWireText semantics).
+    func setToolContextTextForLastAssistantEntry(_ text: String) -> Bool {
+        guard case .assistant(let id, _, _, _) = entries.last else {
+            Logger.warning("ConversationLog: setToolContextTextForLastAssistantEntry — last entry is not an assistant message", category: .ai)
+            return false
+        }
+        if let recorded = toolContextText[id] {
+            if recorded != text {
+                Logger.debug(
+                    "ConversationLog: tool-turn context for entry \(id.uuidString.prefix(8)) already recorded — keeping original bytes (retry rebuild)",
+                    category: .ai
+                )
+            }
+            return true
+        }
+        toolContextText[id] = text
+        return true
+    }
+
+    /// Record a wire-only user turn for a standalone coordinator message.
+    /// These never appear in the UI transcript but must replay in history.
+    func recordCoordinatorWireTurn(text: String) {
+        coordinatorWireTurns.append((afterEntryId: entries.last?.id, text: text))
+    }
+
+    /// Snapshot the conversation in exact wire form for history replay.
+    ///
+    /// Called once per request build — this IS the serialization point, so it also
+    /// records first-serialization state (tool_result wire strings) as a side effect.
+    ///
+    /// ORDERING INVARIANT (deterministic replay): for an assistant entry, the wire
+    /// order is always assistant text/tool_use → tool_results → toolContextText →
+    /// coordinator turns anchored on this entry (insertion order preserved). This is
+    /// the same order the send paths produce (tool-response requests set
+    /// toolContextText before building history; coordinator requests record their
+    /// wire turn before building history), so a rebuilt history reproduces the
+    /// previously sent prefix byte-for-byte.
+    func getWireSnapshot() -> [WireEntry] {
+        var result: [WireEntry] = []
+
+        // Coordinator turns recorded before any entry existed
+        for turn in coordinatorWireTurns where turn.afterEntryId == nil {
+            result.append(.user(text: turn.text, attachment: nil))
+        }
+
+        for entry in entries {
+            switch entry {
+            case .user(let id, let text, _, _):
+                result.append(.user(text: userWireText[id] ?? text, attachment: userAttachments[id]))
+            case .assistant(let id, let text, let toolCalls, _):
+                let wireCalls = toolCalls.map { calls in
+                    calls.map { wireToolCall(for: $0) }
+                }
+                result.append(.assistant(
+                    text: text,
+                    toolCalls: wireCalls,
+                    toolContextText: toolContextText[id]
+                ))
+            case .systemNote:
+                break  // UI display only, never sent to the LLM
+            }
+
+            // Coordinator turns anchored after this entry (insertion order preserved)
+            for turn in coordinatorWireTurns where turn.afterEntryId == entry.id {
+                result.append(.user(text: turn.text, attachment: nil))
+            }
+        }
+
+        return result
+    }
+
+    /// Resolve the exact tool_result wire string for a slot.
+    ///
+    /// First serialization records the string (the real result, or the pending
+    /// placeholder if the tool hasn't finished). Rebuilds reuse the record so the
+    /// prefix stays byte-identical — with ONE exception: if the record is the
+    /// pending placeholder and a real result now exists, upgrade to the real result
+    /// and accept a one-time cache bust. Quality wins over one bust; a permanent
+    /// "pending" would hide the real result from the model forever.
+    private func wireToolCall(for slot: ToolCallSlot) -> WireToolCall {
+        // Empty outputs are substituted HERE, not downstream, so the recorded
+        // string is the exact wire string in all cases.
+        let liveResult = slot.result.map { $0.isEmpty ? Self.emptyToolResultSubstitute : $0 }
+        let resolved: String
+        if let recorded = toolResultWireText[slot.callId] {
+            if recorded == Self.pendingToolResultPlaceholder,
+               let live = liveResult, live != recorded {
+                toolResultWireText[slot.callId] = live
+                Logger.info(
+                    "ConversationLog: tool_result \(slot.callId.prefix(8)) upgraded from pending placeholder to real result (one-time prompt-cache bust)",
+                    category: .ai
+                )
+                resolved = live
+            } else {
+                resolved = recorded
+            }
+        } else {
+            let wire = liveResult ?? Self.pendingToolResultPlaceholder
+            if liveResult == nil {
+                Logger.debug("ConversationLog: tool_result \(slot.callId.prefix(8)) pending — serializing placeholder", category: .ai)
+            }
+            toolResultWireText[slot.callId] = wire
+            resolved = wire
+        }
+        return WireToolCall(
+            callId: slot.callId,
+            name: slot.name,
+            arguments: slot.arguments,
+            result: resolved
+        )
+    }
+
     // MARK: - Persistence Support
 
     /// Restore entries from persistence
@@ -286,6 +528,13 @@ actor ConversationLog {
         // we simply remove the corrupted tool calls entirely - the conversation can
         // continue without them.
         self.entries = removeOrphanedToolCalls(from: entries)
+        // Wire-text side tables are in-memory only; after restore the history
+        // replays from display text (cache is cold after a restart anyway).
+        userWireText.removeAll()
+        userAttachments.removeAll()
+        toolContextText.removeAll()
+        toolResultWireText.removeAll()
+        coordinatorWireTurns.removeAll()
         Logger.info("ConversationLog: Restored \(self.entries.count) entries", category: .ai)
     }
 
@@ -324,6 +573,10 @@ actor ConversationLog {
                 // If no valid tool calls remain and text is empty, skip this entry entirely
                 if validToolCalls.isEmpty && text.isEmpty {
                     Logger.warning("ConversationLog: Removing empty assistant entry \(index) (had only orphaned tool calls)", category: .ai)
+                    // Coordinator wire turns anchored to the removed entry would
+                    // otherwise vanish from every later replay (the model already
+                    // saw them) — re-anchor to the nearest preceding survivor.
+                    reanchorCoordinatorWireTurns(from: id, to: result.last?.id)
                     continue
                 }
 
@@ -345,9 +598,28 @@ actor ConversationLog {
         return result
     }
 
+    /// Re-anchor coordinator wire turns whose anchor entry is being removed by
+    /// orphan cleanup, so wire turns the model has already seen keep replaying.
+    /// Array insertion order is preserved, which keeps emission order
+    /// chronological within the new anchor.
+    private func reanchorCoordinatorWireTurns(from removedId: UUID, to survivorId: UUID?) {
+        for index in coordinatorWireTurns.indices where coordinatorWireTurns[index].afterEntryId == removedId {
+            coordinatorWireTurns[index].afterEntryId = survivorId
+            Logger.info(
+                "ConversationLog: re-anchored coordinator wire turn from removed entry \(removedId.uuidString.prefix(8))",
+                category: .ai
+            )
+        }
+    }
+
     /// Reset all state
     func reset() {
         entries.removeAll()
+        userWireText.removeAll()
+        userAttachments.removeAll()
+        toolContextText.removeAll()
+        toolResultWireText.removeAll()
+        coordinatorWireTurns.removeAll()
         Logger.info("ConversationLog: Reset", category: .ai)
     }
 

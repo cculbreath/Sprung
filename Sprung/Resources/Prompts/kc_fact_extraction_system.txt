@@ -25,6 +25,12 @@ Extract facts into these categories:
 | `collaboration` | Team/stakeholder interaction | "Coordinated with Watring technician on furnace modifications" |
 | `recognition` | External validation | "Published in PRX 2024", "Promoted to Senior Lecturer" |
 | `context` | Situation, constraints, environment | "Pre-production R&D with no established manufacturing process" |
+| `research_process` | How an investigation was structured, iterated, and validated | "Ran iterative anneal-and-image cycles, refining the temperature profile after each defect census" |
+| `experimental_design` | Design of experiments, controls, and validity reasoning | "Added a paired control cell on the same substrate to isolate alignment-layer effects from batch variation" |
+| `ambiguity_navigated` | Progress made under unclear requirements or unknown territory | "Proceeded without an established spec by bracketing the operating envelope with worst-case thermal tests" |
+| `instrument_built` | Apparatus, rig, or measurement capability constructed for the work | "Built a temperature-stabilized rotation stage to eliminate hand-rotation artifacts in optical measurements" |
+| `analysis_method` | Analytical or computational technique applied or developed | "Wrote a Fourier-space defect classifier to replace manual frame-by-frame counting" |
+| `cross_disciplinary_synthesis` | Methods or insight connected across fields | "Applied signal-processing windowing techniques to clean thermal-cycling data from the materials rig" |
 
 ### Category Selection Guidance
 
@@ -37,6 +43,20 @@ For R&D and pre-production work:
 For corporate/production work:
 - Use `scope_indicator` with quantified business impact when available
 - Use `artifact_produced` for outcomes with measurable deliverables
+
+### Research & R&D Source Material
+
+When the source material is research- or R&D-flavored (publications, dissertations,
+lab notes, experimental reports, instrument development), the extractable value IS:
+- The **intellectual contribution** — what question was opened or closed, what was learned
+- The **process maturity** — how the investigation was structured, validated, and iterated
+- The **judgment shown** — tradeoffs weighed, dead ends recognized, methods chosen for reasons
+
+Distilling such work down to quantitative business metrics is usually wrong and produces
+hollow cards. Lean on the `research_process`, `experimental_design`, `ambiguity_navigated`,
+`instrument_built`, `analysis_method`, and `cross_disciplinary_synthesis` categories for
+this material, and match the register of the source — research work should be described
+as research, not retrofitted into corporate impact language.
 
 ### Resume Fitness Filter
 
@@ -83,17 +103,19 @@ Example:
 ```
 
 ### suggested_bullets[]
-Resume bullet TEMPLATES with [PLACEHOLDERS] for customization. These combine multiple facts into impact-oriented statements.
-- Use [BRACKETED_PLACEHOLDERS] for values that might change per application
-- Focus on action + scope + outcome structure
-- Generate 3-5 templates, not finished prose
+Draft resume bullets a human will refine later. Each bullet should read like a sentence the author would actually say about their work — concrete, specific, and grounded in the extracted facts.
+- Write 3-5 bullets, each anchored in one or more extracted facts
+- Include a metric only when the number itself tells an outsider something (±60nm stability does; "attended 3 meetings" does not)
+- Vary sentence structure across the set — if two bullets share the same skeleton, rewrite one
+- NEVER force the "At [place] [verbed] [task] resulting in [number]% improvement" mold
+- Use [BRACKETED_PLACEHOLDERS] only for genuinely unknown specifics (a count you couldn't find, a name to confirm) — never as a sentence skeleton
 
 Example:
 ```json
 [
-  "Built [dual-MCU/multi-controller] motion platform controlling [3 axes] with [17-input] operator interface",
-  "Designed [I2C/communication] protocol enabling [reliable/robust] inter-processor coordination with [retry logic]",
-  "Integrated [N displays + M indicators] for real-time operator feedback during [precision operations]"
+  "Built the control system for a custom motion platform — dual MCUs so the operator interface never stalls the motion timing",
+  "Designed an I2C command protocol with CRC checks and exponential backoff after early prototypes dropped commands mid-sequence",
+  "Wired and programmed a 17-input operator panel that replaced a two-person manual workflow"
 ]
 ```
 
@@ -116,7 +138,7 @@ Example:
 
 If you find yourself writing the same text in multiple fields, STOP. Ask:
 - **Facts**: Is this a raw observation from a source?
-- **Bullets**: Is this a template for resume use?
+- **Bullets**: Is this a draft bullet a human could refine for resume use?
 - **Outcomes**: Is this describing what changed?
 
 ## Source Attribution
@@ -184,7 +206,7 @@ DO NOT summarize these passages. Copy them verbatim with light formatting cleanu
 - ❌ Paraphrase — preserve original phrasing in quotes
 - ❌ Combine facts — one fact per entry
 - ❌ Add information not in sources — only extract what exists
-- ❌ Skip metrics — numbers are crucial for resume bullets
+- ❌ Skip numbers that appear in sources — capture them faithfully as facts (whether a bullet should use them is a separate judgment)
 - ❌ Summarize — list each distinct fact separately
 
 ## DO:
@@ -200,25 +222,16 @@ DO NOT summarize these passages. Copy them verbatim with light formatting cleanu
 
 ## Suggested Bullets
 
-After extracting facts, suggest 3-5 resume bullet templates that combine related facts. These are TEMPLATES with placeholders, not final prose. Adapt the template style to the type of work:
+After extracting facts, write 3-5 draft resume bullets that combine related facts.
 
-For applied/corporate work:
-```
-"Architected [SYSTEM] enabling [CAPABILITY] for [CONTEXT]"
-```
+A good bullet is a sentence the author would actually say about their own work:
+- Concrete and specific — name the system, the method, the problem
+- Metrics appear only when the number itself carries information an outsider needs; otherwise characterize the work qualitatively
+- NEVER force the "At [place] [verbed] [task] resulting in [number]% improvement" mold — most strong work doesn't fit it, and forcing it produces hollow bullets
+- Vary sentence structure across the set; identical skeletons read as filler
+- Bracketed placeholders are for genuinely unknown specifics only, never sentence scaffolding
 
-For research/R&D work:
-```
-"Developed [METHOD/APPARATUS] for [INVESTIGATION], advancing understanding of [DOMAIN AREA]"
-"Designed and fabricated [ARTIFACT] addressing [TECHNICAL CHALLENGE] in [RESEARCH CONTEXT]"
-```
-
-For teaching/academic work:
-```
-"Created [CURRICULUM/PROGRAM] covering [SCOPE] for [AUDIENCE]"
-```
-
-Templates should preserve what makes the work INTERESTING — the reasoning, the specifics, the domain significance — not reduce it to a generic impact formula.
+Preserve what makes the work INTERESTING — the reasoning, the specifics, the domain significance — not a generic impact formula. Match the register of the source: research work should sound like research, production work like production.
 
 ## Output Structure
 
@@ -263,8 +276,8 @@ Call `return_result` with this structure:
       }
     ],
     "suggested_bullets": [
-      "Designed [dual-MCU/multi-controller] motion platform controlling [3 axes] with [17-input] operator interface",
-      "Built [I2C/SPI] communication protocol enabling [reliable] inter-processor coordination with [retry logic]"
+      "Built the control system for a custom motion platform — dual MCUs so the operator interface never stalls the motion timing",
+      "Designed an I2C command protocol with CRC checks and exponential backoff after early prototypes dropped commands mid-sequence"
     ],
     "outcomes": [
       "Replaced manual machine control with repeatable automated sequences",
@@ -320,8 +333,8 @@ For `skill` card types, use a DIFFERENT output structure that references evidenc
     "technologies": ["C++11/14", "Arduino", "Teensy", "ESP32"],
 
     "suggested_bullets": [
-      "Applied [PATTERN] patterns in [CONTEXT] for [BENEFIT]",
-      "Designed [ABSTRACTION] enabling [CAPABILITY] across [SCOPE]"
+      "Structured embedded firmware around explicit state machines and hardware-abstraction singletons across three production projects",
+      "Designed the I2C command protocol that coordinates the UI and motion controllers in the CNC retrofit"
     ]
   }
 }

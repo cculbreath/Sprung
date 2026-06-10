@@ -74,6 +74,8 @@ class GitAnalysisAgent {
     private let repoPath: URL
     private let authorFilter: String?
     private let modelId: String
+    /// Rendered deterministic git evidence (commit history aggregates) injected into the initial context
+    private let gitEvidence: String
     private weak var facade: LLMFacade?
     private var eventBus: EventCoordinator?
 
@@ -104,6 +106,7 @@ class GitAnalysisAgent {
         repoPath: URL,
         authorFilter: String? = nil,
         modelId: String,
+        gitEvidence: String,
         facade: LLMFacade,
         eventBus: EventCoordinator? = nil,
         agentId: String? = nil,
@@ -112,6 +115,7 @@ class GitAnalysisAgent {
         self.repoPath = repoPath
         self.authorFilter = authorFilter
         self.modelId = modelId
+        self.gitEvidence = gitEvidence
         self.facade = facade
         self.eventBus = eventBus
         self.agentId = agentId
@@ -177,7 +181,8 @@ class GitAnalysisAgent {
                         modelId: modelId,
                         inputTokens: inputTokens,
                         outputTokens: outputTokens,
-                        cachedTokens: cachedTokens,
+                        cacheReadTokens: cachedTokens,
+                        cacheCreationTokens: 0,  // OpenAI-style usage has no cache-creation concept
                         reasoningTokens: 0,  // Chat API doesn't have reasoning tokens
                         source: .gitAgent
                     )))
@@ -315,7 +320,10 @@ class GitAnalysisAgent {
     // MARK: - Forced Completion
 
     /// Forces the agent to call complete_analysis when max turns is reached.
-    /// Adds a strong system message and makes one final LLM call.
+    /// Adds a strong system message and makes one final LLM call. If parsing or
+    /// validation of the forced completion fails, sends the validation error back
+    /// to the model once and re-requests completion; a second failure propagates
+    /// as before (nil → maxTurnsExceeded).
     private func forceCompletion(facade: LLMFacade) async throws -> GitAnalysisResult? {
         // Add forceful message to conversation
         let forceMessage = ChatCompletionParameters.Message(
@@ -329,48 +337,61 @@ class GitAnalysisAgent {
         )
         messages.append(forceMessage)
 
-        // Make one final call with auto tool choice (so it can call complete_analysis)
-        let response = try await facade.executeWithTools(
-            messages: messages,
-            tools: tools,
-            toolChoice: .auto,
-            modelId: modelId
-        )
+        // One forced call plus a single corrective round-trip on parse/validation failure
+        for attempt in 1...2 {
+            // Make the call with auto tool choice (so it can call complete_analysis)
+            let response = try await facade.executeWithTools(
+                messages: messages,
+                tools: tools,
+                toolChoice: .auto,
+                modelId: modelId
+            )
 
-        // Track token usage for this forced call
-        if let usage = response.usage {
-            let inputTokens = usage.promptTokens ?? 0
-            let outputTokens = usage.completionTokens ?? 0
-            let cachedTokens = usage.promptTokensDetails?.cachedTokens ?? 0
+            // Track token usage for this forced call
+            if let usage = response.usage {
+                let inputTokens = usage.promptTokens ?? 0
+                let outputTokens = usage.completionTokens ?? 0
+                let cachedTokens = usage.promptTokensDetails?.cachedTokens ?? 0
 
-            if let agentId = agentId {
-                tracker?.addTokenUsage(
-                    agentId: agentId,
-                    input: inputTokens,
-                    output: outputTokens,
-                    cached: cachedTokens
-                )
+                if let agentId = agentId {
+                    tracker?.addTokenUsage(
+                        agentId: agentId,
+                        input: inputTokens,
+                        output: outputTokens,
+                        cached: cachedTokens
+                    )
+                }
+            }
+
+            guard let choice = response.choices?.first,
+                  let message = choice.message,
+                  let toolCalls = message.toolCalls,
+                  let completionCall = toolCalls.first(where: { $0.function.name == CompleteAnalysisTool.name }) else {
+                Logger.error("❌ GitAgent: Forced completion failed - no complete_analysis call received (attempt \(attempt))", category: .ai)
+                return nil
+            }
+
+            do {
+                let result = try parseCompleteAnalysis(arguments: completionCall.function.arguments)
+                await emitEvent(.processing(.gitAgentProgressUpdated(message: "Analysis complete (forced)!", turn: turnCount + 1)))
+                await updateProgress("Analysis complete (forced)!")
+                Logger.info("✅ GitAgent: Forced completion succeeded", category: .ai)
+                return result
+            } catch where attempt == 1 {
+                // Send the validation error back so the model can correct its JSON once
+                Logger.warning("⚠️ GitAgent: Forced completion parsing failed, sending corrective round-trip: \(error.localizedDescription)", category: .ai)
+                messages.append(buildAssistantMessage(from: message))
+                messages.append(buildToolResultMessage(
+                    toolCallId: completionCall.id ?? UUID().uuidString,
+                    result: buildParsingErrorMessage(arguments: completionCall.function.arguments, error: error)
+                ))
+            } catch {
+                Logger.error("❌ GitAgent: Forced completion parsing failed after corrective retry: \(error.localizedDescription)", category: .ai)
+                return nil
             }
         }
 
-        guard let choice = response.choices?.first,
-              let message = choice.message,
-              let toolCalls = message.toolCalls,
-              let completionCall = toolCalls.first(where: { $0.function.name == CompleteAnalysisTool.name }) else {
-            Logger.error("❌ GitAgent: Forced completion failed - no complete_analysis call received", category: .ai)
-            return nil
-        }
-
-        do {
-            let result = try parseCompleteAnalysis(arguments: completionCall.function.arguments)
-            await emitEvent(.processing(.gitAgentProgressUpdated(message: "Analysis complete (forced)!", turn: turnCount + 1)))
-            await updateProgress("Analysis complete (forced)!")
-            Logger.info("✅ GitAgent: Forced completion succeeded", category: .ai)
-            return result
-        } catch {
-            Logger.error("❌ GitAgent: Forced completion parsing failed: \(error.localizedDescription)", category: .ai)
-            return nil
-        }
+        return nil
     }
 
     // MARK: - Tool Execution
@@ -442,12 +463,32 @@ class GitAnalysisAgent {
 
     private func initialUserMessage() -> ChatCompletionParameters.Message {
         let repoName = repoPath.lastPathComponent
-        let prompt = """
+        var prompt = """
         Please analyze the git repository at: \(repoPath.path)
         Repository name: \(repoName)
+        """
+
+        if !gitEvidence.isEmpty {
+            prompt += """
+
+
+            <git_evidence>
+            \(gitEvidence)
+            </git_evidence>
+
+            The git evidence above is deterministic data gathered from the repository's commit \
+            history (each section states its coverage). Use it to ground proficiency judgments in \
+            longitudinal evidence: tenure in a directory (first/last commit dates), sustained \
+            activity (commits and churn per area, monthly activity), and recency.
+            """
+        }
+
+        prompt += """
+
 
         Start by exploring the directory structure to understand the project layout, then examine key files to assess the developer's skills.
         """
+
         return ChatCompletionParameters.Message(
             role: .user,
             content: .text(prompt)
@@ -535,29 +576,24 @@ class GitAnalysisAgent {
 
         Your JSON must match this EXACT structure:
         {
-          "summary": "string (required) - 2-3 sentence overview",
-          "languages": [  // required array
+          "documentType": "git_analysis",
+          "cards": [
             {
-              "name": "string (required)",
-              "proficiency": "string (required) - one of: beginner, intermediate, advanced, expert",
-              "evidence": "string (required) - specific files demonstrating this"
+              "cardType": "string (required) - one of: skill, project, achievement, employment, education",
+              "proposedTitle": "string (required) - specific, descriptive title",
+              "evidenceStrength": "string (required) - one of: primary, supporting, mention",
+              "evidenceLocations": ["string"],  // required - file paths with line numbers
+              "keyFacts": ["string"],  // required
+              "technologies": ["string"],  // required
+              "quantifiedOutcomes": ["string"],  // required (may be empty)
+              "crossReferences": ["string"],  // required (may be empty)
+              "dateRange": "string (optional) - e.g., '2023-2024'",
+              "extractionNotes": "string (optional)",
+              "proficiency": "string (REQUIRED for skill cards) - one of: expert, proficient, familiar",
+              "category": "string (REQUIRED for skill cards) - skill-bank category",
+              "atsVariants": ["string"]  // skill cards - search-term variants of the skill's NAME
             }
-          ],
-          "technologies": ["string"],  // required array of strings
-          "skills": [  // required array
-            {
-              "skill": "string (required)",
-              "evidence": "string (required)"
-            }
-          ],
-          "development_patterns": {  // optional object
-            "code_quality": "string (optional)",
-            "testing_practices": "string (optional)",
-            "documentation_quality": "string (optional)",
-            "architecture_style": "string (optional)"
-          },
-          "highlights": ["string"],  // required array of strings
-          "evidence_files": ["string"]  // required array of file paths examined
+          ]
         }
 
         Please retry with corrected JSON.
@@ -579,21 +615,38 @@ class GitAnalysisAgent {
 
             for card in params.cards {
                 if card.cardType == "skill" {
-                    // Convert skill cards to Skill objects
+                    // Convert skill cards to Skill objects, carrying the agent's judgments through
+                    guard let proficiencyRaw = card.proficiency,
+                          let proficiency = Proficiency(rawValue: proficiencyRaw) else {
+                        throw GitAgentError.invalidToolCall(
+                            "Skill card '\(card.proposedTitle)' is missing a valid 'proficiency' (expected one of: expert, proficient, familiar)"
+                        )
+                    }
+                    guard let category = card.category, !category.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                        throw GitAgentError.invalidToolCall(
+                            "Skill card '\(card.proposedTitle)' is missing a 'category'"
+                        )
+                    }
+                    guard let evidenceStrength = EvidenceStrength(rawValue: card.evidenceStrength) else {
+                        throw GitAgentError.invalidToolCall(
+                            "Skill card '\(card.proposedTitle)' has an invalid 'evidenceStrength' value '\(card.evidenceStrength)' (expected one of: primary, supporting, mention)"
+                        )
+                    }
+
                     let evidence = card.evidenceLocations.map { location in
                         SkillEvidence(
                             documentId: docId,
                             location: location,
                             context: card.extractionNotes ?? "",
-                            strength: EvidenceStrength(rawValue: card.evidenceStrength) ?? .supporting
+                            strength: evidenceStrength
                         )
                     }
 
                     let skill = Skill(
                         canonical: card.proposedTitle,
-                        atsVariants: card.technologies,
-                        category: "Tools & Software",  // Git analysis primarily finds tools/frameworks
-                        proficiency: .proficient,  // Default to proficient for demonstrated skills
+                        atsVariants: card.atsVariants ?? [],
+                        category: category,
+                        proficiency: proficiency,
                         evidence: evidence
                     )
                     skills.append(skill)
@@ -653,6 +706,8 @@ class GitAnalysisAgent {
                 repoName: repoName,
                 analyzedAt: Date()
             )
+        } catch let error as GitAgentError {
+            throw error
         } catch {
             throw GitAgentError.invalidToolCall("Failed to decode complete_analysis: \(error.localizedDescription)")
         }

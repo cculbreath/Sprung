@@ -499,12 +499,6 @@ final class OnboardingDependencyContainer {
         eventBus: EventCoordinator, documentExtractionService: DocumentExtractionService, dataStore: InterviewDataStore,
         stateCoordinator: StateCoordinator, agentTracker: AgentActivityTracker, llmFacade: LLMFacade?
     ) -> DocumentComponents {
-        // Update the extraction service with the event bus and agent tracker
-        Task {
-            await documentExtractionService.updateEventBus(eventBus)
-            await documentExtractionService.setAgentTracker(agentTracker)
-        }
-
         let uploadStorage = OnboardingUploadStorage()
         let documentProcessingService = DocumentProcessingService(
             documentExtractionService: documentExtractionService,
@@ -590,8 +584,7 @@ final class OnboardingDependencyContainer {
     /// Complete initialization of components that require a reference to the coordinator.
     /// Must be called after the coordinator is fully constructed.
     func completeInitialization(
-        coordinator: OnboardingInterviewCoordinator,
-        onModelAvailabilityIssue: @escaping (String) -> Void
+        coordinator: OnboardingInterviewCoordinator
     ) {
         // Initialize tool registrar (only component still requiring coordinator reference)
         self.toolRegistrar = OnboardingToolRegistrar(
@@ -605,22 +598,12 @@ final class OnboardingDependencyContainer {
             candidateDossierStore: candidateDossierStore
         )
         // Register tools
-        toolRegistrar.registerTools(
-            documentExtractionService: documentExtractionService,
-            onModelAvailabilityIssue: onModelAvailabilityIssue
-        )
+        toolRegistrar.registerTools()
 
         // Start token usage tracking subscription
         tokenUsageTracker.startEventSubscription(eventBus: eventBus)
 
         Logger.info("🏗️ OnboardingDependencyContainer late initialization completed", category: .ai)
-    }
-    // MARK: - Service Updates
-    func reregisterTools(onModelAvailabilityIssue: @escaping (String) -> Void) {
-        toolRegistrar.registerTools(
-            documentExtractionService: documentExtractionService,
-            onModelAvailabilityIssue: onModelAvailabilityIssue
-        )
     }
     // MARK: - Accessors for External Dependencies
     func getApplicantProfileStore() -> ApplicantProfileStore {

@@ -7,6 +7,7 @@
 //
 
 import SwiftUI
+import SwiftOpenAI
 
 struct SkillExtractionSheet: View {
     let skillStore: SkillStore
@@ -16,9 +17,13 @@ struct SkillExtractionSheet: View {
 
     @Environment(\.dismiss) private var dismiss
 
-    // Model selection (OpenRouter backend, same key as SkillBankService)
-    @AppStorage("skillBankModelId") private var skillBankModelId: String = ""
-    @Environment(EnabledLLMStore.self) private var enabledLLMStore
+    // Model selection (Anthropic backend, same key as all document-analysis passes)
+    @AppStorage(AnthropicDocumentAnalysisService.modelSettingKey) private var docAnalysisModelId: String = ""
+
+    // Anthropic model list
+    @State private var anthropicModels: [AnthropicModel] = []
+    @State private var isLoadingAnthropicModels = false
+    @State private var anthropicModelError: String?
 
     // Artifact selection
     @State private var selectedArtifactIds: Set<UUID> = []
@@ -44,12 +49,17 @@ struct SkillExtractionSheet: View {
         artifactRecordStore.archivedArtifacts
     }
 
-    private var allOpenRouterModels: [EnabledLLM] {
-        enabledLLMStore.enabledModels
-            .sorted { lhs, rhs in
-                (lhs.displayName.isEmpty ? lhs.modelId : lhs.displayName)
-                    < (rhs.displayName.isEmpty ? rhs.modelId : rhs.displayName)
+    private var hasAnthropicKey: Bool {
+        APIKeyManager.get(.anthropic) != nil
+    }
+
+    private var filteredAnthropicModels: [AnthropicModel] {
+        anthropicModels
+            .filter { model in
+                let id = model.id.lowercased()
+                return id.hasPrefix("claude-") && !id.contains("instant")
             }
+            .sorted { $0.displayName < $1.displayName }
     }
 
     var body: some View {
@@ -63,7 +73,9 @@ struct SkillExtractionSheet: View {
             footerSection
         }
         .frame(width: 560, height: 560)
-        .onAppear {}
+        .task {
+            await loadAnthropicModels()
+        }
         .confirmationDialog(
             "Clear All Skills?",
             isPresented: $showClearConfirmation,
@@ -122,22 +134,31 @@ struct SkillExtractionSheet: View {
 
     private var modelPickerSection: some View {
         GroupBox("Extraction Model") {
-            if allOpenRouterModels.isEmpty {
-                Text("No models enabled")
+            if !hasAnthropicKey {
+                Text("No Anthropic API key configured")
+                    .foregroundStyle(.secondary)
+                    .font(.caption)
+            } else if isLoadingAnthropicModels {
+                ProgressView().controlSize(.small)
+            } else if let error = anthropicModelError {
+                Label(error, systemImage: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.red)
+                    .font(.caption)
+            } else if filteredAnthropicModels.isEmpty {
+                Text("No models available")
                     .foregroundStyle(.secondary)
                     .font(.caption)
             } else {
-                let selectedModel = allOpenRouterModels.first { $0.modelId == skillBankModelId }
-                let displayName = selectedModel.map { $0.displayName.isEmpty ? $0.modelId : $0.displayName } ?? "Select model..."
+                let selectedModel = filteredAnthropicModels.first { $0.id == docAnalysisModelId }
                 Menu {
-                    ForEach(allOpenRouterModels, id: \.modelId) { model in
-                        Button(model.displayName.isEmpty ? model.modelId : model.displayName) {
-                            skillBankModelId = model.modelId
+                    ForEach(filteredAnthropicModels) { model in
+                        Button(model.displayName) {
+                            docAnalysisModelId = model.id
                         }
                     }
                 } label: {
                     HStack(spacing: 4) {
-                        Text(displayName)
+                        Text(selectedModel?.displayName ?? "Select model...")
                         Image(systemName: "chevron.up.chevron.down")
                             .font(.caption2)
                             .foregroundStyle(.secondary)
@@ -320,7 +341,7 @@ struct SkillExtractionSheet: View {
                 }
             }
             .buttonStyle(.borderedProminent)
-            .disabled(selectedArtifactIds.isEmpty || isExtracting || skillBankModelId.isEmpty)
+            .disabled(selectedArtifactIds.isEmpty || isExtracting || docAnalysisModelId.isEmpty)
             .keyboardShortcut(.defaultAction)
         }
         .padding()
@@ -439,6 +460,20 @@ struct SkillExtractionSheet: View {
     }
 
     // MARK: - Helpers
+
+    @MainActor
+    private func loadAnthropicModels() async {
+        guard hasAnthropicKey else { return }
+        isLoadingAnthropicModels = true
+        anthropicModelError = nil
+        do {
+            let response = try await llmFacade.anthropicListModels()
+            anthropicModels = response.data
+        } catch {
+            anthropicModelError = error.localizedDescription
+        }
+        isLoadingAnthropicModels = false
+    }
 
     private func artifactIcon(_ artifact: ArtifactRecord) -> String {
         switch artifact.sourceType {

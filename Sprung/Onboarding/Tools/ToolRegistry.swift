@@ -25,29 +25,4 @@ final class ToolRegistry {
             Array(tools.values)
         }
     }
-    func toolSchemas(filteredBy allowedNames: Set<String>? = nil) async -> [Tool] {
-        let currentTools: [InterviewTool] = queue.sync {
-            Array(tools.values)
-        }
-        var schemas: [Tool] = []
-        for tool in currentTools {
-            if let allowedNames, !allowedNames.contains(tool.name) {
-                continue
-            }
-            if await tool.isAvailable() == false {
-                continue
-            }
-            schemas.append(
-                .function(
-                    .init(
-                        name: tool.name,
-                        parameters: tool.parameters,
-                        strict: tool.isStrict,
-                        description: tool.description
-                    )
-                )
-            )
-        }
-        return schemas
-    }
 }

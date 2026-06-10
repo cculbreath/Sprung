@@ -14,11 +14,6 @@ struct SprungApp: App {
     private let appDependencies: AppDependencies
     private let appEnvironment: AppEnvironment
     init() {
-        // Register default values for settings before any code reads them
-        UserDefaults.standard.register(defaults: [
-            "onboardingInterviewDefaultModelId": "gpt-5"
-        ])
-
         // Perform any pending store reset from previous session (must happen before opening)
         SwiftDataBackupManager.performPendingResetIfNeeded()
 
@@ -229,18 +224,10 @@ struct SprungApp: App {
                     NotificationCenter.default.post(name: .customizeResume, object: nil)
                 }
                 .keyboardShortcut("r", modifiers: [.command])
-                Button("Clarify & Customize") {
-                    NotificationCenter.default.post(name: .clarifyCustomize, object: nil)
-                }
-                .keyboardShortcut("r", modifiers: [.command, .option])
                 Button("Optimize Resume") {
                     NotificationCenter.default.post(name: .optimizeResume, object: nil)
                 }
                 .keyboardShortcut("o", modifiers: [.command])
-                Button("Polish with AI...") {
-                    NotificationCenter.default.post(name: .polishResume, object: nil)
-                }
-                .keyboardShortcut("p", modifiers: [.command, .shift])
                 Divider()
                 Button("Template Editor...") {
                     appDelegate.showTemplateEditorWindow()

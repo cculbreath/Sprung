@@ -2,8 +2,7 @@
 //  DocumentExtractionPrompts.swift
 //  Sprung
 //
-//  Centralized prompts for document extraction and summarization.
-//  Used for PDF text extraction (Gemini) and document summary generation (OpenRouter).
+//  Centralized prompts for document summarization (Anthropic document analysis).
 //
 
 import Foundation
@@ -60,42 +59,18 @@ enum DocumentExtractionPrompts {
         "required": ["documentType", "briefDescription", "summary", "timePeriod", "companies", "roles", "skills", "achievements", "relevanceHints"]
     ]
 
-    // MARK: - Extraction Prompts
-
-    /// Default prompt for PDF text extraction.
-    /// Instructs the model to produce a detailed, structured transcription
-    /// that preserves the original content for downstream processing.
-    static let defaultExtractionPrompt: String = {
-        PromptLibrary.documentExtraction
-    }()
-
-    static func promptWithDocumentHints(filename: String, pageCount: Int?, sizeInBytes: Int) -> String {
-        let sizeMB = Double(sizeInBytes) / 1_048_576.0
-        let pageCountString = pageCount.map(String.init) ?? "unknown"
-
-        return """
-        Document hints (use to choose verbatim vs summary):
-        - filename: \(filename)
-        - page_count: \(pageCountString)
-        - size_mb: \(String(format: "%.1f", sizeMB))
-
-        If page_count is unknown, infer document length from structure and avoid runaway verbatim transcription. Always respect the size cap.
-
-        \(defaultExtractionPrompt)
-        """
-    }
-
     // MARK: - Summarization Prompts
 
-    /// Prompt for document summarization.
+    /// Instructions for document summarization. The document content itself is
+    /// provided as a preceding content block (PDF document block or cached text
+    /// block), not inlined into the prompt.
     /// Generates structured JSON output with summary, document type, metadata.
     /// Used to create lightweight context for the main LLM coordinator.
-    static func summaryPrompt(filename: String, content: String) -> String {
+    static func summaryInstructions(filename: String) -> String {
         PromptLibrary.substitute(
             template: PromptLibrary.documentSummaryTemplate,
             replacements: [
-                "FILENAME": filename,
-                "CONTENT": String(content.prefix(100000))
+                "FILENAME": filename
             ]
         )
     }

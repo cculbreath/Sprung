@@ -240,6 +240,9 @@ actor LLMMessenger: OnboardingEventEmitter {
     ) async {
         await emit(.llm(.status(.busy)))
         let text = payload["content"].string ?? payload["text"].stringValue
+        // Entry id assigned at append/enqueue time — keys the wire-text capture
+        // to the exact ConversationLog entry this request sends.
+        let entryId = payload["entryId"].string.flatMap(UUID.init(uuidString:))
 
         // Extract file attachment data if present (image or PDF)
         // PDF data takes precedence if both are present
@@ -258,6 +261,7 @@ actor LLMMessenger: OnboardingEventEmitter {
             let request = try await anthropicRequestBuilder.buildUserMessageRequest(
                 text: text,
                 isSystemGenerated: isSystemGenerated,
+                entryId: entryId,
                 bundledCoordinatorMessages: bundledCoordinatorMessages,
                 imageBase64: fileData,
                 imageContentType: fileContentType
@@ -324,23 +328,16 @@ actor LLMMessenger: OnboardingEventEmitter {
             let callId = payload["callId"].stringValue
             let toolName = payload["toolName"].stringValue
             let instruction = payload["instruction"].string
-            let pdfBase64 = payload["pdfData"].string
-            let pdfFilename = payload["pdfFilename"].string
 
             Logger.debug("Anthropic tool response: callId=\(callId), tool=\(toolName)", category: .ai)
             if let instruction = instruction {
                 Logger.debug("Instruction attached: \(instruction.prefix(50))...", category: .ai)
             }
-            if pdfBase64 != nil {
-                Logger.info("PDF attachment included: \(pdfFilename ?? "unknown")", category: .ai)
-            }
             Logger.verbose("Sending Anthropic tool response for callId=\(String(callId.prefix(12)))...", category: .ai)
 
             let request = try await anthropicRequestBuilder.buildToolResponseRequest(
                 callId: callId,
-                instruction: instruction,
-                pdfBase64: pdfBase64,
-                pdfFilename: pdfFilename
+                instruction: instruction
             )
 
             if let requestData = try? JSONEncoder().encode(request) {

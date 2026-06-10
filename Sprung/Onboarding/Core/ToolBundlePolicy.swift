@@ -16,10 +16,16 @@
 //     for each fine-grained interview subphase (e.g., p1_profileIntake, p3_dossierCompilation)
 //
 //  2. **Phase-Level Permissions**: Automatically derived by `allowedToolsForPhase()`,
-//     which unions all subphase bundles for that phase. Used for tool execution validation.
+//     which unions all subphase bundles for that phase. This union is ALSO the exact
+//     tool set sent to the API on every request within the phase (sorted by name),
+//     so the request prefix stays byte-identical for prompt caching. The tool list
+//     only changes at phase boundaries.
 //
-//  3. **Request-Time Selection**: `selectBundleForSubphase()` determines which tools
-//     to send in each API request based on current UI state and objectives.
+//  3. **Dispatch-Time Gating**: `availableTools(in:)` determines which tools are
+//     actually executable in the current subphase. A tool invoked out of subphase
+//     is NOT executed; the model receives a structured "tool_not_available" result
+//     and self-corrects. (Never remove tools from the request schema mid-phase —
+//     that would invalidate the prompt cache.)
 //
 //  ## Adding a New Tool
 //
@@ -507,13 +513,14 @@ struct ToolBundlePolicy {
         return .p4_completion
     }
 
-    // MARK: - Bundle Selection
+    // MARK: - Subphase Availability (Dispatch-Time Gating)
 
-    /// Select tool bundle based on subphase.
-    /// Returns the set of tools to send to the LLM for this specific subphase.
+    /// Tools that are executable in the given subphase.
+    /// Used ONLY for dispatch-time gating (the request schema always carries the
+    /// full phase union so the prompt-cache prefix stays stable).
     /// - Parameter subphase: The current interview subphase
-    /// - Returns: Set of tool names to include in the API request
-    static func selectBundleForSubphase(_ subphase: InterviewSubphase) -> Set<String> {
+    /// - Returns: Set of tool names executable right now
+    static func availableTools(in subphase: InterviewSubphase) -> Set<String> {
         // Get base bundle for subphase
         var bundle = subphaseBundles[subphase] ?? []
 
@@ -533,10 +540,35 @@ struct ToolBundlePolicy {
         return bundle
     }
 
+    /// Human/model-readable explanation of why a tool is not yet executable.
+    /// Names the subphase(s) of the current phase where the tool becomes available
+    /// so the model knows which objectives must complete first.
+    static func unavailabilityReason(
+        for toolName: String,
+        currentSubphase: InterviewSubphase
+    ) -> String {
+        let phase = currentSubphase.phase
+        let availableIn = subphaseBundles
+            .filter { $0.key.phase == phase && $0.value.contains(toolName) }
+            .map { $0.key.rawValue }
+            .sorted()
+
+        if availableIn.isEmpty {
+            return "Tool '\(toolName)' is not executable in the current interview stage " +
+                "('\(currentSubphase.rawValue)'). Continue with the current stage's objectives."
+        }
+
+        return "Tool '\(toolName)' becomes available in stage(s) [\(availableIn.joined(separator: ", "))] " +
+            "of \(phase.rawValue). Current stage: '\(currentSubphase.rawValue)'. " +
+            "Complete the current stage's objectives first, then retry."
+    }
+
     // MARK: - Phase-Level Tool Permissions
 
     /// Compute allowed tools for a phase by unioning all subphase bundles.
-    /// This is used for tool execution validation (can this tool run in this phase?).
+    /// Used for tool execution validation (can this tool run in this phase?) AND
+    /// as the request-time tool schema set (sorted by name) so the tool list is
+    /// byte-identical on every request within a phase (prompt-cache requirement).
     /// - Parameter phase: The interview phase
     /// - Returns: Set of all tool names permitted in this phase
     static func allowedToolsForPhase(_ phase: InterviewPhase) -> Set<String> {

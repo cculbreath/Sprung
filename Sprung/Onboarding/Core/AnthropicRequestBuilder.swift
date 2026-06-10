@@ -5,6 +5,36 @@
 //  Builds AnthropicMessageParameter requests for the Onboarding Interview's Anthropic Messages API calls.
 //  Delegates to specialized components for history building, tool conversion, and working memory.
 //
+//  PROMPT-CACHE INVARIANT: the request prefix (tools → system → history) must be
+//  byte-identical between consecutive turns within a phase:
+//  - Tools: full phase union, sorted by name (AnthropicToolConverter) — only
+//    changes at phase boundaries.
+//  - System: static base prompt with a cache breakpoint (cache_control: ephemeral
+//    on the system block caches tools+system together). Volatile content (todo
+//    list, interview context, coordinator guidance) lives in the latest user
+//    message, never in the system prompt.
+//  - History: the exact merged wire text of each sent turn — including chatbox
+//    attachments and tool_result strings — is written back to ConversationLog at
+//    build time so the next request replays identical bytes.
+//
+//  ACCEPTANCE INVARIANT: building the same request twice with no new
+//  ConversationLog entries must produce byte-identical messages JSON; building
+//  turn N+1 must reproduce turn N's messages as an exact prefix (modulo
+//  cache_control placement, which the API ignores for prefix matching).
+//
+//  CACHE BREAKPOINTS (applied at request-build time only, never persisted, so
+//  they "move" naturally each turn — see applyMessageCacheBreakpoints):
+//  1. System block (always, when a system prompt exists).
+//  2. Last cacheable content block of the final message — incremental
+//     conversation caching: turn N+1 reads the prefix turn N wrote.
+//  3. Last document block in the array (if any) — caching through the largest
+//     payload covers all earlier blocks.
+//  4. If total content blocks > 20, the last block of the message ~20 blocks
+//     before the end — keeps a boundary inside Anthropic's 20-block lookback
+//     window after tool-heavy turns.
+//  HARD CLAMP: max 4 cache_control blocks per request INCLUDING system; drop
+//  breakpoint 4 first, then 3 (see clampBreakpointCandidates).
+//
 
 import Foundation
 import SwiftOpenAI
@@ -18,7 +48,6 @@ struct AnthropicRequestBuilder {
     private let historyBuilder: AnthropicHistoryBuilder
     private let toolConverter: AnthropicToolConverter
     private let workingMemoryBuilder: WorkingMemoryBuilder
-    private let todoStore: InterviewTodoStore
 
     init(
         baseSystemPrompt: String,
@@ -31,8 +60,7 @@ struct AnthropicRequestBuilder {
         self.stateCoordinator = stateCoordinator
         self.historyBuilder = AnthropicHistoryBuilder(contextAssembler: contextAssembler)
         self.toolConverter = AnthropicToolConverter(toolRegistry: toolRegistry, stateCoordinator: stateCoordinator)
-        self.workingMemoryBuilder = WorkingMemoryBuilder(stateCoordinator: stateCoordinator)
-        self.todoStore = todoStore
+        self.workingMemoryBuilder = WorkingMemoryBuilder(stateCoordinator: stateCoordinator, todoStore: todoStore)
     }
 
     // MARK: - User Message Request
@@ -40,24 +68,16 @@ struct AnthropicRequestBuilder {
     func buildUserMessageRequest(
         text: String,
         isSystemGenerated: Bool,
+        entryId: UUID? = nil,
         bundledCoordinatorMessages: [JSON] = [],
         imageBase64: String? = nil,
         imageContentType: String? = nil
     ) async throws -> AnthropicMessageParameter {
-        var messages: [AnthropicMessage] = []
-
-        // Build conversation history (Anthropic uses explicit messages, no PRI)
-        let history = await historyBuilder.buildAnthropicHistory()
-        if !history.isEmpty {
-            messages.append(contentsOf: history)
-            Logger.info("📋 Including \(history.count) messages from transcript", category: .ai)
-        }
-
         // Build full message text with XML tags (Anthropic-native pattern)
         // Order: <interview_context> + <coordinator> + <chatbox> or raw text
         var fullMessageParts: [String] = []
 
-        // 1. Interview context (replaces working memory in system prompt)
+        // 1. Interview context (volatile tail: state, objectives, todo list)
         if let interviewContext = await workingMemoryBuilder.buildInterviewContext() {
             fullMessageParts.append(interviewContext)
         }
@@ -75,47 +95,63 @@ struct AnthropicRequestBuilder {
 
         let fullMessageText = fullMessageParts.joined(separator: "\n\n")
 
-        // Build user message - with image if provided
-        // CRITICAL: If history ends with a user message (e.g., synthetic tool_result from race condition),
-        // we must merge the new content with it to maintain Anthropic's role alternation requirement.
-        let newUserBlocks: [AnthropicContentBlock]
-        if let fileData = imageBase64 {
-            let mimeType = imageContentType ?? "image/jpeg"
+        // Chatbox attachment (image or PDF) for this turn. Recorded in the log
+        // alongside the wire text so every later history rebuild replays the
+        // attachment block in its original position — byte-identical prefix.
+        let attachment: ConversationLog.WireAttachment? = imageBase64.map { fileData in
+            ConversationLog.WireAttachment(
+                base64Data: fileData,
+                mediaType: imageContentType ?? "image/jpeg"
+            )
+        }
 
-            // Use document block for PDFs, image block for images
-            if mimeType == "application/pdf" {
-                let docSource = AnthropicDocumentSource(mediaType: mimeType, data: fileData)
-                newUserBlocks = [
-                    .text(AnthropicTextBlock(text: fullMessageText)),
-                    .document(AnthropicDocumentBlock(source: docSource))
-                ]
-                Logger.info("📄 Including PDF document in user message", category: .ai)
-            } else {
-                let imageSource = AnthropicImageSource(mediaType: mimeType, data: fileData)
-                newUserBlocks = [
-                    .text(AnthropicTextBlock(text: fullMessageText)),
-                    .image(AnthropicImageBlock(source: imageSource))
-                ]
-                Logger.info("🖼️ Including image attachment in user message (\(mimeType))", category: .ai)
+        // PROMPT-CACHE INVARIANT: write the exact wire text (and attachment) back
+        // to the log BEFORE building history, so this turn (and every replay of it)
+        // serializes the same bytes. The pending user entry was appended at
+        // enqueue/chatbox time; its id rides in the payload so the capture can
+        // never land on a different entry that raced into the log in the meantime.
+        let wireTextCaptured: Bool
+        if let entryId {
+            wireTextCaptured = await stateCoordinator.setUserMessageWireText(entryId: entryId, fullMessageText)
+            if wireTextCaptured, let attachment {
+                await stateCoordinator.setUserMessageAttachment(entryId: entryId, attachment)
+                Logger.info("📎 Captured \(attachment.mediaType) attachment for byte-stable replay", category: .ai)
             }
         } else {
-            newUserBlocks = [.text(AnthropicTextBlock(text: fullMessageText))]
+            Logger.warning("⚠️ User-message payload missing entryId - wire text not captured (replay uses display text)", category: .ai)
+            wireTextCaptured = false
         }
 
-        // Check if we need to merge with trailing user message from history
-        if let lastIndex = messages.indices.last,
-           messages[lastIndex].role == "user" {
-            // Merge new content with existing user message
-            let existingBlocks = historyBuilder.extractContentBlocks(messages[lastIndex])
-            let mergedBlocks = existingBlocks + newUserBlocks
-            messages[lastIndex] = AnthropicMessage(role: "user", content: .blocks(mergedBlocks))
-            Logger.info("📝 Merged new user content with trailing user message (race condition handling)", category: .ai)
-        } else {
-            // Append as new user message
-            messages.append(AnthropicMessage(role: "user", content: .blocks(newUserBlocks)))
+        // Build conversation history (Anthropic uses explicit messages, no PRI).
+        // When the capture succeeded, the trailing user message already carries
+        // the merged wire text AND the attachment block — send and replay share
+        // the same construction path by design.
+        var messages = await historyBuilder.buildAnthropicHistory()
+        Logger.info("📋 Including \(messages.count) messages from transcript", category: .ai)
+
+        if !wireTextCaptured {
+            // Defensive: wire text could not be keyed to a log entry (missing
+            // entryId, or no user entry with that id) — send the merged text and
+            // attachment directly (replay will fall back to the entry's display
+            // text; one-time cache rebuild). Merge into a trailing user message
+            // if present to preserve role alternation.
+            Logger.warning("⚠️ Wire text not captured in log - sending merged text directly", category: .ai)
+            var newBlocks: [AnthropicContentBlock] = [.text(AnthropicTextBlock(text: fullMessageText))]
+            if let attachment {
+                newBlocks.append(historyBuilder.attachmentBlock(for: attachment))
+            }
+            if let lastIndex = messages.indices.last, messages[lastIndex].role == "user" {
+                let existingBlocks = historyBuilder.extractContentBlocks(messages[lastIndex])
+                messages[lastIndex] = AnthropicMessage(role: "user", content: .blocks(existingBlocks + newBlocks))
+            } else {
+                messages.append(AnthropicMessage(role: "user", content: .blocks(newBlocks)))
+            }
         }
 
-        // Determine tool choice - prefer auto, only use .any as last resort
+        // Message-block cache breakpoints (post-processing, build-time only)
+        messages = applyMessageCacheBreakpoints(to: messages)
+
+        // Determine tool choice - prefer auto, only use .none for the first greeting
         let toolChoice: AnthropicToolChoice
         if !isSystemGenerated {
             let hasStreamed = await stateCoordinator.getHasStreamedFirstResponse()
@@ -129,19 +165,14 @@ struct AnthropicRequestBuilder {
             toolChoice = .auto
         }
 
-        // Get tools and convert to Anthropic format
         let tools = await toolConverter.getAnthropicTools()
-
-        // Build system prompt (base personality only - interview context now in user messages)
-        let systemPrompt = await buildSystemPrompt()
-
         let modelId = try await stateCoordinator.getAnthropicModelId()
 
         let parameters = AnthropicMessageParameter(
             model: modelId,
             messages: messages,
-            system: systemPrompt.isEmpty ? nil : .text(systemPrompt),
-            maxTokens: 4096,
+            system: cacheableSystem(),
+            maxTokens: OnboardingLLMConfig.maxTokens,
             stream: true,
             tools: tools.isEmpty ? nil : tools,
             toolChoice: toolChoice == .none && tools.isEmpty ? nil : toolChoice
@@ -163,16 +194,10 @@ struct AnthropicRequestBuilder {
     func buildCoordinatorMessageRequest(
         text: String
     ) async throws -> AnthropicMessageParameter {
-        var messages: [AnthropicMessage] = []
-
-        // Include conversation history
-        let history = await historyBuilder.buildAnthropicHistory()
-        messages.append(contentsOf: history)
-
         // Build message with interview context + coordinator instruction
         var messageParts: [String] = []
 
-        // 1. Interview context
+        // 1. Interview context (volatile tail)
         if let interviewContext = await workingMemoryBuilder.buildInterviewContext() {
             messageParts.append(interviewContext)
         }
@@ -182,26 +207,27 @@ struct AnthropicRequestBuilder {
 
         let fullMessageText = messageParts.joined(separator: "\n\n")
 
-        // Add as user message (or merge with existing trailing user message)
-        if let lastIndex = messages.indices.last,
-           messages[lastIndex].role == "user" {
-            let existingBlocks = historyBuilder.extractContentBlocks(messages[lastIndex])
-            let mergedBlocks = existingBlocks + [.text(AnthropicTextBlock(text: fullMessageText))]
-            messages[lastIndex] = AnthropicMessage(role: "user", content: .blocks(mergedBlocks))
-            Logger.info("📝 Merged coordinator message with trailing user message", category: .ai)
-        } else {
-            messages.append(.user(fullMessageText))
-        }
+        // Resolve the model FIRST: it can throw, and a coordinator wire turn must
+        // never be recorded for a request that fails to build (the turn would
+        // replay forever in history, and a retried send would duplicate it).
+        let modelId = try await stateCoordinator.getAnthropicModelId()
+
+        // PROMPT-CACHE INVARIANT: coordinator turns have no ConversationEntry, so
+        // record a wire-only turn in the log BEFORE building history — the turn
+        // then appears here and replays byte-identically on every later request.
+        await stateCoordinator.recordCoordinatorWireTurn(fullMessageText)
+
+        // Build history — it now ends with the coordinator wire turn
+        // (message-block cache breakpoints applied as build-time post-processing)
+        let messages = applyMessageCacheBreakpoints(to: await historyBuilder.buildAnthropicHistory())
 
         let tools = await toolConverter.getAnthropicTools()
-        let systemPrompt = await buildSystemPrompt()
-        let modelId = try await stateCoordinator.getAnthropicModelId()
 
         let parameters = AnthropicMessageParameter(
             model: modelId,
             messages: messages,
-            system: systemPrompt.isEmpty ? nil : .text(systemPrompt),
-            maxTokens: 4096,
+            system: cacheableSystem(),
+            maxTokens: OnboardingLLMConfig.maxTokens,
             stream: true,
             tools: tools.isEmpty ? nil : tools,
             toolChoice: tools.isEmpty ? nil : .auto
@@ -220,76 +246,55 @@ struct AnthropicRequestBuilder {
     /// Build a request after a tool has completed.
     ///
     /// The tool result is already stored in ConversationLog (via setToolResult).
-    /// This method builds history from ConversationLog (which includes the tool_result),
-    /// then appends computed context (interview state, coordinator instructions).
+    /// The computed context (interview state, optional coordinator instruction) is
+    /// written to the log as the assistant entry's tool-turn context text, then
+    /// history is rebuilt — so the trailing tool_result user message carries the
+    /// exact blocks that will replay on subsequent turns.
+    ///
+    /// PDF attachments are NOT passed separately: tool outputs containing
+    /// pdfAttachment.storageUrl are re-included as document blocks by
+    /// AnthropicHistoryBuilder on every build, which keeps send and replay bytes
+    /// identical.
     ///
     /// - Parameters:
     ///   - callId: The tool call ID (for logging)
     ///   - instruction: Optional instruction text to include after the tool_result.
     ///     This provides immediate guidance to Claude for the next action.
-    ///   - pdfBase64: Optional base64-encoded PDF to include as a document block
-    ///   - pdfFilename: Optional filename for the PDF attachment
     func buildToolResponseRequest(
         callId: String,
-        instruction: String? = nil,
-        pdfBase64: String? = nil,
-        pdfFilename: String? = nil
+        instruction: String? = nil
     ) async throws -> AnthropicMessageParameter {
-        // Build conversation history - tool_result is already in ConversationLog
-        var messages = await historyBuilder.buildAnthropicHistory()
-
-        // Build computed context to append: interview_context + optional coordinator instruction
+        // Build computed context: interview_context + optional coordinator instruction
         var textParts: [String] = []
 
-        // Include interview context so Claude always has current state
         if let interviewContext = await workingMemoryBuilder.buildInterviewContext() {
             textParts.append(interviewContext)
         }
 
-        // Add coordinator instruction if provided
         if let instruction = instruction {
             textParts.append("<coordinator>\(instruction)</coordinator>")
             Logger.info("📋 Including coordinator instruction with tool result", category: .ai)
         }
 
-        // Build additional content blocks (PDF, computed context)
-        var additionalBlocks: [AnthropicContentBlock] = []
-
-        // If PDF data is provided, include it as a document block
-        if let pdfData = pdfBase64 {
-            let docSource = AnthropicDocumentSource(mediaType: "application/pdf", data: pdfData)
-            additionalBlocks.append(.document(AnthropicDocumentBlock(source: docSource)))
-            Logger.info("📄 Including PDF document block with tool result: \(pdfFilename ?? "unknown")", category: .ai)
-        }
-
-        // Append computed context text if we have any
+        // PROMPT-CACHE INVARIANT: persist the context text on the assistant entry
+        // BEFORE building history so send and replay bytes match.
         if !textParts.isEmpty {
-            additionalBlocks.append(.text(AnthropicTextBlock(text: textParts.joined(separator: "\n\n"))))
+            await stateCoordinator.setToolTurnContextWireText(textParts.joined(separator: "\n\n"))
         }
 
-        // Append additional content to the last user message (which contains the tool_result from history)
-        if !additionalBlocks.isEmpty {
-            if let lastIndex = messages.indices.last, messages[lastIndex].role == "user" {
-                let existingBlocks = historyBuilder.extractContentBlocks(messages[lastIndex])
-                let mergedBlocks = existingBlocks + additionalBlocks
-                messages[lastIndex] = AnthropicMessage(role: "user", content: .blocks(mergedBlocks))
-                Logger.info("📝 Appended computed context to tool result message", category: .ai)
-            } else {
-                // Shouldn't happen - history should end with user message containing tool_result
-                Logger.warning("⚠️ History doesn't end with user message - appending context as new message", category: .ai)
-                messages.append(AnthropicMessage(role: "user", content: .blocks(additionalBlocks)))
-            }
-        }
+        // Build conversation history — tool_result(s) and the context text are
+        // emitted by the history builder in wire order.
+        // (message-block cache breakpoints applied as build-time post-processing)
+        let messages = applyMessageCacheBreakpoints(to: await historyBuilder.buildAnthropicHistory())
 
         let tools = await toolConverter.getAnthropicTools()
-        let systemPrompt = await buildSystemPrompt()
         let modelId = try await stateCoordinator.getAnthropicModelId()
 
         let parameters = AnthropicMessageParameter(
             model: modelId,
             messages: messages,
-            system: systemPrompt.isEmpty ? nil : .text(systemPrompt),
-            maxTokens: 4096,
+            system: cacheableSystem(),
+            maxTokens: OnboardingLLMConfig.maxTokens,
             stream: true,
             tools: tools.isEmpty ? nil : tools,
             toolChoice: tools.isEmpty ? nil : .auto
@@ -346,18 +351,14 @@ struct AnthropicRequestBuilder {
     /// Build a request after multiple tools have completed.
     ///
     /// Tool results are already stored in ConversationLog (via setToolResult).
-    /// This method builds history from ConversationLog (which includes all tool_results),
-    /// then appends computed context (interview state, coordinator instructions).
+    /// Like buildToolResponseRequest, the computed context is persisted on the
+    /// assistant entry before history is built, keeping replay byte-identical.
     ///
     /// - Parameter payloads: Payloads containing callIds and optional instructions (output not needed)
     func buildBatchedToolResponseRequest(payloads: [JSON]) async throws -> AnthropicMessageParameter {
-        // Build conversation history - all tool_results are already in ConversationLog
-        var messages = await historyBuilder.buildAnthropicHistory()
-
-        // Build computed context to append: interview_context + optional coordinator instruction
+        // Build computed context: interview_context + optional coordinator instruction
         var textParts: [String] = []
 
-        // Include interview context so Claude always has current state
         if let interviewContext = await workingMemoryBuilder.buildInterviewContext() {
             textParts.append(interviewContext)
         }
@@ -368,30 +369,23 @@ struct AnthropicRequestBuilder {
             Logger.info("📋 Including coordinator instruction with batched tool results", category: .ai)
         }
 
-        // Append computed context to the last user message (which contains tool_results from history)
+        // PROMPT-CACHE INVARIANT: persist context text before building history.
         if !textParts.isEmpty {
-            let textBlock = AnthropicContentBlock.text(AnthropicTextBlock(text: textParts.joined(separator: "\n\n")))
-            if let lastIndex = messages.indices.last, messages[lastIndex].role == "user" {
-                let existingBlocks = historyBuilder.extractContentBlocks(messages[lastIndex])
-                let mergedBlocks = existingBlocks + [textBlock]
-                messages[lastIndex] = AnthropicMessage(role: "user", content: .blocks(mergedBlocks))
-                Logger.info("📝 Appended computed context to batched tool results message", category: .ai)
-            } else {
-                // Shouldn't happen - history should end with user message containing tool_results
-                Logger.warning("⚠️ History doesn't end with user message - appending context as new message", category: .ai)
-                messages.append(AnthropicMessage(role: "user", content: .blocks([textBlock])))
-            }
+            await stateCoordinator.setToolTurnContextWireText(textParts.joined(separator: "\n\n"))
         }
 
+        // Build conversation history — all tool_results plus context text in wire order
+        // (message-block cache breakpoints applied as build-time post-processing)
+        let messages = applyMessageCacheBreakpoints(to: await historyBuilder.buildAnthropicHistory())
+
         let tools = await toolConverter.getAnthropicTools()
-        let systemPrompt = await buildSystemPrompt()
         let modelId = try await stateCoordinator.getAnthropicModelId()
 
         let parameters = AnthropicMessageParameter(
             model: modelId,
             messages: messages,
-            system: systemPrompt.isEmpty ? nil : .text(systemPrompt),
-            maxTokens: 4096,
+            system: cacheableSystem(),
+            maxTokens: OnboardingLLMConfig.maxTokens,
             stream: true,
             tools: tools.isEmpty ? nil : tools,
             toolChoice: tools.isEmpty ? nil : .auto
@@ -405,25 +399,180 @@ struct AnthropicRequestBuilder {
         return parameters
     }
 
-    // MARK: - System Prompt
+    // MARK: - Message Cache Breakpoints
 
-    /// Build system prompt - base personality plus todo list.
-    /// Per Anthropic best practices, working memory and coordinator instructions
-    /// are now included in user messages with XML tags (<interview_context>, <coordinator>).
-    /// The todo list is included in system prompt since it's rebuilt each request and
-    /// provides persistent visibility without polluting conversation history.
-    private func buildSystemPrompt() async -> String {
-        var parts: [String] = [baseSystemPrompt]
+    /// Position of a content block in the assembled message array.
+    struct BlockPosition: Equatable {
+        let messageIndex: Int
+        let blockIndex: Int
+    }
 
-        // Include todo list if present
-        if let todoList = await todoStore.renderForSystemPrompt() {
-            parts.append("")
-            parts.append(todoList)
-            parts.append("")
-            parts.append("Use the update_todo_list tool to manage your task list. Mark items in_progress before starting work, and completed when done.")
+    /// HARD CLAMP — Anthropic allows at most 4 cache_control blocks per request,
+    /// INCLUDING the system block. With the system breakpoint counted, at most
+    /// (4 - systemBreakpointCount) message breakpoints may survive. Candidates are
+    /// supplied in priority order (tail, document, lookback), so on overflow the
+    /// lookback breakpoint (4) is dropped first, then the document breakpoint (3);
+    /// the tail breakpoint (2) always survives. Duplicate positions collapse.
+    /// Pure function so the invariant is inspectable in isolation.
+    static func clampBreakpointCandidates(
+        tail: BlockPosition?,
+        document: BlockPosition?,
+        lookback: BlockPosition?,
+        systemBreakpointCount: Int
+    ) -> [BlockPosition] {
+        let budget = max(0, 4 - systemBreakpointCount)
+        var kept: [BlockPosition] = []
+        for candidate in [tail, document, lookback] {
+            guard let candidate, !kept.contains(candidate) else { continue }
+            guard kept.count < budget else { break }
+            kept.append(candidate)
+        }
+        return kept
+    }
+
+    /// Rebuild a content block with an ephemeral cache_control attached.
+    /// Returns nil for block kinds that cannot carry cache_control (tool_use in
+    /// the fork's types) — placement skips those.
+    static func addingEphemeralCacheControl(to block: AnthropicContentBlock) -> AnthropicContentBlock? {
+        switch block {
+        case .text(let textBlock):
+            return .text(AnthropicTextBlock(text: textBlock.text, cacheControl: .ephemeral))
+        case .image(let imageBlock):
+            return .image(AnthropicImageBlock(source: imageBlock.source, cacheControl: .ephemeral))
+        case .document(let documentBlock):
+            return .document(AnthropicDocumentBlock(source: documentBlock.source, cacheControl: .ephemeral))
+        case .toolResult(let resultBlock):
+            return .toolResult(AnthropicToolResultBlock(
+                toolUseId: resultBlock.toolUseId,
+                content: resultBlock.content,
+                isError: resultBlock.isError ?? false,
+                cacheControl: .ephemeral
+            ))
+        case .toolUse:
+            return nil
+        }
+    }
+
+    /// Add message-block cache breakpoints so conversation history is served from
+    /// cache from turn 2 onward.
+    ///
+    /// Applied at request-build time only — placements are NEVER persisted, so they
+    /// move naturally as the conversation grows. The API matches cache prefixes on
+    /// prompt content and ignores cache_control placement for prefix matching, so
+    /// moving breakpoints between turns does not invalidate earlier cache entries.
+    ///
+    /// Placement is a pure function of the assembled message array (same history ⇒
+    /// same placement), preserving the ACCEPTANCE INVARIANT in the file header.
+    private func applyMessageCacheBreakpoints(to messages: [AnthropicMessage]) -> [AnthropicMessage] {
+        guard !messages.isEmpty else { return messages }
+
+        // Flatten block geometry (string content counts as one text block).
+        let blocksByMessage: [[AnthropicContentBlock]] = messages.map { historyBuilder.extractContentBlocks($0) }
+        var flatStartIndex: [Int] = []
+        var totalBlocks = 0
+        for blocks in blocksByMessage {
+            flatStartIndex.append(totalBlocks)
+            totalBlocks += blocks.count
         }
 
-        return parts.joined(separator: "\n")
+        func isMarkable(_ block: AnthropicContentBlock) -> Bool {
+            if case .toolUse = block { return false }
+            return true
+        }
+
+        func lastMarkableBlock(inMessage messageIndex: Int) -> BlockPosition? {
+            for blockIndex in blocksByMessage[messageIndex].indices.reversed()
+            where isMarkable(blocksByMessage[messageIndex][blockIndex]) {
+                return BlockPosition(messageIndex: messageIndex, blockIndex: blockIndex)
+            }
+            return nil
+        }
+
+        // Breakpoint 2 — incremental conversation caching: the last markable block
+        // of the final message (walking back if the final message has none).
+        var tail: BlockPosition?
+        for messageIndex in blocksByMessage.indices.reversed() {
+            if let position = lastMarkableBlock(inMessage: messageIndex) {
+                tail = position
+                break
+            }
+        }
+
+        // Breakpoint 3 (conditional) — the LAST document block in the array:
+        // caching through it covers all earlier blocks, including the document
+        // payloads themselves. Collapses into the tail when they coincide.
+        var document: BlockPosition?
+        outer: for messageIndex in blocksByMessage.indices.reversed() {
+            for blockIndex in blocksByMessage[messageIndex].indices.reversed() {
+                if case .document = blocksByMessage[messageIndex][blockIndex] {
+                    document = BlockPosition(messageIndex: messageIndex, blockIndex: blockIndex)
+                    break outer
+                }
+            }
+        }
+
+        // Breakpoint 4 (conditional) — Anthropic's cache lookback walks at most 20
+        // content blocks back from a breakpoint. After tool-heavy turns a single
+        // turn can add >20 blocks, so plant one boundary on the last markable block
+        // of the latest message that ends at least 20 blocks before the end of the
+        // array. Deterministic rule: same history ⇒ same placement.
+        var lookback: BlockPosition?
+        if totalBlocks > 20 {
+            for messageIndex in blocksByMessage.indices.reversed() {
+                let lastFlatIndex = flatStartIndex[messageIndex] + blocksByMessage[messageIndex].count - 1
+                guard totalBlocks - 1 - lastFlatIndex >= 20 else { continue }
+                if let position = lastMarkableBlock(inMessage: messageIndex) {
+                    lookback = position
+                    break
+                }
+            }
+        }
+
+        let kept = Self.clampBreakpointCandidates(
+            tail: tail,
+            document: document,
+            lookback: lookback,
+            systemBreakpointCount: baseSystemPrompt.isEmpty ? 0 : 1
+        )
+        guard !kept.isEmpty else { return messages }
+
+        // Apply marks, grouping by message so multiple marks in one message stack.
+        var marksByMessage: [Int: [Int]] = [:]
+        for position in kept {
+            marksByMessage[position.messageIndex, default: []].append(position.blockIndex)
+        }
+
+        var result = messages
+        for (messageIndex, blockIndexes) in marksByMessage {
+            var blocks = blocksByMessage[messageIndex]
+            for blockIndex in blockIndexes {
+                guard let marked = Self.addingEphemeralCacheControl(to: blocks[blockIndex]) else { continue }
+                blocks[blockIndex] = marked
+            }
+            result[messageIndex] = AnthropicMessage(role: messages[messageIndex].role, content: .blocks(blocks))
+        }
+
+        Logger.debug(
+            "📍 Cache breakpoints: system=\(baseSystemPrompt.isEmpty ? 0 : 1), message=\(kept.count) " +
+            "(tail=\(tail != nil), document=\(document != nil), lookback=\(lookback != nil)), " +
+            "blocks=\(totalBlocks)",
+            category: .ai
+        )
+
+        return result
+    }
+
+    // MARK: - System Prompt
+
+    /// Static system prompt with a cache breakpoint.
+    /// The system prompt is the PhaseScriptRegistry base prompt ONLY — byte-identical
+    /// within a phase. Volatile content (todo list, interview state) lives in the
+    /// <interview_context> block of the latest user message (WorkingMemoryBuilder).
+    /// The ephemeral cache_control on the system block caches tools+system together
+    /// (tools render before system in the prompt).
+    private func cacheableSystem() -> AnthropicSystemContent? {
+        guard !baseSystemPrompt.isEmpty else { return nil }
+        return .blocks([AnthropicSystemBlock(text: baseSystemPrompt, cacheControl: .ephemeral)])
     }
 }
 

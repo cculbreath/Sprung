@@ -127,9 +127,11 @@ extension OnboardingEvent.LLMEvent {
             return "llm.cancelRequested"
         case .status(let status):
             return "llm.status(\(status.rawValue))"
-        case .tokenUsageReceived(let modelId, let input, let output, let cached, _, let source):
-            let cachedStr = cached > 0 ? ", cached: \(cached)" : ""
-            return "llm.tokenUsage[\(source.displayName)]: \(modelId) - in: \(input), out: \(output)\(cachedStr)"
+        case .tokenUsageReceived(let modelId, let input, let output, let cacheRead, let cacheCreation, _, let source):
+            var cacheStr = ""
+            if cacheRead > 0 { cacheStr += ", cacheRead: \(cacheRead)" }
+            if cacheCreation > 0 { cacheStr += ", cacheCreate: \(cacheCreation)" }
+            return "llm.tokenUsage[\(source.displayName)]: \(modelId) - in: \(input), out: \(output)\(cacheStr)"
         case .conversationEntryAppended(let entry):
             return "llm.conversationEntryAppended(\(entry.isUser ? "user" : "assistant"), id: \(entry.id))"
         case .toolResultFilled(let callId, let status):

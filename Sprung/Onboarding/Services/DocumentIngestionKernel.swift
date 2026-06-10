@@ -2,13 +2,13 @@
 //  DocumentIngestionKernel.swift
 //  Sprung
 //
-//  Kernel for document ingestion using Gemini-based extraction.
+//  Kernel for document ingestion via the Anthropic document-analysis pipeline.
 //  Wraps DocumentProcessingService with the unified ingestion protocol.
 //
 import Foundation
 import SwiftyJSON
 
-/// Document ingestion kernel using Gemini (or configured model) for text extraction
+/// Document ingestion kernel wrapping DocumentProcessingService
 actor DocumentIngestionKernel {
 
     private let documentProcessingService: DocumentProcessingService
@@ -100,6 +100,17 @@ actor DocumentIngestionKernel {
             // 1. For batches, this would hide spinner before all files are done
             // 2. The coordinator or LLM response handler should manage the final state
 
+        } catch is ModelConfigurationError {
+            // Repo standard: missing model config surfaces the settings picker,
+            // never a silent substitute. The upload can be retried after configuring.
+            Logger.warning("Document ingestion blocked: document analysis model not configured", category: .ai)
+            await ingestionCoordinator?.handleIngestionFailed(
+                pendingId: pendingId,
+                error: "Document analysis model not configured. Choose one in Settings → Models, then re-upload."
+            )
+            await MainActor.run {
+                NotificationCenter.default.post(name: .showSettings, object: nil)
+            }
         } catch {
             await ingestionCoordinator?.handleIngestionFailed(pendingId: pendingId, error: error.localizedDescription)
             // Note: Don't emit processingStateChanged(false) - let coordinator handle it

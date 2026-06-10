@@ -19,6 +19,8 @@ struct AnthropicStreamAdapter {
     private var currentToolCall: PartialToolCall?
     private var inputTokens: Int = 0
     private var outputTokens: Int = 0
+    private var cacheReadTokens: Int = 0
+    private var cacheCreationTokens: Int = 0
     private var modelId: String = ""
 
     /// Partial tool call being assembled from streaming events
@@ -66,12 +68,18 @@ struct AnthropicStreamAdapter {
         currentToolCall = nil
         modelId = event.message.model
 
-        // Record initial token counts
+        // Record initial token counts (cache fields arrive on message_start)
         if let input = event.message.usage.inputTokens {
             inputTokens = input
         }
         if let output = event.message.usage.outputTokens {
             outputTokens = output
+        }
+        if let cacheRead = event.message.usage.cacheReadInputTokens {
+            cacheReadTokens = cacheRead
+        }
+        if let cacheCreation = event.message.usage.cacheCreationInputTokens {
+            cacheCreationTokens = cacheCreation
         }
 
         return [.llm(.streamingMessageBegan(
@@ -141,6 +149,15 @@ struct AnthropicStreamAdapter {
             if let output = usage.outputTokens {
                 outputTokens = output
             }
+            if let input = usage.inputTokens {
+                inputTokens = input
+            }
+            if let cacheRead = usage.cacheReadInputTokens {
+                cacheReadTokens = cacheRead
+            }
+            if let cacheCreation = usage.cacheCreationInputTokens {
+                cacheCreationTokens = cacheCreation
+            }
         }
 
         return []
@@ -159,12 +176,19 @@ struct AnthropicStreamAdapter {
             statusMessage: nil
         )))
 
-        // Emit token usage
+        // Emit token usage with distinct cache read/creation counts.
+        // This log line is the regression test for prompt caching: from turn 2
+        // within a phase, cacheRead should be ≈ the full prompt minus the latest turn.
+        Logger.info(
+            "📊 Anthropic request usage: input=\(inputTokens) cacheRead=\(cacheReadTokens) cacheCreate=\(cacheCreationTokens) output=\(outputTokens)",
+            category: .ai
+        )
         events.append(.llm(.tokenUsageReceived(
             modelId: modelId,
             inputTokens: inputTokens,
             outputTokens: outputTokens,
-            cachedTokens: 0,  // Anthropic reports this differently
+            cacheReadTokens: cacheReadTokens,
+            cacheCreationTokens: cacheCreationTokens,
             reasoningTokens: 0,  // Extended thinking would go here if enabled
             source: .mainCoordinator
         )))
@@ -193,6 +217,10 @@ struct AnthropicStreamAdapter {
         messageId = nil
         accumulatedText = ""
         pendingToolCalls = []
+        inputTokens = 0
+        outputTokens = 0
+        cacheReadTokens = 0
+        cacheCreationTokens = 0
 
         return events
     }

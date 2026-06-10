@@ -91,7 +91,8 @@ actor NetworkRouter: OnboardingEventEmitter {
                     modelId: modelId,
                     inputTokens: usage.inputTokens ?? 0,
                     outputTokens: usage.outputTokens ?? 0,
-                    cachedTokens: usage.inputTokensDetails?.cachedTokens ?? 0,
+                    cacheReadTokens: usage.inputTokensDetails?.cachedTokens ?? 0,
+                    cacheCreationTokens: 0,  // OpenAI-style usage has no cache-creation concept
                     reasoningTokens: usage.outputTokensDetails?.reasoningTokens ?? 0,
                     source: .mainCoordinator
                 )))

@@ -14,7 +14,8 @@ enum OnboardingLLMConfig {
     // MARK: - Token Limits
 
     /// Maximum tokens for LLM response generation
-    static let maxTokens = 4096
+    /// (8K headroom for synthesis-heavy interview turns; streaming is always on)
+    static let maxTokens = 8192
 
     /// Maximum context tokens for the model
     static let maxContextTokens = 100_000

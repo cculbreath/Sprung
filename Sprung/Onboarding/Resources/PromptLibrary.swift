@@ -71,13 +71,9 @@ enum PromptLibrary {
 
     // MARK: - Document Extraction Prompts
 
-    /// Default PDF/document extraction prompt
-    static let documentExtraction: String = {
-        loadPrompt(named: "document_extraction_prompt")
-    }()
-
     /// Document summarization prompt template.
-    /// Contains placeholders: {FILENAME}, {CONTENT}
+    /// Contains placeholder: {FILENAME}
+    /// The document content arrives as a preceding content block.
     static let documentSummaryTemplate: String = {
         loadPrompt(named: "document_summary_prompt")
     }()
@@ -127,13 +123,15 @@ enum PromptLibrary {
     // MARK: - Skill Bank + Narrative KC Prompts
 
     /// Skill bank extraction prompt template
-    /// Contains placeholders: {DOC_ID}, {FILENAME}, {EXTRACTED_CONTENT}
+    /// Contains placeholders: {DOC_ID}, {FILENAME}, {LOCATION_GUIDANCE}
+    /// The document content arrives as a preceding content block.
     static let skillBankExtractionTemplate: String = {
         loadPrompt(named: "skill_bank_extraction")
     }()
 
     /// Narrative knowledge card extraction prompt template
-    /// Contains placeholders: {DOC_ID}, {FILENAME}, {EXTRACTED_CONTENT}
+    /// Contains placeholders: {DOC_ID}, {FILENAME}, {LOCATION_GUIDANCE}
+    /// The document content arrives as a preceding content block.
     static let kcExtractionTemplate: String = {
         loadPrompt(named: "kc_extraction")
     }()

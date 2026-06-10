@@ -346,7 +346,7 @@ struct KnowledgeCardEditSheet: View {
 
             editableTagGroup("Technologies", systemImage: "cpu", items: $technologies, placeholder: "e.g., Kubernetes")
             editableListGroup("Outcomes", systemImage: "target", items: $outcomes, placeholder: "e.g., Reduced deploy time by 60%")
-            editableListGroup("Suggested Bullets", systemImage: "list.bullet", items: $suggestedBullets, placeholder: "Resume bullet template")
+            editableListGroup("Suggested Bullets", systemImage: "list.bullet", items: $suggestedBullets, placeholder: "Draft resume bullet")
         }
         .padding(16)
         .background(Color(nsColor: .controlBackgroundColor))
