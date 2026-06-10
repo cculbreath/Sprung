@@ -14,14 +14,10 @@ struct ResumeDetailView: View {
     // External navigation bindings
     @Binding var tab: TabList
     @Binding var sheets: AppSheets
-    @Binding var clarifyingQuestions: [ClarifyingQuestion]
     @Binding var showCreateResumeSheet: Bool
 
     // View-model (owns UI state)
     @State private var vm: ResumeDetailVM
-
-    // Popover state
-    @State private var showNodeGroupPhasePopover = false
 
     // Persisted UI state
     @AppStorage("resumeEditorSelectedSection") private var selectedSection: String = "work"
@@ -37,13 +33,11 @@ struct ResumeDetailView: View {
         tab: Binding<TabList>,
         isWide: Binding<Bool>,
         sheets: Binding<AppSheets>,
-        clarifyingQuestions: Binding<[ClarifyingQuestion]>,
         showCreateResumeSheet: Binding<Bool>,
         exportCoordinator: ResumeExportCoordinator
     ) {
         _tab = tab
         _sheets = sheets
-        _clarifyingQuestions = clarifyingQuestions
         _showCreateResumeSheet = showCreateResumeSheet
         _vm = State(wrappedValue: ResumeDetailVM(resume: resume, exportCoordinator: exportCoordinator))
         externalIsWide = isWide
@@ -96,9 +90,7 @@ struct ResumeDetailView: View {
                 ResumeAIDrawer(
                     isExpanded: $isAIDrawerExpanded,
                     sheets: $sheets,
-                    revnodeCount: vm.rootNode?.revnodeCount ?? 0,
-                    showPhaseAssignments: $showNodeGroupPhasePopover,
-                    resume: vm.resume
+                    revnodeCount: vm.rootNode?.aiStatusChildren ?? 0
                 )
             }
 

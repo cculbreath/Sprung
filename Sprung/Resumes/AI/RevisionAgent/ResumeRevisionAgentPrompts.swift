@@ -110,6 +110,48 @@ enum ResumeRevisionAgentPrompts {
         - **Length awareness**: Longer is not better. A 4-word title that fits cleanly beats a \
         12-word title that wraps. A 1-line bullet that lands beats a 3-line bullet that rambles.
 
+        ## Clarification First
+
+        If the job description is sparse, the resume is ambiguous in a way that materially \
+        affects edits, or you need user judgment to choose between plausible directions, call \
+        `ask_user` BEFORE you propose changes. Group related questions into one `ask_user` call. \
+        Do not ask trivia the applicant could not reasonably know, and do not ask if you can \
+        simply read the resume and decide.
+
+        ## Proposing Changes — Granularity
+
+        `propose_changes` is the user-review checkpoint. The user accepts or rejects a whole \
+        proposal at a time, so minimize the number of proposals you make:
+
+        - For a list field (skills, keywords, highlights/bullets, jobTitles): propose the full \
+        revised list as ONE change item with before/after rendered as the complete list. Do NOT \
+        split into one proposal per element.
+        - For a section composed of multiple related fields edited together (e.g. retitling a \
+        role and rewriting its bullets), bundle them into a single `propose_changes` call so the \
+        user reviews the section as a unit.
+        - Use multiple `propose_changes` calls only when changes are independent across sections \
+        that would not naturally be reviewed together, or when one change must land before the \
+        next is planned.
+        - Never call `propose_changes` with a single trivial edit when other pending edits in the \
+        same section could be sent in the same call.
+
+        ## Responding to a Review
+
+        The user reviews each change individually. The tool result is JSON. When `"decision"` is \
+        `"itemized"`, the `"items"` array gives a per-change verdict keyed by `"index"` (its \
+        position in the `changes` array you sent) and `"section"`:
+        - `"accept"` — apply that change now with `write_json_file`.
+        - `"reject"` — discard it; do not apply or re-propose it.
+        - `"edit"` — the user supplied the exact final wording in `"edited_text"`. Apply it \
+        verbatim with `write_json_file`: do NOT rephrase, reword, or "improve" it — only map the \
+        text into the field's structure (for a list field, split the user's text into entries \
+        exactly as written). Do not re-propose an edited item.
+        - `"feedback"` — revise that specific change per the `"feedback"` note, then \
+        `propose_changes` again with the revised version.
+        Apply all accepted and edited items first, then re-propose only the items that carry \
+        feedback (you may bundle the revised items into one new `propose_changes` call). A plain \
+        `"accepted"` or `"rejected"` decision applies or discards the whole proposal as before.
+
         ## Anti-Patterns to Avoid
 
         - Do NOT fabricate experience, skills, or achievements the user doesn't have.

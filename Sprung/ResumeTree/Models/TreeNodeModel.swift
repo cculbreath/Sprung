@@ -88,150 +88,34 @@ enum LeafStatus: String, Codable, Hashable {
 
     /// Attributes in "Together" mode - bundled into 1 revnode (pattern: section.*.attr)
     /// Stored as JSON-encoded array on collection nodes (e.g., skills, work)
+    // DEPRECATED vNext — read once by migrateAISelectionV1, then ignored.
+    // Remove this property (and the migration) in vNext+1. Keep the storage in
+    // place until then so SwiftData lightweight migration does not drop the column.
     @Attribute(.externalStorage)
     private var bundledAttributesData: Data?
 
-    var bundledAttributes: [String]? {
-        get {
-            guard let data = bundledAttributesData else { return nil }
-            return try? JSONDecoder().decode([String].self, from: data)
-        }
-        set {
-            bundledAttributesData = newValue.flatMap { try? JSONEncoder().encode($0) }
-        }
+    /// Decodes legacy `bundledAttributesData` for migration use ONLY.
+    var legacyBundledAttributes: [String]? {
+        guard let data = bundledAttributesData else { return nil }
+        return try? JSONDecoder().decode([String].self, from: data)
     }
 
     /// Attributes in "Separately" mode - one revnode per entry (pattern: section[].attr)
     /// Stored as JSON-encoded array on collection nodes
+    // DEPRECATED vNext — read once by migrateAISelectionV1, then ignored.
+    // Remove this property (and the migration) in vNext+1. Keep the storage in
+    // place until then so SwiftData lightweight migration does not drop the column.
     @Attribute(.externalStorage)
     private var enumeratedAttributesData: Data?
 
-    var enumeratedAttributes: [String]? {
-        get {
-            guard let data = enumeratedAttributesData else { return nil }
-            return try? JSONDecoder().decode([String].self, from: data)
-        }
-        set {
-            enumeratedAttributesData = newValue.flatMap { try? JSONEncoder().encode($0) }
-        }
+    /// Decodes legacy `enumeratedAttributesData` for migration use ONLY.
+    var legacyEnumeratedAttributes: [String]? {
+        guard let data = enumeratedAttributesData else { return nil }
+        return try? JSONDecoder().decode([String].self, from: data)
     }
 
-    /// Returns true if this collection node has any attributes set for AI review
-    var hasAttributeReviewModes: Bool {
-        let hasBundled = !(bundledAttributes?.isEmpty ?? true)
-        let hasEnumerated = !(enumeratedAttributes?.isEmpty ?? true)
-        return hasBundled || hasEnumerated
-    }
-
-    /// Total revnode count for this subtree
-    /// Counts: solo nodes, bundle attributes (1 each), iterate attributes (N each), container enumerate children
-    /// Skips children with `.excludedFromGroup` status
-    var revnodeCount: Int {
-        var count = 0
-
-        // Container enumerate: each child is a revnode (skip excluded)
-        // Only for flat containers (entries without sub-attributes).
-        // Object collections with ["*"] are handled by the iterate block below.
-        let isContainerEnumerate = enumeratedAttributes?.contains("*") == true
-        let isObjectCollection = orderedChildren.first.map { !$0.orderedChildren.isEmpty } ?? false
-        if isContainerEnumerate && !isObjectCollection {
-            count += orderedChildren.filter { $0.status != .excludedFromGroup }.count
-        }
-        // Bundle attributes: 1 revnode per attribute (single-attr), or entries × attrs (multi-attr)
-        else if let bundled = bundledAttributes, !bundled.isEmpty {
-            let namedAttrs = bundled.filter { $0 != "*" && !$0.hasSuffix("[]") }
-            let nestedAttrs = bundled.filter { $0.hasSuffix("[]") }
-
-            if namedAttrs.count > 1 {
-                // Multi-attribute bundle: count entries × attributes (section compound review items)
-                let entryCount = orderedChildren.filter { $0.status != .excludedFromGroup }.count
-                count += entryCount * namedAttrs.count
-            } else {
-                // Single named attribute: 1 bundled revnode
-                for _ in namedAttrs {
-                    count += 1
-                }
-            }
-
-            // "*" wildcard: 1 bundled revnode for all direct children
-            if bundled.contains("*") {
-                count += 1
-            }
-
-            // Nested array attrs: existing per-child counting
-            for attr in nestedAttrs {
-                let baseAttr = String(attr.dropLast(2))
-                for entry in orderedChildren {
-                    if let attrNode = entry.orderedChildren.first(where: {
-                        ($0.name.isEmpty ? $0.displayLabel : $0.name) == baseAttr
-                    }) {
-                        count += attrNode.orderedChildren.filter { $0.status != .excludedFromGroup }.count
-                    }
-                }
-            }
-        }
-
-        // Iterate attributes: N revnodes per attribute (1 per entry) or N×M for nested arrays
-        if let enumerated = enumeratedAttributes, !enumerated.isEmpty {
-            // Expand "*" for object collections (same logic as PhaseReviewManager)
-            var iterateAttrs: [String]
-            if enumerated == ["*"] {
-                if let firstEntry = orderedChildren.first, !firstEntry.orderedChildren.isEmpty {
-                    // Object collection: all attributes → multi-attribute iterate
-                    iterateAttrs = firstEntry.orderedChildren.compactMap {
-                        let n = $0.name.isEmpty ? $0.displayLabel : $0.name
-                        return n.isEmpty ? nil : n
-                    }
-                } else {
-                    iterateAttrs = [] // Flat → counted by container enumerate block above
-                }
-            } else {
-                iterateAttrs = enumerated.filter { $0 != "*" }
-            }
-
-            // Group simple vs nested-array attrs
-            let simpleAttrs = iterateAttrs.filter { !$0.hasSuffix("[]") }
-            let nestedAttrs = iterateAttrs.filter { $0.hasSuffix("[]") }
-
-            // Simple attrs: count entries ONCE regardless of how many attrs
-            // (they merge into one compound RevNode per entry)
-            if !simpleAttrs.isEmpty {
-                count += orderedChildren.filter { $0.status != .excludedFromGroup }.count
-            }
-
-            // Nested array attrs: existing per-child counting
-            for attr in nestedAttrs {
-                let baseAttr = String(attr.dropLast(2))
-                for entry in orderedChildren {
-                    if let attrNode = entry.orderedChildren.first(where: {
-                        ($0.name.isEmpty ? $0.displayLabel : $0.name) == baseAttr
-                    }) {
-                        count += attrNode.orderedChildren.filter { $0.status != .excludedFromGroup }.count
-                    }
-                }
-            }
-        }
-
-        // Solo nodes: status == .aiToReplace with no bundle/enumerate attributes
-        // Counts both leaf nodes and solo containers (e.g., jobTitles) as 1 revnode each
-        if status == .aiToReplace && bundledAttributes == nil && enumeratedAttributes == nil {
-            // Only count if not part of a container enumerate (those are counted above)
-            if parent?.enumeratedAttributes?.contains("*") != true {
-                count += 1
-            }
-        }
-
-        // Recurse into children (skip if container enumerate or solo container - already counted)
-        let isSoloContainer = status == .aiToReplace && !orderedChildren.isEmpty &&
-                              bundledAttributes == nil && enumeratedAttributes == nil
-        if enumeratedAttributes?.contains("*") != true && !isSoloContainer {
-            for child in orderedChildren {
-                count += child.revnodeCount
-            }
-        }
-
-        return count
-    }
+    /// The single editability signal: a node is editable iff it is marked for AI replacement.
+    var isEditable: Bool { status == .aiToReplace }
 
     /// Returns true if this is a collection node (has children that are entries)
     /// Collection nodes can have bundle/iterate modes applied
@@ -256,44 +140,6 @@ enum LeafStatus: String, Codable, Hashable {
             current = ancestor.parent
         }
         return false
-    }
-
-    /// Returns true if this node is included via BUNDLE mode (purple)
-    /// e.g., "Swift" under "keywords" when skills.*.keywords is configured
-    var isIncludedInBundleReview: Bool {
-        guard let containerParent = parent,
-              let entry = containerParent.parent,
-              let collection = entry.parent else { return false }
-
-        let containerName = containerParent.name.isEmpty ? containerParent.displayLabel : containerParent.name
-        return collection.bundledAttributes?.contains(containerName) == true
-    }
-
-    /// Returns true if this node is included via ITERATE mode (cyan)
-    var isIncludedInIterateReview: Bool {
-        // Container enumerate pattern: parent has enumeratedAttributes containing "*"
-        // e.g., Physicist under Job Titles where jobTitles[] is configured
-        if parent?.enumeratedAttributes?.contains("*") == true {
-            return true
-        }
-
-        // Iterate attribute target: this node's name is in parent's parent's enumeratedAttributes
-        // e.g., description when projects[].description is configured
-        if let collection = parent?.parent {
-            let nodeName = name.isEmpty ? displayLabel : name
-            if collection.enumeratedAttributes?.contains(nodeName) == true {
-                return true
-            }
-        }
-
-        // Child of iterate container: parent's name is in great-grandparent's enumeratedAttributes
-        // e.g., bullet under highlights when work[].highlights is configured
-        guard let containerParent = parent,
-              let entry = containerParent.parent,
-              let collection = entry.parent else { return false }
-
-        let containerName = containerParent.name.isEmpty ? containerParent.displayLabel : containerParent.name
-        return collection.enumeratedAttributes?.contains(containerName) == true
     }
 
     /// Evaluates the schemaTitleTemplate by replacing {{fieldName}} with child values.

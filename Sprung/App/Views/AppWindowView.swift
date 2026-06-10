@@ -18,7 +18,6 @@ struct AppWindowView: View {
     @Binding var showSlidingList: Bool
     // Centralized sheet state management for all app windows/modals
     @Binding var sheets: AppSheets
-    @Binding var clarifyingQuestions: [ClarifyingQuestion]
     var body: some View {
         @Bindable var jobAppStore = jobAppStore
         mainContent
@@ -86,8 +85,7 @@ struct AppWindowView: View {
                 isWide: .constant(true),
                 tab: $selectedTab,
                 refresh: $tabRefresh,
-                sheets: $sheets,
-                clarifyingQuestions: $clarifyingQuestions
+                sheets: $sheets
             )
         case .coverLetter:
             CoverLetterView(showCoverLetterInspector: $sheets.showCoverLetterInspector)

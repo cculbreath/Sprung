@@ -33,9 +33,7 @@ struct RevisionChatView: View {
                         if let proposal = currentProposal {
                             RevisionProposalView(
                                 proposal: proposal,
-                                onAccept: { onProposalResponse(.accepted) },
-                                onReject: { onProposalResponse(.rejected) },
-                                onModify: { feedback in onProposalResponse(.modified(feedback: feedback)) }
+                                onRespond: { response in onProposalResponse(response) }
                             )
                             .id("proposal")
                         }

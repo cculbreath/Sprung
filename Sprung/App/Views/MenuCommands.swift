@@ -32,7 +32,6 @@ extension Notification.Name {
     static let selectJobApp = Notification.Name("selectJobApp")
     // Resume Commands
     static let customizeResume = Notification.Name("customizeResume")
-    static let clarifyCustomize = Notification.Name("clarifyCustomize")
     static let optimizeResume = Notification.Name("optimizeResume")
     static let showResumeInspector = Notification.Name("showResumeInspector")
     // Cover Letter Commands
@@ -77,7 +76,6 @@ extension Notification.Name {
     // Menu-to-Toolbar Bridge Commands (for programmatically triggering toolbar buttons)
     static let triggerBestJobButton = Notification.Name("triggerBestJobButton")
     static let triggerCustomizeButton = Notification.Name("triggerCustomizeButton")
-    static let triggerClarifyingQuestionsButton = Notification.Name("triggerClarifyingQuestionsButton")
     static let triggerGenerateCoverLetterButton = Notification.Name("triggerGenerateCoverLetterButton")
     static let triggerReviseCoverLetterButton = Notification.Name("triggerReviseCoverLetterButton")
     static let triggerTTSButton = Notification.Name("triggerTTSButton")

@@ -438,6 +438,17 @@ class ResumeRevisionAgent {
             responseText = "Changes rejected"
         case .modified(let feedback):
             responseText = feedback
+        case .itemized(let items):
+            let accepted = items.filter { $0.kind == .accept }.count
+            let rejected = items.filter { $0.kind == .reject }.count
+            let feedback = items.filter { $0.kind == .feedback }.count
+            let edited = items.filter { $0.kind == .edit }.count
+            var parts: [String] = []
+            if accepted > 0 { parts.append("\(accepted) accepted") }
+            if edited > 0 { parts.append("\(edited) edited") }
+            if rejected > 0 { parts.append("\(rejected) rejected") }
+            if feedback > 0 { parts.append("\(feedback) with feedback") }
+            responseText = "Reviewed items — " + (parts.isEmpty ? "no changes" : parts.joined(separator: ", "))
         }
         messages.append(RevisionMessage(role: .user, content: responseText))
         cont.resume(returning: response)

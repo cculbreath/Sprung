@@ -11,13 +11,11 @@ import SwiftUI
 
 // MARK: - AI Action Drawer
 
-/// Bottom drawer containing AI action buttons, revnode count, and phase assignments
+/// Bottom drawer containing AI action buttons and a review-item count
 struct ResumeAIDrawer: View {
     @Binding var isExpanded: Bool
     @Binding var sheets: AppSheets
     let revnodeCount: Int
-    @Binding var showPhaseAssignments: Bool
-    let resume: Resume?
 
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
 
@@ -61,16 +59,6 @@ struct ResumeAIDrawer: View {
                         .disabled(jobAppStore.selectedApp?.selectedRes?.hasUpdatableNodes != true)
 
                         Button {
-                            NotificationCenter.default.post(name: .clarifyCustomize, object: nil)
-                        } label: {
-                            Label("Clarify", systemImage: "questionmark.bubble")
-                                .font(.system(size: 12))
-                        }
-                        .controlSize(.small)
-                        .buttonStyle(.automatic)
-                        .help("Create resume revisions with clarifying questions")
-                        .disabled(jobAppStore.selectedApp?.selectedRes?.hasUpdatableNodes != true)
-                        Button {
                             sheets.showResumeReview = true
                         } label: {
                             Label("Optimize", systemImage: "character.magnify")
@@ -80,28 +68,6 @@ struct ResumeAIDrawer: View {
                         .buttonStyle(.automatic)
                         .help("AI Resume Review")
                         .disabled(jobAppStore.selectedApp?.selectedRes == nil)
-
-                        Spacer()
-                    }
-
-                    Divider()
-
-                    // Footer row with phase assignments
-                    HStack {
-                        Button(action: { showPhaseAssignments.toggle() }) {
-                            HStack(spacing: 4) {
-                                Image(systemName: "list.number")
-                                Text("Phase Assignments")
-                            }
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                        }
-                        .buttonStyle(.plain)
-                        .popover(isPresented: $showPhaseAssignments, arrowEdge: .top) {
-                            if let resume = resume {
-                                NodeGroupPhasePanelPopover(resume: resume)
-                            }
-                        }
 
                         Spacer()
                     }

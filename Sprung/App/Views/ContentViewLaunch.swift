@@ -51,7 +51,6 @@ struct ContentViewLaunch: View {
             .environment(deps.dragInfo)
             .environment(deps.appEnvironment.llmFacade)
             .environment(deps.reasoningStreamManager)
-            .environment(deps.resumeReviseViewModel)
             .environment(deps.moduleNavigation)
             .environment(deps.focusState)
             .environment(deps.windowCoordinator)

@@ -183,36 +183,14 @@ final class ActivityReportService {
             if resume.dateCreated >= since {
                 created += 1
             }
-            // Check if resume has any phase assignments (indicates LLM customization was configured)
-            // or if any TreeNodes have been through AI revision (have bundled/enumerated attributes set)
-            if !resume.phaseAssignments.isEmpty || hasLLMCustomizedNodes(resume) {
+            // A resume counts as LLM-customized if any of its TreeNodes are
+            // marked editable (status == .aiToReplace).
+            if (resume.rootNode?.aiStatusChildren ?? 0) > 0 {
                 llmCustomized += 1
             }
         }
 
         return (created, modified, llmCustomized)
-    }
-
-    /// Check if a resume has any TreeNodes that have been through LLM customization
-    private func hasLLMCustomizedNodes(_ resume: Resume) -> Bool {
-        guard let rootNode = resume.rootNode else { return false }
-        return checkNodeForLLMCustomization(rootNode)
-    }
-
-    private func checkNodeForLLMCustomization(_ node: TreeNode) -> Bool {
-        // A node has been through LLM customization if it has attribute review modes configured
-        if node.hasAttributeReviewModes {
-            return true
-        }
-
-        // Check children recursively
-        for child in node.children ?? [] {
-            if checkNodeForLLMCustomization(child) {
-                return true
-            }
-        }
-
-        return false
     }
 
     // MARK: - Cover Letter Queries

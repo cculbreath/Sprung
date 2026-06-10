@@ -48,32 +48,11 @@ class ResumeExportService {
         }
         if let fallback = defaultTemplate() {
             resume.template = fallback
-            applyManifestPhaseDefaults(to: resume, from: fallback)
             return fallback
         }
         throw ResumeExportError.noTemplatesConfigured
     }
 
-    /// Apply manifest's reviewPhases defaults to resume.phaseAssignments
-    /// Only phase 1 assignments are stored; phase 2 is the default (absence = phase 2)
-    private func applyManifestPhaseDefaults(to resume: Resume, from template: Template) {
-        guard let manifest = TemplateManifestLoader.manifest(for: template),
-              let reviewPhases = manifest.reviewPhases else { return }
-
-        var assignments = resume.phaseAssignments
-        for (section, phases) in reviewPhases {
-            for phaseConfig in phases {
-                // Extract attribute name from field pattern (e.g., "skills.*.name" -> "name")
-                let attrName = phaseConfig.field.split(separator: ".").last.map(String.init) ?? phaseConfig.field
-                let key = "\(section.capitalized)-\(attrName)"
-                // Only store phase 1 assignments; phase 2 is the default
-                if phaseConfig.phase == 1 {
-                    assignments[key] = 1
-                }
-            }
-        }
-        resume.phaseAssignments = assignments
-    }
     @MainActor
     private func promptForCustomTemplate(for resume: Resume) async throws -> Template {
         let selection = try ExportTemplateSelection.requestTemplateHTMLAndOptionalCSS()

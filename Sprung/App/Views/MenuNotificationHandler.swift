@@ -80,16 +80,6 @@ class MenuNotificationHandler {
             }
         }
         NotificationCenter.default.addObserver(
-            forName: .clarifyCustomize,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            Task { @MainActor in
-                self?.selectedTab?.wrappedValue = .resume
-                self?.handleClarifyCustomize()
-            }
-        }
-        NotificationCenter.default.addObserver(
             forName: .optimizeResume,
             object: nil,
             queue: .main
@@ -389,13 +379,6 @@ class MenuNotificationHandler {
         selectedTab?.wrappedValue = .resume
         // Trigger the same action as ResumeCustomizeButton
         NotificationCenter.default.post(name: .triggerCustomizeButton, object: nil)
-    }
-    @MainActor
-    private func handleClarifyCustomize() {
-        // Switch to resume tab first
-        selectedTab?.wrappedValue = .resume
-        // Trigger the same action as ClarifyingQuestionsButton
-        NotificationCenter.default.post(name: .triggerClarifyingQuestionsButton, object: nil)
     }
     @MainActor
     private func handleGenerateCoverLetter() {

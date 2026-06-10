@@ -226,40 +226,46 @@ During resume customization, the Skill Bank drives ATS-aware keyword injection a
 
 `ExperienceDefaults` is a `Codable` struct holding the user's generally-applicable resume data: `work[]`, `education[]`, `skills[]`, `projects[]`, `awards[]`, and more.
 
-`ExperienceDefaultsToTree` converts this into a recursive `TreeNode` hierarchy where each leaf is a single editable resume field. During conversion, manifest patterns are applied to flag nodes for AI review:
+`ExperienceDefaultsToTree` converts this into a recursive `TreeNode` hierarchy where each leaf is a single editable resume field. During conversion, manifest `defaultAIFields` patterns flag nodes for AI revision by setting `status = .aiToReplace` — a single "editable" axis:
 
-| Manifest Pattern | Review Mode | Effect on TreeNode |
-|-----------------|-------------|-------------------|
-| `skills.*.name` | Bundled | All skill names reviewed together as a set |
-| `skills[].keywords` | Enumerated | Each skill's keywords reviewed individually |
-| `custom.objective` | Scalar | Single objective field flagged for rewrite |
+| Manifest Pattern | Effect on TreeNode |
+|-----------------|-------------------|
+| `skills.*.name`, `skills[].keywords` | The `skills` collection is marked editable |
+| `work[].highlights` | The `work` collection is marked editable |
+| `custom.objective` | The `objective` leaf is marked editable |
 
-### Step 2: AI Customization (Two-Phase Review)
+Patterns containing `*` or `[]` mark the **collection root** editable; plain dotted paths mark the **leaf** editable. There is no bundle-vs-iterate distinction — a node is either editable (`status == .aiToReplace`) or not, and `.excludedFromGroup` lets a child opt out of an editable ancestor.
+
+### Step 2: AI Revision (Agent-Driven)
+
+The user opens the revision agent from the **Customize** toolbar button / menu command. The agent runs in its own window (`ResumeRevisionView`), driven by `ResumeRevisionAgent` over the Anthropic tool loop.
 
 ```
-PhaseReviewManager reads TreeNode AI-review flags
+ResumeRevisionWorkspaceService exports each editable subtree
+(any TreeNode with status == .aiToReplace, minus .excludedFromGroup
+children) into an ephemeral JSON workspace
         │
-        ├── Phase 1 (Bundled): 1 ExportedReviewNode per bundle
-        │   LLM reviews all bundled values holistically
-        │   (e.g., reviews all skill names together to ensure consistency)
-        │
-        └── Phase 2 (Enumerated): 1 ExportedReviewNode per entry
-            LLM reviews each entry in isolation, informed by Phase 1 results
+        ▼
+ResumeRevisionAgent runs an Anthropic tool loop:
+  • read_file / glob / grep   — inspect the workspace + job posting
+  • ask_user                  — clarify ambiguities up front
+  • write_json_file           — stage edits to the workspace
+  • propose_changes           — user-review checkpoint (batched diffs)
 
-Context injected into every LLM call:
+Context available to the agent:
   • Knowledge Cards (enriched narrative + facts)
   • Skill Bank (canonical skills + ATS variants)
   • InferenceGuidance (per-node user instructions)
-  • Full job posting text
-  • ApplicantProfile (identity)
+  • Full job posting text + ApplicantProfile (identity)
 
-LLM returns ProposedRevisionNode[] with oldValue / newValue
-User reviews proposals in streaming queue UI
-  → Accepts, edits, or rejects each proposal
-  → Rejected proposals can be resubmitted with feedback
+User reviews each propose_changes call as a unit
+  → Accept / Reject / Reject-with-feedback (agent re-proposes)
 
-FeedbackNode.applyToResume() patches TreeNode leaves in place
+On completion the agent writes the accepted workspace JSON back
+into the live TreeNode hierarchy.
 ```
+
+Review granularity is the agent's responsibility; its prompt biases toward section-shaped, batched proposals rather than one-proposal-per-element, and toward asking clarifying questions before proposing.
 
 `InferenceGuidance` is a SwiftData model keyed by tree path (e.g., `"experience.*.bullets"`, `"custom.jobTitles"`) that stores per-node LLM instructions set by the user — preferred phrasing, emphasis, constraints — giving fine-grained control over tone in each section.
 
@@ -350,7 +356,7 @@ HTML templates ship in `Sprung/Resources/TemplateDefaults/` (one directory per t
 | Single `LLMFacade` entry point | Feature code stays provider-agnostic; backends swap without touching callers |
 | Backend inferred from model ID prefix | User-selected models route automatically; no per-feature backend configuration needed |
 | No hardcoded model IDs or fallbacks | Model IDs change constantly; missing config surfaces Settings picker rather than silently degrading |
-| Two-phase review (bundled → enumerated) | Holistic Phase 1 review produces better context for per-entry Phase 2 proposals |
+| Agent-driven revision (single editable flag) | One review path; the agent batches section-shaped proposals and clarifies via `ask_user`, instead of per-element two-phase review |
 | Knowledge Cards enriched at creation time | Resume customization LLM receives structured facts and bullet templates, not raw narratives |
 | `ApplicantProfile` merged fresh at render time | Identity never goes stale in stored resumes; one update propagates everywhere |
 | Handlebars→Mustache translation layer | Entire JSON Resume community theme ecosystem is reusable without forking themes |

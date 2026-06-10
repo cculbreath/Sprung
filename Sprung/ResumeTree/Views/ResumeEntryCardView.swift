@@ -29,11 +29,6 @@ struct ResumeEntryCardView: View {
         return Set(requirements.matchedSkillIds.compactMap { UUID(uuidString: $0) })
     }
 
-    /// The parent (section) node
-    private var sectionNode: TreeNode? {
-        node.parent
-    }
-
     /// The title/name node (hidden from card content but shown as header icon)
     private var titleNode: TreeNode? {
         let title = node.computedTitle.lowercased()
@@ -237,27 +232,14 @@ struct ResumeEntryCardView: View {
 
     @ViewBuilder
     private func nestedContainerRow(_ child: TreeNode) -> some View {
-        let containerName = child.name.isEmpty ? child.displayLabel : child.name
-        let containerNameWithSuffix = containerName + "[]"
-
-        // Get full icon resolution for this nested container (may be dual with arrow)
-        let iconResolution = AIIconModeResolver.resolve(for: child)
+        let iconMode = AIIconModeResolver.detectSingleMode(for: child)
 
         VStack(alignment: .leading, spacing: 6) {
-            // Header row with AI icon(s)
+            // Header row with AI icon
             HStack(spacing: 6) {
-                // AI status menu - click to configure AI review for this collection
-                if let section = sectionNode {
-                    ResolvedAIIconNativeMenuButton(resolution: iconResolution) {
-                        self.buildNestedContainerMenu(
-                            section: section,
-                            containerName: containerName,
-                            containerNameWithSuffix: containerNameWithSuffix
-                        )
-                    }
-                } else {
-                    ResolvedAIIcon(resolution: iconResolution)
-                        .padding(4)
+                // AI status menu - click to include/exclude this collection from AI revision
+                AIIconNativeMenuButton(mode: iconMode, showDropIndicator: true) {
+                    nestedContainerMenu(for: child)
                 }
 
                 Text(child.displayLabel.titleCased)
@@ -296,150 +278,32 @@ struct ResumeEntryCardView: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .contextMenu {
-            if let section = sectionNode {
-                nestedContainerContextMenu(section: section, containerName: containerName, containerNameWithSuffix: containerNameWithSuffix)
-            }
+            nestedContainerContextMenu(for: child)
         }
     }
 
-    /// Build native NSMenu for nested container AI configuration.
-    /// Structure: Bundle▶ → [leaf], Iterate▶ → [leaf], Disable
-    private func buildNestedContainerMenu(section: TreeNode, containerName: String, containerNameWithSuffix: String) -> NSMenu {
+    /// Single-toggle native menu for a nested container's AI editability.
+    private func nestedContainerMenu(for container: TreeNode) -> NSMenu {
         let menu = NSMenu()
-
-        let isBundled = section.bundledAttributes?.contains(containerName) == true
-        let isIteratedBundled = section.enumeratedAttributes?.contains(containerName) == true
-        let isIteratedEach = section.enumeratedAttributes?.contains(containerNameWithSuffix) == true
-        let hasConfig = isBundled || isIteratedBundled || isIteratedEach
-        let leaf = nestedLeafLabel(for: containerName)
-
-        // Children's collection mode (independent of which list stores the attribute)
-        // "Bundle" = children grouped together: attr without [] in either list
-        // "Iterate" = children handled individually: attr with [] suffix
-        let childrenBundled = isBundled || isIteratedBundled
-        let childrenIterated = isIteratedEach
-
-        // Bundle ▶ → leaf item
-        let bundleItem = NSMenuItem(title: "Bundle", action: nil, keyEquivalent: "")
-        bundleItem.state = childrenBundled ? .on : .off
-        let bundleSub = NSMenu()
-        bundleSub.addItem(ActionMenuItem(leaf, checked: childrenBundled) {
-            setContainerMode(collection: section, attr: containerName, mode: .bundle)
+        menu.addItem(ActionMenuItem(
+            "Include in AI revision",
+            checked: container.status == .aiToReplace
+        ) {
+            container.status = container.status == .aiToReplace ? .saved : .aiToReplace
         })
-        bundleItem.submenu = bundleSub
-        menu.addItem(bundleItem)
-
-        // Iterate ▶ → leaf item
-        let iterateItem = NSMenuItem(title: "Iterate", action: nil, keyEquivalent: "")
-        iterateItem.state = childrenIterated ? .on : .off
-        let iterateSub = NSMenu()
-        iterateSub.addItem(ActionMenuItem(leaf, checked: childrenIterated) {
-            setContainerMode(collection: section, attr: containerNameWithSuffix, mode: .iterate)
-        })
-        iterateItem.submenu = iterateSub
-        menu.addItem(iterateItem)
-
-        if hasConfig {
-            menu.addItem(.separator())
-            menu.addItem(ActionMenuItem("Disable AI Review") {
-                setContainerMode(collection: section, attr: containerName, mode: .off)
-            })
-        }
-
         return menu
     }
 
-    /// Simple singularization for leaf display labels (keywords → Keyword)
-    private func nestedLeafLabel(for attr: String) -> String {
-        let name = attr.titleCased
-        if name.hasSuffix("s") && !name.hasSuffix("ss") {
-            return String(name.dropLast())
-        }
-        return name
-    }
-
-    /// Context menu content for nested container (right-click) - uses native Menu format
+    /// Right-click context menu for a nested container: single editable toggle.
     @ViewBuilder
-    private func nestedContainerContextMenu(section: TreeNode, containerName: String, containerNameWithSuffix: String) -> some View {
-        let isBundled = section.bundledAttributes?.contains(containerName) == true
-        let isIteratedBundled = section.enumeratedAttributes?.contains(containerName) == true
-        let isIteratedEach = section.enumeratedAttributes?.contains(containerNameWithSuffix) == true
-        let hasAIConfig = isBundled || isIteratedBundled || isIteratedEach
-
-        Text("AI Review: \(containerName)")
-
-        Divider()
-
-        // Bundle all (1 review for all items across all entries)
+    private func nestedContainerContextMenu(for container: TreeNode) -> some View {
         Button {
-            setContainerMode(collection: section, attr: containerName, mode: .bundle)
+            container.status = container.status == .aiToReplace ? .saved : .aiToReplace
         } label: {
             HStack {
-                Image(systemName: "circle.hexagongrid.circle")
-                    .foregroundColor(.purple)
-                Text("Bundle - 1 review")
-                if isBundled { Image(systemName: "checkmark") }
+                Text("Include in AI revision")
+                if container.status == .aiToReplace { Image(systemName: "checkmark") }
             }
-        }
-
-        // Iterate bundled (N reviews, each entry's items together)
-        Button {
-            setContainerMode(collection: section, attr: containerName, mode: .iterate)
-        } label: {
-            HStack {
-                Image(systemName: "film.stack")
-                    .foregroundColor(.indigo)
-                Text("Iterate (bundled) - N reviews")
-                if isIteratedBundled { Image(systemName: "checkmark") }
-            }
-        }
-
-        // Iterate each (N×M reviews, each item separate)
-        Button {
-            setContainerMode(collection: section, attr: containerNameWithSuffix, mode: .iterate)
-        } label: {
-            HStack {
-                Image(systemName: "film.stack")
-                    .foregroundColor(.indigo)
-                Text("Iterate (each) - N×M reviews")
-                if isIteratedEach { Image(systemName: "checkmark") }
-            }
-        }
-
-        if hasAIConfig {
-            Divider()
-
-            Button(role: .destructive) {
-                setContainerMode(collection: section, attr: containerName, mode: .off)
-            } label: {
-                Label("Disable AI Review", systemImage: "xmark.circle")
-            }
-        }
-    }
-
-    private func setContainerMode(collection: TreeNode, attr: String, mode: AIReviewMode) {
-        let baseAttr = attr.replacingOccurrences(of: "[]", with: "")
-        let attrWithSuffix = baseAttr + "[]"
-
-        // Remove from both lists
-        if var bundled = collection.bundledAttributes {
-            bundled.removeAll { $0 == baseAttr || $0 == attrWithSuffix }
-            collection.bundledAttributes = bundled.isEmpty ? nil : bundled
-        }
-        if var enumerated = collection.enumeratedAttributes {
-            enumerated.removeAll { $0 == baseAttr || $0 == attrWithSuffix }
-            collection.enumeratedAttributes = enumerated.isEmpty ? nil : enumerated
-        }
-
-        // Add to appropriate list
-        if mode == .bundle {
-            var bundled = collection.bundledAttributes ?? []
-            bundled.append(baseAttr)
-            collection.bundledAttributes = bundled
-        } else if mode == .iterate {
-            var enumerated = collection.enumeratedAttributes ?? []
-            enumerated.append(attr)  // Use the attr as-is (may have [] suffix)
-            collection.enumeratedAttributes = enumerated
         }
     }
 
@@ -514,10 +378,9 @@ private struct FieldValueEditor: View {
         node.status == .excludedFromGroup
     }
 
-    /// Whether this field is a member of a group review (bundled or iterated)
+    /// Whether this field sits under an editable ancestor (included or opted-out)
     private var isGroupMember: Bool {
-        iconMode == .bundledMember || iconMode == .iteratedMember || iconMode == .iterateBundledMember ||
-        iconMode == .excludedBundledMember || iconMode == .excludedIteratedMember
+        iconMode == .included || iconMode == .excluded
     }
 
     private func toggleSoloMode() {
@@ -639,10 +502,9 @@ private struct BulletItemEditor: View {
         node.status == .excludedFromGroup
     }
 
-    /// Whether this bullet is a member of a group review (bundled or iterated)
+    /// Whether this bullet sits under an editable ancestor (included or opted-out)
     private var isGroupMember: Bool {
-        iconMode == .bundledMember || iconMode == .iteratedMember || iconMode == .iterateBundledMember ||
-        iconMode == .excludedBundledMember || iconMode == .excludedIteratedMember
+        iconMode == .included || iconMode == .excluded
     }
 
     var body: some View {

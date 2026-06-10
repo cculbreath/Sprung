@@ -91,14 +91,12 @@ extension NSToolbarItem.Identifier {
     static let createResume = NSToolbarItem.Identifier("createResume")
     static let coverLetter = NSToolbarItem.Identifier("coverLetter")
     static let experienceEditor = NSToolbarItem.Identifier("experienceEditor")
-    static let resumePolish = NSToolbarItem.Identifier("resumePolish")
     static let analyze = NSToolbarItem.Identifier("analyze")
     static let inspector = NSToolbarItem.Identifier("inspector")
     static let settingsItem = NSToolbarItem.Identifier("settings")
     static let applicantProfile = NSToolbarItem.Identifier("applicantProfile")
     static let ttsReadAloud = NSToolbarItem.Identifier("ttsReadAloud")
     static let customize = NSToolbarItem.Identifier("customize")
-    static let clarifyCustomize = NSToolbarItem.Identifier("clarifyCustomize")
     static let optimize = NSToolbarItem.Identifier("optimize")
 }
 
@@ -173,11 +171,9 @@ final class ToolbarCoordinator: NSObject, NSToolbarDelegate, NSToolbarItemValida
             .onboardingInterview,
             .createResume,
             .customize,
-            .clarifyCustomize,
             .optimize,
             .coverLetter,
             .experienceEditor,
-            .resumePolish,
             .analyze,
             .inspector,
             .settingsItem,
@@ -241,13 +237,6 @@ final class ToolbarCoordinator: NSObject, NSToolbarDelegate, NSToolbarItemValida
             item.image = NSImage(systemSymbolName: "wand.and.sparkles", accessibilityDescription: "Customize")
             item.action = #selector(customizeResumeAction)
 
-        case .clarifyCustomize:
-            item.label = "Clarify & Customize"
-            item.paletteLabel = "Clarify & Customize"
-            item.toolTip = "Create resume revisions with clarifying questions"
-            item.image = NSImage(systemSymbolName: "questionmark.bubble", accessibilityDescription: "Clarify & Customize")
-            item.action = #selector(clarifyCustomizeAction)
-
         case .optimize:
             item.label = "Optimize"
             item.paletteLabel = "Optimize Resume"
@@ -269,13 +258,6 @@ final class ToolbarCoordinator: NSObject, NSToolbarDelegate, NSToolbarItemValida
             item.toolTip = "Open Experience Editor"
             item.image = NSImage(systemSymbolName: "building.columns", accessibilityDescription: "Experience")
             item.action = #selector(experienceEditorAction)
-
-        case .resumePolish:
-            item.label = "Polish Resume"
-            item.paletteLabel = "Polish Resume"
-            item.toolTip = "Polish resume with AI revision agent"
-            item.image = NSImage(systemSymbolName: "bubbles.and.sparkles", accessibilityDescription: "Polish Resume")
-            item.action = #selector(resumePolishAction)
 
         case .analyze:
             item.label = "Analyze"
@@ -328,12 +310,10 @@ final class ToolbarCoordinator: NSObject, NSToolbarDelegate, NSToolbarItemValida
                 return jobAppStore?.selectedApp != nil
             case .coverLetter:
                 return jobAppStore?.selectedApp?.selectedRes != nil
-            case .resumePolish:
-                return jobAppStore?.selectedApp?.selectedRes != nil
             case .analyze:
                 return jobAppStore?.selectedApp?.selectedRes != nil
                     && jobAppStore?.selectedApp?.selectedCover?.generated == true
-            case .customize, .clarifyCustomize:
+            case .customize:
                 return navigationState?.selectedTab == .resume
                     && jobAppStore?.selectedApp?.selectedRes?.hasUpdatableNodes == true
             case .optimize:
@@ -373,10 +353,6 @@ final class ToolbarCoordinator: NSObject, NSToolbarDelegate, NSToolbarItemValida
         NotificationCenter.default.post(name: .customizeResume, object: nil)
     }
 
-    @objc private func clarifyCustomizeAction() {
-        NotificationCenter.default.post(name: .clarifyCustomize, object: nil)
-    }
-
     @objc private func optimizeResumeAction() {
         NotificationCenter.default.post(name: .optimizeResume, object: nil)
     }
@@ -387,10 +363,6 @@ final class ToolbarCoordinator: NSObject, NSToolbarDelegate, NSToolbarItemValida
 
     @objc private func experienceEditorAction() {
         NotificationCenter.default.post(name: .showExperienceEditor, object: nil)
-    }
-
-    @objc private func resumePolishAction() {
-        NotificationCenter.default.post(name: .polishResume, object: nil)
     }
 
     @objc private func analyzeAction() {

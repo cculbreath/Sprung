@@ -408,20 +408,6 @@ struct TemplateManifest: Codable {
     /// Uses the same path syntax as defaultAIFields.
     let listContainers: [String]?
 
-    /// Multi-phase review configuration for sections requiring structured review workflows.
-    /// Key is section name (e.g., "skills"), value is array of phase configs.
-    ///
-    /// ## Example
-    /// ```json
-    /// "reviewPhases": {
-    ///   "skills": [
-    ///     { "phase": 1, "field": "skills.*.name", "bundle": true },
-    ///     { "phase": 2, "field": "skills.*.keywords", "bundle": false }
-    ///   ]
-    /// }
-    /// ```
-    let reviewPhases: [String: [ReviewPhaseConfig]]?
-
     /// Maps section names to bespoke editor panel views, bypassing generic tree-node rendering.
     /// Key is dot-notation section name (e.g., "custom.jobTitles"), value is panel identifier
     /// (e.g., "jobTitlesPanel").
@@ -429,34 +415,6 @@ struct TemplateManifest: Codable {
 
     /// Target page count for the rendered resume. `nil` means no constraint.
     let pageLimit: Int?
-
-    /// Configuration for a single review phase
-    struct ReviewPhaseConfig: Codable {
-        /// Phase number (1-indexed, executed in order)
-        let phase: Int
-        /// Field path to review in this phase (uses path syntax)
-        let field: String
-        /// If true, all matching nodes are bundled into a single review unit.
-        /// If false (default), each matching node is reviewed separately.
-        let bundle: Bool
-
-        init(phase: Int, field: String, bundle: Bool = false) {
-            self.phase = phase
-            self.field = field
-            self.bundle = bundle
-        }
-
-        private enum CodingKeys: String, CodingKey {
-            case phase, field, bundle
-        }
-
-        init(from decoder: Decoder) throws {
-            let container = try decoder.container(keyedBy: CodingKeys.self)
-            phase = try container.decode(Int.self, forKey: .phase)
-            field = try container.decode(String.self, forKey: .field)
-            bundle = try container.decodeIfPresent(Bool.self, forKey: .bundle) ?? false
-        }
-    }
 
     init(
         slug: String,
@@ -470,7 +428,6 @@ struct TemplateManifest: Codable {
         transparentKeys: [String]? = nil,
         defaultAIFields: [String]? = nil,
         listContainers: [String]? = nil,
-        reviewPhases: [String: [ReviewPhaseConfig]]? = nil,
         editorPanels: [String: String]? = nil,
         pageLimit: Int? = nil
     ) {
@@ -484,7 +441,6 @@ struct TemplateManifest: Codable {
         self.transparentKeys = transparentKeys
         self.defaultAIFields = defaultAIFields
         self.listContainers = listContainers
-        self.reviewPhases = reviewPhases
         self.editorPanels = editorPanels
         self.pageLimit = pageLimit
         var normalized: [String: Section] = [:]
@@ -511,7 +467,6 @@ struct TemplateManifest: Codable {
         transparentKeys = try container.decodeIfPresent([String].self, forKey: .transparentKeys)
         defaultAIFields = try container.decodeIfPresent([String].self, forKey: .defaultAIFields)
         listContainers = try container.decodeIfPresent([String].self, forKey: .listContainers)
-        reviewPhases = try container.decodeIfPresent([String: [ReviewPhaseConfig]].self, forKey: .reviewPhases)
         editorPanels = try container.decodeIfPresent([String: String].self, forKey: .editorPanels)
         pageLimit = try container.decodeIfPresent(Int.self, forKey: .pageLimit)
         let decodedSections = try container.decode([String: Section].self, forKey: .sections)
@@ -541,7 +496,6 @@ struct TemplateManifest: Codable {
         try container.encodeIfPresent(transparentKeys, forKey: .transparentKeys)
         try container.encodeIfPresent(defaultAIFields, forKey: .defaultAIFields)
         try container.encodeIfPresent(listContainers, forKey: .listContainers)
-        try container.encodeIfPresent(reviewPhases, forKey: .reviewPhases)
         try container.encodeIfPresent(editorPanels, forKey: .editorPanels)
         try container.encodeIfPresent(pageLimit, forKey: .pageLimit)
         try container.encode(sections, forKey: .sections)
@@ -629,7 +583,6 @@ struct TemplateManifest: Codable {
         case transparentKeys
         case defaultAIFields
         case listContainers
-        case reviewPhases
         case editorPanels
         case pageLimit
     }

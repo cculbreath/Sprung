@@ -18,7 +18,6 @@ struct ResumeSplitView: View {
     @Binding var tab: TabList
     @Binding var refresh: Bool
     @Binding var sheets: AppSheets
-    @Binding var clarifyingQuestions: [ClarifyingQuestion]
 
     @State private var showCreateResumeSheet = false
     @AppStorage("pdfPreviewVisible") private var pdfPreviewVisible = true
@@ -48,7 +47,6 @@ struct ResumeSplitView: View {
                     tab: $tab,
                     isWide: $isWide,
                     sheets: $sheets,
-                    clarifyingQuestions: $clarifyingQuestions,
                     showCreateResumeSheet: $showCreateResumeSheet,
                     exportCoordinator: appEnvironment.resumeExportCoordinator
                 )

@@ -116,10 +116,9 @@ struct ChipView: View {
         }
     }
 
-    /// Whether this chip is a member of a group review (bundled or iterated)
+    /// Whether this chip sits under an editable ancestor (included or opted-out)
     private var isGroupMember: Bool {
-        iconMode == .bundledMember || iconMode == .iteratedMember || iconMode == .iterateBundledMember ||
-        iconMode == .excludedBundledMember || iconMode == .excludedIteratedMember
+        iconMode == .included || iconMode == .excluded
     }
 
     private var editingView: some View {

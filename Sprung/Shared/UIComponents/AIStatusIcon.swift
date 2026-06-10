@@ -9,46 +9,36 @@
 import AppKit
 import SwiftUI
 
-/// Icon modes for AI status display
+/// Icon modes for AI status display.
+/// Single editability axis: a node is either marked editable, inheriting
+/// editability from an editable ancestor (included), explicitly excluded from
+/// that group, or unset.
 enum AIIconMode: Equatable {
-    case iteratedCollection      // film.stack, indigo - Collection with [] iterate
-    case iteratedMember          // inset.filled.bottomhalf.rectangle, indigo (hierarchical)
-    case iterateBundledMember    // custom.bundled.member, indigo - Bundled with other attrs in iterate context
-    case bundledCollection       // circle.hexagongrid.circle, purple - Collection with .* bundle
-    case bundledMember           // custom.bundled.member, purple - Child in bundled collection
-    case excludedBundledMember   // custom.bundled.member.disabled, gray - Excluded from bundle review
-    case excludedIteratedMember  // custom.iterated.member.disabled, gray - Excluded from iterate review
-    case unset                   // sparkles, gray (primary) - No AI assignment
-    case solo                    // target, teal - Individual node marked for AI
+    case editable   // target, teal - Node itself marked for AI revision (.aiToReplace)
+    case included   // film.stack, teal - Inside an editable group (inherited)
+    case excluded   // custom.bundled.member.disabled, gray - Opted out of an editable group
+    case unset      // sparkles, gray (primary) - Not part of any AI revision
 
     var symbolName: String {
         switch self {
-        case .iteratedCollection: return "film.stack"
-        case .iteratedMember: return "inset.filled.bottomhalf.rectangle"
-        case .iterateBundledMember: return "custom.bundled.member"
-        case .bundledCollection: return "circle.hexagongrid.circle"
-        case .bundledMember: return "custom.bundled.member"
-        case .excludedBundledMember: return "custom.bundled.member.disabled"
-        case .excludedIteratedMember: return "custom.iterated.member.disabled"
+        case .editable: return "target"
+        case .included: return "film.stack"
+        case .excluded: return "custom.bundled.member.disabled"
         case .unset: return "sparkles"
-        case .solo: return "target"
         }
     }
 
     var color: Color {
         switch self {
-        case .iteratedCollection, .iteratedMember, .iterateBundledMember: return .indigo
-        case .bundledCollection, .bundledMember: return .purple
-        case .excludedBundledMember, .excludedIteratedMember: return .secondary
+        case .editable, .included: return .teal
+        case .excluded: return .secondary
         case .unset: return .primary
-        case .solo: return .teal
         }
     }
 
     var usesHierarchical: Bool {
         switch self {
-        case .iteratedMember: return true
-        case .iterateBundledMember: return false
+        case .included: return true
         default: return false
         }
     }
@@ -56,41 +46,18 @@ enum AIIconMode: Equatable {
     /// Whether this is a custom symbol from the asset catalog (not SF Symbols)
     var isCustomSymbol: Bool {
         switch self {
-        case .iterateBundledMember, .bundledMember, .excludedBundledMember, .excludedIteratedMember: return true
+        case .excluded: return true
         default: return false
         }
     }
 
     var helpText: String {
         switch self {
-        case .iteratedCollection: return "Iterate: N reviews (one per entry)"
-        case .iteratedMember: return "Included in iterate review (per entry)"
-        case .iterateBundledMember: return "Bundled with other attributes in per-entry review"
-        case .bundledCollection: return "Bundle: All entries combined into 1 review"
-        case .bundledMember: return "Included in bundle review (all combined)"
-        case .excludedBundledMember: return "Excluded from bundle review"
-        case .excludedIteratedMember: return "Excluded from iterate review"
-        case .unset: return "Click to configure AI review"
-        case .solo: return "Solo: Just this one item"
+        case .editable: return "Marked for AI revision"
+        case .included: return "Included in AI revision (inherited from section)"
+        case .excluded: return "Excluded from AI revision"
+        case .unset: return "Click to include in AI revision"
         }
-    }
-}
-
-/// Result of icon resolution for a node
-struct AIIconResolution: Equatable {
-    let primary: AIIconMode
-    let secondary: AIIconMode?
-    /// true = arrow between icons (member→collection), false = side by side
-    let showArrow: Bool
-
-    var isDual: Bool { secondary != nil }
-
-    static func single(_ mode: AIIconMode) -> AIIconResolution {
-        AIIconResolution(primary: mode, secondary: nil, showArrow: false)
-    }
-
-    static func dual(_ a: AIIconMode, _ b: AIIconMode, arrow: Bool) -> AIIconResolution {
-        AIIconResolution(primary: a, secondary: b, showArrow: arrow)
     }
 }
 
@@ -134,37 +101,6 @@ struct AIStatusIcon: View {
         }
         .buttonStyle(.plain)
         .help(mode.helpText)
-    }
-}
-
-// MARK: - Resolved Icon View
-
-/// Renders the correct icon(s) for an AIIconResolution.
-/// Uses plain AIIconImage — safe for use inside Menu labels.
-struct ResolvedAIIcon: View {
-    let resolution: AIIconResolution
-
-    var body: some View {
-        if resolution.isDual {
-            HStack(spacing: resolution.showArrow ? 1 : 2) {
-                AIIconImage(mode: resolution.primary)
-                    .padding(4)
-
-                if resolution.showArrow {
-                    Image(systemName: "arrow.right")
-                        .font(.system(size: 9, weight: .semibold))
-                        .foregroundStyle(.secondary)
-                }
-
-                if let secondary = resolution.secondary {
-                    AIIconImage(mode: secondary)
-                        .padding(4)
-                }
-            }
-        } else {
-            AIIconImage(mode: resolution.primary)
-                .padding(4)
-        }
     }
 }
 
@@ -363,242 +299,28 @@ struct AIIconNativeMenuButton: View {
     }
 }
 
-/// Button with resolved AI icon(s) that opens a native NSMenu on click.
-/// For dual-icon patterns (member→collection with arrow).
-struct ResolvedAIIconNativeMenuButton: View {
-    let resolution: AIIconResolution
-    let showDropIndicator: Bool
-    let menuBuilder: () -> NSMenu
-
-    @State private var anchor = NativeMenuAnchor()
-
-    init(resolution: AIIconResolution, showDropIndicator: Bool = false, menuBuilder: @escaping () -> NSMenu) {
-        self.resolution = resolution
-        self.showDropIndicator = showDropIndicator
-        self.menuBuilder = menuBuilder
-    }
-
-    var body: some View {
-        Button {
-            anchor.showMenu(menuBuilder())
-        } label: {
-            HStack(spacing: 1) {
-                ResolvedAIIcon(resolution: resolution)
-                if showDropIndicator {
-                    Image(systemName: "arrowtriangle.down.fill")
-                        .font(.system(size: 5))
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .help(resolution.primary.helpText)
-        .background(NativeMenuAnchorView(anchor: anchor))
-    }
-}
-
 // MARK: - Mode Detection
 
-/// Determines the appropriate AIIconMode for a tree node
+/// Determines the appropriate AIIconMode for a tree node, derived solely from
+/// the node's editability status and its inheritance from editable ancestors.
 struct AIIconModeResolver {
 
-    /// Full resolution: returns primary + optional secondary icon with arrow info
-    static func resolve(for node: TreeNode) -> AIIconResolution {
-        // 1. Section/collection with its own AI config
-        let hasBundled = node.bundledAttributes?.isEmpty == false
-        let hasIterated = node.enumeratedAttributes?.isEmpty == false
-
-        if hasBundled && hasIterated {
-            // Collection+Collection: both icons, NO arrow
-            return .dual(.bundledCollection, .iteratedCollection, arrow: false)
-        }
-        if hasIterated && !hasBundled {
-            return .single(.iteratedCollection)
-        }
-        if hasBundled && !hasIterated {
-            return .single(.bundledCollection)
-        }
-
-        // 2. Nested container: both a member (of parent's config) AND a collection (has children)
-        if let dual = resolveDualContainerMode(for: node) {
-            return dual
-        }
-
-        // 3. Entry under a section with AI config
-        if let entryMode = resolveEntryMode(for: node) {
-            return .single(entryMode)
-        }
-
-        // 4. Leaf member of an AI-reviewed group
-        if let leafMode = resolveLeafMemberMode(for: node) {
-            return .single(leafMode)
-        }
-
-        // 5. Solo
-        if node.status == .aiToReplace {
-            return .single(.solo)
-        }
-
-        // 6. Default
-        return .single(.unset)
-    }
-
-    /// Shorthand for views that only need a single mode (picks primary)
+    /// The editability mode for a node:
+    /// - `.editable`  : node itself is `.aiToReplace`
+    /// - `.excluded`  : node opted out of an editable group (`.excludedFromGroup`)
+    /// - `.included`  : node sits under an editable ancestor (inherited)
+    /// - `.unset`     : node is not part of any AI revision
     static func detectSingleMode(for node: TreeNode) -> AIIconMode {
-        resolve(for: node).primary
-    }
-
-    // MARK: - Multi-Attribute Iterate Resolution
-
-    /// Resolve iterate attributes for a collection, expanding "*" wildcard for object collections.
-    /// Returns nil if no iterate attributes, or the expanded list with isMultiAttribute flag.
-    private static func resolvedIterateAttrs(for collection: TreeNode) -> (attrs: [String], isMulti: Bool)? {
-        guard let enumerated = collection.enumeratedAttributes, !enumerated.isEmpty else { return nil }
-        if enumerated == ["*"] {
-            // Check if object collection (entries have sub-attributes)
-            guard let firstEntry = collection.orderedChildren.first,
-                  !firstEntry.orderedChildren.isEmpty else { return nil } // flat → not multi-attribute
-            let attrs = firstEntry.orderedChildren.compactMap {
-                let n = $0.name.isEmpty ? $0.displayLabel : $0.name
-                return n.isEmpty ? nil : n
-            }
-            return attrs.count > 1 ? (attrs, true) : (attrs, false)
+        if node.status == .aiToReplace {
+            return .editable
         }
-        let attrs = enumerated.filter { $0 != "*" }
-        return attrs.isEmpty ? nil : (attrs, attrs.count > 1)
-    }
-
-    // MARK: - Dual Container Detection
-
-    /// A container that is both a member (referenced in grandparent's AI config)
-    /// AND a collection (has children whose review mode is determined by suffix).
-    ///
-    /// Example: `highlights` under `work[].highlights`
-    ///   - iteratedMember (highlights is in work's enumeratedAttributes)
-    ///   - bundledCollection (no [] suffix → children are bundled together)
-    ///   - Shows: [iteratedMember] → [bundledCollection] with arrow
-    private static func resolveDualContainerMode(for node: TreeNode) -> AIIconResolution? {
-        // Must have children to be a collection
-        guard !node.orderedChildren.isEmpty else { return nil }
-
-        // Must have a grandparent (collection level) with AI config
-        guard let grandparent = node.parent?.parent else { return nil }
-
-        let name = node.name.isEmpty ? node.displayLabel : node.name
-        let nameWithSuffix = name + "[]"
-
-        // Determine member mode: how does this container relate to the grandparent's config?
-        let memberMode: AIIconMode
-        if grandparent.enumeratedAttributes?.contains(name) == true ||
-           grandparent.enumeratedAttributes?.contains(nameWithSuffix) == true {
-            // Check for multi-attribute iterate: 2nd+ attrs get bundled member icon
-            if let resolved = resolvedIterateAttrs(for: grandparent),
-               resolved.isMulti, resolved.attrs.first != name {
-                memberMode = .iterateBundledMember
-            } else {
-                memberMode = .iteratedMember
-            }
-        } else if grandparent.bundledAttributes?.contains(name) == true ||
-                  grandparent.bundledAttributes?.contains(nameWithSuffix) == true {
-            memberMode = .bundledMember
-        } else {
-            return nil // Not referenced in grandparent's AI config
+        if node.status == .excludedFromGroup {
+            return .excluded
         }
-
-        // Determine collection mode: how are this container's children treated?
-        // With [] suffix on the attribute name → children are iterated individually
-        // Without [] suffix → children are bundled together
-        let collectionMode: AIIconMode
-        if grandparent.enumeratedAttributes?.contains(nameWithSuffix) == true ||
-           grandparent.bundledAttributes?.contains(nameWithSuffix) == true {
-            collectionMode = .iteratedCollection
-        } else {
-            collectionMode = .bundledCollection
+        if node.isInheritedAISelection {
+            return .included
         }
-
-        // Member→Collection with arrow (member on left, collection on right)
-        return .dual(memberMode, collectionMode, arrow: true)
-    }
-
-    // MARK: - Entry Mode Detection
-
-    /// An entry (direct child of a section) whose parent section has AI config.
-    /// e.g., a work experience entry under work[] → iteratedMember
-    private static func resolveEntryMode(for node: TreeNode) -> AIIconMode? {
-        guard let parent = node.parent else { return nil }
-        // Must have children (entries are containers)
-        guard !node.orderedChildren.isEmpty else { return nil }
-
-        let hasBundled = parent.bundledAttributes?.isEmpty == false
-        let hasIterated = parent.enumeratedAttributes?.isEmpty == false
-
-        guard hasBundled || hasIterated else { return nil }
-
-        // Prefer iterated if section has both modes
-        if hasIterated {
-            return .iteratedMember
-        }
-        return .bundledMember
-    }
-
-    // MARK: - Leaf Member Detection
-
-    /// A leaf node that participates in an AI-reviewed group.
-    /// Returns excluded variant if node has `.excludedFromGroup` status.
-    private static func resolveLeafMemberMode(for node: TreeNode) -> AIIconMode? {
-        guard let parent = node.parent else { return nil }
-        let isExcluded = node.status == .excludedFromGroup
-
-        // Case 1: Scalar array child (parent has bundledAttributes["*"] or enumeratedAttributes["*"])
-        if parent.bundledAttributes?.contains("*") == true {
-            return isExcluded ? .excludedBundledMember : .bundledMember
-        }
-        if parent.enumeratedAttributes?.contains("*") == true {
-            return isExcluded ? .excludedIteratedMember : .iteratedMember
-        }
-
-        // Case 2: Scalar attribute under a collection entry
-        // e.g., "name" field under skill entry where skills section has bundledAttributes["name"]
-        // node.parent = entry, node.parent.parent = section (collection)
-        if node.orderedChildren.isEmpty, let collection = parent.parent {
-            let nodeName = node.name.isEmpty ? node.displayLabel : node.name
-
-            if collection.bundledAttributes?.contains(nodeName) == true {
-                return isExcluded ? .excludedBundledMember : .bundledMember
-            }
-            if collection.enumeratedAttributes?.contains(nodeName) == true {
-                if isExcluded { return .excludedIteratedMember }
-                // Check for multi-attribute iterate: 2nd+ attrs get bundled member icon
-                if let resolved = resolvedIterateAttrs(for: collection),
-                   resolved.isMulti, resolved.attrs.first != nodeName {
-                    return .iterateBundledMember
-                }
-                return .iteratedMember
-            }
-        }
-
-        // Case 3: Child of a nested array container
-        // e.g., "Swift" keyword under "keywords" where skills has enumeratedAttributes["keywords"]
-        // node.parent = keywords, node.parent.parent = entry, node.parent.parent.parent = section
-        if let entry = parent.parent, let collection = entry.parent {
-            let parentName = parent.name.isEmpty ? parent.displayLabel : parent.name
-            let parentNameWithSuffix = parentName + "[]"
-
-            // With [] suffix → children are iterated
-            if collection.enumeratedAttributes?.contains(parentNameWithSuffix) == true ||
-               collection.bundledAttributes?.contains(parentNameWithSuffix) == true {
-                return isExcluded ? .excludedIteratedMember : .iteratedMember
-            }
-
-            // Without suffix → children are bundled
-            if collection.enumeratedAttributes?.contains(parentName) == true ||
-               collection.bundledAttributes?.contains(parentName) == true {
-                return isExcluded ? .excludedBundledMember : .bundledMember
-            }
-        }
-
-        return nil
+        return .unset
     }
 
     /// Check if a node should show an icon at all

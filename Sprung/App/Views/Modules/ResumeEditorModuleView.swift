@@ -13,15 +13,12 @@ struct ResumeEditorModuleView: View {
     @Environment(JobAppStore.self) private var jobAppStore
     @Environment(CoverLetterStore.self) private var coverLetterStore
     @Environment(NavigationStateService.self) private var navigationState
-    @Environment(ReasoningStreamManager.self) private var reasoningStreamManager
-    @Environment(ResumeReviseViewModel.self) private var resumeReviseViewModel
     @Environment(WindowCoordinator.self) private var windowCoordinator
     @Environment(UnifiedJobFocusState.self) private var focusState
 
     @State var tabRefresh: Bool = false
     @State var showSlidingList: Bool = false
     @State private var sheets = AppSheets()
-    @State private var clarifyingQuestions: [ClarifyingQuestion] = []
     @State private var hasVisitedResumeTab: Bool = false
     @State private var refPopup: Bool = false
     @State private var menuHandler = MenuNotificationHandler()
@@ -63,31 +60,18 @@ struct ResumeEditorModuleView: View {
         .animation(.easeInOut(duration: 0.2), value: isSidebarExpanded)
         // Headless toolbar button views: stay in the view hierarchy so their
         // notification-driven sheets/alerts continue to present from menu and toolbar commands
-        // Processing logo overlay (shown when LLM is working but thinking/review dialogs are hidden)
-        .overlay {
-            if resumeReviseViewModel.isWorkflowBusy(.customize)
-                && !reasoningStreamManager.isVisible
-                && !resumeReviseViewModel.showResumeRevisionSheet {
-                ProcessingLogoOverlay()
-            }
-        }
         .background {
             VStack(spacing: 0) {
                 BestJobButton()
                 CoverLetterGenerateButton()
                 ResumeCustomizeButton(selectedTab: $navigationState.selectedTab)
-                ClarifyingQuestionsButton(
-                    selectedTab: $navigationState.selectedTab,
-                    clarifyingQuestions: $clarifyingQuestions,
-                    sheets: $sheets
-                )
             }
             .frame(width: 0, height: 0)
             .clipped()
             .allowsHitTesting(false)
             .accessibilityHidden(true)
         }
-        .appSheets(sheets: $sheets, clarifyingQuestions: $clarifyingQuestions, refPopup: $refPopup)
+        .appSheets(sheets: $sheets, refPopup: $refPopup)
         .onChange(of: jobAppStore.selectedApp) { _, newValue in
             navigationState.saveSelectedJobApp(newValue)
             updateMyLetter()
@@ -186,8 +170,7 @@ struct ResumeEditorModuleView: View {
                     hasVisitedResumeTab: $hasVisitedResumeTab,
                     tabRefresh: $tabRefresh,
                     showSlidingList: $showSlidingList,
-                    sheets: $sheets,
-                    clarifyingQuestions: $clarifyingQuestions
+                    sheets: $sheets
                 )
                 .background {
                     Rectangle()

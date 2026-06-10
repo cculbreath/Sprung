@@ -9,7 +9,6 @@ import SwiftUI
 struct AppSheets {
     var showApplicationReview = false
     var showResumeReview = false
-    var showClarifyingQuestions = false
     var showChooseBestCoverLetter = false
     var showMultiModelChooseBest = false
     var showBatchCoverLetter = false
@@ -26,22 +25,12 @@ struct AppSheets {
 // MARK: - Sheet Presentation ViewModifier
 struct AppSheetsModifier: ViewModifier {
     @Binding var sheets: AppSheets
-    @Binding var clarifyingQuestions: [ClarifyingQuestion]
     @Binding var refPopup: Bool
     @Environment(JobAppStore.self) private var jobAppStore
     @Environment(ResStore.self) private var resStore
     @Environment(CoverLetterStore.self) private var coverLetterStore
     @Environment(EnabledLLMStore.self) private var enabledLLMStore
     @Environment(AppState.self) private var appState
-    @Environment(ResumeReviseViewModel.self) private var resumeReviseViewModel
-    private var revisionSheetBinding: Binding<Bool> {
-        Binding(
-            get: { resumeReviseViewModel.showResumeRevisionSheet },
-            set: { newValue in
-                resumeReviseViewModel.showResumeRevisionSheet = newValue
-            }
-        )
-    }
     func body(content: Content) -> some View {
         content
             .sheet(isPresented: $sheets.showNewJobApp, onDismiss: {
@@ -137,20 +126,12 @@ struct AppSheetsModifier: ViewModifier {
                     sheets.showSetupWizard = false
                 }
             }
-            .sheet(isPresented: revisionSheetBinding) {
-                if let selectedResume = jobAppStore.selectedApp?.selectedRes {
-                    RevisionReviewView(
-                        viewModel: resumeReviseViewModel,
-                        resume: .constant(selectedResume)
-                    )
-                }
-            }
     }
 }
 
 // MARK: - Helper View Extension
 extension View {
-    func appSheets(sheets: Binding<AppSheets>, clarifyingQuestions: Binding<[ClarifyingQuestion]>, refPopup: Binding<Bool>) -> some View {
-        self.modifier(AppSheetsModifier(sheets: sheets, clarifyingQuestions: clarifyingQuestions, refPopup: refPopup))
+    func appSheets(sheets: Binding<AppSheets>, refPopup: Binding<Bool>) -> some View {
+        self.modifier(AppSheetsModifier(sheets: sheets, refPopup: refPopup))
     }
 }

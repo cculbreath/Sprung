@@ -55,20 +55,11 @@ class Resume: Identifiable, Hashable {
         }
     }
     /// User-configured phase assignments for AI review (maps "Section-attribute" to phase number)
+    // DEPRECATED vNext — read once by migrateAISelectionV1, then ignored.
+    // Remove this property (and the migration) in vNext+1. Keep the storage in
+    // place until then so SwiftData lightweight migration does not drop the column.
     @Attribute(.externalStorage)
     private var phaseAssignmentsData: Data?
-    var phaseAssignments: [String: Int] {
-        get {
-            guard let phaseAssignmentsData,
-                  let decoded = try? JSONDecoder().decode([String: Int].self, from: phaseAssignmentsData) else {
-                return [:]
-            }
-            return decoded
-        }
-        set {
-            phaseAssignmentsData = try? JSONEncoder().encode(newValue)
-        }
-    }
     func label(_ key: String) -> String {
         if let myLabel = keyLabels[key] {
             return myLabel
@@ -117,14 +108,6 @@ class Resume: Identifiable, Hashable {
         return rootNode.aiStatusChildren > 0
     }
 
-    /// Returns flat array of AI-marked nodes as dictionaries for the revision workflow
-    func getUpdatableNodes() -> [[String: Any]] {
-        if let node = rootNode {
-            return TreeNode.traverseAndExportNodes(node: node)
-        } else {
-            return [[:]]
-        }
-    }
     var meta: String = "\"format\": \"FRESH@0.6.0\", \"version\": \"0.1.0\""
     init(
         jobApp: JobApp,

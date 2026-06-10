@@ -145,9 +145,7 @@ final class ResumeRevisionWorkspaceService {
     }
 
     /// Find the AI-editable root nodes within a section.
-    /// Catches two patterns:
-    ///   1. Solo nodes with `status == .aiToReplace`
-    ///   2. Collection nodes with `bundledAttributes` or `enumeratedAttributes`
+    /// Editable roots are nodes with `status == .aiToReplace`; their entire subtree is editable.
     /// Records all editable node IDs for import-time enforcement.
     private func collectEditableRoots(from section: TreeNode) -> [TreeNode] {
         var roots: [TreeNode] = []
@@ -161,16 +159,11 @@ final class ResumeRevisionWorkspaceService {
     }
 
     /// Walk the tree to find AI-editable subtree roots.
-    /// Solo nodes: `status == .aiToReplace` with no attribute review modes.
-    /// Collection nodes: `hasAttributeReviewModes` (bundled/enumerated attributes).
+    /// A root is any node with `status == .aiToReplace`; its entire subtree is editable.
     private func findEditableRoots(node: TreeNode, result: inout [TreeNode]) {
         if node.status == .aiToReplace {
             result.append(node)
             return // Entire subtree is editable
-        }
-        if node.hasAttributeReviewModes {
-            result.append(node)
-            return // Entire collection subtree is editable
         }
         for child in node.orderedChildren {
             findEditableRoots(node: child, result: &result)
@@ -460,7 +453,6 @@ final class ResumeRevisionWorkspaceService {
         // Copy metadata from original
         newResume.keyLabels = original.keyLabels
         newResume.sectionVisibilityOverrides = original.sectionVisibilityOverrides
-        newResume.phaseAssignments = original.phaseAssignments
         newResume.importedEditorKeys = original.importedEditorKeys
 
         return newResume
@@ -482,8 +474,6 @@ final class ResumeRevisionWorkspaceService {
         clone.myIndex = node.myIndex
         clone.editorLabel = node.editorLabel
         clone.copySchemaMetadata(from: node)
-        clone.bundledAttributes = node.bundledAttributes
-        clone.enumeratedAttributes = node.enumeratedAttributes
         context.insert(clone)
 
         for child in node.orderedChildren {
