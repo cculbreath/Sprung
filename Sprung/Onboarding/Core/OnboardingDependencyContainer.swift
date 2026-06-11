@@ -129,6 +129,9 @@ final class OnboardingDependencyContainer {
     // MARK: - Usage Tracking
     let tokenUsageTracker: TokenUsageTracker
 
+    // MARK: - Coverage Planner
+    let coveragePlannerService: CoveragePlannerService
+
     // MARK: - Interview Todo List
     let todoStore: InterviewTodoStore
 
@@ -263,6 +266,15 @@ final class OnboardingDependencyContainer {
         } else {
             self.chatInventoryService = nil
         }
+
+        // 4b. Initialize coverage planner (runs once at the Phase 3 → Phase 4 boundary)
+        self.coveragePlannerService = CoveragePlannerService(
+            eventBus: core.eventBus,
+            artifactRepository: stores.artifactRepository,
+            knowledgeCardStore: knowledgeCardStore,
+            candidateDossierStore: candidateDossierStore,
+            llmFacade: llmFacade
+        )
 
         // 5. Initialize document services
         let docs = Self.createDocumentComponents(
@@ -410,6 +422,51 @@ final class OnboardingDependencyContainer {
             agentActivityTracker: agentActivityTracker,
             conversationLog: stores.conversationLog
         )
+
+        // 12b. Wire voice anchoring into the document-analysis narrative passes
+        // (card extraction, verification, enrichment). The analysis service
+        // resolves the provider once per instance, so the rendered anchor is
+        // byte-stable across passes and documents and the anchored prefix
+        // caches.
+        let documentProcessingForVoice = docs.documentProcessingService
+        let guidanceStoreForVoice = guidanceStore
+        let artifactStoreForVoice = artifactRecordStore
+        let sessionHandlerForVoice = sessionPersistenceHandler
+        let voiceAnchorProvider: @Sendable () async -> String? = {
+            await MainActor.run { () -> String? in
+                let samples: [String]
+                if let session = sessionHandlerForVoice.currentSession {
+                    samples = artifactStoreForVoice.artifacts(for: session)
+                        .filter(\.isWritingSample)
+                        .map(\.extractedContent)
+                } else {
+                    samples = []
+                }
+                return DocumentAnalysisPrompts.voiceAnchorText(
+                    profile: guidanceStoreForVoice.voiceProfile(),
+                    writingSamples: samples
+                )
+            }
+        }
+        Task {
+            await documentProcessingForVoice.setVoiceAnchorProvider(voiceAnchorProvider)
+        }
+        // Re-install the provider whenever voice-primer extraction completes.
+        // Phase 1 voice-profile extraction runs asynchronously, so a document
+        // analyzed before it finishes memoizes a nil/partial anchor; without
+        // this, that stale anchor would be frozen for the whole session.
+        // Re-installing drops the memoized analysis service, so the NEXT
+        // analysis resolves a fresh anchor (a one-time prefix change with
+        // bounded cache churn). This also covers an upload that creates the
+        // analysis service before the install Task above has run.
+        let eventBusForVoice = core.eventBus
+        Task {
+            for await event in await eventBusForVoice.stream(topic: .artifact) {
+                guard case .artifact(.voicePrimerExtractionCompleted) = event else { continue }
+                await documentProcessingForVoice.setVoiceAnchorProvider(voiceAnchorProvider)
+                Logger.info("🎤 Voice anchor provider refreshed after voice-primer extraction", category: .ai)
+            }
+        }
         // 11. Initialize early coordinators (don't need coordinator reference)
         // Create extracted services first
         let kcWorkflow = KnowledgeCardWorkflowService(
@@ -602,6 +659,9 @@ final class OnboardingDependencyContainer {
 
         // Start token usage tracking subscription
         tokenUsageTracker.startEventSubscription(eventBus: eventBus)
+
+        // Start coverage planner subscription (Phase 3 → Phase 4 boundary hook)
+        coveragePlannerService.start()
 
         Logger.info("🏗️ OnboardingDependencyContainer late initialization completed", category: .ai)
     }

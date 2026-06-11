@@ -141,6 +141,15 @@ final class LLMFacadeSpecializedAPIs {
         return try await service.messagesStream(parameters: parameters)
     }
 
+    func anthropicMessages(
+        parameters: AnthropicMessageParameter
+    ) async throws -> AnthropicMessageResponse {
+        guard let service = anthropicService else {
+            throw LLMError.clientError("Anthropic service is not configured. Call registerAnthropicService first.")
+        }
+        return try await service.messages(parameters: parameters)
+    }
+
     func anthropicListModels() async throws -> AnthropicModelsResponse {
         guard let service = anthropicService else {
             throw LLMError.clientError("Anthropic service is not configured. Call registerAnthropicService first.")

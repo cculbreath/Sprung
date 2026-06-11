@@ -111,6 +111,16 @@ struct TokenUsageStats: Codable {
         return Double(cacheReadTokens) / Double(totalPromptTokens)
     }
 
+    /// Cache hit rate over tokens that COULD have been served from cache:
+    /// cacheRead / (input + cacheRead). Excludes cache-creation tokens from
+    /// the denominator (unlike `cacheHitRate`, which measures the cached
+    /// fraction of ALL prompt tokens including writes).
+    var hitRate: Double {
+        let denominator = inputTokens + cacheReadTokens
+        guard denominator > 0 else { return 0 }
+        return Double(cacheReadTokens) / Double(denominator)
+    }
+
     mutating func add(_ entry: TokenUsageEntry) {
         inputTokens += entry.inputTokens
         outputTokens += entry.outputTokens
@@ -198,7 +208,9 @@ class TokenUsageTracker {
 
     // MARK: - Event Subscription
 
-    /// Start listening to token usage events from the event bus
+    /// Start listening to token usage events from the event bus.
+    /// Also watches phase events so a session-total summary is logged once
+    /// when the interview completes.
     func startEventSubscription(eventBus: EventCoordinator) {
         Task { @MainActor [weak self] in
             for await event in await eventBus.stream(topic: .llm) {
@@ -213,6 +225,14 @@ class TokenUsageTracker {
                         cacheCreationTokens: cacheCreationTokens,
                         reasoningTokens: reasoningTokens
                     )
+                }
+            }
+        }
+        Task { @MainActor [weak self] in
+            for await event in await eventBus.stream(topic: .phase) {
+                guard let self = self else { return }
+                if case .phase(.interviewCompleted) = event {
+                    self.logSessionSummary(trigger: "interview complete")
                 }
             }
         }
@@ -261,6 +281,27 @@ class TokenUsageTracker {
             source: source
         )
         recordEntry(entry)
+    }
+
+    // MARK: - Session Summary
+
+    /// Log a single session-total readout: totals, overall cache hit-rate,
+    /// and a per-category (per-source) breakdown.
+    /// Emitted at interview end and on event-dump export.
+    func logSessionSummary(trigger: String) {
+        let total = totalStats
+        guard total.requestCount > 0 else {
+            Logger.info("📊 Session token summary (\(trigger)): no usage recorded", category: .ai)
+            return
+        }
+
+        var lines: [String] = []
+        lines.append("📊 Session token summary (\(trigger)) — \(formattedDuration), \(total.requestCount) request(s)")
+        lines.append("  totals: in=\(Self.formatTokenCount(total.inputTokens)) out=\(Self.formatTokenCount(total.outputTokens)) cacheRead=\(Self.formatTokenCount(total.cacheReadTokens)) cacheWrite=\(Self.formatTokenCount(total.cacheCreationTokens)) hitRate=\(Self.formatPercentage(total.hitRate))")
+        for (source, stats) in sourcesSortedByUsage {
+            lines.append("  \(source.displayName): in=\(Self.formatTokenCount(stats.inputTokens)) out=\(Self.formatTokenCount(stats.outputTokens)) cacheRead=\(Self.formatTokenCount(stats.cacheReadTokens)) cacheWrite=\(Self.formatTokenCount(stats.cacheCreationTokens)) hitRate=\(Self.formatPercentage(stats.hitRate)) (\(stats.requestCount) req)")
+        }
+        Logger.info(lines.joined(separator: "\n"), category: .ai)
     }
 
 }

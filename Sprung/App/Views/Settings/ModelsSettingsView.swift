@@ -135,9 +135,13 @@ struct ModelsSettingsView: View {
             .font(.footnote)
             .foregroundStyle(.secondary)
             .padding(.leading, operationWidth + backendWidth)
-        modelRow(operation: "Card Merge", backend: .openRouter) {
-            openRouterPicker(selection: $cardMergeModelId)
+        modelRow(operation: "Card Merge", backend: .anthropic) {
+            anthropicPicker(selection: $cardMergeModelId)
         }
+        Text("Deduplicates and curates cards/skills after ingestion. An Opus-tier model is recommended; the agent loop benefits from prompt caching.")
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+            .padding(.leading, operationWidth + backendWidth)
 
         Divider().padding(.vertical, 4)
 
@@ -164,9 +168,13 @@ struct ModelsSettingsView: View {
         modelRow(operation: "KC Agent", backend: .openRouter) {
             openRouterPicker(selection: $kcAgentModelId)
         }
-        modelRow(operation: "Git Ingest", backend: .openRouter) {
-            openRouterPicker(selection: $gitIngestModelId)
+        modelRow(operation: "Git Ingest", backend: .anthropic) {
+            anthropicPicker(selection: $gitIngestModelId)
         }
+        Text("Multi-turn repository analysis agent. An Opus-tier model is recommended; conversation-prefix caching keeps long sessions affordable.")
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+            .padding(.leading, operationWidth + backendWidth)
         modelRow(operation: "Background Processing", backend: .openRouter) {
             openRouterPicker(selection: $backgroundProcessingModelId)
         }

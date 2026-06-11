@@ -45,8 +45,9 @@ than selectivity. When in doubt, INCLUDE the skill at a lower proficiency level.
 
 Extract both the explicit skill AND its reasonable implied skills — with signal
 discipline:
-- Mark implied skills as implied: start the evidence `context` with "Implied:"
-  (e.g., "Implied: SolidWorks design doc presumes engineering drawing practice")
+- Set `implied` to true on implied skills (and false on explicitly demonstrated
+  ones); the evidence `context` should explain what the inference rests on
+  (e.g., "SolidWorks design doc presumes engineering drawing practice")
 - Cap implied-skill evidence strength at "supporting" or "mention" — NEVER "primary"
 - An implied skill the applicant couldn't speak to in an interview is a "mention"
   at most; if even that feels like a stretch, omit it
@@ -104,7 +105,7 @@ Keep total categories between 6-10 to avoid over-fragmentation.
 
 - Exhaustiveness: Could someone reading the source document identify skills you missed?
 - Implied skills: Did you extract skills implied by the tools, roles, and activities described?
-- Implied skills are marked "Implied:" in their evidence context and capped at "supporting"/"mention" strength
+- Implied skills have `implied: true` and are capped at "supporting"/"mention" evidence strength
 - ATS variants cover common job listing phrasings — and stay inside `ats_variants`, never as separate entries
 - Proficiency matches demonstrated depth
 - No near-duplicate entries: trivially-identical variants merged into one skill at extraction time

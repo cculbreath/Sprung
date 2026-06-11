@@ -43,10 +43,15 @@ actor KnowledgeCardExtractionService {
     }
 
     /// Extract knowledge cards from an analysis source (uploaded PDF or text block).
+    /// - Parameter voiceAnchor: Optional voice-anchoring text (Phase 1 voice
+    ///   profile + writing-sample excerpts), injected into the user content
+    ///   AFTER the cached source block. Must be byte-stable across the
+    ///   narrative passes of an analysis run so the anchored prefix caches.
     func extractCards(
         documentId: String,
         filename: String,
-        source: DocumentAnalysisSource
+        source: DocumentAnalysisSource,
+        voiceAnchor: String? = nil
     ) async throws -> [KnowledgeCard] {
         guard let facade = llmFacade else {
             throw KCError.llmNotConfigured
@@ -67,7 +72,9 @@ actor KnowledgeCardExtractionService {
             do {
                 let response: KnowledgeCardExtractionResponse = try await facade.executeStructuredWithAnthropicBlocks(
                     systemContent: DocumentAnalysisPrompts.systemBlocks,
-                    userBlocks: DocumentAnalysisPrompts.userBlocks(source: source, instructions: instructions),
+                    userBlocks: DocumentAnalysisPrompts.userBlocks(
+                        source: source, voiceAnchor: voiceAnchor, instructions: instructions
+                    ),
                     modelId: modelId,
                     responseType: KnowledgeCardExtractionResponse.self,
                     schema: KCExtractionPrompts.jsonSchema,

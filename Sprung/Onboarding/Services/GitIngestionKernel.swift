@@ -4,12 +4,12 @@
 //
 //  Kernel for git repository analysis using a multi-turn LLM agent.
 //  Uses the GitAnalysisAgent to explore codebases and extract skills with evidence.
-//  Leverages LLMFacade (OpenRouter) for model flexibility.
+//  Runs on the Anthropic Messages API via LLMFacade.
 //
 import Foundation
 import SwiftyJSON
 
-/// Git repository ingestion kernel using async LLM agent via OpenRouter
+/// Git repository ingestion kernel using an async LLM agent on the Anthropic Messages API
 actor GitIngestionKernel {
 
     private let eventBus: EventCoordinator
@@ -244,7 +244,7 @@ actor GitIngestionKernel {
         }
         Logger.info("🔬 [GitIngest] llmFacade exists, getting model ID...", category: .ai)
 
-        // Get model from settings (OpenRouter-style ID)
+        // Get model from settings (Anthropic model ID)
         guard let modelId = UserDefaults.standard.string(forKey: "onboardingGitIngestModelId"), !modelId.isEmpty else {
             throw ModelConfigurationError.modelNotConfigured(
                 settingKey: "onboardingGitIngestModelId",
@@ -263,7 +263,8 @@ actor GitIngestionKernel {
         // Render the deterministic git evidence for the agent's initial context
         let gitEvidence = GitEvidenceCollector.render(gitData)
 
-        // Run the multi-turn analysis agent - returns DocumentInventory directly
+        // Run the multi-turn analysis agent — returns GitAnalysisResult
+        // (Stage A candidates, evidence-verified by Stage B)
         let analysisResult = try await runGitAnalysisAgent(
             facade: facade,
             repoPath: repoURL,

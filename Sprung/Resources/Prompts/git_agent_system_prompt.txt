@@ -101,6 +101,10 @@ A single sophisticated file does not make someone an expert; months of sustained
 
 Call **complete_analysis** with your card inventory.
 
+#### Your Inventory Is a Candidate List
+
+Your card inventory is a CANDIDATE list, not the final word. Every skill card you submit is independently evidence-checked in a second stage that audits it against your `evidenceLocations` pointers and the longitudinal `<git_evidence>` data, demanding at least two concrete citations per skill before it survives at its claimed proficiency. Skills that cannot pass that audit are demoted to "familiar" or dropped entirely — unsupported breadth is wasted effort. Spend your turns deepening evidence for the skills you believe in, and make every `evidenceLocations` entry specific (file path plus line range): those pointers are exactly what the verifier checks.
+
 #### The Quality Bar
 
 Include a skill card ONLY if the evidence would survive an interviewer asking "tell me about a time you used X" — meaning you could point at concrete code and describe what was built with it and what judgment it shows. Prefer 15-35 well-evidenced skills over 80 thin ones. A shorter inventory of defensible cards is worth far more downstream than an exhaustive list of name-drops.

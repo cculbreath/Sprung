@@ -35,43 +35,81 @@ class StandaloneKCExtractor {
 
     // MARK: - Public API
 
+    /// Maximum number of source extraction pipelines run concurrently.
+    /// Bounded to stay within Anthropic rate limits while still overlapping
+    /// the per-document LLM passes. Within a document the warm-then-fan-out
+    /// caching pattern still applies; across documents cold cache starts are
+    /// expected (document content differs per source).
+    private static let maxConcurrentSourcePipelines = 3
+
     /// Extract all sources into artifacts. Artifacts are persisted to SwiftData as standalone (archived).
+    /// Sources run through a bounded task group; this method does not return
+    /// until EVERY pipeline has finished, so the downstream merge/analysis
+    /// step remains a hard barrier after all sources complete.
     /// - Parameters:
     ///   - sources: URLs to documents or git repositories
-    ///   - onProgress: Progress callback (current, total, filename)
+    ///   - onProgress: Progress callback (dispatched count, total, filename)
     ///   - onGitProgress: Git agent turn progress callback (turn, maxTurns, action)
-    /// - Returns: Array of artifact JSON objects with their IDs
+    /// - Returns: Array of artifact JSON objects with their IDs (source order preserved)
     func extractAllSources(
         _ sources: [URL],
         onProgress: @escaping (Int, Int, String) -> Void,
         onGitProgress: @escaping (Int, Int, String) -> Void
     ) async throws -> [JSON] {
-        var artifacts: [JSON] = []
         let total = sources.count
 
         // Reset pre-analyzed results from previous runs
         gitAnalyzedCards = []
         gitAnalyzedSkills = []
 
-        for (index, url) in sources.enumerated() {
-            let filename = url.lastPathComponent
-            onProgress(index + 1, total, filename)
+        var artifactsByIndex: [Int: JSON] = [:]
+        var dispatchedCount = 0
 
-            do {
-                if isGitRepository(url) {
-                    let artifact = try await extractGitRepository(url, onGitProgress: onGitProgress)
-                    artifacts.append(artifact)
-                } else {
-                    let artifact = try await extractDocument(url)
-                    artifacts.append(artifact)
+        await withTaskGroup(of: (Int, JSON?).self) { group in
+            var inFlight = 0
+
+            for (index, url) in sources.enumerated() {
+                // Bound concurrency: drain one finished pipeline before adding more
+                if inFlight >= Self.maxConcurrentSourcePipelines {
+                    if let (finishedIndex, artifact) = await group.next() {
+                        inFlight -= 1
+                        if let artifact {
+                            artifactsByIndex[finishedIndex] = artifact
+                        }
+                    }
                 }
-            } catch {
-                Logger.warning("StandaloneKCExtractor: Failed to extract \(filename): \(error.localizedDescription)", category: .ai)
-                // Continue with other sources even if one fails
+
+                let filename = url.lastPathComponent
+                dispatchedCount += 1
+                onProgress(dispatchedCount, total, filename)
+
+                inFlight += 1
+                group.addTask { [weak self] in
+                    guard let self else { return (index, nil) }
+                    do {
+                        if await self.isGitRepository(url) {
+                            return (index, try await self.extractGitRepository(url, onGitProgress: onGitProgress))
+                        } else {
+                            return (index, try await self.extractDocument(url))
+                        }
+                    } catch {
+                        Logger.warning("StandaloneKCExtractor: Failed to extract \(filename): \(error.localizedDescription)", category: .ai)
+                        // Continue with other sources even if one fails
+                        return (index, nil)
+                    }
+                }
+            }
+
+            // Barrier: wait for every remaining pipeline before returning
+            for await (finishedIndex, artifact) in group {
+                if let artifact {
+                    artifactsByIndex[finishedIndex] = artifact
+                }
             }
         }
 
-        return artifacts
+        // Preserve original source order
+        return artifactsByIndex.keys.sorted().compactMap { artifactsByIndex[$0] }
     }
 
     /// Load archived artifacts from SwiftData.

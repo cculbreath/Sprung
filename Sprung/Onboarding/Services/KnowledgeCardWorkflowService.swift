@@ -162,10 +162,30 @@ final class KnowledgeCardWorkflowService {
         knowledgeCardStore.addAll(cardsToAdd)
         agentActivityTracker.markCompleted(agentId: cardMergeAgentId)
 
-        // STEP 2: Aggregate skills from all artifacts and persist with isPending=true
+        // STEP 2: Aggregate skills from all artifacts, run the curation gate,
+        // and persist with isPending=true
         var skillsToAdd: [Skill] = []
         if let mergedSkillBank = await cardMergeService.getMergedSkillBank() {
-            skillsToAdd = mergedSkillBank.skills.map { skill -> Skill in
+            var bankSkills = mergedSkillBank.skills
+
+            // Curation gate: collapse over-granular entries into parent skills
+            // (absorbed names become ATS variants) and drop implied skills with
+            // no supporting evidence beyond the inference itself.
+            if let facade = llmFacadeProvider?() {
+                do {
+                    let curationService = SkillBankService(llmFacade: facade)
+                    let outcome = try await curationService.curateSkills(bankSkills)
+                    bankSkills = outcome.skills
+                    Logger.info(
+                        "🔧 Skill curation: \(outcome.inputCount) in → \(bankSkills.count) out (\(outcome.collapsedCount) collapsed into parents, \(outcome.droppedImpliedCount) implied dropped)",
+                        category: .ai
+                    )
+                } catch {
+                    Logger.warning("⚠️ Skill curation failed, keeping uncurated skills: \(error.localizedDescription)", category: .ai)
+                }
+            }
+
+            skillsToAdd = bankSkills.map { skill -> Skill in
                 Skill(
                     canonical: skill.canonical,
                     atsVariants: skill.atsVariants,
@@ -174,6 +194,7 @@ final class KnowledgeCardWorkflowService {
                     evidence: skill.evidence,
                     relatedSkills: skill.relatedSkills,
                     lastUsed: skill.lastUsed,
+                    implied: skill.implied,
                     isFromOnboarding: true,
                     isPending: true
                 )

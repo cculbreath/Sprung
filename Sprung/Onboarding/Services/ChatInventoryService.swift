@@ -4,6 +4,8 @@
 //
 //  Service for extracting skills and narrative cards from chat transcript.
 //  Creates a "chat transcript" artifact that participates in knowledge merge.
+//  Runs two structured Anthropic calls that share a cached system + transcript
+//  prefix: the first (awaited) call warms the cache, the second reads it.
 //
 
 import Foundation
@@ -50,7 +52,6 @@ actor ChatInventoryService {
 
         Logger.info("💬 Extracting chat knowledge from \(userMessages.count) user messages", category: .ai)
 
-        // Call LLM with structured output for skills
         guard let modelId = UserDefaults.standard.string(forKey: "onboardingCardMergeModelId"), !modelId.isEmpty else {
             throw ModelConfigurationError.modelNotConfigured(
                 settingKey: "onboardingCardMergeModelId",
@@ -58,36 +59,51 @@ actor ChatInventoryService {
             )
         }
 
+        // Shared cached prefix for both extraction calls: system block +
+        // transcript block each carry a breakpoint (2 of 4 max). The skills
+        // call runs first and warms the cache; the cards call reuses it.
+        let systemBlocks = [AnthropicSystemBlock(text: Self.systemPrompt, cacheControl: .ephemeral)]
+        let transcriptBlock = AnthropicContentBlock.text(AnthropicTextBlock(
+            text: "CONVERSATION TRANSCRIPT:\n---\n\(transcript)\n---",
+            cacheControl: .ephemeral
+        ))
+
         // Extract skills
         let skills: [Skill]
         do {
-            skills = try await llmFacade.executeStructuredWithSchema(
-                prompt: buildSkillsExtractionPrompt(transcript: transcript),
+            let response: ChatSkillsResponse = try await llmFacade.executeStructuredWithAnthropicBlocks(
+                systemContent: systemBlocks,
+                userBlocks: [transcriptBlock, .text(AnthropicTextBlock(text: Self.skillsInstructions))],
                 modelId: modelId,
-                as: [Skill].self,
-                schema: Self.skillsSchema,
-                schemaName: "chat_skills",
-                backend: .openRouter
+                responseType: ChatSkillsResponse.self,
+                schema: SkillBankPrompts.jsonSchema,
+                maxTokens: 16384
             )
+            skills = response.skills
+        } catch let error as ModelConfigurationError {
+            throw error
         } catch {
             Logger.warning("⚠️ Chat skills extraction failed: \(error.localizedDescription)", category: .ai)
             return nil
         }
 
-        // Extract narrative cards
+        // Extract narrative cards (reads the cache the skills call just wrote)
         let narrativeCards: [KnowledgeCard]
         do {
-            narrativeCards = try await llmFacade.executeStructuredWithSchema(
-                prompt: buildNarrativeCardsExtractionPrompt(transcript: transcript),
+            let response: ChatCardsResponse = try await llmFacade.executeStructuredWithAnthropicBlocks(
+                systemContent: systemBlocks,
+                userBlocks: [transcriptBlock, .text(AnthropicTextBlock(text: Self.narrativeCardsInstructions))],
                 modelId: modelId,
-                as: [KnowledgeCard].self,
+                responseType: ChatCardsResponse.self,
                 schema: Self.narrativeCardsSchema,
-                schemaName: "chat_narrativeCards",
-                backend: .openRouter
+                maxTokens: 16384
             )
+            narrativeCards = response.cards
         } catch {
-            Logger.warning("⚠️ Chat narrative cards extraction failed: \(error.localizedDescription)", category: .ai)
-            return nil
+            // Don't discard skills the first call already produced — degrade to
+            // a skills-only artifact (the both-empty guard below still applies).
+            Logger.warning("⚠️ Chat narrative cards extraction failed: \(error.localizedDescription) — keeping extracted skills", category: .ai)
+            narrativeCards = []
         }
 
         // Check if anything was extracted
@@ -138,15 +154,23 @@ actor ChatInventoryService {
         return lines.joined(separator: "\n\n")
     }
 
-    private func buildSkillsExtractionPrompt(transcript: String) -> String {
+    // MARK: - Prompts
+
+    private static let systemPrompt = """
+        You are a career-knowledge extraction assistant. You analyze interview \
+        conversation transcripts in which a user discusses their career, \
+        achievements, skills, and experience, and you extract structured \
+        knowledge (skill inventories and narrative knowledge cards) exactly \
+        matching the requested JSON schema.
         """
-        You are extracting a COMPREHENSIVE skill inventory from an interview conversation. \
-        The user has been discussing their career, achievements, skills, and experience.
+
+    private static let skillsInstructions = """
+        Extract a COMPREHENSIVE skill inventory from the conversation transcript above.
 
         This is a BANK of all possible skills — completeness matters more than selectivity. \
         When in doubt, INCLUDE the skill at a lower proficiency level.
 
-        Review the conversation below and extract ALL skills, including:
+        Extract ALL skills, including:
         - Technical skills and technologies mentioned explicitly
         - Skills IMPLIED by the work described (e.g., if they managed a team, extract \
           "team management", "performance reviews", "hiring", "mentoring")
@@ -157,127 +181,139 @@ actor ChatInventoryService {
         - Adjacent skills implied by primary ones (e.g., "Python" implies "pip", \
           "virtual environments", "debugging")
 
-        For each skill, assess:
-        - The proficiency level based on how they discuss it (expert, advanced, intermediate, beginner)
-        - Years of experience if mentioned
-        - Evidence strength (strong, moderate, weak) based on specificity of claims
+        For each skill:
+        - Set `implied` to false when the skill was explicitly demonstrated or discussed, \
+          and true when it is only inferred from context. Cap implied-skill evidence \
+          strength at "supporting" or "mention" — never "primary".
+        - Set proficiency (expert, proficient, familiar) based on how they discuss it.
+        - Provide evidence with document_id "chat", a location like "conversation", a brief \
+          context note, and a strength (primary, supporting, mention).
+        - List ATS variants of the skill name inside ats_variants — variants are NEVER \
+          separate skill entries.
 
-        IMPORTANT:
-        - Extract both explicit AND implied skills
-        - Use "chat" as the source document ID
-        - If no clear skills are mentioned, return an empty array
-
-        CONVERSATION TRANSCRIPT:
-        ---
-        \(transcript)
-        ---
-
-        Extract the skills now as a JSON array.
+        If no clear skills are mentioned, return an empty skills array.
         """
-    }
 
-    private func buildNarrativeCardsExtractionPrompt(transcript: String) -> String {
-        """
-        You are extracting narrative knowledge cards from an interview conversation. The user has been \
-        discussing their career, achievements, skills, and experience.
+    private static let narrativeCardsInstructions = """
+        Extract narrative knowledge cards from the conversation transcript above.
 
-        Review the conversation below and extract any career narratives that would make good \
-        knowledge cards. Focus on:
+        Focus on:
         - Employment experiences and roles discussed
         - Projects described with enough detail for a narrative
         - Achievements and accomplishments mentioned
         - Educational experiences if discussed in depth
 
-        For each card, capture:
+        For each card, write a narrative that captures:
         - The CONTEXT: What was the situation and the applicant's role?
         - The APPROACH: What did they do and what reasoning drove their decisions?
         - The SIGNIFICANCE: What was accomplished, discovered, or advanced?
 
         IMPORTANT:
         - Only create cards for experiences with enough detail for a meaningful narrative
-        - Use "chat" as the source document ID
-        - Set evidence strength to "moderate" since chat is supplemental to documents
-        - If no substantial career narratives are shared, return an empty array
+        - Use "chat" as the document_id in evidence_anchors
+        - If no substantial career narratives are shared, return an empty cards array
         - Focus on accomplishments, expertise, and what was built/discovered — omit
           negative content like performance criticisms, failures, or self-deprecation
-
-        CONVERSATION TRANSCRIPT:
-        ---
-        \(transcript)
-        ---
-
-        Extract the narrative cards now as a JSON array.
         """
-    }
 
     // MARK: - Schemas
 
-    /// JSON Schema for skills array
-    static let skillsSchema: JSONSchema = {
-        let evidenceAnchorSchema = JSONSchema(
-            type: .object,
-            properties: [
-                "sourceDocumentId": JSONSchema(type: .string),
-                "quoteOrReference": JSONSchema(type: .string),
-                "strength": JSONSchema(type: .string, enum: ["strong", "moderate", "weak"])
-            ],
-            required: ["sourceDocumentId", "strength"]
-        )
+    /// JSON Schema for narrative cards extracted from chat. Keys match the
+    /// KnowledgeCard Codable wire format (snake_case).
+    static let narrativeCardsSchema: [String: Any] = [
+        "type": "object",
+        "properties": [
+            "cards": [
+                "type": "array",
+                "description": "Narrative knowledge cards extracted from the conversation",
+                "items": [
+                    "type": "object",
+                    "properties": [
+                        "id": [
+                            "type": "string",
+                            "description": "Unique identifier (UUID format)"
+                        ],
+                        "card_type": [
+                            "type": "string",
+                            "enum": ["employment", "project", "achievement", "education"],
+                            "description": "Type of knowledge card"
+                        ],
+                        "title": [
+                            "type": "string",
+                            "description": "Specific, descriptive title for the card"
+                        ],
+                        "narrative": [
+                            "type": "string",
+                            "description": "Narrative capturing context, approach, and significance in the user's voice"
+                        ],
+                        "organization": [
+                            "type": "string",
+                            "description": "Company, institution, or organization"
+                        ],
+                        "date_range": [
+                            "type": "string",
+                            "description": "Time period if applicable"
+                        ],
+                        "evidence_anchors": [
+                            "type": "array",
+                            "description": "Links back to the conversation",
+                            "items": [
+                                "type": "object",
+                                "properties": [
+                                    "document_id": [
+                                        "type": "string",
+                                        "description": "Always \"chat\" for conversation-sourced cards"
+                                    ],
+                                    "location": [
+                                        "type": "string",
+                                        "description": "Where in the conversation this was discussed"
+                                    ],
+                                    "verbatim_excerpt": [
+                                        "type": "string",
+                                        "description": "Short verbatim quote from the user (20-50 words)"
+                                    ]
+                                ],
+                                "required": ["document_id", "location"]
+                            ]
+                        ],
+                        "extractable": [
+                            "type": "object",
+                            "description": "Metadata for job matching",
+                            "properties": [
+                                "domains": [
+                                    "type": "array",
+                                    "items": ["type": "string"],
+                                    "description": "Fields of expertise"
+                                ],
+                                "scale": [
+                                    "type": "array",
+                                    "items": ["type": "string"],
+                                    "description": "Quantified elements (numbers, metrics, scope)"
+                                ],
+                                "keywords": [
+                                    "type": "array",
+                                    "items": ["type": "string"],
+                                    "description": "High-level terms for job matching"
+                                ]
+                            ]
+                        ]
+                    ],
+                    "required": ["id", "card_type", "title", "narrative", "evidence_anchors"]
+                ]
+            ]
+        ],
+        "required": ["cards"]
+    ]
+}
 
-        let skillSchema = JSONSchema(
-            type: .object,
-            properties: [
-                "name": JSONSchema(type: .string, description: "The skill name"),
-                "category": JSONSchema(type: .string, enum: ["technical", "softSkill", "domain", "tool", "methodology"]),
-                "proficiency": JSONSchema(type: .string, enum: ["expert", "advanced", "intermediate", "beginner"]),
-                "yearsExperience": JSONSchema(type: .integer),
-                "atsVariants": JSONSchema(type: .array, items: JSONSchema(type: .string)),
-                "evidence": JSONSchema(type: .array, items: evidenceAnchorSchema),
-                "context": JSONSchema(type: .string)
-            ],
-            required: ["name", "category", "proficiency"]
-        )
+// MARK: - Response Wrappers
 
-        return JSONSchema(type: .array, items: skillSchema)
-    }()
+/// Wrapper for the skills extraction response (schema: SkillBankPrompts.jsonSchema)
+private struct ChatSkillsResponse: Codable {
+    let skills: [Skill]
+}
 
-    /// JSON Schema for narrative cards array
-    static let narrativeCardsSchema: JSONSchema = {
-        let evidenceAnchorSchema = JSONSchema(
-            type: .object,
-            properties: [
-                "sourceDocumentId": JSONSchema(type: .string),
-                "quoteOrReference": JSONSchema(type: .string),
-                "strength": JSONSchema(type: .string, enum: ["strong", "moderate", "weak"])
-            ],
-            required: ["sourceDocumentId", "strength"]
-        )
-
-        let cardSchema = JSONSchema(
-            type: .object,
-            properties: [
-                "id": JSONSchema(type: .string),
-                "cardType": JSONSchema(type: .string, enum: ["employment", "project", "achievement", "education", "volunteer", "certification", "publication", "award"]),
-                "title": JSONSchema(type: .string),
-                "organization": JSONSchema(type: .string),
-                "timePeriod": JSONSchema(type: .string),
-                "whySection": JSONSchema(type: .string, description: "Context: the situation and the applicant's role"),
-                "journeySection": JSONSchema(type: .string, description: "Approach: what they did and what reasoning drove decisions"),
-                "lessonsSection": JSONSchema(type: .string, description: "Significance: what was accomplished, discovered, or advanced"),
-                "technologies": JSONSchema(type: .array, items: JSONSchema(type: .string)),
-                "evidence": JSONSchema(type: .array, items: evidenceAnchorSchema),
-                "extractableMetadata": JSONSchema(
-                    type: .object,
-                    properties: [
-                        "metrics": JSONSchema(type: .array, items: JSONSchema(type: .string)),
-                        "keyAchievements": JSONSchema(type: .array, items: JSONSchema(type: .string)),
-                        "collaborations": JSONSchema(type: .array, items: JSONSchema(type: .string))
-                    ]
-                )
-            ],
-            required: ["id", "cardType", "title", "whySection", "journeySection", "lessonsSection"]
-        )
-
-        return JSONSchema(type: .array, items: cardSchema)
-    }()
+/// Wrapper for the narrative cards extraction response
+private struct ChatCardsResponse: Codable {
+    let cards: [KnowledgeCard]
 }

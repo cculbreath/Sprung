@@ -50,9 +50,12 @@ enum DocumentAnalysisSource {
 
 enum DocumentAnalysisPrompts {
     /// System prompt shared by ALL analysis passes (summary, skills, cards,
-    /// enrichment). It must stay byte-identical across passes: prompt caching is
-    /// a prefix match over system + messages, so a per-pass system prompt would
-    /// invalidate the cached document prefix.
+    /// verification, enrichment). It must stay byte-identical across passes:
+    /// prompt caching is a strict prefix match over tools → system → messages,
+    /// so a per-pass system prompt would fork the prefix and the expensive
+    /// per-document source-block cache entry would be paid twice. The voice
+    /// anchor for the narrative passes therefore lives in the user content
+    /// AFTER the cached source block (see `userBlocks`), never in system.
     static let sharedSystemPrompt = """
     You are a meticulous document-analysis assistant for a resume-building application. \
     Ground every claim in the source document provided at the start of the user message, \
@@ -63,13 +66,98 @@ enum DocumentAnalysisPrompts {
         [AnthropicSystemBlock(text: sharedSystemPrompt)]
     }
 
-    /// Build the user content for one pass: the cached source block first,
-    /// then the pass-specific instructions.
-    static func userBlocks(source: DocumentAnalysisSource, instructions: String) -> [AnthropicContentBlock] {
-        [
-            source.cachedContentBlock,
-            .text(AnthropicTextBlock(text: instructions))
-        ]
+    /// Build the user content for one pass: the cached source block first, then
+    /// the optional voice anchor (narrative passes only), then the pass-specific
+    /// instructions.
+    ///
+    /// The anchor sits AFTER the source block so every pass — anchored or not —
+    /// shares the single (system + source) cache entry warmed by the first pass;
+    /// the document is ingested exactly once per chunk. The anchor carries its
+    /// own cache breakpoint (2 total ≤ 4) so the narrative passes additionally
+    /// share a (system + source + anchor) entry written by the cards pass; the
+    /// incremental write is just the anchor's few hundred tokens.
+    static func userBlocks(
+        source: DocumentAnalysisSource,
+        voiceAnchor: String? = nil,
+        instructions: String
+    ) -> [AnthropicContentBlock] {
+        var blocks: [AnthropicContentBlock] = [source.cachedContentBlock]
+        if let voiceAnchor, !voiceAnchor.isEmpty {
+            blocks.append(.text(AnthropicTextBlock(text: voiceAnchor, cacheControl: .ephemeral)))
+        }
+        blocks.append(.text(AnthropicTextBlock(text: instructions)))
+        return blocks
+    }
+
+    // MARK: - Voice Anchoring
+
+    /// Total character budget for representative writing-sample excerpts.
+    static let voiceExcerptBudget = 1200
+
+    /// Render the voice-anchoring text from the Phase 1 voice profile and
+    /// writing samples (injected into the user content of the narrative passes
+    /// after the cached source block). Deterministic by construction (stable
+    /// sort, bounded excerpts, no timestamps) so the rendered text is
+    /// byte-identical across passes and documents within a session. Returns nil
+    /// when there is nothing to inject — no placeholder text.
+    static func voiceAnchorText(profile: VoiceProfile?, writingSamples: [String]) -> String? {
+        var sections: [String] = []
+
+        if let profile {
+            var lines: [String] = []
+            lines.append("- Enthusiasm: \(profile.enthusiasm.displayName)")
+            lines.append("- Person: \(profile.useFirstPerson ? "first person (I built, I discovered)" : "third person")")
+            lines.append("- Connective style: \(profile.connectiveStyle)")
+            if !profile.aspirationalPhrases.isEmpty {
+                lines.append("- Aspirational phrases: \(profile.aspirationalPhrases.joined(separator: ", "))")
+            }
+            if !profile.avoidPhrases.isEmpty {
+                lines.append("- Never use: \(profile.avoidPhrases.joined(separator: ", "))")
+            }
+            sections.append("## Author Voice Profile\n\n" + lines.joined(separator: "\n"))
+        }
+
+        let excerpts = representativeExcerpts(from: writingSamples)
+        if !excerpts.isEmpty {
+            let rendered = excerpts.enumerated()
+                .map { "Excerpt \($0.offset + 1):\n\"\($0.element)\"" }
+                .joined(separator: "\n\n")
+            sections.append("## Representative Writing Samples\n\n" + rendered)
+        }
+
+        guard !sections.isEmpty else { return nil }
+
+        return """
+        This is how the author describes their own work — match this register when writing \
+        narratives, bullets, and excerpts. Preserve the author's natural sentence rhythm and \
+        vocabulary; never compress their voice into formulaic resume bullet patterns.
+
+        \(sections.joined(separator: "\n\n"))
+        """
+    }
+
+    /// Pick 1–2 representative writing-sample excerpts, bounded to
+    /// `voiceExcerptBudget` characters total. Samples are sorted before
+    /// selection so the result is deterministic regardless of store ordering.
+    private static func representativeExcerpts(from samples: [String]) -> [String] {
+        let cleaned = samples
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .sorted()
+        guard !cleaned.isEmpty else { return [] }
+
+        let selected = cleaned.prefix(2)
+        let perExcerpt = voiceExcerptBudget / selected.count
+        return selected.map { truncatedAtWordBoundary($0, limit: perExcerpt) }
+    }
+
+    private static func truncatedAtWordBoundary(_ text: String, limit: Int) -> String {
+        guard text.count > limit else { return text }
+        let prefix = String(text.prefix(limit))
+        if let lastSpace = prefix.lastIndex(where: { $0.isWhitespace }) {
+            return String(prefix[..<lastSpace]) + "…"
+        }
+        return prefix + "…"
     }
 }
 
@@ -80,7 +168,17 @@ enum DocumentAnalysisPrompts {
 ///
 /// 1. Summary FIRST (awaited — warms the prompt cache for the document prefix)
 /// 2. Skill bank + narrative-card extraction concurrently
-/// 3. Enrichment after cards complete (sees the document + the extracted cards)
+/// 3. Verification after cards (awaited) — one batched adversarial grounding
+///    check per document/chunk against the same cached source; unsupported
+///    claims are stripped, broken anchors repaired or downgraded, fabricated
+///    cards dropped BEFORE enrichment can elaborate on them
+/// 4. Enrichment after verification (sees the document + the verified cards)
+///
+/// All five passes share ONE system prefix and ONE cached source block per
+/// document/chunk. When a Phase 1 voice profile / writing samples exist, the
+/// narrative passes (cards, verification, enrichment) additionally inject a
+/// voice-anchor text block AFTER the cached source block in the user content;
+/// the summary and skill passes omit it.
 ///
 /// Multi-chunk PDFs run the pass set per chunk; results are concatenated and
 /// summaries are joined with "Part N (pages X–Y):" labels.
@@ -116,16 +214,41 @@ actor AnthropicDocumentAnalysisService {
     private let kcExtractionService: KnowledgeCardExtractionService
     private let enrichmentService: CardEnrichmentService
 
+    /// Supplies the rendered voice-anchor text (nil when no voice profile /
+    /// writing samples exist). Resolved once per service instance so the
+    /// anchor is byte-stable across passes and documents in a session; the
+    /// container re-installs the provider (dropping this instance) when
+    /// voice-primer extraction completes.
+    private let voiceAnchorProvider: (@Sendable () async -> String?)?
+    private var voiceAnchorResolved = false
+    private var voiceAnchorCache: String?
+
     init(
         llmFacade: LLMFacade,
         skillBankService: SkillBankService,
-        kcExtractionService: KnowledgeCardExtractionService
+        kcExtractionService: KnowledgeCardExtractionService,
+        voiceAnchorProvider: (@Sendable () async -> String?)? = nil
     ) {
         self.llmFacade = llmFacade
         self.preflightService = PDFPreflightService(llmFacade: llmFacade)
         self.skillBankService = skillBankService
         self.kcExtractionService = kcExtractionService
         self.enrichmentService = CardEnrichmentService(llmFacade: llmFacade)
+        self.voiceAnchorProvider = voiceAnchorProvider
+    }
+
+    /// Resolve (and memoize) the voice anchor for this service instance.
+    /// A concurrent double-resolution is harmless: the provider is
+    /// deterministic, so both resolutions yield identical bytes.
+    private func resolveVoiceAnchor() async -> String? {
+        if voiceAnchorResolved { return voiceAnchorCache }
+        let anchor = await voiceAnchorProvider?()
+        voiceAnchorCache = anchor
+        voiceAnchorResolved = true
+        if let anchor {
+            Logger.info("🎤 Voice anchoring active for narrative passes (\(anchor.count) chars)", category: .ai)
+        }
+        return anchor
     }
 
     /// Resolve the configured document-analysis model or throw so the UI layer
@@ -243,6 +366,10 @@ actor AnthropicDocumentAnalysisService {
     ) async -> AnalysisResult {
         var result = AnalysisResult()
 
+        // Resolved once per service instance; nil when no voice profile or
+        // writing samples exist. Used only by the narrative passes.
+        let voiceAnchor = await resolveVoiceAnchor()
+
         // Pass 1: summary FIRST — awaiting it warms the prompt cache for the
         // shared (system + source) prefix used by every subsequent pass.
         if passes.summary {
@@ -265,24 +392,42 @@ actor AnthropicDocumentAnalysisService {
 
             if passes.skills && passes.narrativeCards && !passes.summary {
                 result.skills = await extractSkills(documentId: documentId, filename: filename, source: source)
-                result.narrativeCards = await extractCards(documentId: documentId, filename: filename, source: source)
+                result.narrativeCards = await extractCards(
+                    documentId: documentId, filename: filename, source: source, voiceAnchor: voiceAnchor
+                )
             } else {
                 async let skillsTask: [Skill]? = passes.skills
                     ? extractSkills(documentId: documentId, filename: filename, source: source)
                     : nil
                 async let cardsTask: [KnowledgeCard]? = passes.narrativeCards
-                    ? extractCards(documentId: documentId, filename: filename, source: source)
+                    ? extractCards(documentId: documentId, filename: filename, source: source, voiceAnchor: voiceAnchor)
                     : nil
 
                 (result.skills, result.narrativeCards) = await (skillsTask, cardsTask)
             }
         }
 
-        // Pass 3: enrichment after cards complete — each enrichment request sees
-        // the same cached document plus the extracted card it is enriching.
+        // Pass 3: verification (awaited) — one batched adversarial grounding
+        // check against the same cached source block. Runs BEFORE enrichment so
+        // enrichment never elaborates on hallucinated claims. A verification
+        // failure keeps the cards: it is a quality gate, not a point of failure.
+        if let cards = result.narrativeCards, !cards.isEmpty {
+            statusCallback?("Verifying \(cards.count) cards against \(filename)...")
+            result.narrativeCards = await verifyCards(
+                cards,
+                documentId: documentId,
+                filename: filename,
+                source: source,
+                modelId: modelId,
+                voiceAnchor: voiceAnchor
+            )
+        }
+
+        // Pass 4: enrichment after verification — each enrichment request sees
+        // the same cached document plus the verified card it is enriching.
         if passes.enrichment, let cards = result.narrativeCards, !cards.isEmpty {
             statusCallback?("Enriching \(cards.count) cards from \(filename)...")
-            await enrichCards(cards, source: source)
+            await enrichCards(cards, source: source, voiceAnchor: voiceAnchor)
         }
 
         return result
@@ -326,13 +471,15 @@ actor AnthropicDocumentAnalysisService {
     private func extractCards(
         documentId: String,
         filename: String,
-        source: DocumentAnalysisSource
+        source: DocumentAnalysisSource,
+        voiceAnchor: String?
     ) async -> [KnowledgeCard]? {
         do {
             return try await kcExtractionService.extractCards(
                 documentId: documentId,
                 filename: filename,
-                source: source
+                source: source,
+                voiceAnchor: voiceAnchor
             )
         } catch {
             Logger.warning("📖 Narrative-card pass failed for \(filename): \(error.localizedDescription)", category: .ai)
@@ -340,8 +487,137 @@ actor AnthropicDocumentAnalysisService {
         }
     }
 
-    /// Enrich freshly extracted cards in small concurrent batches.
-    private func enrichCards(_ cards: [KnowledgeCard], source: DocumentAnalysisSource) async {
+    // MARK: - Verification Pass
+
+    /// Run one batched adversarial verification call for the chunk's cards and
+    /// apply the verdicts: drop fabricated cards, swap in revised narratives,
+    /// repair broken anchors, and downgrade evidence quality when anchors are
+    /// broken and unrepairable. On any call failure the cards pass through
+    /// unchanged (logged) — verification degrades gracefully.
+    private func verifyCards(
+        _ cards: [KnowledgeCard],
+        documentId: String,
+        filename: String,
+        source: DocumentAnalysisSource,
+        modelId: String,
+        voiceAnchor: String?
+    ) async -> [KnowledgeCard] {
+        let response: CardVerificationResponse
+        do {
+            response = try await llmFacade.executeStructuredWithAnthropicBlocks(
+                systemContent: DocumentAnalysisPrompts.systemBlocks,
+                userBlocks: DocumentAnalysisPrompts.userBlocks(
+                    source: source,
+                    voiceAnchor: voiceAnchor,
+                    instructions: CardVerificationPrompts.verificationPrompt(
+                        documentId: documentId,
+                        filename: filename,
+                        cards: cards,
+                        isPagedSource: source.isPaged
+                    )
+                ),
+                modelId: modelId,
+                responseType: CardVerificationResponse.self,
+                schema: CardVerificationPrompts.jsonSchema,
+                maxTokens: 32768
+            )
+        } catch {
+            Logger.warning(
+                "🛡️ Verification pass failed for \(filename) — keeping all \(cards.count) cards unverified: \(error.localizedDescription)",
+                category: .ai
+            )
+            return cards
+        }
+
+        var kept = 0
+        var revised = 0
+        var dropped = 0
+        var surviving: [KnowledgeCard] = []
+
+        for (index, card) in cards.enumerated() {
+            guard let verdict = verdictFor(card: card, index: index, in: response.verdicts) else {
+                // No verdict returned for this card — keep it untouched.
+                kept += 1
+                surviving.append(card)
+                continue
+            }
+
+            if verdict.verdict == .drop {
+                dropped += 1
+                Logger.info(
+                    "🛡️ Dropped card \"\(card.title)\" — unsupported: \(verdict.unsupportedClaims.joined(separator: " | "))",
+                    category: .ai
+                )
+                continue
+            }
+
+            let revisedNarrative = verdict.verdict == .revise
+                ? verdict.revisedNarrative?.trimmingCharacters(in: .whitespacesAndNewlines)
+                : nil
+            // Contract (CardVerificationPrompts): when anchorsValid is false,
+            // repairedAnchors is the card's COMPLETE replacement anchor set —
+            // still-valid anchors echoed unchanged, broken ones corrected,
+            // unrepairable ones omitted — so wholesale replacement below is
+            // lossless. Empty/missing means no anchor material survived: keep
+            // the originals and downgrade evidence quality instead.
+            let repairedAnchors = verdict.anchorsValid ? nil : verdict.repairedAnchors
+            let downgradeEvidence = !verdict.anchorsValid && (repairedAnchors?.isEmpty ?? true)
+
+            await MainActor.run {
+                if let revisedNarrative, !revisedNarrative.isEmpty {
+                    card.narrative = revisedNarrative
+                }
+                if let repairedAnchors, !repairedAnchors.isEmpty {
+                    // The document identity is known a priori — never trust the
+                    // model-echoed documentId (a hallucinated id would corrupt
+                    // the anchor's linkage to its source artifact).
+                    card.evidenceAnchors = repairedAnchors.map {
+                        EvidenceAnchor(
+                            documentId: documentId,
+                            location: $0.location,
+                            verbatimExcerpt: $0.verbatimExcerpt
+                        )
+                    }
+                }
+                if downgradeEvidence {
+                    card.evidenceQuality = "weak"
+                }
+            }
+
+            if let revisedNarrative, !revisedNarrative.isEmpty {
+                revised += 1
+                Logger.info(
+                    "🛡️ Revised card \"\(card.title)\" — stripped: \(verdict.unsupportedClaims.joined(separator: " | "))",
+                    category: .ai
+                )
+            } else {
+                kept += 1
+            }
+            surviving.append(card)
+        }
+
+        Logger.info(
+            "🛡️ Verification for \(filename): \(cards.count) cards in → \(kept) kept, \(revised) revised, \(dropped) dropped",
+            category: .ai
+        )
+        return surviving
+    }
+
+    /// Match a verdict to a card by id (preferred) or batch index (fallback).
+    private func verdictFor(
+        card: KnowledgeCard,
+        index: Int,
+        in verdicts: [CardVerificationVerdict]
+    ) -> CardVerificationVerdict? {
+        let cardId = card.id.uuidString.lowercased()
+        if let byId = verdicts.first(where: { $0.cardId.lowercased() == cardId }) {
+            return byId
+        }
+        return verdicts.first(where: { $0.cardIndex == index })
+    }
+
+    /// Enrich verified cards in small concurrent batches.
+    private func enrichCards(_ cards: [KnowledgeCard], source: DocumentAnalysisSource, voiceAnchor: String?) async {
         let batchSize = 4
         var enriched = 0
 
@@ -353,7 +629,7 @@ actor AnthropicDocumentAnalysisService {
                 for card in batch where !card.narrative.isEmpty {
                     group.addTask {
                         do {
-                            try await service.enrichCard(card, source: source)
+                            try await service.enrichCard(card, source: source, voiceAnchor: voiceAnchor)
                             return true
                         } catch {
                             Logger.warning("✨ Enrichment failed for \(card.title): \(error.localizedDescription)", category: .ai)

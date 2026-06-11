@@ -39,23 +39,30 @@ actor CardEnrichmentService {
 
     /// Enrich a single card with structured fact extraction from an analysis source
     /// (uploaded PDF or text block).
+    /// - Parameter voiceAnchor: Optional voice-anchoring text (Phase 1 voice
+    ///   profile + writing-sample excerpts), injected into the user content
+    ///   AFTER the cached source block. Must be byte-stable across the
+    ///   narrative passes of an analysis run so the anchored prefix caches.
     func enrichCard(
         _ card: KnowledgeCard,
-        source: DocumentAnalysisSource
+        source: DocumentAnalysisSource,
+        voiceAnchor: String? = nil
     ) async throws {
-        try await extractFacts(for: card, source: source)
+        try await extractFacts(for: card, source: source, voiceAnchor: voiceAnchor)
     }
 
     // MARK: - Fact Extraction
 
-    private func extractFacts(for card: KnowledgeCard, source: DocumentAnalysisSource) async throws {
+    private func extractFacts(for card: KnowledgeCard, source: DocumentAnalysisSource, voiceAnchor: String?) async throws {
         let modelId = try AnthropicDocumentAnalysisService.configuredModelId(operationName: "Fact Extraction")
 
         let instructions = buildFactExtractionPrompt(card: card, isPagedSource: source.isPaged)
 
         let result: FactExtractionResult = try await llmFacade.executeStructuredWithAnthropicBlocks(
             systemContent: DocumentAnalysisPrompts.systemBlocks,
-            userBlocks: DocumentAnalysisPrompts.userBlocks(source: source, instructions: instructions),
+            userBlocks: DocumentAnalysisPrompts.userBlocks(
+                source: source, voiceAnchor: voiceAnchor, instructions: instructions
+            ),
             modelId: modelId,
             responseType: FactExtractionResult.self,
             schema: Self.factExtractionSchema,

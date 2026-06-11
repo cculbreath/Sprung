@@ -680,6 +680,14 @@ final class LLMFacade {
         try await specializedAPIs.anthropicMessagesStream(parameters: parameters)
     }
 
+    /// Non-streaming Anthropic messages call — used by multi-turn agent loops
+    /// (git analysis, card merge) where the full response is consumed at once.
+    func anthropicMessages(
+        parameters: AnthropicMessageParameter
+    ) async throws -> AnthropicMessageResponse {
+        try await specializedAPIs.anthropicMessages(parameters: parameters)
+    }
+
     func anthropicListModels() async throws -> AnthropicModelsResponse {
         try await specializedAPIs.anthropicListModels()
     }

@@ -667,6 +667,8 @@ struct EventDumpView: View {
         return lines.joined(separator: "\n")
     }
     private func exportEventDump() {
+        // Telemetry: emit the session-total token readout alongside the dump.
+        coordinator.tokenUsageTracker.logSessionSummary(trigger: "event dump export")
         let savePanel = NSSavePanel()
         savePanel.nameFieldStringValue = "event-dump-\(Date().formatted(.iso8601.year().month().day().time(includingFractionalSeconds: false).dateSeparator(.dash).dateTimeSeparator(.space).timeSeparator(.colon))).txt"
         savePanel.allowedContentTypes = [.plainText]

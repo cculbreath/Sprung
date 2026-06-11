@@ -7,6 +7,7 @@
 //
 
 import Foundation
+import SwiftOpenAI
 
 /// A lightweight background agent that merges cards
 @MainActor
@@ -199,20 +200,26 @@ class BackgroundMergeAgent {
     }
 
     private func callLLMForMerge(facade: LLMFacade, prompt: String) async throws -> String {
-        let messages: [ChatCompletionParameters.Message] = [
-            ChatCompletionParameters.Message(role: .user, content: .text(prompt))
-        ]
-
-        let response = try await facade.executeWithTools(
-            messages: messages,
-            tools: [],
-            toolChoice: nil,
-            modelId: modelId
+        let parameters = AnthropicMessageParameter(
+            model: modelId,
+            messages: [.user(prompt)],
+            maxTokens: 8192,
+            stream: false
         )
 
-        guard let choice = response.choices?.first,
-              let message = choice.message,
-              let content = message.content else {
+        let response = try await facade.anthropicMessages(parameters: parameters)
+
+        Logger.info(
+            "🔀 BackgroundMergeAgent usage (\(modelId)): input=\(response.usage.inputTokens) cache_read=\(response.usage.cacheReadInputTokens ?? 0) output=\(response.usage.outputTokens)",
+            category: .ai
+        )
+
+        let content = response.content.compactMap { block -> String? in
+            if case .text(let textBlock) = block { return textBlock.text }
+            return nil
+        }.joined()
+
+        guard !content.isEmpty else {
             throw MergeError.noResponse
         }
 

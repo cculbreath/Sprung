@@ -119,7 +119,9 @@ actor SkillBankService {
                     proficiency: proficiency,
                     evidence: allEvidence,
                     relatedSkills: Array(Set(existing.relatedSkills + skill.relatedSkills)),
-                    lastUsed: existing.lastUsed ?? skill.lastUsed
+                    lastUsed: existing.lastUsed ?? skill.lastUsed,
+                    // A skill stays implied only if EVERY source marked it implied
+                    implied: existing.implied && skill.implied
                 )
             } else {
                 merged[key] = skill
@@ -138,6 +140,215 @@ actor SkillBankService {
             skills: merged,
             generatedAt: Date(),
             sourceDocumentIds: sourceDocumentIds
+        )
+    }
+
+    // MARK: - Curation Gate
+
+    /// Outcome of the post-merge skill curation gate.
+    struct SkillCurationOutcome {
+        let skills: [Skill]
+        let inputCount: Int
+        let collapsedCount: Int
+        let droppedImpliedCount: Int
+    }
+
+    /// LLM decision payload for curation. Keys are camelCase matching property names.
+    private struct CurationDecisions: Codable {
+        struct Merge: Codable {
+            let intoSkillId: String
+            let absorbedSkillIds: [String]
+            let canonical: String?
+            let reasoning: String
+        }
+        struct Drop: Codable {
+            let skillId: String
+            let reason: String
+        }
+        let merges: [Merge]
+        let drops: [Drop]
+    }
+
+    /// Curate an aggregated skill bank: collapse over-granular entries into
+    /// their parent skill (absorbed names become ATS variants), and drop
+    /// implied skills with no supporting evidence beyond the inference itself.
+    /// Runs a single structured Anthropic call under the card-merge model and
+    /// applies the returned decisions locally so evidence is never rewritten.
+    func curateSkills(_ skills: [Skill]) async throws -> SkillCurationOutcome {
+        guard let facade = llmFacade else {
+            throw SkillBankError.llmNotConfigured
+        }
+        guard skills.count > 1 else {
+            return SkillCurationOutcome(skills: skills, inputCount: skills.count, collapsedCount: 0, droppedImpliedCount: 0)
+        }
+
+        guard let modelId = UserDefaults.standard.string(forKey: "onboardingCardMergeModelId"), !modelId.isEmpty else {
+            throw ModelConfigurationError.modelNotConfigured(
+                settingKey: "onboardingCardMergeModelId",
+                operationName: "Skill Curation"
+            )
+        }
+
+        let prompt = SkillBankPrompts.curationPrompt(skillsJSON: curationInputJSON(for: skills))
+
+        let decisions: CurationDecisions = try await facade.executeStructuredWithAnthropicBlocks(
+            systemContent: [AnthropicSystemBlock(text: SkillBankPrompts.curationSystemPrompt)],
+            userBlocks: [.text(AnthropicTextBlock(text: prompt))],
+            modelId: modelId,
+            responseType: CurationDecisions.self,
+            schema: SkillBankPrompts.curationSchema,
+            maxTokens: 16384
+        )
+
+        return apply(decisions: decisions, to: skills)
+    }
+
+    /// Compact, LLM-readable JSON for the curation prompt.
+    private func curationInputJSON(for skills: [Skill]) -> String {
+        let entries: [[String: Any]] = skills.map { skill in
+            var entry: [String: Any] = [
+                "id": skill.id.uuidString,
+                "canonical": skill.canonical,
+                "atsVariants": skill.atsVariants,
+                "category": skill.category,
+                "proficiency": skill.proficiency.rawValue,
+                "implied": skill.implied,
+                "evidence": skill.evidence.map { evidence in
+                    [
+                        "documentId": evidence.documentId,
+                        "location": evidence.location,
+                        "context": evidence.context,
+                        "strength": evidence.strength.rawValue
+                    ]
+                }
+            ]
+            if let lastUsed = skill.lastUsed {
+                entry["lastUsed"] = lastUsed
+            }
+            return entry
+        }
+
+        guard let data = try? JSONSerialization.data(withJSONObject: entries, options: [.sortedKeys]),
+              let json = String(data: data, encoding: .utf8) else {
+            return "[]"
+        }
+        return json
+    }
+
+    /// Apply merge/drop decisions deterministically. Surviving skills keep
+    /// their exact evidence; absorbed entries contribute their names as ATS
+    /// variants plus their evidence and best proficiency.
+    private func apply(decisions: CurationDecisions, to skills: [Skill]) -> SkillCurationOutcome {
+        var byId: [String: Skill] = [:]
+        for skill in skills {
+            byId[skill.id.uuidString] = skill
+        }
+
+        var absorbedIds = Set<String>()
+        var droppedIds = Set<String>()
+
+        // Drops first: an absorbed-and-dropped conflict resolves to drop
+        for drop in decisions.drops {
+            guard let skill = byId[drop.skillId] else { continue }
+            // Only implied skills are eligible for the unsupported-inference drop
+            guard skill.implied else {
+                Logger.debug("🔧 Curation: ignoring drop of non-implied skill '\(skill.canonical)'", category: .ai)
+                continue
+            }
+            droppedIds.insert(drop.skillId)
+            Logger.debug("🔧 Curation dropped implied skill '\(skill.canonical)': \(drop.reason)", category: .ai)
+        }
+
+        // Resolve transitive merge chains before applying. The model may return
+        // chained decisions in any order (e.g. merge B→A then merge C→B); a
+        // merge whose target was itself absorbed must re-route into the
+        // surviving ancestor, otherwise the absorbed-into-absorbed data is
+        // silently lost when the final filter removes both entries.
+        var redirects: [String: String] = [:]
+        for merge in decisions.merges {
+            for absorbedId in merge.absorbedSkillIds where absorbedId != merge.intoSkillId {
+                // First decision wins, matching the absorb-once semantics below
+                if redirects[absorbedId] == nil {
+                    redirects[absorbedId] = merge.intoSkillId
+                }
+            }
+        }
+
+        func resolveSurvivor(_ id: String) -> String? {
+            var current = id
+            var visited: Set<String> = [id]
+            while let next = redirects[current] {
+                guard visited.insert(next).inserted else {
+                    Logger.warning("🔧 Curation: cyclic merge chain at '\(id)' — skipping merge", category: .ai)
+                    return nil
+                }
+                current = next
+            }
+            return current
+        }
+
+        for merge in decisions.merges {
+            guard let survivorId = resolveSurvivor(merge.intoSkillId),
+                  let target = byId[survivorId],
+                  !droppedIds.contains(survivorId) else { continue }
+
+            if survivorId != merge.intoSkillId {
+                Logger.debug("🔧 Curation: redirected chained merge target '\(merge.intoSkillId)' → '\(survivorId)'", category: .ai)
+            }
+
+            var variants = Set(target.atsVariants)
+            var evidence = target.evidence
+            var proficiency = target.proficiency
+            var implied = target.implied
+
+            for absorbedId in merge.absorbedSkillIds {
+                guard absorbedId != survivorId,
+                      !droppedIds.contains(absorbedId),
+                      !absorbedIds.contains(absorbedId),
+                      let absorbed = byId[absorbedId] else { continue }
+
+                absorbedIds.insert(absorbedId)
+                variants.insert(absorbed.canonical)
+                variants.formUnion(absorbed.atsVariants)
+                evidence.append(contentsOf: absorbed.evidence)
+                if absorbed.proficiency.sortOrder < proficiency.sortOrder {
+                    proficiency = absorbed.proficiency
+                }
+                implied = implied && absorbed.implied
+            }
+
+            // Dedupe evidence by document+location, same as deduplicateSkills
+            var seenEvidence = Set<String>()
+            evidence = evidence.filter { item in
+                seenEvidence.insert("\(item.documentId):\(item.location)").inserted
+            }
+
+            // A rename only applies when this merge's stated target IS the
+            // survivor; a redirected merge's rename was meant for the absorbed
+            // intermediate, not the ancestor it re-routed into.
+            if survivorId == merge.intoSkillId,
+               let canonical = merge.canonical, !canonical.isEmpty, canonical != target.canonical {
+                variants.insert(target.canonical)
+                target.canonical = canonical
+            }
+            variants.remove(target.canonical)
+
+            target.atsVariants = variants.sorted()
+            target.evidence = evidence
+            target.proficiency = proficiency
+            target.implied = implied
+        }
+
+        let curated = skills.filter { skill in
+            let id = skill.id.uuidString
+            return !absorbedIds.contains(id) && !droppedIds.contains(id)
+        }
+
+        return SkillCurationOutcome(
+            skills: curated,
+            inputCount: skills.count,
+            collapsedCount: absorbedIds.count,
+            droppedImpliedCount: droppedIds.count
         )
     }
 

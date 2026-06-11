@@ -4,6 +4,10 @@
 //
 //  Multi-turn agent for merging duplicate knowledge cards.
 //  Uses filesystem tools to read, compare, merge, and delete cards.
+//  Runs against the Anthropic Messages API with prompt caching:
+//  one breakpoint on the last tool (caches the tool set), one on the
+//  system block, and a moving breakpoint on the last content block of
+//  the final message (3 total, within the 4-breakpoint limit).
 //
 
 import Foundation
@@ -85,24 +89,30 @@ class CardMergeAgent {
     // Limits
     private let maxTurns = 100  // More turns allowed for thorough merging
     private let timeoutSeconds: TimeInterval = 900  // 15 minutes
+    private let maxResponseTokens = 8192
 
-    // Context pruning (0 = disabled, uses full context)
+    // Context pruning (0 = disabled, uses full context).
+    // Note: pruning rewrites earlier messages, which invalidates the cached
+    // prefix from the prune point forward — only enable when context size
+    // matters more than cache hits.
     private var ephemeralTurns: Int {
         UserDefaults.standard.integer(forKey: "onboardingEphemeralTurns")
     }
 
-    // Conversation state
-    private var messages: [ChatCompletionParameters.Message] = []
+    // Conversation state (no cache_control markers stored here; the moving
+    // breakpoint is applied to a per-request copy in cachedRequestMessages()).
+    private var messages: [AnthropicMessage] = []
 
-    // Track ephemeral messages: (messageIndex, addedAtTurn, toolCallId)
-    private var ephemeralMessages: [(index: Int, addedAtTurn: Int, toolCallId: String)] = []
+    // Track ephemeral tool-result blocks: (messageIndex, blockIndex, addedAtTurn, toolUseId)
+    private var ephemeralBlocks: [(messageIndex: Int, blockIndex: Int, addedAtTurn: Int, toolUseId: String)] = []
 
     // Track file reads to detect excessive re-reading
     private var fileReadCounts: [String: Int] = [:]
     private var duplicateReadWarningIssued = false
 
-    // Tools
-    private var tools: [ChatCompletionParameters.Tool]
+    // Tools (built once so the encoded tool list is byte-stable across turns —
+    // required for the tool-set cache breakpoint to hit)
+    private var tools: [AnthropicTool]
 
     // Original card count for statistics
     private var originalCardCount: Int = 0
@@ -145,16 +155,15 @@ class CardMergeAgent {
         turnCount = 0
         messages = []
         progress = []
+        ephemeralBlocks = []
 
         // Count original cards
         originalCardCount = try countCards()
 
         // Initialize conversation
-        messages.append(systemMessage())
         messages.append(initialUserMessage())
 
         let startTime = Date()
-        var mergeLog: [MergeLogEntry] = []
 
         do {
             while turnCount < maxTurns {
@@ -176,65 +185,102 @@ class CardMergeAgent {
                     )
                 }
 
-                // Call LLM with tools
-                // Use full context when ephemeralTurns is 0 (disabled)
-                let response = try await facade.executeWithTools(
-                    messages: messages,
+                let parameters = AnthropicMessageParameter(
+                    model: modelId,
+                    messages: cachedRequestMessages(),
+                    system: systemContent(),
+                    maxTokens: maxResponseTokens,
+                    stream: false,
                     tools: tools,
-                    toolChoice: .auto,
-                    modelId: modelId,
-                    useFullContextLength: ephemeralTurns == 0
+                    toolChoice: .auto
                 )
 
-                // Track token usage
-                if let usage = response.usage, let agentId = agentId {
-                    let inputTokens = usage.promptTokens ?? 0
-                    let outputTokens = usage.completionTokens ?? 0
-                    let cachedTokens = usage.promptTokensDetails?.cachedTokens ?? 0
+                let response = try await facade.anthropicMessages(parameters: parameters)
+
+                // Track token + cache usage
+                let usage = response.usage
+                Logger.info(
+                    "🔀 CardMergeAgent usage (\(modelId)): input=\(usage.inputTokens) cache_read=\(usage.cacheReadInputTokens ?? 0) cache_create=\(usage.cacheCreationInputTokens ?? 0) output=\(usage.outputTokens)",
+                    category: .ai
+                )
+                if let agentId = agentId {
                     tracker?.addTokenUsage(
                         agentId: agentId,
-                        input: inputTokens,
-                        output: outputTokens,
-                        cached: cachedTokens
+                        input: usage.inputTokens,
+                        output: usage.outputTokens,
+                        cached: usage.cacheReadInputTokens ?? 0
                     )
                 }
 
-                // Process response
-                guard let choice = response.choices?.first,
-                      let message = choice.message else {
-                    throw CardMergeAgentError.agentDidNotComplete
+                // Split response content into text and tool-use blocks
+                var textParts: [String] = []
+                var toolUses: [AnthropicToolUseResponseBlock] = []
+                for block in response.content {
+                    switch block {
+                    case .text(let textBlock):
+                        textParts.append(textBlock.text)
+                    case .toolUse(let toolUse):
+                        toolUses.append(toolUse)
+                    }
                 }
 
-                // Add assistant message to history
-                messages.append(buildAssistantMessage(from: message))
+                // Echo the assistant turn into history
+                messages.append(assistantMessage(textParts: textParts, toolUses: toolUses))
 
-                // Check finish reason
-                let finishReason: String
-                switch choice.finishReason {
-                case .int(let val): finishReason = String(val)
-                case .string(let val): finishReason = val
-                case .none: finishReason = ""
-                }
-
-                // If model returned text without tool calls, it might be confused
-                if finishReason == "stop" && (message.toolCalls == nil || message.toolCalls!.isEmpty) {
-                    // Prompt it to continue or complete
-                    messages.append(ChatCompletionParameters.Message(
-                        role: .user,
-                        content: .text("Please continue merging cards or call complete_merge if you're done.")
-                    ))
+                // If the model returned text without tool calls, it might be confused
+                if toolUses.isEmpty {
+                    messages.append(.user("Please continue merging cards or call complete_merge if you're done."))
                     continue
                 }
 
-                // Process tool calls
-                guard let toolCalls = message.toolCalls, !toolCalls.isEmpty else {
-                    continue
+                // Prune old ephemeral tool-result blocks before adding new ones (if enabled)
+                if ephemeralTurns > 0 {
+                    pruneEphemeralBlocks()
                 }
 
-                // Check for completion tool
-                if let completionCall = toolCalls.first(where: { $0.function.name == CompleteMergeTool.name }) {
+                // Execute non-completion tool calls first so every tool_use in the
+                // assistant turn gets a tool_result in the next user message.
+                var resultBlocks: [AnthropicContentBlock] = []
+                var ephemeralCandidates: [(blockIndex: Int, toolUseId: String)] = []
+
+                for toolUse in toolUses where toolUse.name != CompleteMergeTool.name {
+                    let arguments = argumentsJSON(from: toolUse.input)
+
+                    await updateProgress("Turn \(turnCount): \(toolDisplayName(toolUse.name))")
+
+                    let result = await executeTool(name: toolUse.name, arguments: arguments)
+                    let blockIndex = resultBlocks.count
+                    resultBlocks.append(.toolResult(AnthropicToolResultBlock(
+                        toolUseId: toolUse.id,
+                        content: result
+                    )))
+
+                    // Mark card file reads as ephemeral (they can be pruned after a few turns)
+                    // Only files in cards/ folder are ephemeral; index.json and other files persist
+                    if toolUse.name == ReadFileTool.name {
+                        let path = extractToolDetail(name: toolUse.name, arguments: arguments) ?? ""
+                        if path.contains("cards/") {
+                            ephemeralCandidates.append((blockIndex: blockIndex, toolUseId: toolUse.id))
+                        }
+                        // Track duplicate reads
+                        trackFileRead(path: path)
+                    }
+
+                    // Log to transcript
+                    if let agentId = agentId {
+                        tracker?.appendTranscript(
+                            agentId: agentId,
+                            entryType: .tool,
+                            content: toolDisplayName(toolUse.name),
+                            details: extractToolDetail(name: toolUse.name, arguments: arguments)
+                        )
+                    }
+                }
+
+                // Handle the completion tool (if called this turn)
+                if let completionCall = toolUses.first(where: { $0.name == CompleteMergeTool.name }) {
                     do {
-                        mergeLog = try parseCompleteMerge(arguments: completionCall.function.arguments)
+                        let mergeLog = try parseCompleteMerge(arguments: argumentsJSON(from: completionCall.input))
 
                         // Wait for any background merge tasks to complete before finalizing
                         if !backgroundMergeTasks.isEmpty {
@@ -255,54 +301,36 @@ class CardMergeAgent {
                         )
                     } catch {
                         // Send error back so agent can retry
-                        messages.append(buildToolResultMessage(
-                            toolCallId: completionCall.id ?? UUID().uuidString,
-                            result: "Error parsing complete_merge: \(error.localizedDescription). Please retry."
-                        ))
-                        continue
-                    }
-                }
-
-                // Prune old ephemeral messages before adding new ones (if enabled)
-                if ephemeralTurns > 0 {
-                    pruneEphemeralMessages()
-                }
-
-                // Execute other tool calls
-                let executableCalls = toolCalls.filter { $0.function.name != CompleteMergeTool.name }
-
-                for toolCall in executableCalls {
-                    let toolId = toolCall.id ?? UUID().uuidString
-                    let toolName = toolCall.function.name ?? "unknown"
-                    let arguments = toolCall.function.arguments
-
-                    await updateProgress("Turn \(turnCount): \(toolDisplayName(toolName))")
-
-                    let result = await executeTool(name: toolName, arguments: arguments)
-                    let messageIndex = messages.count
-                    messages.append(buildToolResultMessage(toolCallId: toolId, result: result))
-
-                    // Mark card file reads as ephemeral (they can be pruned after a few turns)
-                    // Only files in cards/ folder are ephemeral; index.json and other files persist
-                    if toolName == ReadFileTool.name {
-                        let path = extractToolDetail(name: toolName, arguments: arguments) ?? ""
-                        let isCardFile = path.contains("cards/")
-                        if isCardFile {
-                            ephemeralMessages.append((index: messageIndex, addedAtTurn: turnCount, toolCallId: toolId))
+                        resultBlocks.append(.toolResult(AnthropicToolResultBlock(
+                            toolUseId: completionCall.id,
+                            content: "Error parsing complete_merge: \(error.localizedDescription). Please retry.",
+                            isError: true
+                        )))
+                        // Every tool_use must be answered: a duplicate
+                        // complete_merge in the same turn would otherwise orphan
+                        // its id and 400 the next request.
+                        for duplicate in toolUses.filter({ $0.name == CompleteMergeTool.name && $0.id != completionCall.id }) {
+                            resultBlocks.append(.toolResult(AnthropicToolResultBlock(
+                                toolUseId: duplicate.id,
+                                content: "Duplicate complete_merge call — answered by the first call's result.",
+                                isError: true
+                            )))
                         }
-                        // Track duplicate reads
-                        trackFileRead(path: path)
                     }
+                }
 
-                    // Log to transcript
-                    if let agentId = agentId {
-                        tracker?.appendTranscript(
-                            agentId: agentId,
-                            entryType: .tool,
-                            content: toolDisplayName(toolName),
-                            details: extractToolDetail(name: toolName, arguments: arguments)
-                        )
-                    }
+                guard !resultBlocks.isEmpty else { continue }
+
+                let messageIndex = messages.count
+                messages.append(AnthropicMessage(role: "user", content: .blocks(resultBlocks)))
+
+                for candidate in ephemeralCandidates {
+                    ephemeralBlocks.append((
+                        messageIndex: messageIndex,
+                        blockIndex: candidate.blockIndex,
+                        addedAtTurn: turnCount,
+                        toolUseId: candidate.toolUseId
+                    ))
                 }
             }
 
@@ -509,15 +537,16 @@ class CardMergeAgent {
 
     // MARK: - Message Building
 
-    private func systemMessage() -> ChatCompletionParameters.Message {
-        let prompt = CardMergeAgentPrompts.systemPrompt
-        return ChatCompletionParameters.Message(
-            role: .system,
-            content: .text(prompt)
-        )
+    /// System content with a cache breakpoint. Together with the breakpoint on
+    /// the last tool, this caches the full tools → system prefix.
+    private func systemContent() -> AnthropicSystemContent {
+        .blocks([AnthropicSystemBlock(
+            text: CardMergeAgentPrompts.systemPrompt,
+            cacheControl: .ephemeral
+        )])
     }
 
-    private func initialUserMessage() -> ChatCompletionParameters.Message {
+    private func initialUserMessage() -> AnthropicMessage {
         let prompt = """
         Please analyze and merge duplicate knowledge cards in the workspace.
 
@@ -535,62 +564,107 @@ class CardMergeAgent {
 
         Call complete_merge when you've processed all duplicates.
         """
-        return ChatCompletionParameters.Message(
-            role: .user,
-            content: .text(prompt)
-        )
+        return .user(prompt)
     }
 
-    private func buildAssistantMessage(from message: ChatCompletionObject.ChatChoice.ChatMessage) -> ChatCompletionParameters.Message {
-        let content: ChatCompletionParameters.Message.ContentType
-        if let text = message.content {
-            content = .text(text)
-        } else {
-            content = .text("")
+    private func assistantMessage(
+        textParts: [String],
+        toolUses: [AnthropicToolUseResponseBlock]
+    ) -> AnthropicMessage {
+        var blocks: [AnthropicContentBlock] = []
+        let text = textParts.joined(separator: "\n")
+        if !text.isEmpty {
+            blocks.append(.text(AnthropicTextBlock(text: text)))
+        }
+        for toolUse in toolUses {
+            blocks.append(.toolUse(AnthropicToolUseBlock(
+                id: toolUse.id,
+                name: toolUse.name,
+                input: toolUse.input.mapValues { $0.value }
+            )))
+        }
+        if blocks.isEmpty {
+            // The API rejects empty text blocks (400) — use a visible placeholder
+            // so a rare empty-content response stays recoverable.
+            blocks.append(.text(AnthropicTextBlock(text: "(no content)")))
+        }
+        return AnthropicMessage(role: "assistant", content: .blocks(blocks))
+    }
+
+    /// Returns a per-request copy of the conversation with the moving cache
+    /// breakpoint applied to the last content block of the final message.
+    /// History itself stays marker-free so each request carries exactly one
+    /// message-tier breakpoint (3 total with tools + system).
+    private func cachedRequestMessages() -> [AnthropicMessage] {
+        guard let last = messages.last else { return messages }
+
+        var result = messages
+
+        switch last.content {
+        case .text(let text):
+            result[result.count - 1] = AnthropicMessage(
+                role: last.role,
+                content: .blocks([.text(AnthropicTextBlock(text: text, cacheControl: .ephemeral))])
+            )
+        case .blocks(let blocks):
+            guard let lastBlock = blocks.last else { return result }
+            var newBlocks = blocks
+            switch lastBlock {
+            case .text(let textBlock):
+                newBlocks[newBlocks.count - 1] = .text(
+                    AnthropicTextBlock(text: textBlock.text, cacheControl: .ephemeral)
+                )
+            case .toolResult(let toolResult):
+                newBlocks[newBlocks.count - 1] = .toolResult(AnthropicToolResultBlock(
+                    toolUseId: toolResult.toolUseId,
+                    content: toolResult.content,
+                    isError: toolResult.isError ?? false,
+                    cacheControl: .ephemeral
+                ))
+            default:
+                break  // image/document/toolUse blocks never terminate our messages
+            }
+            result[result.count - 1] = AnthropicMessage(role: last.role, content: .blocks(newBlocks))
         }
 
-        return ChatCompletionParameters.Message(
-            role: .assistant,
-            content: content,
-            toolCalls: message.toolCalls
-        )
+        return result
     }
 
-    private func buildToolResultMessage(toolCallId: String, result: String) -> ChatCompletionParameters.Message {
-        return ChatCompletionParameters.Message(
-            role: .tool,
-            content: .text(result),
-            toolCallID: toolCallId
-        )
+    /// Serialize a tool-use input dictionary back to a JSON string for the
+    /// existing Codable tool parameter decoders.
+    private func argumentsJSON(from input: [String: AnthropicDynamicValue]) -> String {
+        let dict = input.mapValues { $0.value }
+        guard JSONSerialization.isValidJSONObject(dict),
+              let data = try? JSONSerialization.data(withJSONObject: dict),
+              let json = String(data: data, encoding: .utf8) else {
+            return "{}"
+        }
+        return json
     }
 
     // MARK: - Tool Definitions
 
-    private static func buildTools() -> [ChatCompletionParameters.Tool] {
-        [
-            buildTool(ReadFileTool.self),
-            buildTool(ListDirectoryTool.self),
-            buildTool(WriteFileTool.self),
-            buildTool(DeleteFileTool.self),
-            buildTool(GlobSearchTool.self),
-            buildTool(MergeCardsTool.self),
-            buildTool(CompleteMergeTool.self)
+    private static func buildTools() -> [AnthropicTool] {
+        let toolTypes: [any AgentTool.Type] = [
+            ReadFileTool.self,
+            ListDirectoryTool.self,
+            WriteFileTool.self,
+            DeleteFileTool.self,
+            GlobSearchTool.self,
+            MergeCardsTool.self,
+            CompleteMergeTool.self
         ]
-    }
 
-    private static func buildTool<T: AgentTool>(_ tool: T.Type) -> ChatCompletionParameters.Tool {
-        let schemaDict = tool.parametersSchema
-        // Tool schemas are static compile-time dictionaries; crash correctly signals malformed schema
-        let schema = try! JSONSchema.from(dictionary: schemaDict)
-
-        let function = ChatCompletionParameters.ChatFunction(
-            name: tool.name,
-            strict: false,
-            description: tool.description,
-            parameters: schema
-        )
-
-        return ChatCompletionParameters.Tool(function: function)
+        return toolTypes.enumerated().map { index, tool in
+            // Cache breakpoint on the LAST tool caches the whole tool set.
+            let isLast = index == toolTypes.count - 1
+            return .function(AnthropicFunctionTool(
+                name: tool.name,
+                description: tool.description,
+                inputSchema: tool.parametersSchema,
+                cacheControl: isLast ? .ephemeral : nil
+            ))
+        }
     }
 
     // MARK: - Result Parsing
@@ -614,31 +688,33 @@ class CardMergeAgent {
 
     // MARK: - Context Pruning
 
-    /// Prune old ephemeral messages to keep context size manageable.
-    /// Replaces pruned messages with a placeholder so tool call IDs remain valid.
+    /// Prune old ephemeral tool-result blocks to keep context size manageable.
+    /// Replaces pruned blocks with a placeholder so tool_use IDs remain answered.
     /// Only called when ephemeralTurns > 0.
-    private func pruneEphemeralMessages() {
+    private func pruneEphemeralBlocks() {
         let expiredTurn = turnCount - ephemeralTurns
-        let toRemove = ephemeralMessages.filter { $0.addedAtTurn <= expiredTurn }
+        let toRemove = ephemeralBlocks.filter { $0.addedAtTurn <= expiredTurn }
 
         for item in toRemove {
-            guard item.index < messages.count else { continue }
+            guard item.messageIndex < messages.count,
+                  case .blocks(var blocks) = messages[item.messageIndex].content,
+                  item.blockIndex < blocks.count else { continue }
 
-            // Replace with a pruned placeholder instead of removing
-            // This preserves the message structure and tool call ID reference
-            // Use the tracked toolCallId since the property may not be accessible
-            messages[item.index] = ChatCompletionParameters.Message(
-                role: .tool,
-                content: .text("[Content pruned - file was read \(turnCount - item.addedAtTurn) turns ago. Re-read if needed.]"),
-                toolCallID: item.toolCallId
+            blocks[item.blockIndex] = .toolResult(AnthropicToolResultBlock(
+                toolUseId: item.toolUseId,
+                content: "[Content pruned - file was read \(turnCount - item.addedAtTurn) turns ago. Re-read if needed.]"
+            ))
+            messages[item.messageIndex] = AnthropicMessage(
+                role: messages[item.messageIndex].role,
+                content: .blocks(blocks)
             )
         }
 
         // Remove from tracking
-        ephemeralMessages.removeAll { $0.addedAtTurn <= expiredTurn }
+        ephemeralBlocks.removeAll { $0.addedAtTurn <= expiredTurn }
 
         if !toRemove.isEmpty {
-            Logger.debug("🔀 Pruned \(toRemove.count) ephemeral messages from context", category: .ai)
+            Logger.debug("🔀 Pruned \(toRemove.count) ephemeral tool results from context", category: .ai)
         }
     }
 

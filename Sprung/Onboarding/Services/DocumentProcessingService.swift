@@ -20,6 +20,11 @@ actor DocumentProcessingService {
     // Anthropic analysis orchestrator (created lazily; requires the facade)
     private var documentAnalysisService: AnthropicDocumentAnalysisService?
 
+    // Supplies the rendered voice-anchor text for the narrative analysis passes
+    // (nil when no Phase 1 voice profile / writing samples exist). Set once at
+    // container wiring; the analysis service resolves and memoizes it.
+    private var voiceAnchorProvider: (@Sendable () async -> String?)?
+
     // MARK: - Initialization
     init(
         documentExtractionService: DocumentExtractionService,
@@ -285,13 +290,22 @@ actor DocumentProcessingService {
 
     // MARK: - Anthropic Analysis
 
+    /// Install the voice-anchor provider used by the narrative analysis passes.
+    /// Drops any previously memoized analysis service so the next analysis
+    /// picks the provider up.
+    func setVoiceAnchorProvider(_ provider: @escaping @Sendable () async -> String?) {
+        voiceAnchorProvider = provider
+        documentAnalysisService = nil
+    }
+
     private func getOrCreateAnalysisService() -> AnthropicDocumentAnalysisService? {
         if let service = documentAnalysisService { return service }
         guard let facade = llmFacade else { return nil }
         let service = AnthropicDocumentAnalysisService(
             llmFacade: facade,
             skillBankService: skillBankService,
-            kcExtractionService: kcExtractionService
+            kcExtractionService: kcExtractionService,
+            voiceAnchorProvider: voiceAnchorProvider
         )
         documentAnalysisService = service
         return service

@@ -52,10 +52,19 @@ enum GitEvidenceCollector {
         let totalCommits = try await runGitCommand(["rev-list", "--count", "HEAD"], in: repoPath)
         data["totalCommits"].int = Int(totalCommits.trimmingCharacters(in: .whitespacesAndNewlines)) ?? 0
 
-        // Get first and last commit dates
-        let firstCommit = try await runGitCommand(["log", "--reverse", "--format=%ci", "-1"], in: repoPath)
+        // Get first and last commit dates. NOTE: `git log --reverse -1` does NOT
+        // work for the first commit — git applies commit limiting BEFORE
+        // --reverse, so it returns the newest commit. List the root commit(s)
+        // explicitly instead; multi-root repos (e.g. merged subtrees) yield one
+        // date per root, and the earliest wins.
+        let rootCommitDates = try await runGitCommand(["log", "--max-parents=0", "--format=%ci", "HEAD"], in: repoPath)
         let lastCommit = try await runGitCommand(["log", "--format=%ci", "-1"], in: repoPath)
-        data["firstCommit"].string = firstCommit.trimmingCharacters(in: .whitespacesAndNewlines)
+        let firstCommit = rootCommitDates
+            .split(separator: "\n")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .min() ?? ""
+        data["firstCommit"].string = firstCommit
         data["lastCommit"].string = lastCommit.trimmingCharacters(in: .whitespacesAndNewlines)
 
         // Longitudinal evidence over the commit history: per-directory churn/tenure

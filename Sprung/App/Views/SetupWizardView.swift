@@ -488,20 +488,20 @@ private extension SetupWizardView {
 
     var gitIngestPicker: some View {
         VStack(alignment: .leading, spacing: 8) {
-            if enabledLLMStore.enabledModels.isEmpty {
-                Text("Enable OpenRouter models to choose a Git ingest model.")
+            if filteredAnthropicModels.isEmpty {
+                Text("Add an Anthropic API key and load models to choose a Git ingest model.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             } else {
                 Picker("Git Ingest Model", selection: $gitIngestModelId) {
-                    ForEach(enabledLLMStore.enabledModels.sorted(by: { $0.displayName < $1.displayName }), id: \.modelId) { model in
-                        Text(model.displayName.isEmpty ? model.modelId : model.displayName)
-                            .tag(model.modelId)
+                    Text("Select a model…").tag("")
+                    ForEach(filteredAnthropicModels, id: \.id) { model in
+                        Text(model.displayName).tag(model.id)
                     }
                 }
                 .pickerStyle(.menu)
             }
-            Text("Used when scanning repositories during onboarding.")
+            Text("Used when scanning repositories during onboarding. An Opus-tier model is recommended.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
         }
@@ -651,6 +651,9 @@ private extension SetupWizardView {
             }
             if !filteredAnthropicModels.contains(where: { $0.id == interviewModelId }) {
                 interviewModelId = ""
+            }
+            if !filteredAnthropicModels.contains(where: { $0.id == gitIngestModelId }) {
+                gitIngestModelId = ""
             }
         } catch {
             anthropicModelError = error.localizedDescription

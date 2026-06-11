@@ -26,6 +26,7 @@ final class DatabaseMigrationCoordinator {
         migrateReasoningCapabilities()
         migrateAISelectionV1()
         migrateDocAnalysisModelKeysV1()
+        migrateAnthropicProviderKeysV1()
         scheduleModelValidation()
     }
     private func migrateSelectedModelsFromUserDefaults() {
@@ -126,6 +127,19 @@ final class DatabaseMigrationCoordinator {
         }
         UserDefaults.standard.set(true, forKey: migrationKey)
         Logger.debug("✅ docAnalysisModelKeysMigrationV1: removed \(legacyKeys.count) legacy document model keys", category: .migration)
+    }
+
+    /// Git ingest and card merge moved from OpenRouter to Anthropic (Wave 3).
+    /// Stored OpenRouter-format ids ("anthropic/claude-…") are invalid against the
+    /// Anthropic API — clear them so the pickers surface instead of 404ing.
+    private func migrateAnthropicProviderKeysV1() {
+        let migrationKey = "anthropicProviderKeysMigrationCompleted_v1"
+        guard !UserDefaults.standard.bool(forKey: migrationKey) else { return }
+        for key in ["onboardingGitIngestModelId", "onboardingCardMergeModelId"] {
+            UserDefaults.standard.removeObject(forKey: key)
+        }
+        UserDefaults.standard.set(true, forKey: migrationKey)
+        Logger.debug("✅ anthropicProviderKeysMigrationV1: cleared git/merge model keys for provider move", category: .migration)
     }
     private func scheduleModelValidation() {
         Task { [weak self] in

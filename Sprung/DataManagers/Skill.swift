@@ -141,6 +141,11 @@ class Skill: Identifiable, Codable {
     /// Last year the skill was used (e.g., "2024" or "present")
     var lastUsed: String?
 
+    /// True when the skill was inferred from context rather than explicitly
+    /// demonstrated in a source document. Default value keeps this a
+    /// lightweight SwiftData migration.
+    var implied: Bool = false
+
     // MARK: - Onboarding Metadata
 
     /// Indicates this was created via onboarding interview
@@ -160,6 +165,7 @@ class Skill: Identifiable, Codable {
         evidence: [SkillEvidence] = [],
         relatedSkills: [UUID] = [],
         lastUsed: String? = nil,
+        implied: Bool = false,
         isFromOnboarding: Bool = false,
         isPending: Bool = false
     ) {
@@ -168,6 +174,7 @@ class Skill: Identifiable, Codable {
         self.categoryRaw = SkillCategoryUtils.normalizeCategory(category)
         self.proficiencyRaw = proficiency.rawValue
         self.lastUsed = lastUsed
+        self.implied = implied
         self.isFromOnboarding = isFromOnboarding
         self.isPending = isPending
 
@@ -187,6 +194,7 @@ class Skill: Identifiable, Codable {
         case evidenceJSON = "evidence"
         case relatedSkillsJSON = "related_skills"
         case lastUsed = "last_used"
+        case implied
         case isFromOnboarding
         case isPending
     }
@@ -205,6 +213,7 @@ class Skill: Identifiable, Codable {
         self.categoryRaw = try container.decode(String.self, forKey: .categoryRaw)
         self.proficiencyRaw = try container.decode(String.self, forKey: .proficiencyRaw)
         self.lastUsed = try container.decodeIfPresent(String.self, forKey: .lastUsed)
+        self.implied = try container.decodeIfPresent(Bool.self, forKey: .implied) ?? false
         self.isFromOnboarding = try container.decodeIfPresent(Bool.self, forKey: .isFromOnboarding) ?? false
         self.isPending = try container.decodeIfPresent(Bool.self, forKey: .isPending) ?? false
 
@@ -252,6 +261,7 @@ class Skill: Identifiable, Codable {
         try container.encodeIfPresent(evidenceJSON, forKey: .evidenceJSON)
         try container.encodeIfPresent(relatedSkillsJSON, forKey: .relatedSkillsJSON)
         try container.encodeIfPresent(lastUsed, forKey: .lastUsed)
+        try container.encode(implied, forKey: .implied)
         try container.encode(isFromOnboarding, forKey: .isFromOnboarding)
         try container.encode(isPending, forKey: .isPending)
     }
@@ -354,5 +364,8 @@ class Skill: Identifiable, Codable {
 
 // @Model synthesizes an unavailable Sendable conformance. This explicit @unchecked Sendable
 // overrides that to enable cross-actor usage. The redundant conformance warning is expected.
-// Thread safety: All mutations occur on @MainActor via stores; cross-actor reads are safe.
+// Thread safety: PERSISTED instances are mutated only on @MainActor via stores; cross-actor
+// reads are safe. Exception: NOT-YET-INSERTED instances (git Stage-B regrading, skill-curation
+// apply) may be mutated on another actor's executor — safe because access to those instances
+// is serialized by their owning await chain until insertion, which happens on @MainActor.
 extension Skill: @unchecked Sendable {}
