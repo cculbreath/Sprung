@@ -200,10 +200,13 @@ class BackgroundMergeAgent {
     }
 
     private func callLLMForMerge(facade: LLMFacade, prompt: String) async throws -> String {
+        // Merging 3+ cards with 500–2000-word narratives can exceed 8k output
+        // tokens — a truncated response decodes as garbage downstream, so the
+        // budget matches the extraction passes.
         let parameters = AnthropicMessageParameter(
             model: modelId,
             messages: [.user(prompt)],
-            maxTokens: 8192,
+            maxTokens: 32768,
             stream: false
         )
 
@@ -213,6 +216,12 @@ class BackgroundMergeAgent {
             "🔀 BackgroundMergeAgent usage (\(modelId)): input=\(response.usage.inputTokens) cache_read=\(response.usage.cacheReadInputTokens ?? 0) output=\(response.usage.outputTokens)",
             category: .ai
         )
+
+        // A merge cut off at the output ceiling is unparseable half-JSON —
+        // report the truncation itself rather than the downstream parse error.
+        guard response.stopReason != "max_tokens" else {
+            throw MergeError.outputTruncated(outputTokens: response.usage.outputTokens)
+        }
 
         let content = response.content.compactMap { block -> String? in
             if case .text(let textBlock) = block { return textBlock.text }
@@ -244,7 +253,7 @@ class BackgroundMergeAgent {
 
     private func updateCardId(json: String, newId: String) throws -> String {
         guard let data = json.data(using: .utf8),
-              var dict = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+              var dict = try parseCardObject(data, rawJSON: json) else {
             throw MergeError.invalidJSON
         }
         dict["id"] = newId
@@ -253,6 +262,20 @@ class BackgroundMergeAgent {
             throw MergeError.invalidJSON
         }
         return updatedJSON
+    }
+
+    /// Parse the merged-card JSON, logging a preview of unparseable responses
+    /// so failures are diagnosable from the console log.
+    private func parseCardObject(_ data: Data, rawJSON: String) throws -> [String: Any]? {
+        do {
+            return try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        } catch {
+            Logger.warning(
+                "🔀 Merged card response is not valid JSON (\(rawJSON.count) chars): \(rawJSON.prefix(500))",
+                category: .ai
+            )
+            throw MergeError.invalidJSON
+        }
     }
 
     private func updateIndex(deletedFiles: [String], newCardId: String, mergedCardJSON: String) throws {
@@ -299,6 +322,7 @@ class BackgroundMergeAgent {
         case cardNotFound(String)
         case noResponse
         case invalidJSON
+        case outputTruncated(outputTokens: Int)
 
         var errorDescription: String? {
             switch self {
@@ -306,6 +330,8 @@ class BackgroundMergeAgent {
             case .cardNotFound(let path): return "Card not found: \(path)"
             case .noResponse: return "No response from LLM"
             case .invalidJSON: return "Invalid JSON in response"
+            case .outputTruncated(let outputTokens):
+                return "Merge output truncated at the \(outputTokens)-token limit — merged card was incomplete"
             }
         }
     }
