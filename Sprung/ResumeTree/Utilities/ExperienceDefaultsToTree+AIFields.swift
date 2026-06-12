@@ -4,11 +4,16 @@
 //
 //  Parses and applies defaultAIFields patterns from the template manifest.
 //
+//  Patterns resolve to ATTRIBUTE level: a collection marker (`*` or `[]`)
+//  fans out across the collection's entries and the remainder of the path is
+//  resolved inside each entry. Only the node the pattern actually names is
+//  marked `.aiToReplace` — never the whole section.
+//
 //  Pattern types:
-//    section.*.attr         -> collection root marked .aiToReplace
-//    section[].attr         -> collection root marked .aiToReplace
-//    section.container[]    -> collection root marked .aiToReplace
-//    section.field          -> .aiToReplace status on scalar node
+//    section.*.attr   -> each entry's `attr` node marked .aiToReplace
+//    section[].attr   -> each entry's `attr` node marked .aiToReplace
+//    section.list[]   -> the `list` container itself marked .aiToReplace
+//    section.field    -> the resolved field node marked .aiToReplace
 //
 
 import Foundation
@@ -20,26 +25,20 @@ extension ExperienceDefaultsToTree {
 
     /// Apply defaultAIFields patterns to TreeNode state.
     ///
-    /// This sets up the TreeNode as the single source of truth for AI review configuration.
-    /// Patterns determine initial state; users can modify via UI (context menu toggle).
-    ///
-    /// # Pattern Types and TreeNode State
-    ///
-    /// | Pattern | TreeNode State |
-    /// |---------|----------------|
-    /// | `section.*.attr` | collection root marked `.aiToReplace` |
-    /// | `section[].attr` | collection root marked `.aiToReplace` |
-    /// | `section.container[]` | collection root marked `.aiToReplace` |
-    /// | `section.field` | field node marked `.aiToReplace` (scalar) |
+    /// This sets up the TreeNode as the single source of truth for AI review
+    /// configuration. Patterns determine initial state; users can modify via
+    /// UI (context menu toggle). The single selection axis is preserved:
+    /// `isEditable == (status == .aiToReplace)`.
     ///
     /// # Examples
     ///
     /// | Pattern | Effect |
     /// |---------|--------|
-    /// | `skills.*.name` | skills node marked `.aiToReplace` |
-    /// | `skills[].keywords` | skills node marked `.aiToReplace` |
-    /// | `custom.jobTitles` | jobTitles node marked `.aiToReplace` |
-    /// | `custom.objective` | objective node marked `.aiToReplace` |
+    /// | `work[].highlights` | each work entry's `highlights` container marked `.aiToReplace` |
+    /// | `skills.*.name` | each skill entry's `name` field marked `.aiToReplace` |
+    /// | `skills[].keywords` | each skill entry's `keywords` container marked `.aiToReplace` |
+    /// | `custom.jobTitles[]` | the `jobTitles` container marked `.aiToReplace` |
+    /// | `custom.objective` | the `objective` node marked `.aiToReplace` |
     ///
     func applyDefaultAIFields(to root: TreeNode, patterns: [String]) {
         Logger.debug("🎯 [applyDefaultAIFields] Starting with \(patterns.count) patterns: \(patterns)")
@@ -49,10 +48,9 @@ extension ExperienceDefaultsToTree {
         }
     }
 
-    /// Apply a single pattern to the tree, marking the appropriate node `.aiToReplace`.
-    ///
-    /// Collection patterns (containing `*` or `[]`) mark the collection ROOT editable;
-    /// scalar patterns mark the resolved leaf editable.
+    /// Apply a single pattern to the tree, marking the node(s) it names
+    /// `.aiToReplace`. Collection markers fan out across entries so agent
+    /// authority is scoped to exactly the attribute the manifest named.
     private func applyPattern(_ pattern: String, to root: TreeNode) {
         // Parse pattern into components, normalizing "field[]" to "field", "[]"
         var components: [String] = []
@@ -71,38 +69,49 @@ extension ExperienceDefaultsToTree {
 
         guard !components.isEmpty else { return }
 
-        // Collection pattern: resolve the collection root (path up to the first * or [])
-        // and mark it editable. Scalar pattern: resolve the leaf and mark it editable.
-        let collectionMarkerIndex = components.firstIndex { $0 == "*" || $0 == "[]" }
-
-        let path: [String]
-        if let markerIndex = collectionMarkerIndex {
-            path = Array(components[0..<markerIndex])
+        let markedCount = markNodes(components[...], from: root, pattern: pattern)
+        if markedCount == 0 {
+            Logger.warning("🎯 [applyPattern] No node matched pattern '\(pattern)'")
         } else {
-            path = components
+            Logger.info("🎯 [applyPattern] Marked \(markedCount) node(s) .aiToReplace for pattern '\(pattern)'")
         }
-
-        guard let node = findNode(path: path, from: root) else {
-            Logger.warning("🎯 [applyPattern] Node not found for path: \(path) (pattern: \(pattern))")
-            return
-        }
-
-        node.status = .aiToReplace
-        Logger.info("🎯 [applyPattern] Marked '\(node.name)' .aiToReplace for pattern '\(pattern)'")
     }
 
-    /// Find a node by navigating a path of component names from root
-    private func findNode(path: [String], from root: TreeNode) -> TreeNode? {
-        var current = root
-        for component in path {
+    /// Recursively resolve pattern components from `node`, fanning out across
+    /// entries at each `*`/`[]` marker. Returns the number of nodes marked.
+    private func markNodes(_ components: ArraySlice<String>, from node: TreeNode, pattern: String) -> Int {
+        var current = node
+        var index = components.startIndex
+
+        while index < components.endIndex {
+            let component = components[index]
+
+            if component == "*" || component == "[]" {
+                let remainder = components[(index + 1)...]
+                if remainder.isEmpty {
+                    // Trailing marker (`list[]`): the list container itself is
+                    // the named attribute.
+                    current.status = .aiToReplace
+                    return 1
+                }
+                // Fan out: resolve the remainder inside each entry. Entries
+                // missing the attribute (e.g. no highlights) contribute zero.
+                var marked = 0
+                for entry in current.orderedChildren {
+                    marked += markNodes(remainder, from: entry, pattern: pattern)
+                }
+                return marked
+            }
+
             guard let child = current.findChildByName(component) else {
-                let childNames = current.orderedChildren.map { $0.name }
-                Logger.debug("🎯 [findNode] Could not find '\(component)' in '\(current.name)'. Available: \(childNames)")
-                return nil
+                Logger.debug("🎯 [markNodes] No child '\(component)' under '\(current.name)' for pattern '\(pattern)'")
+                return 0
             }
             current = child
+            index += 1
         }
-        Logger.debug("🎯 [findNode] Found node at path: \(path) -> '\(current.name)'")
-        return current
+
+        current.status = .aiToReplace
+        return 1
     }
 }

@@ -23,7 +23,29 @@ enum LeafStatus: String, Codable, Hashable {
     /// Returns the effective display label: editorLabel if set, otherwise falls back to label
     var displayLabel: String { editorLabel ?? label }
     @Relationship(deleteRule: .noAction) var resume: Resume
-    var status: LeafStatus
+    /// Backing storage for `status`. SwiftData's `@Model` macro drops property
+    /// observers, so the public computed `status` below is the single write
+    /// chokepoint for transition side effects. `originalName` keeps the
+    /// existing column so the rename is a lossless lightweight migration.
+    @Attribute(originalName: "status")
+    private var statusStorage: LeafStatus
+    /// The node's editability state. Every UI surface assigns this directly,
+    /// so the setter owns the TB-4 sweep: when a node leaves `.aiToReplace`
+    /// and no editable ancestor remains, its group dissolves and orphaned
+    /// `.excludedFromGroup` marks in the subtree are cleared — otherwise they
+    /// would linger invisibly and silently re-apply if the node were marked
+    /// editable again later. Exclusions inside a subtree rooted at a node
+    /// that is still `.aiToReplace` belong to that live group and are kept.
+    var status: LeafStatus {
+        get { statusStorage }
+        set {
+            let oldValue = statusStorage
+            statusStorage = newValue
+            guard oldValue == .aiToReplace, newValue != .aiToReplace else { return }
+            guard !hasAncestorWithAIStatus else { return }
+            clearOrphanedDescendantExclusions()
+        }
+    }
     var depth: Int = 0
     // Schema metadata (optional, derived from manifest descriptors)
     var schemaKey: String?
@@ -130,16 +152,37 @@ enum LeafStatus: String, Codable, Hashable {
         return hasAncestorWithAIStatus
     }
 
-    /// Returns true if any ancestor has .aiToReplace status
+    /// Returns true if any ancestor has .aiToReplace status.
+    /// The walk stops at an `.excludedFromGroup` ancestor: exclusion blocks
+    /// inheritance, so nodes under an excluded entry are NOT part of the
+    /// editable group even when a higher ancestor is marked editable.
     var hasAncestorWithAIStatus: Bool {
         var current = parent
         while let ancestor = current {
+            if ancestor.status == .excludedFromGroup {
+                return false
+            }
             if ancestor.status == .aiToReplace {
                 return true
             }
             current = ancestor.parent
         }
         return false
+    }
+
+    /// Clears orphaned `.excludedFromGroup` marks in the subtree. Invoked by
+    /// the `status` setter when this node leaves the editable state with no
+    /// editable ancestor remaining. Subtrees rooted at a still-`.aiToReplace`
+    /// node are skipped entirely: their exclusions opt out of that live group
+    /// and remain meaningful until that group dissolves in turn.
+    private func clearOrphanedDescendantExclusions() {
+        for child in children ?? [] {
+            if child.status == .aiToReplace { continue }
+            if child.status == .excludedFromGroup {
+                child.status = .saved
+            }
+            child.clearOrphanedDescendantExclusions()
+        }
     }
 
     /// Evaluates the schemaTitleTemplate by replacing {{fieldName}} with child values.
@@ -169,7 +212,7 @@ enum LeafStatus: String, Codable, Hashable {
         self.value = value
         self.children = children
         self.parent = parent
-        self.status = status
+        statusStorage = status
         includeInEditor = inEditor
         depth = parent.map { $0.depth + 1 } ?? 0
         self.resume = resume
@@ -181,7 +224,9 @@ enum LeafStatus: String, Codable, Hashable {
             children = []
         }
         child.parent = self
-        child.myIndex = (children?.count ?? 0)
+        // max(existing)+1, not count: after deletions, count can collide with a
+        // surviving sibling's index and make ordering nondeterministic.
+        child.myIndex = (children?.map(\.myIndex).max() ?? -1) + 1
         child.depth = depth + 1
         children?.append(child)
         return child

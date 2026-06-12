@@ -37,19 +37,40 @@ struct WriteJsonFileTool: AgentTool {
         let itemCount: Int
     }
 
-    /// Paths the agent is allowed to write to.
-    private static let allowedPrefixes = ["treenodes/"]
-    private static let allowedExactPaths: Set<String> = ["fontsizenodes.json"]
-
     static func execute(parameters: Parameters, repoRoot: URL) throws -> Result {
         let path = parameters.path
 
-        // Validate path is within allowed write targets
-        let isAllowed = allowedPrefixes.contains(where: { path.hasPrefix($0) })
-            || allowedExactPaths.contains(path)
-        guard isAllowed else {
+        // Resolve the path FIRST, then authorize against the resolved location.
+        // A prefix check on the raw string would let "treenodes/../…" traverse
+        // into protected areas (e.g. the pristine export snapshots).
+        guard !path.isEmpty, !path.hasPrefix("/") else {
             throw AgentToolError.pathOutsideRepo(
-                "Write not allowed for '\(path)'. Allowed: treenodes/*.json, fontsizenodes.json"
+                "Write paths must be workspace-relative (got '\(path)'). Allowed: treenodes/<section>.json, fontsizenodes.json"
+            )
+        }
+
+        let workspaceRoot = repoRoot.standardizedFileURL.resolvingSymlinksInPath()
+        let resolved = workspaceRoot.appendingPathComponent(path)
+            .standardizedFileURL
+            .resolvingSymlinksInPath()
+
+        let rootComponents = workspaceRoot.pathComponents
+        let fileComponents = resolved.pathComponents
+        guard fileComponents.count > rootComponents.count,
+              Array(fileComponents.prefix(rootComponents.count)) == rootComponents else {
+            throw AgentToolError.pathOutsideRepo(path)
+        }
+
+        // Authorize the RESOLVED location: either a JSON file directly inside
+        // treenodes/, or exactly fontsizenodes.json at the workspace root.
+        let isTreeNodeFile = fileComponents.count == rootComponents.count + 2
+            && fileComponents[rootComponents.count] == "treenodes"
+            && resolved.pathExtension == "json"
+        let isFontSizeFile = fileComponents.count == rootComponents.count + 1
+            && resolved.lastPathComponent == "fontsizenodes.json"
+        guard isTreeNodeFile || isFontSizeFile else {
+            throw AgentToolError.pathOutsideRepo(
+                "Write not allowed for '\(path)'. Allowed: treenodes/<section>.json, fontsizenodes.json"
             )
         }
 
@@ -65,27 +86,19 @@ struct WriteJsonFileTool: AgentTool {
             throw AgentToolError.executionFailed("Content is not valid JSON: \(error.localizedDescription)")
         }
 
-        // Type-specific validation
+        // Type-specific validation, keyed off the resolved location
         let itemCount: Int
-        if path.hasPrefix("treenodes/") {
+        if isTreeNodeFile {
             itemCount = try validateTreeNodes(parsed)
-        } else if path == "fontsizenodes.json" {
-            itemCount = try validateFontSizeNodes(parsed)
         } else {
-            guard let array = parsed as? [Any] else {
-                throw AgentToolError.executionFailed("Content must be a JSON array")
-            }
-            itemCount = array.count
+            itemCount = try validateFontSizeNodes(parsed)
         }
 
-        // Resolve path and write
-        let filePath = try FilesystemToolUtilities.resolveAndValidatePath(path, repoRoot: repoRoot)
-        let fileURL = URL(fileURLWithPath: filePath)
-
-        let parentDir = fileURL.deletingLastPathComponent()
-        try FileManager.default.createDirectory(at: parentDir, withIntermediateDirectories: true)
-
-        try contentData.write(to: fileURL)
+        try FileManager.default.createDirectory(
+            at: resolved.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try contentData.write(to: resolved)
 
         return Result(success: true, path: path, itemCount: itemCount)
     }

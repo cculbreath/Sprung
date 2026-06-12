@@ -112,7 +112,13 @@ private struct SectionAIModeMenu: View {
                 "Include this section in AI revision",
                 checked: node.status == .aiToReplace
             ) {
-                node.status = node.status == .aiToReplace ? .saved : .aiToReplace
+                // Leaving the editable state sweeps orphaned descendant
+                // opt-outs automatically (TreeNode.status setter).
+                if node.status == .aiToReplace {
+                    node.status = .saved
+                } else {
+                    node.status = .aiToReplace
+                }
             })
             return menu
         }

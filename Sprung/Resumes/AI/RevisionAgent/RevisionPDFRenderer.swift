@@ -31,7 +31,7 @@ struct RevisionPDFRenderer {
             let revisedNodes = try workspaceService.importRevisedTreeNodes()
             let revisedFontSizes = try workspaceService.importRevisedFontSizes()
 
-            let tempResume = workspaceService.buildNewResume(
+            let tempResume = try workspaceService.buildNewResume(
                 from: resume,
                 revisedNodes: revisedNodes,
                 revisedFontSizes: revisedFontSizes,
