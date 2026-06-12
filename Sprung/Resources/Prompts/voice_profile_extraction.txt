@@ -1,6 +1,8 @@
 # Voice Profile Extraction
 
-Analyze writing samples to extract voice characteristics for objective statement generation.
+You are a literary stylist preparing an IMPERSONATION BRIEF. Another writer will use your analysis to produce cover letters and resume content that must pass as this author's own writing. A generic summary fails that test — your brief must capture what makes this voice recognizable, how to reproduce it, and what would instantly give an impostor away.
+
+Ground every claim in the samples. Prefer a precise observation with a verbatim fragment over a broad adjective.
 
 ## Writing Samples
 
@@ -33,10 +35,7 @@ How do they talk about goals and future?
 Corporate buzzwords they never use (or mock):
 - Common avoids: "leverage", "utilize", "synergy", "paradigm shift", "circle back"
 
-### 6. Sample Excerpts
-Pull 2-3 verbatim excerpts (20-50 words) that capture their authentic voice. Choose excerpts that DEMONSTRATE the register modulation pattern you describe in section 7 — e.g. one formal Latinate passage and one plain Anglo-Saxon punchline, or a single excerpt that switches registers mid-stream — rather than generically pleasant sentences.
-
-### 7. Vocabulary Register
+### 6. Vocabulary Register
 English vocabulary splits into three broad etymological registers:
 - **Anglo-Saxon / Germanic** (plain, casual, concrete): get, build, make, work, show, find, strong
 - **Latinate** (formal, abstract, professional): obtain, construct, fabricate, collaborate, demonstrate, discover, robust
@@ -45,6 +44,30 @@ English vocabulary splits into three broad etymological registers:
 Assess BOTH:
 - **vocabularyRegister**: the author's dominant blend. Is their default plain Anglo-Saxon with Latinate sprinkled in, or formally Latinate throughout? Do Greek-derived terms appear only as domain vocabulary or as general style?
 - **registerModulation**: how the author SWITCHES registers within and across sentences. Common patterns: dropping to plain Anglo-Saxon for emphasis or punchline conclusions ("the instrument simply worked"), rising to Latinate for formal claims, deploying Greek-derived terminology only inside technical passages then returning to plain speech. Describe the switching pattern with the same care as the mix itself — this modulation is a stronger voice fingerprint than the static blend.
+
+### 7. Sentence Rhythm
+Sentence-level mechanics, observed not guessed:
+- Typical sentence length and how much it varies; where short sentences land (emphasis? conclusions?)
+- Clause architecture: appositives, em-dash elaborations ("—a project that required..."), parentheticals, lists
+- Punctuation habits: em-dashes, semicolons, colons, comma density
+- Cadence: e.g. "long multi-clause builds resolved by an abrupt short declarative"
+
+### 8. Rhetorical Moves
+Name the author's recurring moves and attach a verbatim mini-example to each:
+- Repetition figures (anaphora: "I love… I know… I learned…")
+- Argument shapes (concrete anecdote escalated into thesis; enumerate three capabilities then synthesize into an identity claim)
+- Persuasion habits (justifying enthusiasm with evidence; pre-empting objections; self-deprecating aside before a strong claim)
+List 3-6 moves. A move without an example is a guess — cut it.
+
+### 9. Openings and Closings
+- **openingStyle**: the characteristic first-paragraph move (direct declaration, scene-setting anecdote, thesis-first) with a verbatim fragment
+- **closingStyle**: the characteristic final move (return to opening image, plain-register conviction statement, forward-looking commitment) with a verbatim fragment
+
+### 10. Sample Excerpts
+Pull 3-5 verbatim excerpts (20-50 words) that capture the authentic voice. Choose excerpts that DEMONSTRATE the register modulation and rhetorical moves you describe — e.g. one formal Latinate passage, one plain Anglo-Saxon punchline, one excerpt showing a signature move — rather than generically pleasant sentences.
+
+### 11. Voice Summary (write this LAST)
+Synthesize everything above into a 150-300 word impersonation brief: what makes this voice immediately recognizable, the two or three habits an imitator must get right, and the tells that would expose a fake (e.g. "never opens with a question", "would not write 'utilize'", "always earns abstractions with a concrete example first"). Write it as direct instruction to the impersonating writer.
 
 ## Output
 
@@ -59,7 +82,12 @@ Return JSON with exactly this structure:
   "avoidPhrases": ["leverage", "utilize", "synergy"],
   "sampleExcerpts": ["I've amended my design philosophy over the years..."],
   "vocabularyRegister": "Anglo-Saxon core (build, work, fix) with Latinate vocabulary reserved for design claims; Greek-derived terms appear only as physics domain vocabulary",
-  "registerModulation": "Rises to Latinate when framing a formal argument, then deliberately drops to plain Anglo-Saxon for the concluding point; technical Greek-derived terms stay confined to methods passages"
+  "registerModulation": "Rises to Latinate when framing a formal argument, then deliberately drops to plain Anglo-Saxon for the concluding point; technical Greek-derived terms stay confined to methods passages",
+  "voiceSummary": "This writer leads with earnest, unguarded enthusiasm and earns it with evidence...",
+  "sentenceRhythm": "Long multi-clause sentences elaborated with em-dash appositives, resolved by short plain declaratives at paragraph ends...",
+  "rhetoricalMoves": ["anaphora for conviction (\"I love… I know…\")", "concrete anecdote escalated into thesis"],
+  "openingStyle": "Direct declaration of intent in the first sentence (\"Enclosed are my application materials for...\")",
+  "closingStyle": "Plain-register conviction statement (\"This is a place I can thrive\")"
 }
 ```
 

@@ -100,10 +100,15 @@ struct VoiceProfile: Codable, Equatable {
     var aspirationalPhrases: [String]   // "What excites me...", "I want to build..."
     var avoidPhrases: [String]          // "leverage", "utilize", "synergy"
     var sampleExcerpts: [String]        // Verbatim voice samples
-    // Lexical register analysis. Optional so profiles stored before these
+    // Extended stylistic analysis. Optional so profiles stored before these
     // fields existed still decode.
     var vocabularyRegister: String?     // Dominant mix of Anglo-Saxon / Latinate / Greek-derived lexis
     var registerModulation: String?     // When and how the author shifts between registers
+    var voiceSummary: String?           // Stylist's portrait: what makes the voice recognizable, how to imitate it
+    var sentenceRhythm: String?         // Length variation, clause structure, punctuation habits, cadence
+    var rhetoricalMoves: [String]?      // Named recurring moves with mini-examples
+    var openingStyle: String?           // How pieces open
+    var closingStyle: String?           // How pieces close
 
     init(
         enthusiasm: EnthusiasmLevel = .moderate,
@@ -113,7 +118,12 @@ struct VoiceProfile: Codable, Equatable {
         avoidPhrases: [String] = [],
         sampleExcerpts: [String] = [],
         vocabularyRegister: String? = nil,
-        registerModulation: String? = nil
+        registerModulation: String? = nil,
+        voiceSummary: String? = nil,
+        sentenceRhythm: String? = nil,
+        rhetoricalMoves: [String]? = nil,
+        openingStyle: String? = nil,
+        closingStyle: String? = nil
     ) {
         self.enthusiasm = enthusiasm
         self.useFirstPerson = useFirstPerson
@@ -123,6 +133,11 @@ struct VoiceProfile: Codable, Equatable {
         self.sampleExcerpts = sampleExcerpts
         self.vocabularyRegister = vocabularyRegister
         self.registerModulation = registerModulation
+        self.voiceSummary = voiceSummary
+        self.sentenceRhythm = sentenceRhythm
+        self.rhetoricalMoves = rhetoricalMoves
+        self.openingStyle = openingStyle
+        self.closingStyle = closingStyle
     }
 }
 
@@ -131,7 +146,11 @@ extension VoiceProfile {
     /// "voice characteristics" prompt block (cover letters, revision
     /// workspace, guidance store). Empty/absent fields are omitted.
     var characteristicPairs: [(label: String, value: String)] {
-        var pairs: [(String, String)] = [
+        var pairs: [(String, String)] = []
+        if let summary = voiceSummary, !summary.isEmpty {
+            pairs.append(("Voice Summary", summary))
+        }
+        pairs += [
             ("Enthusiasm", enthusiasm.displayName),
             ("Person", useFirstPerson ? "First person (I built, I discovered)" : "Third person"),
             ("Connective Style", connectiveStyle)
@@ -141,6 +160,18 @@ extension VoiceProfile {
         }
         if let modulation = registerModulation, !modulation.isEmpty {
             pairs.append(("Register Modulation", modulation))
+        }
+        if let rhythm = sentenceRhythm, !rhythm.isEmpty {
+            pairs.append(("Sentence Rhythm", rhythm))
+        }
+        if let moves = rhetoricalMoves, !moves.isEmpty {
+            pairs.append(("Rhetorical Moves", moves.joined(separator: " • ")))
+        }
+        if let opening = openingStyle, !opening.isEmpty {
+            pairs.append(("Openings", opening))
+        }
+        if let closing = closingStyle, !closing.isEmpty {
+            pairs.append(("Closings", closing))
         }
         if !aspirationalPhrases.isEmpty {
             pairs.append(("Aspirational Phrases", aspirationalPhrases.joined(separator: ", ")))

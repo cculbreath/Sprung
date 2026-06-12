@@ -259,9 +259,30 @@ private enum VoiceProfileSchemas {
             "registerModulation": [
                 "type": "string",
                 "description": "When and how the author shifts between vocabulary registers — e.g. drops to plain Anglo-Saxon for emphasis or conclusions, rises to Latinate for formal framing, deploys Greek-derived terminology only inside technical passages. Cite the pattern, not just the mix"
+            ],
+            "voiceSummary": [
+                "type": "string",
+                "description": "A stylist's portrait (150-300 words): what makes this voice immediately recognizable, what it would take for another writer to convincingly imitate it, and what would instantly give an impostor away. Write it as an impersonation brief, not a list of adjectives"
+            ],
+            "sentenceRhythm": [
+                "type": "string",
+                "description": "Sentence-level mechanics: typical length and variation, clause architecture (appositives, em-dash elaborations, parentheticals), punctuation habits, and cadence patterns — e.g. 'long multi-clause builds resolved by an abrupt short declarative'"
+            ],
+            "rhetoricalMoves": [
+                "type": "array",
+                "items": ["type": "string"],
+                "description": "Named recurring rhetorical moves, each with a brief verbatim mini-example — e.g. 'anaphora for conviction (\"I love… I know… I learned…\")', 'concrete anecdote escalated into thesis', 'enumerate three capabilities then synthesize into identity claim'"
+            ],
+            "openingStyle": [
+                "type": "string",
+                "description": "How pieces open: the characteristic first-paragraph move (direct declaration, scene-setting anecdote, thesis-first, etc.) with a verbatim fragment as evidence"
+            ],
+            "closingStyle": [
+                "type": "string",
+                "description": "How pieces close: the characteristic final move (return to opening image, plain-register conviction statement, forward-looking commitment, etc.) with a verbatim fragment as evidence"
             ]
         ],
-        "required": ["enthusiasm", "useFirstPerson", "connectiveStyle", "vocabularyRegister", "registerModulation"],
+        "required": ["enthusiasm", "useFirstPerson", "connectiveStyle", "vocabularyRegister", "registerModulation", "voiceSummary", "sentenceRhythm", "rhetoricalMoves"],
         "additionalProperties": false
     ]
 }
