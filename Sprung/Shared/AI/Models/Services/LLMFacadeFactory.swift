@@ -50,19 +50,20 @@ struct LLMFacadeFactory {
     /// - Parameters:
     ///   - llmService: The LLMService to initialize
     ///   - appState: Application state for configuration
-    ///   - modelContext: SwiftData context for conversation persistence
+    ///   - modelContainer: SwiftData container for conversation persistence
+    ///     (the store creates its own actor-bound context from it)
     ///   - enabledLLMStore: Store for enabled model preferences
     ///   - openRouterService: Service for OpenRouter model metadata
     static func initialize(
         llmService: OpenRouterServiceBackend,
         appState: AppState,
-        modelContext: ModelContext?,
+        modelContainer: ModelContainer?,
         enabledLLMStore: EnabledLLMStore?,
         openRouterService: OpenRouterService?
     ) {
         llmService.initialize(
             appState: appState,
-            modelContext: modelContext,
+            modelContainer: modelContainer,
             enabledLLMStore: enabledLLMStore,
             openRouterService: openRouterService
         )

@@ -219,7 +219,7 @@ final class AppDependencies {
         LLMFacadeFactory.initialize(
             llmService: llmService,
             appState: appState,
-            modelContext: modelContext,
+            modelContainer: modelContext.container,
             enabledLLMStore: enabledLLMStore,
             openRouterService: openRouterService
         )

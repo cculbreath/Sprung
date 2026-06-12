@@ -69,11 +69,13 @@ final class OpenRouterServiceBackend {
     }
     // MARK: - Initialization
     @MainActor
-    func initialize(appState: AppState, modelContext: ModelContext? = nil, enabledLLMStore: EnabledLLMStore? = nil, openRouterService: OpenRouterService? = nil) {
+    func initialize(appState: AppState, modelContainer: ModelContainer? = nil, enabledLLMStore: EnabledLLMStore? = nil, openRouterService: OpenRouterService? = nil) {
         self.appState = appState
         self.enabledLLMStore = enabledLLMStore
         self.openRouterService = openRouterService
-        let conversationStore = LLMConversationStore(modelContext: modelContext)
+        // The store is a @ModelActor: it creates its own ModelContext on its
+        // executor from the container. Never hand it a context made elsewhere.
+        let conversationStore = modelContainer.map { LLMConversationStore(modelContainer: $0) }
         self.conversationCoordinator = ConversationCoordinator(store: conversationStore)
         Task { [weak self] in
             guard let self else { return }

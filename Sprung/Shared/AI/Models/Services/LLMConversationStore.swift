@@ -5,30 +5,32 @@
 //  Actor responsible for persisting conversation history using SwiftData and
 //  domain DTOs.
 //
+//  @ModelActor: the actor owns a ModelContext bound to its own executor.
+//  ModelContext is not thread-safe, so persistence work off the main actor
+//  must go through a context created HERE — sharing the main-actor context
+//  with this actor crashes (EXC_BAD_ACCESS) in fetch/save.
+//
 import Foundation
 import SwiftData
+
+@ModelActor
 actor LLMConversationStore {
-    private let modelContext: ModelContext?
-    init(modelContext: ModelContext?) {
-        self.modelContext = modelContext
-    }
-    func loadMessages(conversationId: UUID) async -> [LLMMessageDTO] {
-        guard let context = modelContext else { return [] }
+    func loadMessages(conversationId: UUID) -> [LLMMessageDTO] {
         let descriptor = FetchDescriptor<ConversationContext>(predicate: #Predicate { $0.id == conversationId }, sortBy: [])
-        if let stored = try? context.fetch(descriptor).first {
+        if let stored = try? modelContext.fetch(descriptor).first {
             return stored.messages.sorted { $0.timestamp < $1.timestamp }.map { $0.dto }
         }
         return []
     }
+
     func saveMessages(
         conversationId: UUID,
         objectId: UUID? = nil,
         objectType: ConversationType? = nil,
         messages: [LLMMessageDTO]
-    ) async {
-        guard let context = modelContext else { return }
+    ) {
         let descriptor = FetchDescriptor<ConversationContext>(predicate: #Predicate { $0.id == conversationId }, sortBy: [])
-        let existing = try? context.fetch(descriptor).first
+        let existing = try? modelContext.fetch(descriptor).first
         let conversation = existing ?? ConversationContext(
             conversationId: conversationId,
             objectId: objectId,
@@ -49,10 +51,10 @@ actor LLMConversationStore {
             conversation.messages.append(stored)
         }
         if existing == nil {
-            context.insert(conversation)
+            modelContext.insert(conversation)
         }
         do {
-            try context.save()
+            try modelContext.save()
         } catch {
             Logger.error("❌ Failed to save conversation: \(error)", category: .storage)
         }
