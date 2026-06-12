@@ -129,7 +129,9 @@ final class VoiceProfileService {
         reasoningStreamManager.isVisible = false
     }
 
-    /// Store extracted voice profile in guidance store
+    /// Store extracted voice profile in guidance store. Upserts the single
+    /// "objective" guidance row — re-running extraction (onboarding debug
+    /// button, KC browser) replaces the profile instead of stacking duplicates.
     func storeVoiceProfile(_ profile: VoiceProfile, in guidanceStore: InferenceGuidanceStore) {
         let attachments = GuidanceAttachments(voiceProfile: profile)
 
@@ -151,16 +153,24 @@ final class VoiceProfileService {
         promptLines.append("Sample excerpts preserving voice:")
         promptLines.append(profile.sampleExcerpts.map { "• \"\($0)\"" }.joined(separator: "\n"))
 
-        let guidance = InferenceGuidance(
-            nodeKey: "objective",
-            displayName: "Voice Profile",
-            prompt: promptLines.joined(separator: "\n"),
-            attachmentsJSON: attachments.asJSON(),
-            source: .auto
-        )
+        let prompt = promptLines.joined(separator: "\n")
 
-        guidanceStore.add(guidance)
-        Logger.info("🎤 Voice profile stored in guidance store", category: .ai)
+        if let existing = guidanceStore.guidance(for: "objective") {
+            existing.prompt = prompt
+            existing.attachmentsJSON = attachments.asJSON()
+            guidanceStore.update(existing)
+            Logger.info("🎤 Voice profile updated in guidance store", category: .ai)
+        } else {
+            let guidance = InferenceGuidance(
+                nodeKey: "objective",
+                displayName: "Voice Profile",
+                prompt: prompt,
+                attachmentsJSON: attachments.asJSON(),
+                source: .auto
+            )
+            guidanceStore.add(guidance)
+            Logger.info("🎤 Voice profile stored in guidance store", category: .ai)
+        }
     }
 
     enum VoiceProfileError: Error, LocalizedError {

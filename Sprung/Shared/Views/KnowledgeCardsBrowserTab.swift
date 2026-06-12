@@ -12,6 +12,7 @@ struct KnowledgeCardsBrowserTab: View {
     @Environment(ArtifactRecordStore.self) private var artifactRecordStore
     @Environment(SkillStore.self) private var skillStore
     @Environment(ReasoningStreamManager.self) private var reasoningStreamManager
+    @Environment(InferenceGuidanceStore.self) private var guidanceStore
 
     @State private var selectedFilter: CardTypeFilter = .all
     @State private var searchText = ""
@@ -22,6 +23,8 @@ struct KnowledgeCardsBrowserTab: View {
     @State private var showIngestionSheet = false
     @State private var refiningCard: KnowledgeCard?
     @State private var pipelineCoordinator: StandaloneKCCoordinator?
+    @State private var isExtractingVoice = false
+    @State private var voiceResultMessage: String?
 
     enum CardTypeFilter: String, CaseIterable {
         case all = "All"
@@ -67,6 +70,14 @@ struct KnowledgeCardsBrowserTab: View {
     /// Cards that haven't been enriched with structured facts yet
     private var unEnrichedCards: [KnowledgeCard] {
         cards.filter { $0.factsJSON == nil && !$0.narrative.isEmpty }
+    }
+
+    /// Archived writing samples available for voice profile extraction
+    private var archivedWritingSamples: [String] {
+        artifactRecordStore.archivedArtifacts
+            .filter(\.isWritingSample)
+            .map { $0.extractedContent.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
     }
 
     var body: some View {
@@ -149,6 +160,17 @@ struct KnowledgeCardsBrowserTab: View {
             Button("Cancel", role: .cancel) {}
         } message: { card in
             Text("Delete \"\(card.title)\"? This cannot be undone.")
+        }
+        .alert(
+            "Voice Profile",
+            isPresented: Binding(
+                get: { voiceResultMessage != nil },
+                set: { if !$0 { voiceResultMessage = nil } }
+            )
+        ) {
+            Button("OK") { voiceResultMessage = nil }
+        } message: {
+            Text(voiceResultMessage ?? "")
         }
         .onChange(of: selectedFilter) { _, _ in }  // Index reset handled by CoverflowBrowser
         .onChange(of: searchText) { _, _ in }
@@ -250,6 +272,34 @@ struct KnowledgeCardsBrowserTab: View {
         .buttonStyle(.plain)
         .disabled(cards.count < 2 || isProcessing)
         .help("Merge similar cards using AI-powered deduplication")
+
+        let sampleCount = archivedWritingSamples.count
+        Button(action: runVoiceExtraction) {
+            HStack(spacing: 4) {
+                if isExtractingVoice {
+                    ProgressView()
+                        .scaleEffect(0.5)
+                        .frame(width: 12, height: 12)
+                } else {
+                    Image(systemName: "waveform")
+                }
+                Text("Voice")
+                if sampleCount > 0 {
+                    Text("\(sampleCount)")
+                        .font(.caption2.weight(.semibold))
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 1)
+                        .background(Capsule().fill(Color.teal.opacity(0.2)))
+                }
+            }
+            .font(.caption)
+            .foregroundStyle(.teal)
+        }
+        .buttonStyle(.plain)
+        .disabled(llmFacade == nil || sampleCount == 0 || isExtractingVoice)
+        .help(sampleCount == 0
+            ? "No archived writing samples — ingest writing samples first"
+            : "Extract a voice profile from \(sampleCount) archived writing sample\(sampleCount == 1 ? "" : "s")")
     }
 
     // MARK: - Refinement
@@ -275,6 +325,55 @@ struct KnowledgeCardsBrowserTab: View {
                 Logger.error("KC Refinement failed: \(error.localizedDescription)", category: .ai)
             }
         }
+    }
+
+    // MARK: - Voice Profile Extraction
+
+    /// Extract a voice profile from archived writing samples and store it in
+    /// the guidance store (same profile the onboarding flow produces — used
+    /// for voice anchoring across document analysis and generation).
+    private func runVoiceExtraction() {
+        guard let llmFacade else { return }
+        let samples = archivedWritingSamples
+        guard !samples.isEmpty else { return }
+
+        isExtractingVoice = true
+        Task {
+            defer { isExtractingVoice = false }
+            do {
+                let service = VoiceProfileService(
+                    llmFacade: llmFacade,
+                    reasoningStreamManager: reasoningStreamManager
+                )
+                let profile = try await service.extractVoiceProfile(from: samples)
+                service.storeVoiceProfile(profile, in: guidanceStore)
+                voiceResultMessage = voiceProfileSummary(profile, sampleCount: samples.count)
+                Logger.info("🎤 Voice profile extracted from KC browser (\(samples.count) samples)", category: .ai)
+            } catch is ModelConfigurationError {
+                NotificationCenter.default.post(name: .showSettings, object: nil)
+                voiceResultMessage = "Voice profile model is not configured. Choose one in Settings → Models, then try again."
+            } catch {
+                voiceResultMessage = "Extraction failed: \(error.localizedDescription)"
+                Logger.error("🎤 KC browser voice extraction failed: \(error.localizedDescription)", category: .ai)
+            }
+        }
+    }
+
+    private func voiceProfileSummary(_ profile: VoiceProfile, sampleCount: Int) -> String {
+        var lines = [
+            "Extracted from \(sampleCount) writing sample\(sampleCount == 1 ? "" : "s") and stored.",
+            "",
+            "Enthusiasm: \(profile.enthusiasm.displayName)",
+            "Person: \(profile.useFirstPerson ? "first" : "third")",
+            "Connectives: \(profile.connectiveStyle)"
+        ]
+        if let register = profile.vocabularyRegister, !register.isEmpty {
+            lines.append("Register: \(register)")
+        }
+        if let modulation = profile.registerModulation, !modulation.isEmpty {
+            lines.append("Modulation: \(modulation)")
+        }
+        return lines.joined(separator: "\n")
     }
 
     // MARK: - Pipeline Actions
