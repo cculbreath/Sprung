@@ -114,9 +114,6 @@ final class ConversationLogStore {
     private func handleEvent(_ event: OnboardingEvent) async {
         switch event {
         // User messages
-        case .llm(.chatboxUserMessageAdded(let messageId)):
-            addEntry(type: .user, content: "Message added to chatbox", metadata: ["messageId": String(messageId.prefix(8))])
-
         case .llm(.userMessageSent(let messageId, let payload, let isSystemGenerated)):
             // Check both "text" and "content" keys - different code paths use different keys
             let text = payload["text"].string ?? payload["content"].stringValue

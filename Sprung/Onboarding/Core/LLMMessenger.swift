@@ -281,6 +281,12 @@ actor LLMMessenger: OnboardingEventEmitter {
             await emit(.llm(.status(.error)))
 
             if let chatboxMessageId = chatboxMessageId, let originalText = originalText {
+                // The failed text is restored to the input box for manual resend —
+                // remove the entry the request build created so the resend doesn't
+                // duplicate the turn in history.
+                if let entryUUID = UUID(uuidString: chatboxMessageId) {
+                    await stateCoordinator.removeUserMessage(entryId: entryUUID)
+                }
                 await emit(.llm(.userMessageFailed(
                     messageId: chatboxMessageId,
                     originalText: originalText,

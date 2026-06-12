@@ -198,11 +198,27 @@ actor ConversationLog {
 
     /// Append user message - fills pending tool slots first if needed
     /// This is the gating mechanism that ensures the log is always valid
-    /// - Returns: The new entry's id. Callers that later send this entry MUST
+    ///
+    /// SEND-ORDER INVARIANT: user entries are created at request-BUILD time
+    /// (AnthropicRequestBuilder), never at enqueue/click time. Builds are
+    /// serialized behind any in-flight stream, so a user entry can never land
+    /// before an assistant entry that finalizes after it — the log is strictly
+    /// send-ordered and a rebuilt history can never end with an assistant turn.
+    ///
+    /// - Parameter id: The entry id reserved at enqueue time. Idempotent: if an
+    ///   entry with this id already exists (a failed request being retried),
+    ///   the append is a no-op so retries never duplicate the turn.
+    /// - Returns: The entry's id. Callers that later send this entry MUST
     ///   carry this id to `setWireText(forUserEntryId:text:)` so the wire-text
     ///   capture can never land on a different entry (see PROMPT-CACHE INVARIANT).
     @discardableResult
-    func appendUser(text: String, isSystemGenerated: Bool) async -> UUID {
+    func appendUser(id: UUID = UUID(), text: String, isSystemGenerated: Bool) async -> UUID {
+        // Idempotent on id: a retried request build re-uses its reserved entry
+        if entries.contains(where: { $0.id == id }) {
+            Logger.debug("ConversationLog: appendUser — entry \(id.uuidString.prefix(8)) already exists (retry), skipping append", category: .ai)
+            return id
+        }
+
         // If there are pending tool calls, resolve them first
         if hasPendingToolCalls {
             let pendingIds = pendingToolCallIds
@@ -225,7 +241,6 @@ actor ConversationLog {
         }
 
         // Now safe to append user message
-        let id = UUID()
         let entry = ConversationEntry.user(
             id: id,
             text: text,
@@ -239,6 +254,22 @@ actor ConversationLog {
         // Publish event for persistence
         await eventBus.publish(.llm(.conversationEntryAppended(entry: entry)))
         return id
+    }
+
+    /// Remove a user entry whose request failed to send.
+    /// The failed chatbox text is restored to the input box for manual resend;
+    /// leaving the entry in the log would replay a turn the model never received
+    /// and duplicate the message when the user resends it. Wire side tables for
+    /// the entry are cleared so nothing replays its bytes.
+    func removeUserEntry(id: UUID) async {
+        guard let index = entries.lastIndex(where: { $0.id == id && $0.isUser }) else {
+            Logger.debug("ConversationLog: removeUserEntry — no user entry \(id.uuidString.prefix(8))", category: .ai)
+            return
+        }
+        entries.remove(at: index)
+        userWireText.removeValue(forKey: id)
+        userAttachments.removeValue(forKey: id)
+        Logger.info("ConversationLog: Removed failed user entry \(id.uuidString.prefix(8)) (total: \(entries.count))", category: .ai)
     }
 
     // MARK: - Assistant Message
@@ -281,38 +312,10 @@ actor ConversationLog {
             toolCalls: calls,
             timestamp: Date()
         )
-
-        // CAUSAL ORDERING: this turn answers a request that predates any user
-        // entries enqueued while its stream was in flight (user entries append at
-        // enqueue/chatbox time; assistant entries append at stream finalize). If
-        // such entries sit at the tail awaiting their own request build (no wire
-        // text recorded yet), insert the assistant turn BEFORE them — otherwise
-        // their request would serialize assistant-final and the API rejects it
-        // ("this model does not support assistant message prefill"). Only
-        // text-only turns are reordered: turns WITH tool calls must stay last
-        // (pending slots are only fillable on the last entry) and their wire form
-        // ends with a tool_result user message, so they can never go out
-        // assistant-final.
-        var insertionIndex = entries.count
-        if calls?.isEmpty ?? true {
-            while insertionIndex > 0 {
-                let previous = entries[insertionIndex - 1]
-                guard previous.isUser, userWireText[previous.id] == nil else { break }
-                insertionIndex -= 1
-            }
-        }
+        entries.append(entry)
 
         let toolCount = calls?.count ?? 0
-        if insertionIndex < entries.count {
-            entries.insert(entry, at: insertionIndex)
-            Logger.info(
-                "ConversationLog: Inserted assistant message before \(entries.count - 1 - insertionIndex) pending user entr(ies) to preserve causal order",
-                category: .ai
-            )
-        } else {
-            entries.append(entry)
-            Logger.info("ConversationLog: Appended assistant message with \(toolCount) tool call(s)", category: .ai)
-        }
+        Logger.info("ConversationLog: Appended assistant message with \(toolCount) tool call(s)", category: .ai)
 
         // Publish event for persistence
         await eventBus.publish(.llm(.conversationEntryAppended(entry: entry)))

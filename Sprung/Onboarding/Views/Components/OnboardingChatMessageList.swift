@@ -15,23 +15,22 @@ struct OnboardingChatMessageList: View {
 
     private let bubbleShape = RoundedRectangle(cornerRadius: 24, style: .continuous)
 
-    /// Sent messages (not queued) - shown in chronological order
+    /// Sent messages - shown in chronological order
     /// Includes systemNote messages which are displayed inline between bubbles
     private var sentMessages: [OnboardingMessage] {
-        let queuedIds = coordinator.ui.queuedMessageIds
-        return coordinator.ui.messages.filter {
+        coordinator.ui.messages.filter {
             !$0.isSystemGenerated &&
-            !($0.role == .assistant && $0.text.isEmpty) &&
-            !queuedIds.contains($0.id)
+            !($0.role == .assistant && $0.text.isEmpty)
         }
     }
 
-    /// Queued messages - shown at bottom with special styling
+    /// Pending messages - awaiting delivery at the next safe boundary; their
+    /// ConversationLog entries don't exist yet, so they render from the
+    /// pending list (filtered against `messages` to avoid a brief double
+    /// render between request build and bubble retirement)
     private var queuedMessages: [OnboardingMessage] {
-        let queuedIds = coordinator.ui.queuedMessageIds
-        return coordinator.ui.messages.filter {
-            queuedIds.contains($0.id) && !$0.isSystemGenerated
-        }
+        let sentIds = Set(coordinator.ui.messages.map(\.id))
+        return coordinator.ui.pendingChatMessages.filter { !sentIds.contains($0.id) }
     }
 
     var body: some View {

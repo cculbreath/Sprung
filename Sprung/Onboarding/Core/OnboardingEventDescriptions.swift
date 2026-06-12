@@ -88,8 +88,6 @@ extension OnboardingEvent.LLMEvent {
         case .streamingMessageFinalized(let id, let finalText, let toolCalls, _):
             let textPreview = finalText.prefix(50).replacingOccurrences(of: "\n", with: " ")
             return "llm.streamingMessageFinalized(id: \(id), text: \"\(textPreview)...\", toolCalls: \(toolCalls?.count ?? 0))"
-        case .chatboxUserMessageAdded(let messageId):
-            return "llm.chatboxUserMessageAdded(\(messageId.prefix(8))...)"
         case .userMessageFailed(let messageId, _, let error):
             return "llm.userMessageFailed(\(messageId.prefix(8))..., error: \(error.prefix(50)))"
         case .userMessageSent(let messageId, _, let isSystemGenerated):

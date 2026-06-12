@@ -75,7 +75,6 @@ extension OnboardingEvent {
         case streamingMessageFinalized(id: UUID, finalText: String, toolCalls: [OnboardingMessage.ToolCallInfo]? = nil, statusMessage: String? = nil)
 
         // Message lifecycle
-        case chatboxUserMessageAdded(messageId: String)
         case userMessageFailed(messageId: String, originalText: String, error: String)
         case userMessageSent(messageId: String, payload: JSON, isSystemGenerated: Bool = false)
         case coordinatorMessageSent(messageId: String, payload: JSON)

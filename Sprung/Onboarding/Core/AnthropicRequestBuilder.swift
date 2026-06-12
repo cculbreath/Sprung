@@ -73,6 +73,11 @@ struct AnthropicRequestBuilder {
         imageBase64: String? = nil,
         imageContentType: String? = nil
     ) async throws -> AnthropicMessageParameter {
+        // Resolve the model FIRST: it can throw, and the user entry must never be
+        // created for a request that fails to build (the entry would replay in
+        // history for a message the model never received).
+        let modelId = try await stateCoordinator.getAnthropicModelId()
+
         // Build full message text with XML tags (Anthropic-native pattern)
         // Order: <interview_context> + <coordinator> + <chatbox> or raw text
         var fullMessageParts: [String] = []
@@ -105,13 +110,19 @@ struct AnthropicRequestBuilder {
             )
         }
 
+        // SEND-ORDER INVARIANT: the user entry is created HERE, at request-build
+        // time — request builds are serialized behind any in-flight stream, so the
+        // assistant entry from a stream that was running when this message was
+        // enqueued has already been appended, and the log stays strictly
+        // send-ordered (a rebuilt history can never end with an assistant turn).
+        // Idempotent on entryId: a retried build re-uses the same entry.
+        //
         // PROMPT-CACHE INVARIANT: write the exact wire text (and attachment) back
         // to the log BEFORE building history, so this turn (and every replay of it)
-        // serializes the same bytes. The pending user entry was appended at
-        // enqueue/chatbox time; its id rides in the payload so the capture can
-        // never land on a different entry that raced into the log in the meantime.
+        // serializes the same bytes, keyed to this exact entry.
         let wireTextCaptured: Bool
         if let entryId {
+            await stateCoordinator.appendUserMessage(text, id: entryId, isSystemGenerated: isSystemGenerated)
             wireTextCaptured = await stateCoordinator.setUserMessageWireText(entryId: entryId, fullMessageText)
             if wireTextCaptured, let attachment {
                 await stateCoordinator.setUserMessageAttachment(entryId: entryId, attachment)
@@ -166,7 +177,6 @@ struct AnthropicRequestBuilder {
         }
 
         let tools = await toolConverter.getAnthropicTools()
-        let modelId = try await stateCoordinator.getAnthropicModelId()
 
         let parameters = AnthropicMessageParameter(
             model: modelId,

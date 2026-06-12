@@ -119,8 +119,6 @@ final class UIStateUpdateHandler {
         switch event {
         case .llm(.status):
             break
-        case .llm(.chatboxUserMessageAdded):
-            ui.messages = await state.messages
         case .llm(.streamingMessageBegan(_, _, let statusMessage)):
             ui.messages = await state.messages
             ui.updateStreaming(true)
@@ -140,6 +138,12 @@ final class UIStateUpdateHandler {
             ui.currentStatusMessage = statusMessage ?? nil
         case .llm(.userMessageSent):
             ui.messages = await state.messages
+            // The entry for a pending chatbox message now exists in the log —
+            // retire its pending bubble so it renders from `messages` instead.
+            if !ui.pendingChatMessages.isEmpty {
+                let sentIds = Set(ui.messages.map(\.id))
+                ui.pendingChatMessages.removeAll { sentIds.contains($0.id) }
+            }
         default:
             break
         }

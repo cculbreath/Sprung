@@ -58,14 +58,10 @@ struct OnboardingInterviewChatPanel: View {
             OnboardingChatComposerView(
                 text: $state.userInput,
                 isEditable: coordinator.ui.isActive,
-                isStreaming: coordinator.ui.isStreaming,
                 isProcessing: coordinator.ui.isProcessing,
                 isWaitingForValidation: isWaitingForValidation,
                 onSend: { text in
                     send(text)
-                },
-                onInterrupt: { text in
-                    interrupt(text)
                 },
                 onStop: {
                     stop()
@@ -116,16 +112,6 @@ struct OnboardingInterviewChatPanel: View {
         state.userInput = ""
         Task {
             await coordinator.sendChatMessage(trimmed)
-        }
-    }
-
-    private func interrupt(_ text: String) {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
-        state.shouldAutoScroll = true
-        state.userInput = ""
-        Task {
-            await coordinator.interruptWithMessage(trimmed)
         }
     }
 

@@ -701,21 +701,6 @@ final class OnboardingInterviewCoordinator {
         await uiResponseCoordinator.sendChatMessage(text)
     }
 
-    /// Interrupt current LLM operation and send the message immediately.
-    /// Called when user clicks the Interrupt button.
-    func interruptWithMessage(_ text: String) async {
-        Logger.info("⚡ Interrupt with message requested", category: .ai)
-
-        // 1. Cancel current LLM operation
-        await requestCancelLLM()
-
-        // 2. Clear all drain gate blocks to allow immediate processing
-        drainGate.clearAllBlocks()
-
-        // 3. Send the message (it will be queued and processed immediately since gate is clear)
-        await sendChatMessage(text)
-    }
-
     /// Stop all processing, clear queue, and silence incoming until next user action.
     /// Cleans up orphan tool calls and cancels active agents.
     func stopProcessing() async {
@@ -733,9 +718,10 @@ final class OnboardingInterviewCoordinator {
         // 4. Clear the message queue
         await queueDrainCoordinator.reset()
 
-        // 5. Clear queued message IDs from UI state
+        // 5. Clear queued message IDs and pending bubbles from UI state
         ui.queuedMessageIds.removeAll()
         ui.queuedMessageCount = 0
+        ui.pendingChatMessages.removeAll()
 
         // 6. Clean up orphan tool calls from conversation history
         await state.getConversationLog().cleanupOrphanedToolCalls()

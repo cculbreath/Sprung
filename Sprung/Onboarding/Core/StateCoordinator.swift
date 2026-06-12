@@ -358,18 +358,15 @@ actor StateCoordinator: OnboardingEventEmitter {
             // Clear streaming buffer - message is now in ConversationLog
             await streamingBuffer.finalize()
         case .llm(.enqueueUserMessage(let payload, let isSystemGenerated, let chatboxMessageId, let originalText)):
-            // Add system-generated messages to ConversationLog NOW to preserve ordering
-            // Chatbox messages are already added in sendChatMessage() before enqueueing
-            // (their payloads carry entryId from QueueDrainCoordinator).
+            // SEND-ORDER INVARIANT: the ConversationLog entry is NOT created here.
+            // Only the entry id is reserved; AnthropicRequestBuilder creates the
+            // entry at request-build time, after any in-flight stream has
+            // finalized its assistant entry, so the log is strictly send-ordered.
+            // (Chatbox payloads already carry the id reserved in sendChatMessage.)
             var payload = payload
-            if isSystemGenerated {
-                let text = payload["text"].stringValue
-                let entryId = await conversationLog.appendUser(text: text, isSystemGenerated: isSystemGenerated)
-                // PROMPT-CACHE INVARIANT: capture the pending entry's id so the
-                // request build can key its wire-text write to THIS entry, even if
-                // another entry lands in the log before the request is built.
-                payload["entryId"].string = entryId.uuidString
-                Logger.debug("StateCoordinator: system-generated message added to ConversationLog at enqueue time", category: .ai)
+            if payload["entryId"].string == nil {
+                payload["entryId"].string = UUID().uuidString
+                Logger.debug("StateCoordinator: reserved entry id for user message (entry created at request build)", category: .ai)
             }
 
             // Bundle any queued coordinator messages WITH the user message
@@ -824,12 +821,19 @@ actor StateCoordinator: OnboardingEventEmitter {
         }
     }
     /// Append user message - gated by ConversationLog (fills pending tool slots first)
-    /// - Returns: The appended entry's id. Callers that enqueue this message for
-    ///   sending MUST carry the id into the payload ("entryId") so the request
-    ///   build can key its wire-text capture to this exact entry.
-    func appendUserMessage(_ text: String, isSystemGenerated: Bool = false) async -> UUID {
+    /// Called at request-BUILD time only (AnthropicRequestBuilder) with the entry id
+    /// reserved at enqueue time — see the SEND-ORDER INVARIANT on ConversationLog.appendUser.
+    /// Idempotent on id, so a retried request never duplicates the turn.
+    @discardableResult
+    func appendUserMessage(_ text: String, id: UUID = UUID(), isSystemGenerated: Bool = false) async -> UUID {
         // ConversationLog is the sole source of truth - handles gating for pending tool calls
-        await conversationLog.appendUser(text: text, isSystemGenerated: isSystemGenerated)
+        await conversationLog.appendUser(id: id, text: text, isSystemGenerated: isSystemGenerated)
+    }
+
+    /// Remove a user entry whose request failed to send (chatbox failure path:
+    /// the text is restored to the input box, so the entry must not replay).
+    func removeUserMessage(entryId: UUID) async {
+        await conversationLog.removeUserEntry(id: entryId)
     }
 
     func appendAssistantMessage(_ text: String) async -> UUID {

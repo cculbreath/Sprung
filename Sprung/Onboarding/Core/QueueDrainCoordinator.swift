@@ -126,10 +126,9 @@ actor QueueDrainCoordinator {
         // Build payload for sendUserMessage event with <chatbox> wrapper
         var payload = JSON()
         payload["text"].string = "<chatbox>\(text)</chatbox>"
-        // PROMPT-CACHE INVARIANT: `id` is the ConversationLog entry id assigned at
-        // append time (sendChatMessage). Carrying it here lets the request build
-        // key its wire-text write to THIS entry even if another entry lands in the
-        // log before the request is built.
+        // `id` is the entry id reserved in sendChatMessage. The ConversationLog
+        // entry itself is created at request-build time with this id (send-order
+        // invariant), which also keys the wire-text capture to the exact entry.
         payload["entryId"].string = id.uuidString
 
         // Emit processing state change for UI feedback

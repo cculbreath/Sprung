@@ -37,6 +37,12 @@ final class OnboardingUIState {
     var queuedMessageCount: Int = 0
     /// IDs of messages that are queued but not yet sent to the LLM
     var queuedMessageIds: Set<UUID> = []
+    /// Chatbox messages awaiting delivery. Their ConversationLog entries are
+    /// created at request-build time (send-order invariant), so until then the
+    /// transcript renders them from this list. A message's id here is the entry
+    /// id its log entry will carry; it is removed once the entry appears in
+    /// `messages`.
+    var pendingChatMessages: [OnboardingMessage] = []
 
     // MARK: - Chat State
     var messages: [OnboardingMessage] = []
@@ -169,9 +175,12 @@ final class OnboardingUIState {
 
     /// Handle a failed message send by removing it from transcript and storing for input restoration
     func handleMessageFailure(messageId: String, originalText: String, error: String) {
-        // Remove the failed message from the transcript
+        // Remove the failed message from the transcript (and the pending list,
+        // in case it never reached request build)
         if let uuid = UUID(uuidString: messageId) {
             messages.removeAll { $0.id == uuid }
+            pendingChatMessages.removeAll { $0.id == uuid }
+            queuedMessageIds.remove(uuid)
         }
         // Store the original text and error for UI to restore
         failedMessageText = originalText

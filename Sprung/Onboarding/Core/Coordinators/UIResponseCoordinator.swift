@@ -690,19 +690,25 @@ final class UIResponseCoordinator {
         // NOTE: Document collection mode is NOT cleared by chatbox messages.
         // It should only be dismissed by "Done with Uploads" button or phase transitions.
 
-        // CRITICAL: User chatbox messages are highest priority - clear ALL stale blocks
-        // This prevents messages from being stuck in queue due to orphaned blocking states.
-        // UI prompts have already been dismissed above, so all blocks should be stale.
-        // If glow is off (not streaming), any remaining blocks are definitionally stale.
-        drainGate.clearAllBlocks()
+        // Stale-block cleanup: when nothing is actively processing (glow off), any
+        // remaining blocks are definitionally stale — clear them so the message
+        // isn't stuck in the queue. While a stream IS in flight, blocks are real:
+        // the message queues and delivers at the next safe boundary (the Stop
+        // button is the explicit interrupt).
+        if !ui.isProcessing && !ui.isStreaming {
+            drainGate.clearAllBlocks()
+        }
 
-        // Add the message to chat transcript IMMEDIATELY so user sees it in the UI.
-        // The returned entry id rides through the user-action queue into the send
-        // payload so the wire-text capture is keyed to this exact entry.
-        let messageId = await state.appendUserMessage(text, isSystemGenerated: false)
-
-        // Emit event so coordinator can sync its messages array to UI
-        await eventBus.publish(.llm(.chatboxUserMessageAdded(messageId: messageId.uuidString)))
+        // SEND-ORDER INVARIANT: no ConversationLog entry is created here. The id
+        // is reserved now (it becomes the entry id at request-build time) and the
+        // message renders from the pending-bubble list until then.
+        let messageId = UUID()
+        ui.pendingChatMessages.append(OnboardingMessage(
+            id: messageId,
+            role: .user,
+            text: text,
+            isQueued: true
+        ))
 
         // Queue the message for sending at a safe boundary
         // This prevents race conditions with ongoing tool execution
@@ -923,7 +929,7 @@ final class UIResponseCoordinator {
             // Complete the UI tool with cancellation so tool result is filled
             let result = buildCompletionResult(
                 status: "dismissed",
-                message: "User sent a chatbox message instead of making a selection"
+                message: "User typed a chatbox message instead of making a selection. Their message is queued and arrives next - treat it as their response. Do not re-present this prompt."
             )
             completeUITool(toolName: OnboardingToolName.getUserOption.rawValue, result: result)
             Logger.info("💬 Dismissed choice prompt via chatbox message (tool cancelled)", category: .ai)
@@ -937,7 +943,7 @@ final class UIResponseCoordinator {
             // Complete the UI tool with cancellation
             let result = buildCompletionResult(
                 status: "dismissed",
-                message: "User sent a chatbox message instead of validating"
+                message: "User typed a chatbox message instead of validating. Their message is queued and arrives next - treat it as their response."
             )
             completeUITool(toolName: OnboardingToolName.submitForValidation.rawValue, result: result)
             Logger.info("💬 Dismissed validation prompt via chatbox message (tool cancelled)", category: .ai)
@@ -949,7 +955,7 @@ final class UIResponseCoordinator {
             for request in toolRouter.pendingUploadRequests {
                 let result = buildCompletionResult(
                     status: "dismissed",
-                    message: "User sent a chatbox message instead of uploading"
+                    message: "User typed a chatbox message instead of uploading. Their message is queued and arrives next - treat it as their response."
                 )
                 completeUITool(toolName: OnboardingToolName.getUserUpload.rawValue, result: result)
                 // Also emit the cancellation event for the specific request
@@ -967,7 +973,7 @@ final class UIResponseCoordinator {
             // Complete the UI tool with cancellation
             let result = buildCompletionResult(
                 status: "dismissed",
-                message: "User sent a chatbox message instead of configuring sections"
+                message: "User typed a chatbox message instead of configuring sections. Their message is queued and arrives next - treat it as their response."
             )
             completeUITool(toolName: OnboardingToolName.configureEnabledSections.rawValue, result: result)
             Logger.info("💬 Dismissed section toggle via chatbox message (tool cancelled)", category: .ai)

@@ -1,14 +1,13 @@
 import SwiftUI
 
-/// Chat input composer with send/queue and context-aware stop/interrupt button
+/// Chat input composer: Send always queues (delivered at the next safe
+/// boundary while the assistant is working); Stop is the explicit interrupt.
 struct OnboardingChatComposerView: View {
     @Binding var text: String
     let isEditable: Bool
-    let isStreaming: Bool      // True when LLM is actively streaming (glow on)
     let isProcessing: Bool     // True when any processing is happening
     let isWaitingForValidation: Bool
     let onSend: (String) -> Void
-    let onInterrupt: (String) -> Void
     let onStop: () -> Void
 
     @State private var composerHeight: CGFloat = ChatComposerTextView.minimumHeight
@@ -47,46 +46,33 @@ struct OnboardingChatComposerView: View {
             // Button stack - fixed layout, visibility changes via opacity
             VStack(alignment: .trailing, spacing: 4) {
                 // Primary button - Send or Queue (fixed width to prevent layout shift)
-                // Show Queue only when LLM is actively streaming to avoid interrupting
+                // While the assistant is working, sending queues the message for
+                // delivery at the next safe boundary (label communicates this)
                 Button(action: {
                     onSend(text)
                 }, label: {
-                    Label(isStreaming ? "Queue" : "Send",
-                          systemImage: isStreaming ? "clock" : "paperplane.fill")
+                    Label(isProcessing ? "Queue" : "Send",
+                          systemImage: isProcessing ? "clock" : "paperplane.fill")
                         .frame(minWidth: 60)
                 })
                 .buttonStyle(.borderedProminent)
-                .tint(isStreaming ? .gray : .accentColor)
+                .tint(isProcessing ? .gray : .accentColor)
                 .disabled(isSendDisabled)
-                .help(isStreaming
-                      ? "Add message to queue - will be sent when response completes"
+                .help(isProcessing
+                      ? "Add message to queue - delivered when the assistant reaches a safe boundary"
                       : (isWaitingForValidation ? "Submit or cancel the validation dialog to continue" : ""))
 
-                // Stop/Interrupt button - always in layout, opacity controls visibility
-                Group {
-                    if hasText && isProcessing {
-                        Button(action: {
-                            onInterrupt(text)
-                        }, label: {
-                            Label("Interrupt", systemImage: "exclamationmark.bubble.fill")
-                        })
-                        .buttonStyle(.borderedProminent)
-                        .tint(.orange)
-                        .controlSize(.small)
-                        .disabled(!isEditable || isWaitingForValidation)
-                        .help("Stop current operation and send this message immediately")
-                    } else {
-                        Button(action: {
-                            onStop()
-                        }, label: {
-                            Label("Stop", systemImage: "stop.fill")
-                        })
-                        .buttonStyle(.borderedProminent)
-                        .tint(.red)
-                        .controlSize(.small)
-                        .help("Stop all processing, clear queue, and silence incoming tool calls")
-                    }
-                }
+                // Stop button - the explicit interrupt; always in layout,
+                // opacity controls visibility
+                Button(action: {
+                    onStop()
+                }, label: {
+                    Label("Stop", systemImage: "stop.fill")
+                })
+                .buttonStyle(.borderedProminent)
+                .tint(.red)
+                .controlSize(.small)
+                .help("Stop all processing, clear queued messages, and silence incoming tool calls")
                 .opacity(isProcessing ? 1 : 0)
                 .allowsHitTesting(isProcessing)
             }
