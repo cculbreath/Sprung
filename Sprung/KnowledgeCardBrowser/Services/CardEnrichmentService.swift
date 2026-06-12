@@ -203,10 +203,13 @@ actor CardEnrichmentService {
     /// Resolve the source text a card should be enriched against.
     ///
     /// Resolution order:
-    /// 1. Evidence-anchor document ID → artifact UUID lookup (document cards)
-    /// 2. Evidence-anchor document ID → artifact filename match (git cards
+    /// 1. Evidence-anchor document ID → artifact UUID lookup
+    /// 2. Evidence-anchor document ID → the artifact's ORIGINAL pipeline ID
+    ///    (persistence assigns a fresh UUID; the extraction-time ID the
+    ///    anchors reference survives at metadataJSON.id)
+    /// 3. Evidence-anchor document ID → artifact filename match (git cards
     ///    anchor with the repo name, chat cards with a non-UUID string id)
-    /// 3. The card's own narrative — self-grounded, never another document.
+    /// 4. The card's own narrative — self-grounded, never another document.
     ///
     /// There is deliberately NO "any artifact" fallback: enriching a card
     /// against an unrelated document cross-contaminates its facts and
@@ -222,12 +225,11 @@ actor CardEnrichmentService {
             }
         }
 
-        // Git/chat anchors carry a repo name or string id instead of a UUID —
-        // match against artifact filenames before giving up.
         let allArtifacts = store.allArtifacts
         for anchor in card.evidenceAnchors {
             if let artifact = allArtifacts.first(where: {
-                $0.filename == anchor.documentId && !$0.extractedContent.isEmpty
+                !$0.extractedContent.isEmpty
+                    && ($0.metadataString("id") == anchor.documentId || $0.filename == anchor.documentId)
             }) {
                 return artifact.extractedContent
             }
