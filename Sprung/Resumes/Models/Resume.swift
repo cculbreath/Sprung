@@ -4,7 +4,6 @@ import SwiftData
 @Model
 class Resume: Identifiable, Hashable {
     @Attribute(.unique) var id: UUID = UUID()
-    var needToTree: Bool = true
     var needToFont: Bool = true
     @Relationship(deleteRule: .cascade)
     var rootNode: TreeNode? // The top-level node
@@ -54,12 +53,6 @@ class Resume: Identifiable, Hashable {
             sectionVisibilityData = try? JSONEncoder().encode(newValue)
         }
     }
-    /// User-configured phase assignments for AI review (maps "Section-attribute" to phase number)
-    // DEPRECATED vNext — read once by migrateAISelectionV1, then ignored.
-    // Remove this property (and the migration) in vNext+1. Keep the storage in
-    // place until then so SwiftData lightweight migration does not drop the column.
-    @Attribute(.externalStorage)
-    private var phaseAssignmentsData: Data?
     func label(_ key: String) -> String {
         if let myLabel = keyLabels[key] {
             return myLabel

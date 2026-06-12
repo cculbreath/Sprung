@@ -49,16 +49,12 @@ The manifest controls how the template appears in the resume editor.
     "custom.jobTitles": "Job Titles",
     "custom.moreInfo": "Additional Info"
   },
-  "listContainers": [
-    "skills.*.keywords",
-    "work.*.highlights"
+  "defaultAIFields": [
+    "custom.objective",
+    "work[].highlights",
+    "skills.*.name",
+    "skills[].keywords"
   ],
-  "reviewPhases": {
-    "skills": [
-      { "phase": 1, "field": "skills.*.name", "bundle": true },
-      { "phase": 2, "field": "skills.*.keywords", "bundle": false }
-    ]
-  },
   "styling": {
     "fontSizes": {
       "name": "24pt",
@@ -88,52 +84,32 @@ Controls which sections appear in the resume tree editor and their order.
 - Sections listed here appear in the Content tree
 - `styling` enables the Font Sizes panel
 
-#### `listContainers` (Deprecated)
+### Path Pattern Syntax (`defaultAIFields`)
 
-> **Note:** This field is deprecated. Use `*` vs `[]` notation in path patterns instead.
-> - `skills.*.keywords` (bundle) → batch review
-> - `skills[].keywords` (enumerate) → per-item review
+`defaultAIFields` seeds the AI selection state when a resume tree is first built
+from a template. Selection is a **single axis**: a node is editable by the
+revision agent iff its status is `.aiToReplace`
+(`TreeNode.isEditable == (status == .aiToReplace)`). Patterns are applied once
+at tree-build time by `ExperienceDefaultsToTree.applyDefaultAIFields`
+(`Sprung/ResumeTree/Utilities/ExperienceDefaultsToTree+AIFields.swift`); users
+can change the selection afterward via the editor UI.
 
-Previously defined review behavior for list items:
-
-```json
-"listContainers": [
-  "skills.*.keywords",
-  "work.*.highlights"
-]
-```
-
-#### `reviewPhases`
-
-Configures multi-phase AI review for complex sections. Each phase targets a specific field path.
-
-```json
-"reviewPhases": {
-  "skills": [
-    { "phase": 1, "field": "skills.*.name" },
-    { "phase": 2, "field": "skills[].keywords" }
-  ]
-}
-```
-
-### Path Pattern Syntax (defaultAIFields & reviewPhases)
-
-Path patterns determine how resume tree nodes are exported for AI review. The syntax controls both **navigation** (which nodes to select) and **grouping** (how many RevNodes are created).
+Patterns resolve to **attribute level**: a collection marker (`*` or `[]`) fans
+out across the collection's entries and the remainder of the path is resolved
+inside each entry. Only the node the pattern actually names is marked
+`.aiToReplace` — never the whole section.
 
 #### Core Symbols
 
-| Symbol | Meaning | Grouping |
-|--------|---------|----------|
-| `.fieldName` | Navigate to exact field | — |
-| `.*` | Enumerate children AND **bundle** | All matches → **1 RevNode** |
-| `[]` | Enumerate children, **separate** | Each match → **1 RevNode** |
+| Symbol | Meaning |
+|--------|---------|
+| `.fieldName` | Navigate to the child node with that name |
+| `.*.` or `[].` (mid-path) | Fan out across the collection's entries; resolve the rest of the path inside each entry |
+| `field[]` (trailing) | The `field` list container itself is the named attribute |
 
-#### The Key Distinction: `*` vs `[]`
-
-Both `*` and `[]` enumerate child nodes, but they differ in how results are grouped:
-
-- **`*` bundles**: Collect the specified attribute from ALL children into a single RevNode
-- **`[]` iterates**: Create separate RevNodes for each child
+`*` and `[]` are interchangeable: both fan out across entries. There is no
+bundle-vs-iterate distinction anymore — the pattern only decides **which nodes
+get marked**, and the revision agent works on the marked subtrees.
 
 #### Understanding the Tree Structure
 
@@ -176,69 +152,33 @@ root
 
 #### Pattern Examples
 
-| Pattern | RevNodes | Content |
-|---------|----------|---------|
-| `work[].highlights` | 2 | RevNode 1: `["Built X", "Led Y", "Improved Z"]`<br>RevNode 2: `["Created W", "Designed V"]` |
-| `work.*.highlights` | 1 | `["Built X", "Led Y", "Improved Z", "Created W", "Designed V"]` |
-| `skills.*.name` | 1 | `["Software Engineering", "Data Science"]` |
-| `skills[].name` | 2 | RevNode 1: `"Software Engineering"`<br>RevNode 2: `"Data Science"` |
-| `skills[].keywords` | 2 | RevNode 1: `["Swift", "Python", "JavaScript"]`<br>RevNode 2: `["ML", "Statistics"]` |
-| `skills.*.keywords` | 1 | `["Swift", "Python", "JavaScript", "ML", "Statistics"]` |
-| `custom.jobTitles[]` | 3 | RevNode 1: `"Engineer"`<br>RevNode 2: `"Developer"`<br>RevNode 3: `"Architect"` |
-| `projects[].description` | N | One RevNode per project, each containing a description string |
+| Pattern | Nodes marked `.aiToReplace` |
+|---------|-----------------------------|
+| `work[].highlights` | Each work entry's `highlights` container (2 nodes: Company A's and Company B's highlights lists) |
+| `skills.*.name` | Each skill entry's `name` field (2 nodes) |
+| `skills[].keywords` | Each skill entry's `keywords` container (2 nodes) |
+| `custom.jobTitles[]` | The `jobTitles` container itself (1 node — trailing `[]` names the list) |
+| `custom.objective` | The resolved `objective` node (1 node) |
 
-#### Double Iteration: `[]` + `[]`
-
-For deep iteration, you can use `[]` multiple times:
-
-| Pattern | RevNodes | Content |
-|---------|----------|---------|
-| `skills[].keywords[]` | 5 | One RevNode per keyword across all skills |
-| `work[].highlights[]` | 5 | One RevNode per highlight bullet across all jobs |
-
-#### When to Use Each
-
-**Use `*` (bundle) when:**
-- LLM needs holistic view of all items together
-- Items should be reviewed/edited as a cohesive set
-- Example: Skill category names should complement each other
-
-**Use `[]` (iterate) when:**
-- Each item should be reviewed independently
-- Changes to one item don't affect others
-- Example: Each job's highlights stand alone
+Notes:
+- Entries missing the named attribute contribute nothing (e.g., a work entry
+  with no `highlights` is skipped).
+- A pattern that matches no node logs a warning and is otherwise ignored.
+- Marking a container makes its whole subtree editable by inheritance; users
+  can opt individual children out (`.excludedFromGroup`) in the editor.
 
 #### Typical Configuration
 
 ```json
 "defaultAIFields": [
-  "custom.objective",      // 1 RevNode: scalar field
-  "work[].highlights",     // N RevNodes: each job's bullets separately
-  "projects[].description",// N RevNodes: each project description
-  "skills.*.name",         // 1 RevNode: all category names bundled (Phase 1)
-  "skills[].keywords",     // N RevNodes: each category's keywords (Phase 2)
-  "custom.jobTitles[]"     // N RevNodes: each job title separately
+  "custom.objective",       // the objective node
+  "work[].highlights",      // each job's highlights container
+  "projects[].description", // each project's description field
+  "skills.*.name",          // each skill category's name field
+  "skills[].keywords",      // each skill category's keywords container
+  "custom.jobTitles[]"      // the jobTitles container
 ]
 ```
-
-#### Phase Configuration
-
-Phases let you review certain fields first (e.g., skill category names) before reviewing dependent fields (e.g., keywords under those categories):
-
-```json
-"reviewPhases": {
-  "skills": [
-    { "phase": 1, "field": "skills.*.name" },
-    { "phase": 2, "field": "skills[].keywords" }
-  ]
-}
-```
-
-In this example:
-- **Phase 1**: Review all 5 skill category names together (1 bundled RevNode)
-- **Phase 2**: After Phase 1 approvals are applied, review keywords for each category (5 RevNodes)
-
-Phase 2 paths will reflect any name changes from Phase 1.
 
 #### `section-visibility`
 

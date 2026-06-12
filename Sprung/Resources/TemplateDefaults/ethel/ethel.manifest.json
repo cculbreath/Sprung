@@ -138,11 +138,5 @@
     "skills.*.name",
     "skills[].keywords",
     "custom.jobTitles"
-  ],
-  "reviewPhases": {
-    "skills": [
-      { "phase": 1, "field": "skills.*.name" },
-      { "phase": 2, "field": "skills[].keywords" }
-    ]
-  }
+  ]
 }

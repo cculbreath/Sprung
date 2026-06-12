@@ -86,7 +86,6 @@ extension TemplateEditorView {
         }
         let jobApp = JobApp()
         let resume = Resume(jobApp: jobApp, enabledSources: [], template: template)
-        resume.needToTree = true
         resume.importedEditorKeys = []
         let experienceDefaults = appEnvironment.experienceDefaultsStore.currentDefaults()
         let treeBuilder = ExperienceDefaultsToTree(

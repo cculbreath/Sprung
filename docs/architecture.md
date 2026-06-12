@@ -230,25 +230,29 @@ During resume customization, the Skill Bank drives ATS-aware keyword injection a
 
 | Manifest Pattern | Effect on TreeNode |
 |-----------------|-------------------|
-| `skills.*.name`, `skills[].keywords` | The `skills` collection is marked editable |
-| `work[].highlights` | The `work` collection is marked editable |
+| `skills.*.name`, `skills[].name` | Each skill entry's `name` field is marked editable |
+| `work[].highlights` | Each work entry's `highlights` container is marked editable |
+| `custom.jobTitles[]` | The `jobTitles` container itself is marked editable (trailing `[]`) |
 | `custom.objective` | The `objective` leaf is marked editable |
 
-Patterns containing `*` or `[]` mark the **collection root** editable; plain dotted paths mark the **leaf** editable. There is no bundle-vs-iterate distinction — a node is either editable (`status == .aiToReplace`) or not, and `.excludedFromGroup` lets a child opt out of an editable ancestor.
+Patterns resolve to **attribute level** (`ExperienceDefaultsToTree+AIFields`): a `*` or `[]` marker fans out across the collection's entries and the rest of the path is resolved inside each entry, so only the node the pattern names is marked — never the whole section. `*` and `[]` are interchangeable. There is no bundle-vs-iterate distinction — a node is either editable (`status == .aiToReplace`) or not, and `.excludedFromGroup` lets a child opt out of an editable ancestor.
 
 ### Step 2: AI Revision (Agent-Driven)
 
-The user opens the revision agent from the **Customize** toolbar button / menu command. The agent runs in its own window (`ResumeRevisionView`), driven by `ResumeRevisionAgent` over the Anthropic tool loop.
+The user opens the revision agent via the **Customize** toolbar button / ⌘R menu command / editor drawer button. Every entry point posts the single `.customizeResume` notification, which `AppDelegate` routes to `SecondaryWindowManager.showResumeRevision()` — the one choke point that gates on `Resume.hasUpdatableNodes` and cancels/replaces the window when the selected resume changes. The agent runs in its own window (`ResumeRevisionView`), driven by `ResumeRevisionAgent` over the Anthropic tool loop using the session model `resumeRevisionModelId`.
 
 ```
 ResumeRevisionWorkspaceService exports each editable subtree
 (any TreeNode with status == .aiToReplace, minus .excludedFromGroup
-children) into an ephemeral JSON workspace
+children) into an ephemeral JSON workspace, snapshotting each
+exported file at creation time
         │
         ▼
 ResumeRevisionAgent runs an Anthropic tool loop:
   • read_file / glob / grep   — inspect the workspace + job posting
   • ask_user                  — clarify ambiguities up front
+    (registered per session only when the
+    enableResumeCustomizationTools setting is on)
   • write_json_file           — stage edits to the workspace
   • propose_changes           — user-review checkpoint (batched diffs)
 
@@ -266,6 +270,10 @@ into the live TreeNode hierarchy.
 ```
 
 Review granularity is the agent's responsibility; its prompt biases toward section-shaped, batched proposals rather than one-proposal-per-element, and toward asking clarifying questions before proposing.
+
+**Completion boundary (ground truth + grounding).** At `complete_revision` and at Save, before the workspace is imported back into the resume, the agent computes a ground-truth diff between the creation-time snapshots of the exported treenodes and the current workspace files. Proposal review shows these ground-truth diffs, and every proposed change carries a required evidence citation. A grounding verification pass — one batched structured call in adversarial fact-checker style, run as a continuation of the session conversation so the cached prefix applies, on the same session model (`resumeRevisionModelId`) — checks each change against the exported knowledge-card/skill corpus and `ask_user` answers, producing supported / unsupported / suggested-revision verdicts. An optional coherence pass (gated by the `enableCoherencePass` setting) checks cross-section consistency of the final text. Both passes surface advisory flags on the completion card; neither hard-blocks the import. Workspace writes that match no accepted proposal are flagged.
+
+**Prompt caching & telemetry.** The session conversation uses Anthropic prompt caching with three cache breakpoints over the stable prefix (system preamble, exported corpus, conversation history), and per-turn usage telemetry (input/output/cache-read/cache-write tokens) is recorded for each loop iteration.
 
 `InferenceGuidance` is a SwiftData model keyed by tree path (e.g., `"experience.*.bullets"`, `"custom.jobTitles"`) that stores per-node LLM instructions set by the user — preferred phrasing, emphasis, constraints — giving fine-grained control over tone in each section.
 

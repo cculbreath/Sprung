@@ -106,44 +106,8 @@ enum LeafStatus: String, Codable, Hashable {
 
     // MARK: - AI Selection Inheritance
 
-    // MARK: - Per-Attribute Review Mode (Collection Nodes)
-
-    /// Attributes in "Together" mode - bundled into 1 revnode (pattern: section.*.attr)
-    /// Stored as JSON-encoded array on collection nodes (e.g., skills, work)
-    // DEPRECATED vNext — read once by migrateAISelectionV1, then ignored.
-    // Remove this property (and the migration) in vNext+1. Keep the storage in
-    // place until then so SwiftData lightweight migration does not drop the column.
-    @Attribute(.externalStorage)
-    private var bundledAttributesData: Data?
-
-    /// Decodes legacy `bundledAttributesData` for migration use ONLY.
-    var legacyBundledAttributes: [String]? {
-        guard let data = bundledAttributesData else { return nil }
-        return try? JSONDecoder().decode([String].self, from: data)
-    }
-
-    /// Attributes in "Separately" mode - one revnode per entry (pattern: section[].attr)
-    /// Stored as JSON-encoded array on collection nodes
-    // DEPRECATED vNext — read once by migrateAISelectionV1, then ignored.
-    // Remove this property (and the migration) in vNext+1. Keep the storage in
-    // place until then so SwiftData lightweight migration does not drop the column.
-    @Attribute(.externalStorage)
-    private var enumeratedAttributesData: Data?
-
-    /// Decodes legacy `enumeratedAttributesData` for migration use ONLY.
-    var legacyEnumeratedAttributes: [String]? {
-        guard let data = enumeratedAttributesData else { return nil }
-        return try? JSONDecoder().decode([String].self, from: data)
-    }
-
     /// The single editability signal: a node is editable iff it is marked for AI replacement.
     var isEditable: Bool { status == .aiToReplace }
-
-    /// Returns true if this is a collection node (has children that are entries)
-    /// Collection nodes can have bundle/iterate modes applied
-    var isCollectionNode: Bool {
-        !orderedChildren.isEmpty && orderedChildren.first?.orderedChildren.isEmpty == false
-    }
 
     /// Returns true if this node's AI selection is inherited from an ancestor
     /// (i.e., this node is NOT directly marked .aiToReplace, but an ancestor is)

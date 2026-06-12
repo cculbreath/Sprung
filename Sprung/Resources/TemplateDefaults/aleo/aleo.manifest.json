@@ -47,20 +47,6 @@
     "custom.moreInfo",
     "styling"
   ],
-  "reviewPhases" : {
-    "skills" : [
-      {
-        "bundle" : false,
-        "field" : "skills.*.name",
-        "phase" : 1
-      },
-      {
-        "bundle" : false,
-        "field" : "skills[].keywords",
-        "phase" : 2
-      }
-    ]
-  },
   "section-visibility" : {
     "education" : true,
     "projects" : true,
