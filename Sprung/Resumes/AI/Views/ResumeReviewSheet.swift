@@ -205,6 +205,7 @@ struct ResumeReviewSheet: View {
                             viewModel.resetChangeMessage()
                             dismiss()
                         }
+                        .disabled(viewModel.pendingChangeReview != nil)
                     } else {
                         Button(
                             selectedReviewType == .fixOverflow ? "Optimize Skills" :
@@ -219,6 +220,10 @@ struct ResumeReviewSheet: View {
                             viewModel.resetChangeMessage()
                             dismiss()
                         }
+                        .disabled(viewModel.pendingChangeReview != nil)
+                        .help(viewModel.pendingChangeReview != nil
+                              ? "Accept or reject the AI changes before closing"
+                              : "")
                     }
                 }
                 .padding([.horizontal, .bottom]) // Padding for the button bar
@@ -228,6 +233,10 @@ struct ResumeReviewSheet: View {
             // Note: Reasoning stream view is now displayed globally in the main app UI
         }
         .frame(width: 650, height: 600, alignment: .topLeading) // Increased sheet size for better content fit
+        // A pending accept/reject gate is the only undo path for applied AI
+        // mutations — block every dismissal route (Esc included) until the
+        // user explicitly accepts or rejects.
+        .interactiveDismissDisabled(viewModel.pendingChangeReview != nil)
         .onAppear {
             viewModel.initialize(
                 llmFacade: llmFacade,
@@ -236,6 +245,11 @@ struct ResumeReviewSheet: View {
                 openRouterService: openRouterService,
                 coverRefStore: coverRefStore
             )
+        }
+        .onDisappear {
+            // Runs that finish after this point auto-reject their mutations
+            // instead of presenting a review gate into a dead view.
+            viewModel.handleSheetDismissed()
         }
     }
     // View for custom options (extracted for clarity) - Unchanged

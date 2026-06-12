@@ -37,6 +37,17 @@ struct RevisionStreamProcessor {
     private var cacheReadTokens = 0
     private var cacheCreationTokens = 0
     private var outputTokens = 0
+    /// True between message_start and the .usage emission at message_stop.
+    private var hasOpenMessage = false
+
+    /// Partial usage for a message that started but never reached
+    /// message_stop (stream error, stall cancellation, teardown). Consumed by
+    /// the agent's stream-error path so session totals stay honest; nil when
+    /// no usage is pending.
+    var pendingUsage: (inputTokens: Int, cacheReadTokens: Int, cacheCreationTokens: Int, outputTokens: Int)? {
+        guard hasOpenMessage else { return nil }
+        return (inputTokens, cacheReadTokens, cacheCreationTokens, outputTokens)
+    }
 
     struct ToolCallInfo {
         let id: String
@@ -61,6 +72,7 @@ struct RevisionStreamProcessor {
             cacheReadTokens = event.message.usage.cacheReadInputTokens ?? 0
             cacheCreationTokens = event.message.usage.cacheCreationInputTokens ?? 0
             outputTokens = event.message.usage.outputTokens ?? 0
+            hasOpenMessage = true
             return []
 
         case .contentBlockStart(let blockStart):
@@ -135,6 +147,7 @@ struct RevisionStreamProcessor {
             cacheReadTokens = 0
             cacheCreationTokens = 0
             outputTokens = 0
+            hasOpenMessage = false
 
             return events
 

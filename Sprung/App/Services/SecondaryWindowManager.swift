@@ -505,7 +505,8 @@ final class SecondaryWindowManager {
               let knowledgeCardStore,
               let skillStore,
               let coverRefStore,
-              let titleSetStore else {
+              let titleSetStore,
+              let guidanceStore else {
             Logger.error("Missing dependencies for resume revision window", category: .ui)
             return
         }
@@ -536,6 +537,7 @@ final class SecondaryWindowManager {
                 .environment(skillStore)
                 .environment(coverRefStore)
                 .environment(titleSetStore)
+                .environment(guidanceStore)
         ))
 
         let window = NSWindow(

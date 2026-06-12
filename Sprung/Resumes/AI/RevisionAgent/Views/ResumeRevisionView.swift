@@ -12,6 +12,7 @@ struct ResumeRevisionView: View {
     @Environment(SkillStore.self) private var skillStore
     @Environment(CoverRefStore.self) private var coverRefStore
     @Environment(TitleSetStore.self) private var titleSetStore
+    @Environment(InferenceGuidanceStore.self) private var guidanceStore
     @Environment(\.modelContext) private var modelContext
 
     let resume: Resume
@@ -187,8 +188,8 @@ struct ResumeRevisionView: View {
 
         // Load initial PDF for preview
         do {
-            let slug = resume.template?.slug ?? "default"
-            pdfData = try await pdfGenerator.generatePDF(for: resume, template: slug)
+            let template = try pdfGenerator.resolveTemplate(for: resume)
+            pdfData = try await pdfGenerator.generatePDF(for: resume, template: template.slug)
         } catch {
             Logger.error("ResumeRevisionView: Failed to load initial PDF: \(error)", category: .ai)
         }
@@ -207,11 +208,8 @@ struct ResumeRevisionView: View {
         let coverRefs = coverRefStore.storedCoverRefs
         // Canonical voice context: the same block every other LLM surface uses.
         let writersVoice = coverRefStore.writersVoice
-        // Explicitly banned phrases from the onboarding voice profile. The
-        // guidance store is a stateless query facade over the model context;
-        // the revision window's environment does not carry one.
-        let avoidPhrases = InferenceGuidanceStore(context: modelContext)
-            .voiceProfile()?.avoidPhrases ?? []
+        // Explicitly banned phrases from the onboarding voice profile.
+        let avoidPhrases = guidanceStore.voiceProfile()?.avoidPhrases ?? []
 
         let revisionAgent = ResumeRevisionAgent(
             resume: resume,

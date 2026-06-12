@@ -175,8 +175,8 @@ final class ResumeRevisionWorkspaceService {
             throw WorkspaceError.workspaceNotCreated
         }
 
-        let slug = resume.template?.slug ?? "default"
-        let pdfData = try await pdfGenerator.generatePDF(for: resume, template: slug)
+        let template = try pdfGenerator.resolveTemplate(for: resume)
+        let pdfData = try await pdfGenerator.generatePDF(for: resume, template: template.slug)
         let pdfFile = workspace.appendingPathComponent("resume.pdf")
         try pdfData.write(to: pdfFile)
 
@@ -342,16 +342,19 @@ final class ResumeRevisionWorkspaceService {
 
     // MARK: - Export: Job Requirements
 
-    /// Export the preprocessed, tiered job requirements. Skipped (with a log)
-    /// when preprocessing has not produced results for this job yet.
-    func exportJobRequirements(_ requirements: ExtractedRequirements?) throws {
+    /// Export the preprocessed, tiered job requirements. Returns whether the
+    /// file was written — skipped (with a log) when preprocessing has not
+    /// produced results for this job yet, so prompt construction can avoid
+    /// pointing the agent at a file that does not exist.
+    @discardableResult
+    func exportJobRequirements(_ requirements: ExtractedRequirements?) throws -> Bool {
         guard let workspace = workspacePath else {
             throw WorkspaceError.workspaceNotCreated
         }
 
         guard let requirements, requirements.isValid else {
             Logger.info("No preprocessed job requirements to export", category: .ai)
-            return
+            return false
         }
 
         var lines: [String] = [
@@ -372,6 +375,7 @@ final class ResumeRevisionWorkspaceService {
         let file = workspace.appendingPathComponent("job_requirements.txt")
         try lines.joined(separator: "\n").write(to: file, atomically: true, encoding: .utf8)
         Logger.info("Exported tiered job requirements", category: .ai)
+        return true
     }
 
     // MARK: - Export: Knowledge Cards
@@ -564,10 +568,8 @@ final class ResumeRevisionWorkspaceService {
             throw WorkspaceError.workspaceNotCreated
         }
 
-        // Canonical selection — mirrors CoverRefStore.writersVoice.
-        let samples = coverRefs
-            .filter { $0.type == .writingSample && $0.enabledByDefault }
-            .prefix(3)
+        // Canonical selection — the same helper CoverRefStore.writersVoice uses.
+        let samples = CoverRefStore.voiceSamples(in: coverRefs)
         let primer = coverRefs.first { $0.type == .voicePrimer }
 
         for sample in samples {

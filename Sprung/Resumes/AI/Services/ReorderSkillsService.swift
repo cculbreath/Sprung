@@ -40,12 +40,14 @@ class ReorderSkillsService {
         // Apply the reordering to the actual tree nodes
         let success = applySkillReordering(resume: resume, reorderedNodes: reorderResponse.reorderedSkillsAndExpertise)
         if success {
-            // Re-render the resume with the new order
+            // Re-render the resume with the new order. forceRender bypasses the
+            // freshness short-circuit (direct TreeNode mutations don't mark the
+            // resume dirty) and completes before the accept/reject gate, so no
+            // deferred export can race rejectPendingChanges' restore render.
             onStatusUpdate(ReorderSkillsStatus(statusMessage: "Re-rendering resume with new skill order...", changeMessage: changeMessage))
             do {
-                try await exportCoordinator.ensureFreshRenderedText(for: resume)
+                try await exportCoordinator.forceRender(for: resume)
                 onStatusUpdate(ReorderSkillsStatus(statusMessage: statusMessage, changeMessage: changeMessage))
-                exportCoordinator.debounceExport(resume: resume)
                 return .success(statusMessage)
             } catch {
                 return .failure(ReorderSkillsError.pdfReRenderFailed(error: error))

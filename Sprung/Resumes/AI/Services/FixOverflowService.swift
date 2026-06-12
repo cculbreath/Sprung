@@ -39,10 +39,12 @@ class FixOverflowService {
             return .failure(FixOverflowError.noTemplate)
         }
         let manifest = TemplateManifestDefaults.manifest(for: template)
-        // Fix Overflow's contract is fitting the declared page budget. Templates
-        // that declare no pageLimit are single-page by this feature's definition;
-        // the target is surfaced in every status update so this is never silent.
-        let pageLimit = manifest.pageLimit ?? 1
+        // Fix Overflow's contract is fitting the declared page budget. A
+        // template that declares no pageLimit has no budget to chase — surface
+        // a configuration error before any mutation; never substitute a default.
+        guard let pageLimit = manifest.pageLimit else {
+            return .failure(FixOverflowError.noPageLimit(templateName: template.name))
+        }
         var pageCount = 0
 
         func status(_ message: String) {
@@ -126,7 +128,13 @@ class FixOverflowService {
                 editableNodeIds: editableNodeIds,
                 iteration: loopCount
             )
-            changeMessage = newChangeMessage
+            // Accumulate across iterations: the accept/reject gate presents one
+            // diff covering the whole run, not just the last iteration.
+            if !newChangeMessage.isEmpty {
+                changeMessage = changeMessage.isEmpty
+                    ? newChangeMessage
+                    : changeMessage + "\n\n" + newChangeMessage
+            }
             if !changesMade {
                 statusMessage = "AI suggested no further changes. Content cannot be optimized further within the editable nodes."
                 operationSuccess = false
@@ -158,7 +166,9 @@ class FixOverflowService {
             operationSuccess: operationSuccess,
             statusMessage: statusMessage
         )
-        exportCoordinator.debounceExport(resume: resume)
+        // No trailing export: every mutation path already force-rendered via
+        // renderAndCountPages, and a deferred export could race the gate's
+        // reject path (rejectPendingChanges' forceRender) — last writer wins.
         return .success(finalStatus)
     }
     // MARK: - Networking Methods
@@ -529,6 +539,7 @@ class FixOverflowService {
 // MARK: - Error Types
 enum FixOverflowError: LocalizedError {
     case noTemplate
+    case noPageLimit(templateName: String)
     case noEditableSkillNodes
     case pdfConversionFailed(iteration: Int)
     case skillsExtractionFailed(iteration: Int)
@@ -540,6 +551,8 @@ enum FixOverflowError: LocalizedError {
         switch self {
         case .noTemplate:
             return "This resume has no template assigned. Assign a template before running Fix Overflow."
+        case .noPageLimit(let templateName):
+            return "The template '\(templateName)' declares no page budget (pageLimit) in its manifest. Fix Overflow needs a page budget to fit — add a pageLimit to the template manifest to use this feature."
         case .noEditableSkillNodes:
             return "No 'Skills and Expertise' entries are marked editable. Mark the entries you want the AI to revise (AI status) and try again."
         case .pdfConversionFailed(let iteration):

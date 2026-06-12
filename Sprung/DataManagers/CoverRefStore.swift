@@ -34,15 +34,25 @@ final class CoverRefStore: SwiftDataStore {
 
     // MARK: - Writer's Voice (Single Source of Truth)
 
+    /// Canonical writer's-voice sample selection: enabled-by-default writing
+    /// samples, capped at 3. Static so callers that already hold a CoverRef
+    /// array (e.g. the revision workspace export) share the exact criteria
+    /// `writersVoice` uses.
+    static func voiceSamples(in coverRefs: [CoverRef]) -> [CoverRef] {
+        Array(
+            coverRefs
+                .filter { $0.type == .writingSample && $0.enabledByDefault }
+                .prefix(3)
+        )
+    }
+
     /// Canonical voice context string for all LLM prompts.
     /// Combines voice primer analysis (if available) and writing samples into a single
     /// prompt-ready block. Callers skip injection when this returns empty string.
     var writersVoice: String {
         let allRefs = storedCoverRefs
         let voicePrimerRef = allRefs.first { $0.type == .voicePrimer }
-        let samples = allRefs
-            .filter { $0.type == .writingSample && $0.enabledByDefault }
-            .prefix(3)
+        let samples = Self.voiceSamples(in: allRefs)
 
         guard voicePrimerRef != nil || !samples.isEmpty else { return "" }
 

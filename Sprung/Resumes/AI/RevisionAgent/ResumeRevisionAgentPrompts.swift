@@ -326,16 +326,23 @@ enum ResumeRevisionAgentPrompts {
 
     static func initialUserMessage(
         jobDescription: String,
+        jobRequirementsAvailable: Bool,
         writingSamplesAvailable: Bool
     ) -> String {
-        """
+        // Mention only materials the export actually wrote — pointing the
+        // agent at a missing file guarantees a wasted read_file error round-trip.
+        var materials = ["knowledge cards overview"]
+        if jobRequirementsAvailable { materials.append("job requirements") }
+        materials.append("skill bank")
+        if writingSamplesAvailable { materials.append("writing samples") }
+
+        return """
         Please review my resume and suggest improvements tailored to the job described below.
 
         The resume PDF is attached above as a document. Start by examining it along with \
         the treenode files to understand the current content structure.
 
-        Then read the workspace reference materials (knowledge cards overview, job \
-        requirements, skill bank\(writingSamplesAvailable ? ", writing samples" : "")) \
+        Then read the workspace reference materials (\(materials.joined(separator: ", "))) \
         to identify relevant content that could strengthen the resume.
 
         ## Job Description

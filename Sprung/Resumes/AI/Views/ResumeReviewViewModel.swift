@@ -65,6 +65,23 @@ private struct SkillsTreeSnapshot {
             }
         }
     }
+
+    /// Captured nodes that are no longer reachable from the snapshot root —
+    /// detached by merge operations. On accept these must be deleted from the
+    /// model context or they persist as unreachable subtrees forever (reject
+    /// re-attaches them via `restore()`).
+    func detachedNodes() -> [TreeNode] {
+        guard let root = states.first?.node else { return [] }
+        var reachable = Set<ObjectIdentifier>()
+        func walk(_ node: TreeNode) {
+            reachable.insert(ObjectIdentifier(node))
+            for child in node.children ?? [] {
+                walk(child)
+            }
+        }
+        walk(root)
+        return states.map(\.node).filter { !reachable.contains(ObjectIdentifier($0)) }
+    }
 }
 
 /// A completed AI skills mutation awaiting the user's accept/reject decision.
@@ -92,6 +109,10 @@ class ResumeReviewViewModel {
     private(set) var pendingChangeReview: PendingSkillsChangeReview?
     private var skillsSnapshot: SkillsTreeSnapshot?
     private var reviewedResume: Resume?
+    /// Set when the hosting sheet disappears. A run that completes after this
+    /// auto-rejects (restores the snapshot) instead of presenting a review
+    /// gate into a dead view.
+    private var isSheetDismissed = false
     // MARK: - Dependencies
     private var reasoningStreamManager: ReasoningStreamManager?
     private var openRouterService: OpenRouterService?
@@ -115,7 +136,19 @@ class ResumeReviewViewModel {
         reviewService = ResumeReviewService(llmFacade: llmFacade)
         fixOverflowService = FixOverflowService(llm: llmFacade, exportCoordinator: exportCoordinator)
         reorderSkillsService = ReorderSkillsService(llm: llmFacade, exportCoordinator: exportCoordinator)
+        isSheetDismissed = false
         resetChangeMessage()
+    }
+
+    /// Called from the sheet's `onDisappear`. While a review is pending the
+    /// sheet blocks dismissal, but force-dismissals (window teardown) can still
+    /// land here — reject immediately so the mutations never stick silently.
+    /// Runs that finish after dismissal auto-reject in `presentReviewIfNeeded`.
+    func handleSheetDismissed() {
+        isSheetDismissed = true
+        if pendingChangeReview != nil {
+            Task { await rejectPendingChanges() }
+        }
     }
     // MARK: - Public Methods
     func handleSubmit(
@@ -173,8 +206,17 @@ class ResumeReviewViewModel {
         fixOverflowChangeMessage = ""
     }
     // MARK: - Accept/Reject
-    /// Keep the AI mutations: discard the snapshot.
+    /// Keep the AI mutations: delete the nodes merge operations detached
+    /// (otherwise they persist unreachably in SwiftData forever), then discard
+    /// the snapshot.
     func acceptPendingChanges() {
+        if let snapshot = skillsSnapshot {
+            for node in snapshot.detachedNodes() {
+                // children carry a cascade delete rule, so the whole detached
+                // subtree goes with the node.
+                node.modelContext?.delete(node)
+            }
+        }
         pendingChangeReview = nil
         skillsSnapshot = nil
         reviewedResume = nil
@@ -212,10 +254,26 @@ class ResumeReviewViewModel {
         currentPageLimit = 0
     }
     /// Present the accept/reject gate when the operation actually mutated the tree.
-    private func presentReviewIfNeeded(resume: Resume, operationTitle: String, diffSummary: String) {
+    /// If the sheet was dismissed while the run was still processing, nobody is
+    /// left to review — restore the snapshot (auto-reject) instead of presenting
+    /// a gate into a dead view.
+    private func presentReviewIfNeeded(resume: Resume, operationTitle: String, diffSummary: String) async {
         guard let snapshot = skillsSnapshot, snapshot.hasChanges else {
             skillsSnapshot = nil
             reviewedResume = nil
+            return
+        }
+        if isSheetDismissed {
+            snapshot.restore()
+            skillsSnapshot = nil
+            reviewedResume = nil
+            fixOverflowChangeMessage = ""
+            Logger.warning("\(operationTitle): review sheet dismissed before the run completed — AI changes auto-rejected")
+            do {
+                try await exportCoordinator?.forceRender(for: resume)
+            } catch {
+                Logger.error("\(operationTitle): re-render after auto-reject failed: \(error.localizedDescription)")
+            }
             return
         }
         reviewedResume = resume
@@ -328,7 +386,7 @@ class ResumeReviewViewModel {
             fixOverflowError = "Fix Overflow service unavailable."
         }
         // Even on failure, applied iterations must be reviewable — never silent.
-        presentReviewIfNeeded(
+        await presentReviewIfNeeded(
             resume: resume,
             operationTitle: "Fix Overflow",
             diffSummary: fixOverflowChangeMessage
@@ -361,7 +419,7 @@ class ResumeReviewViewModel {
         case .none:
             fixOverflowError = "Reorder Skills service unavailable."
         }
-        presentReviewIfNeeded(
+        await presentReviewIfNeeded(
             resume: resume,
             operationTitle: "Reorder Skills",
             diffSummary: fixOverflowChangeMessage

@@ -172,9 +172,10 @@ class ResumeRevisionAgent {
             try await workspaceService.exportResumePDF(resume: resume, pdfGenerator: pdfGenerator)
             let manifest = try workspaceService.exportModifiableTreeNodes(from: resume)
             try workspaceService.exportJobDescription(jobDescription)
+            var jobRequirementsExported = false
             if let jobApp = resume.jobApp {
                 try workspaceService.exportJobMetadata(for: jobApp)
-                try workspaceService.exportJobRequirements(jobApp.extractedRequirements)
+                jobRequirementsExported = try workspaceService.exportJobRequirements(jobApp.extractedRequirements)
             }
             try workspaceService.exportKnowledgeCards(
                 knowledgeCards,
@@ -206,6 +207,7 @@ class ResumeRevisionAgent {
 
             let userText = ResumeRevisionAgentPrompts.initialUserMessage(
                 jobDescription: jobDescription,
+                jobRequirementsAvailable: jobRequirementsExported,
                 writingSamplesAvailable: voiceExport.samplesExported > 0
             )
 
@@ -320,46 +322,62 @@ class ResumeRevisionAgent {
                     var processor = RevisionStreamProcessor()
                     var result = RevisionAgentStreamResult()
 
-                    for try await event in stream {
-                        try Task.checkCancellation()
-                        // Any raw event counts as stream activity for the
-                        // stall watchdog, including pings and unknown events.
-                        self.lastStreamEventDate = Date()
+                    do {
+                        for try await event in stream {
+                            try Task.checkCancellation()
+                            // Any raw event counts as stream activity for the
+                            // stall watchdog, including pings and unknown events.
+                            self.lastStreamEventDate = Date()
 
-                        let domainEvents = processor.process(event)
-                        for domainEvent in domainEvents {
-                            switch domainEvent {
-                            case .textDelta(let text):
-                                self.appendOrUpdateAssistantMessage(text)
+                            let domainEvents = processor.process(event)
+                            for domainEvent in domainEvents {
+                                switch domainEvent {
+                                case .textDelta(let text):
+                                    self.appendOrUpdateAssistantMessage(text)
 
-                            case .textFinalized(let fullText):
-                                result.textBlocks.append(.text(AnthropicTextBlock(text: fullText)))
+                                case .textFinalized(let fullText):
+                                    result.textBlocks.append(.text(AnthropicTextBlock(text: fullText)))
 
-                            case .toolCallReady(let id, let name, let arguments):
-                                result.toolCalls.append(RevisionStreamProcessor.ToolCallInfo(
-                                    id: id, name: name, arguments: arguments
-                                ))
-                                let inputDict = self.parseToolArguments(arguments)
-                                result.toolCallBlocks.append(.toolUse(AnthropicToolUseBlock(
-                                    id: id, name: name, input: inputDict
-                                )))
+                                case .toolCallReady(let id, let name, let arguments):
+                                    result.toolCalls.append(RevisionStreamProcessor.ToolCallInfo(
+                                        id: id, name: name, arguments: arguments
+                                    ))
+                                    let inputDict = self.parseToolArguments(arguments)
+                                    result.toolCallBlocks.append(.toolUse(AnthropicToolUseBlock(
+                                        id: id, name: name, input: inputDict
+                                    )))
 
-                            case .stopReason(let reason):
-                                result.stopReason = reason
+                                case .stopReason(let reason):
+                                    result.stopReason = reason
 
-                            case .usage(let input, let cacheRead, let cacheCreation, let output):
-                                self.recordTurnUsage(
-                                    input: input,
-                                    cacheRead: cacheRead,
-                                    cacheCreation: cacheCreation,
-                                    output: output
-                                )
+                                case .usage(let input, let cacheRead, let cacheCreation, let output):
+                                    self.recordTurnUsage(
+                                        input: input,
+                                        cacheRead: cacheRead,
+                                        cacheCreation: cacheCreation,
+                                        output: output
+                                    )
 
-                            case .streamError(let message):
-                                result.streamErrors.append(message)
-                                Logger.error("RevisionAgent: Stream error event on turn \(self.turnCount): \(message)", category: .ai)
+                                case .streamError(let message):
+                                    result.streamErrors.append(message)
+                                    Logger.error("RevisionAgent: Stream error event on turn \(self.turnCount): \(message)", category: .ai)
+                                }
                             }
                         }
+                    } catch {
+                        // Stream torn down mid-message (transport error, stall
+                        // cancellation, user interrupt): the .usage event only
+                        // fires at message_stop, so log the partial usage the
+                        // API already counted — session totals stay honest.
+                        if let usage = processor.pendingUsage {
+                            self.recordTurnUsage(
+                                input: usage.inputTokens,
+                                cacheRead: usage.cacheReadTokens,
+                                cacheCreation: usage.cacheCreationTokens,
+                                output: usage.outputTokens
+                            )
+                        }
+                        throw error
                     }
 
                     return result
@@ -1527,9 +1545,9 @@ class ResumeRevisionAgent {
         // Best-effort PDF generation. If the window closes (task cancelled)
         // during this step the resume data is already saved. The main window
         // will regenerate the PDF on next display if needed.
-        let slug = resume.template?.slug ?? "default"
         do {
-            let pdfData = try await pdfGenerator.generatePDF(for: newResume, template: slug)
+            let template = try pdfGenerator.resolveTemplate(for: newResume)
+            let pdfData = try await pdfGenerator.generatePDF(for: newResume, template: template.slug)
             newResume.pdfData = pdfData
             try modelContext.save()
         } catch {
