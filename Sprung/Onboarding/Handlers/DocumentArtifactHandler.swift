@@ -24,12 +24,10 @@ actor DocumentArtifactHandler: OnboardingEventEmitter {
     }
 
     // MARK: - Processing Queue
-    /// Queued files waiting to be processed
+    /// Queued files waiting for a free extraction slot
     private var pendingFiles: [QueuedFile] = []
-    /// Currently processing count
+    /// Currently processing count (occupied extraction slots)
     private var activeProcessingCount = 0
-    /// Task for queue processing
-    private var queueProcessingTask: Task<Void, Never>?
 
     /// Represents a file queued for processing
     private struct QueuedFile {
@@ -126,11 +124,11 @@ actor DocumentArtifactHandler: OnboardingEventEmitter {
             }
         }
 
-        // Update extraction status to show queue state
+        // Newly queued files claim free extraction slots immediately — they
+        // run alongside any in-flight extractions rather than waiting for one
+        // to finish.
         if queuedCount > 0 {
-            updateExtractionStatus()
-            // Kick off queue processing if not already running
-            startQueueProcessingIfNeeded()
+            pumpQueue()
         }
     }
 
@@ -154,73 +152,30 @@ actor DocumentArtifactHandler: OnboardingEventEmitter {
         }
     }
 
-    /// Start queue processing task if not already running
-    private func startQueueProcessingIfNeeded() {
-        guard queueProcessingTask == nil else { return }
-
-        queueProcessingTask = Task { [weak self] in
-            guard let self else { return }
-            await self.processQueue()
-            await self.finishQueueTask()
-        }
-    }
-
-    /// Clear the queue task, then restart if files landed between the queue
-    /// draining and this cleanup — handleEvent's startQueueProcessingIfNeeded
-    /// saw a live task for those files, so they're this method's to pick up.
-    private func finishQueueTask() {
-        queueProcessingTask = nil
-        if !pendingFiles.isEmpty {
-            startQueueProcessingIfNeeded()
-        }
-    }
-
-    /// Process files from the queue with controlled concurrency using TaskGroup.
-    ///
-    /// Pulls from the LIVE `pendingFiles` queue at every refill — never a
-    /// snapshot. Files uploaded while extraction is running are appended by
-    /// handleEvent (whose startQueueProcessingIfNeeded is a no-op because this
-    /// task is alive), so they MUST join the running drain or they'd be
-    /// stranded until the next upload after this task clears.
-    private func processQueue() async {
-        await withTaskGroup(of: Void.self) { group in
-            // Start initial batch up to max concurrency
-            var activeCount = 0
-            while activeCount < maxConcurrentExtractions, !pendingFiles.isEmpty {
-                let queued = pendingFiles.removeFirst()
-                activeProcessingCount += 1
-                activeCount += 1
-                updateExtractionStatus()
-                group.addTask { [weak self] in
-                    guard let self else { return }
-                    await self.processQueuedFile(queued)
-                }
-            }
-
-            // As tasks complete, top back up to max concurrency (late arrivals
-            // may have queued more than one file since the last completion)
-            for await _ in group {
-                activeProcessingCount -= 1
-                activeCount -= 1
-                updateExtractionStatus()
-
-                while activeCount < maxConcurrentExtractions, !pendingFiles.isEmpty {
-                    let queued = pendingFiles.removeFirst()
-                    activeProcessingCount += 1
-                    activeCount += 1
-                    updateExtractionStatus()
-                    group.addTask { [weak self] in
-                        guard let self else { return }
-                        await self.processQueuedFile(queued)
-                    }
-                }
+    /// Fill every free extraction slot from the pending queue. Called on every
+    /// enqueue and on every completion, so late-arriving files start the moment
+    /// a slot is free — immediately when concurrency allows, not after an
+    /// in-flight document finishes. Actor isolation serializes slot accounting.
+    private func pumpQueue() {
+        while activeProcessingCount < maxConcurrentExtractions, !pendingFiles.isEmpty {
+            let queued = pendingFiles.removeFirst()
+            activeProcessingCount += 1
+            Task { [weak self] in
+                guard let self else { return }
+                await self.processQueuedFile(queued)
+                await self.extractionSlotFreed()
             }
         }
-
-        // Reflect final state — emits inProgress: false only when nothing is
-        // pending or active (finishQueueTask may be about to restart the drain)
         updateExtractionStatus()
-        Logger.info("📄 Queue processing complete", category: .ai)
+    }
+
+    /// Release a slot after an extraction finishes and pull the next file.
+    private func extractionSlotFreed() {
+        activeProcessingCount -= 1
+        if pendingFiles.isEmpty && activeProcessingCount == 0 {
+            Logger.info("📄 Queue processing complete", category: .ai)
+        }
+        pumpQueue()
     }
 
     /// Process a single queued file
@@ -324,7 +279,7 @@ actor DocumentArtifactHandler: OnboardingEventEmitter {
             await emit(.processing(.extractionStateChanged(inProgress: true, statusMessage: userMessage)))
             try? await Task.sleep(for: .seconds(2))
         }
-        // Note: activeProcessingCount is managed by the TaskGroup in processQueue()
+        // Note: activeProcessingCount is managed by pumpQueue()/extractionSlotFreed()
     }
 
     // MARK: - Image Artifact Helpers
