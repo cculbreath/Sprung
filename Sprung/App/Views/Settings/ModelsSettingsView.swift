@@ -130,14 +130,14 @@ struct ModelsSettingsView: View {
         modelRow(operation: "Document Analysis", backend: .anthropic) {
             anthropicPicker(selection: $docAnalysisModelId)
         }
-        Text("Powers all document ingestion passes: summary, narrative cards, skill bank, and enrichment. An Opus-tier model is recommended.")
+        Text("Powers all document ingestion passes: summary, narrative cards, skill bank, and enrichment. Sonnet balances extraction quality and cost; Haiku is the budget option. Extraction fidelity feeds all downstream cards.")
             .font(.footnote)
             .foregroundStyle(.secondary)
             .padding(.leading, operationWidth + backendWidth)
         modelRow(operation: "Card Merge", backend: .anthropic) {
             anthropicPicker(selection: $cardMergeModelId)
         }
-        Text("Deduplicates and curates cards/skills after ingestion. An Opus-tier model is recommended; the agent loop benefits from prompt caching.")
+        Text("Deduplicates and curates cards/skills after ingestion. Structured judgment over already-extracted content — Sonnet handles this well at a fraction of Opus cost.")
             .font(.footnote)
             .foregroundStyle(.secondary)
             .padding(.leading, operationWidth + backendWidth)
@@ -167,7 +167,7 @@ struct ModelsSettingsView: View {
         modelRow(operation: "Git Ingest", backend: .anthropic) {
             anthropicPicker(selection: $gitIngestModelId)
         }
-        Text("Multi-turn repository analysis agent. An Opus-tier model is recommended; conversation-prefix caching keeps long sessions affordable.")
+        Text("Multi-turn repository analysis agent. High request volume across many repos/commits — Haiku keeps this affordable; step up to Sonnet only if analysis quality disappoints.")
             .font(.footnote)
             .foregroundStyle(.secondary)
             .padding(.leading, operationWidth + backendWidth)

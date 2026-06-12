@@ -427,7 +427,7 @@ private extension SetupWizardView {
                 }
                 .pickerStyle(.menu)
             }
-            Text("Used for the onboarding interview (Anthropic Messages API). An Opus-tier model is recommended.")
+            Text("Used for the onboarding interview (Anthropic Messages API). Opus is recommended here — it's the user-facing core, and prompt caching keeps the conversation affordable.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
         }
@@ -465,7 +465,7 @@ private extension SetupWizardView {
                 }
                 .pickerStyle(.menu)
             }
-            Text("Powers all document ingestion passes: summary, narrative cards, skill bank, and enrichment. An Opus-tier model is recommended.")
+            Text("Powers all document ingestion passes: summary, narrative cards, skill bank, and enrichment. Sonnet balances extraction quality and cost; Haiku is the budget option.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
         }
@@ -501,7 +501,7 @@ private extension SetupWizardView {
                 }
                 .pickerStyle(.menu)
             }
-            Text("Used when scanning repositories during onboarding. An Opus-tier model is recommended.")
+            Text("Used when scanning repositories during onboarding. High request volume — Haiku keeps this affordable; step up only if analysis quality disappoints.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
         }
