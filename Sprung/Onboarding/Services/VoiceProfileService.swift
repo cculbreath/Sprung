@@ -129,30 +129,25 @@ final class VoiceProfileService {
         reasoningStreamManager.isVisible = false
     }
 
-    /// Store extracted voice profile in guidance store. Upserts the single
-    /// "objective" guidance row — re-running extraction (onboarding debug
-    /// button, KC browser) replaces the profile instead of stacking duplicates.
-    func storeVoiceProfile(_ profile: VoiceProfile, in guidanceStore: InferenceGuidanceStore) {
+    /// Store the extracted voice profile everywhere it is consumed:
+    /// - guidance store ("objective" row) for generation guidance and the
+    ///   document-analysis voice anchor
+    /// - CoverRefStore `.voicePrimer` entry for cover letters, the revision
+    ///   workspace, and the writing-samples browser's Voice Primers tab
+    /// Both writes upsert — re-running extraction replaces the profile
+    /// instead of stacking duplicates.
+    func storeVoiceProfile(
+        _ profile: VoiceProfile,
+        in guidanceStore: InferenceGuidanceStore,
+        coverRefStore: CoverRefStore
+    ) {
         let attachments = GuidanceAttachments(voiceProfile: profile)
 
-        var promptLines = [
-            "Voice profile for content generation:",
-            "- Enthusiasm: \(profile.enthusiasm.displayName)",
-            "- Person: \(profile.useFirstPerson ? "First person (I built, I discovered)" : "Third person")",
-            "- Connectives: \(profile.connectiveStyle)",
-            "- Aspirational phrases: \(profile.aspirationalPhrases.joined(separator: ", "))",
-            "- NEVER use: \(profile.avoidPhrases.joined(separator: ", "))"
-        ]
-        if let register = profile.vocabularyRegister, !register.isEmpty {
-            promptLines.append("- Vocabulary register: \(register)")
-        }
-        if let modulation = profile.registerModulation, !modulation.isEmpty {
-            promptLines.append("- Register modulation: \(modulation)")
-        }
+        var promptLines = ["Voice profile for content generation:"]
+        promptLines += profile.characteristicPairs.map { "- \($0.label): \($0.value)" }
         promptLines.append("")
         promptLines.append("Sample excerpts preserving voice:")
         promptLines.append(profile.sampleExcerpts.map { "• \"\($0)\"" }.joined(separator: "\n"))
-
         let prompt = promptLines.joined(separator: "\n")
 
         if let existing = guidanceStore.guidance(for: "objective") {
@@ -170,6 +165,40 @@ final class VoiceProfileService {
             )
             guidanceStore.add(guidance)
             Logger.info("🎤 Voice profile stored in guidance store", category: .ai)
+        }
+
+        upsertVoicePrimerRef(profile, summary: prompt, in: coverRefStore)
+    }
+
+    /// Upsert the single `.voicePrimer` CoverRef carrying the encoded profile.
+    private func upsertVoicePrimerRef(
+        _ profile: VoiceProfile,
+        summary: String,
+        in coverRefStore: CoverRefStore
+    ) {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        guard let data = try? encoder.encode(profile),
+              let json = String(data: data, encoding: .utf8) else {
+            Logger.error("🎤 Failed to encode voice profile for CoverRef storage", category: .ai)
+            return
+        }
+
+        if let existing = coverRefStore.storedCoverRefs.first(where: { $0.type == .voicePrimer }) {
+            existing.content = summary
+            existing.voicePrimerJSON = json
+            coverRefStore.saveContext()
+            Logger.info("🎤 Voice primer CoverRef updated", category: .ai)
+        } else {
+            let ref = CoverRef(
+                name: "Voice Profile",
+                content: summary,
+                enabledByDefault: true,
+                type: .voicePrimer,
+                voicePrimerJSON: json
+            )
+            _ = coverRefStore.addCoverRef(ref)
+            Logger.info("🎤 Voice primer CoverRef created", category: .ai)
         }
     }
 

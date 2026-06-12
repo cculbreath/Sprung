@@ -417,6 +417,7 @@ final class OnboardingDependencyContainer {
             eventBus: core.eventBus,
             voiceProfileService: voiceProfileService,
             guidanceStore: guidanceStore,
+            coverRefStore: coverRefStore,
             artifactRecordStore: artifactRecordStore,
             sessionPersistenceHandler: sessionPersistenceHandler,
             agentActivityTracker: agentActivityTracker,

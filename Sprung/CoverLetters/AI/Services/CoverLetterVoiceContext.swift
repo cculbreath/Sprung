@@ -30,8 +30,8 @@ enum CoverLetterVoiceContext {
 
         var lines = ["## Voice & Style Reference"]
 
-        // Include structured voice primer analysis if available
-        if let primer = primerRef, let analysis = primer.voicePrimer {
+        // Include the analyzed voice profile if available
+        if let profile = primerRef?.voiceProfile {
             lines.append("""
 
             ### Analyzed Voice Characteristics
@@ -40,32 +40,11 @@ enum CoverLetterVoiceContext {
             Generated content MUST match these characteristics.
             """)
 
-            if let tone = analysis["tone"]["description"].string, !tone.isEmpty {
-                lines.append("**Tone:** \(tone)")
+            for (label, value) in profile.characteristicPairs {
+                lines.append("**\(label):** \(value)")
             }
-            if let structure = analysis["structure"]["description"].string, !structure.isEmpty {
-                lines.append("**Sentence Structure:** \(structure)")
-            }
-            if let vocab = analysis["vocabulary"]["description"].string, !vocab.isEmpty {
-                lines.append("**Vocabulary:** \(vocab)")
-            }
-            if let rhetoric = analysis["rhetoric"]["description"].string, !rhetoric.isEmpty {
-                lines.append("**Rhetoric Style:** \(rhetoric)")
-            }
-
-            let strengths = analysis["markers"]["strengths"].arrayValue.compactMap { $0.string }
-            if !strengths.isEmpty {
-                lines.append("**Writing Strengths:** \(strengths.joined(separator: ", "))")
-            }
-
-            let quirks = analysis["markers"]["quirks"].arrayValue.compactMap { $0.string }
-            if !quirks.isEmpty {
-                lines.append("**Distinctive Traits:** \(quirks.joined(separator: ", "))")
-            }
-
-            let recommendations = analysis["markers"]["recommendations"].arrayValue.compactMap { $0.string }
-            if !recommendations.isEmpty {
-                lines.append("**Style Notes:** \(recommendations.joined(separator: "; "))")
+            if !profile.sampleExcerpts.isEmpty {
+                lines.append("**Voice Excerpts:** " + profile.sampleExcerpts.map { "\"\($0)\"" }.joined(separator: " | "))
             }
         }
 

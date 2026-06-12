@@ -126,6 +126,32 @@ struct VoiceProfile: Codable, Equatable {
     }
 }
 
+extension VoiceProfile {
+    /// Labeled characteristic pairs — the single source of truth for every
+    /// "voice characteristics" prompt block (cover letters, revision
+    /// workspace, guidance store). Empty/absent fields are omitted.
+    var characteristicPairs: [(label: String, value: String)] {
+        var pairs: [(String, String)] = [
+            ("Enthusiasm", enthusiasm.displayName),
+            ("Person", useFirstPerson ? "First person (I built, I discovered)" : "Third person"),
+            ("Connective Style", connectiveStyle)
+        ]
+        if let register = vocabularyRegister, !register.isEmpty {
+            pairs.append(("Vocabulary Register", register))
+        }
+        if let modulation = registerModulation, !modulation.isEmpty {
+            pairs.append(("Register Modulation", modulation))
+        }
+        if !aspirationalPhrases.isEmpty {
+            pairs.append(("Aspirational Phrases", aspirationalPhrases.joined(separator: ", ")))
+        }
+        if !avoidPhrases.isEmpty {
+            pairs.append(("Never Use", avoidPhrases.joined(separator: ", ")))
+        }
+        return pairs
+    }
+}
+
 enum EnthusiasmLevel: String, Codable, CaseIterable {
     case measured   // "I'm interested in..."
     case moderate   // "I'm drawn to...", "What appeals to me..."

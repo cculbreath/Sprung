@@ -32,7 +32,6 @@ struct ModelsSettingsView: View {
     @AppStorage("skillsProcessingParallelAgents") private var skillsProcessingParallelAgents: Int = 12
 
     // MARK: - Additional Models
-    @AppStorage("voicePrimerExtractionModelId") private var voicePrimerModelId: String = ""
     @AppStorage("voiceProfileModelId") private var voiceProfileModelId: String = ""
     @AppStorage("onboardingKCAgentModelId") private var kcAgentModelId: String = ""
     @AppStorage("onboardingGitIngestModelId") private var gitIngestModelId: String = ""
@@ -159,9 +158,6 @@ struct ModelsSettingsView: View {
         Divider().padding(.vertical, 4)
 
         // Additional Models
-        modelRow(operation: "Voice Primer", backend: .openRouter) {
-            openRouterPicker(selection: $voicePrimerModelId)
-        }
         modelRow(operation: "Voice Profile", backend: .openRouter) {
             openRouterPicker(selection: $voiceProfileModelId)
         }

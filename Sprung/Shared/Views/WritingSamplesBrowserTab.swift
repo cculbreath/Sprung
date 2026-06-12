@@ -10,6 +10,7 @@ struct WritingSamplesBrowserTab: View {
     @Environment(LLMFacade.self) private var llmFacade
     @Environment(ReasoningStreamManager.self) private var reasoningStreamManager
     @Environment(InferenceGuidanceStore.self) private var guidanceStore
+    @Environment(CoverRefStore.self) private var coverRefStore
 
     @State private var selectedFilter: SampleTypeFilter = .all
     @State private var searchText = ""
@@ -215,7 +216,7 @@ struct WritingSamplesBrowserTab: View {
                     reasoningStreamManager: reasoningStreamManager
                 )
                 let profile = try await service.extractVoiceProfile(from: samples)
-                service.storeVoiceProfile(profile, in: guidanceStore)
+                service.storeVoiceProfile(profile, in: guidanceStore, coverRefStore: coverRefStore)
                 voiceResultMessage = voiceProfileSummary(profile, sampleCount: samples.count)
                 Logger.info("🎤 Voice profile extracted from writing samples browser (\(samples.count) samples)", category: .ai)
             } catch is ModelConfigurationError {

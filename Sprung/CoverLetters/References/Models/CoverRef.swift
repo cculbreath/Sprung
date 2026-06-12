@@ -19,7 +19,7 @@ class CoverRef: Identifiable, Codable {
     var type: CoverRefType
 
     // Voice primer structured fields (only populated when type == .voicePrimer)
-    /// JSON-encoded voice primer analysis from VoicePrimerExtractionService
+    /// JSON-encoded VoiceProfile from voice analysis (VoiceProfileService)
     var voicePrimerJSON: String?
 
     init(
@@ -64,41 +64,17 @@ class CoverRef: Identifiable, Codable {
         try container.encodeIfPresent(voicePrimerJSON, forKey: .voicePrimerJSON)
     }
 
-    // MARK: - Voice Primer Accessors
+    // MARK: - Voice Profile Accessor
 
-    /// Parse the voice primer JSON into SwiftyJSON for programmatic access.
-    /// Returns nil if this is not a voice primer or JSON is not set.
-    var voicePrimer: SwiftyJSON.JSON? {
+    /// Decode the stored voice profile (the `.voicePrimer` payload — produced
+    /// by voice analysis, rendered in prompts via `characteristicPairs`).
+    /// Returns nil if this is not a voice primer or the JSON is not set.
+    var voiceProfile: VoiceProfile? {
         guard type == .voicePrimer,
               let jsonString = voicePrimerJSON,
               let data = jsonString.data(using: .utf8) else {
             return nil
         }
-        return try? SwiftyJSON.JSON(data: data)
-    }
-
-    /// Extract specific voice characteristic (e.g., "tone", "structure", "vocabulary", "rhetoric")
-    func voiceCharacteristic(_ key: String) -> SwiftyJSON.JSON? {
-        voicePrimer?[key]
-    }
-
-    /// Get tone description
-    var toneDescription: String? {
-        voicePrimer?["tone"]["description"].string
-    }
-
-    /// Get vocabulary technical level
-    var vocabularyLevel: String? {
-        voicePrimer?["vocabulary"]["technical_level"].string
-    }
-
-    /// Get writing strengths from markers
-    var writingStrengths: [String] {
-        voicePrimer?["markers"]["strengths"].arrayValue.compactMap { $0.string } ?? []
-    }
-
-    /// Get writing recommendations from markers
-    var writingRecommendations: [String] {
-        voicePrimer?["markers"]["recommendations"].arrayValue.compactMap { $0.string } ?? []
+        return try? JSONDecoder().decode(VoiceProfile.self, from: data)
     }
 }

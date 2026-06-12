@@ -618,8 +618,7 @@ final class ResumeRevisionWorkspaceService {
         return VoiceExportSummary(samplesExported: samples.count, voiceProfileExported: profileExported)
     }
 
-    /// Render the distilled voice primer (summary + structured analysis) as
-    /// readable Markdown.
+    /// Render the analyzed voice profile as readable Markdown.
     private func renderVoiceProfile(_ primer: CoverRef) -> String {
         var lines: [String] = ["# Voice Profile", ""]
 
@@ -627,27 +626,17 @@ final class ResumeRevisionWorkspaceService {
             lines.append(Self.wrapText(primer.content))
         }
 
-        if let analysis = primer.voicePrimer {
-            func add(_ label: String, _ value: String?) {
-                guard let value, !value.isEmpty else { return }
+        if let profile = primer.voiceProfile {
+            for (label, value) in profile.characteristicPairs {
                 lines.append("")
                 lines.append("## \(label)")
                 lines.append(Self.wrapText(value))
             }
-            add("Tone", analysis["tone"]["description"].string)
-            add("Sentence Structure", analysis["structure"]["description"].string)
-            add("Vocabulary", analysis["vocabulary"]["description"].string)
-            add("Rhetoric Style", analysis["rhetoric"]["description"].string)
-
-            func addList(_ label: String, _ values: [String]) {
-                guard !values.isEmpty else { return }
+            if !profile.sampleExcerpts.isEmpty {
                 lines.append("")
-                lines.append("## \(label)")
-                lines.append(contentsOf: values.map { Self.wrapText("- \($0)") })
+                lines.append("## Voice Excerpts")
+                lines.append(contentsOf: profile.sampleExcerpts.map { Self.wrapText("- \"\($0)\"") })
             }
-            addList("Writing Strengths", analysis["markers"]["strengths"].arrayValue.compactMap(\.string))
-            addList("Distinctive Traits", analysis["markers"]["quirks"].arrayValue.compactMap(\.string))
-            addList("Style Notes", analysis["markers"]["recommendations"].arrayValue.compactMap(\.string))
         }
 
         return lines.joined(separator: "\n")

@@ -14,6 +14,7 @@ final class VoiceProfileExtractionHandler {
     private let eventBus: EventCoordinator
     private let voiceProfileService: VoiceProfileService
     private let guidanceStore: InferenceGuidanceStore
+    private let coverRefStore: CoverRefStore
     private let artifactRecordStore: ArtifactRecordStore
     private let sessionPersistenceHandler: SwiftDataSessionPersistenceHandler
     private let agentActivityTracker: AgentActivityTracker
@@ -27,6 +28,7 @@ final class VoiceProfileExtractionHandler {
         eventBus: EventCoordinator,
         voiceProfileService: VoiceProfileService,
         guidanceStore: InferenceGuidanceStore,
+        coverRefStore: CoverRefStore,
         artifactRecordStore: ArtifactRecordStore,
         sessionPersistenceHandler: SwiftDataSessionPersistenceHandler,
         agentActivityTracker: AgentActivityTracker,
@@ -35,6 +37,7 @@ final class VoiceProfileExtractionHandler {
         self.eventBus = eventBus
         self.voiceProfileService = voiceProfileService
         self.guidanceStore = guidanceStore
+        self.coverRefStore = coverRefStore
         self.artifactRecordStore = artifactRecordStore
         self.sessionPersistenceHandler = sessionPersistenceHandler
         self.agentActivityTracker = agentActivityTracker
@@ -120,7 +123,7 @@ final class VoiceProfileExtractionHandler {
                 }
 
                 let profile = try await voiceProfileService.extractVoiceProfile(from: samples)
-                voiceProfileService.storeVoiceProfile(profile, in: guidanceStore)
+                voiceProfileService.storeVoiceProfile(profile, in: guidanceStore, coverRefStore: coverRefStore)
 
                 if let data = try? JSONEncoder().encode(profile),
                    let json = try? JSON(data: data) {
