@@ -1,6 +1,6 @@
 import SwiftUI
 import SwiftData
-    import PDFKit
+import PDFKit
 
 /// Main container view for the resume revision agent session.
 /// Presents a split layout: PDF preview on the left, chat stream on the right.
@@ -15,6 +15,12 @@ struct ResumeRevisionView: View {
     @Environment(\.modelContext) private var modelContext
 
     let resume: Resume
+    /// Hands the freshly created agent to SecondaryWindowManager so window
+    /// teardown can cancel it (the single cancellation choke point).
+    let onAgentCreated: (ResumeRevisionAgent) -> Void
+    /// Closes the hosting window via SecondaryWindowManager. Teardown
+    /// (agent cancellation) happens in the manager's windowWillClose handler.
+    let onRequestClose: () -> Void
 
     @State private var agent: ResumeRevisionAgent?
     @State private var pdfData: Data?
@@ -39,9 +45,9 @@ struct ResumeRevisionView: View {
                     RevisionToolbar(
                         status: agent.status,
                         currentAction: agent.currentAction,
-                        onCancel: { handleCancel() },
+                        onCancel: { onRequestClose() },
                         onSave: { agent.acceptCurrentState() },
-                        onClose: { closeWindow() }
+                        onClose: { onRequestClose() }
                     )
                 }
 
@@ -60,8 +66,21 @@ struct ResumeRevisionView: View {
                 pdfData = newData
             }
         }
+        // Status is the source of truth for failure: a session can end with
+        // .failed(message) without run() throwing. Cancellation stays silent.
+        .onChange(of: agent?.status) { _, newStatus in
+            if case .failed(let message) = newStatus {
+                errorMessage = message
+                showError = true
+            }
+        }
         .alert("Revision Error", isPresented: $showError) {
-            Button("OK") { closeWindow() }
+            Button("OK") {
+                // Startup failures (no agent yet) leave nothing to inspect, so
+                // close the window. Mid-session failures keep the window open
+                // so the user can review the transcript.
+                if agent == nil { onRequestClose() }
+            }
         } message: {
             Text(errorMessage ?? "An unknown error occurred")
         }
@@ -105,6 +124,7 @@ struct ResumeRevisionView: View {
                 currentQuestion: agent.currentQuestion,
                 currentCompletionSummary: agent.currentCompletionSummary,
                 isRunning: agent.status == .running,
+                sessionEnded: sessionEnded,
                 onProposalResponse: { response in
                     agent.respondToProposal(response)
                 },
@@ -136,6 +156,17 @@ struct ResumeRevisionView: View {
     }
 
     // MARK: - Agent Lifecycle
+
+    /// True once the session has reached a terminal state.
+    private var sessionEnded: Bool {
+        guard let status = agent?.status else { return false }
+        switch status {
+        case .completed, .failed, .cancelled:
+            return true
+        case .idle, .running:
+            return false
+        }
+    }
 
     private func startAgent() async {
         let pdfGenerator = NativePDFGenerator(
@@ -174,6 +205,7 @@ struct ResumeRevisionView: View {
             titleSets: titleSetStore.allTitleSets
         )
         agent = revisionAgent
+        onAgentCreated(revisionAgent)
 
         do {
             try await revisionAgent.run(
@@ -183,19 +215,15 @@ struct ResumeRevisionView: View {
                 coverRefs: coverRefs
             )
         } catch {
-            if revisionAgent.status != .cancelled {
+            switch revisionAgent.status {
+            case .cancelled, .failed:
+                // .cancelled stays silent; .failed is surfaced by the status
+                // observer in `body` — avoid presenting a duplicate alert.
+                break
+            case .idle, .running, .completed:
                 errorMessage = error.localizedDescription
                 showError = true
             }
         }
-    }
-
-    private func handleCancel() {
-        agent?.cancel()
-        closeWindow()
-    }
-
-    private func closeWindow() {
-        NSApp.keyWindow?.performClose(nil)
     }
 }

@@ -35,10 +35,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             object: nil
         )
 
+        // Customize entry choke point: observed here so the revision window
+        // opens regardless of which module is active. Gating lives in
+        // SecondaryWindowManager.showResumeRevision().
         NotificationCenter.default.addObserver(
             self,
-            selector: #selector(handleShowResumeRevision(_:)),
-            name: .polishResume,
+            selector: #selector(handleCustomizeResume(_:)),
+            name: .customizeResume,
             object: nil
         )
 
@@ -166,10 +169,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         )
     }
 
-    func showResumeRevisionWindow() {
-        windowManager.showResumeRevision()
-    }
-
     @objc private func handleShowDebugLogs(_ notification: Notification) {
         Logger.info("Debug logs notification received", category: .ui)
         guard let coordinator = notification.object as? OnboardingInterviewCoordinator else {
@@ -186,7 +185,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    @objc private func handleShowResumeRevision(_ notification: Notification) {
+    @objc private func handleCustomizeResume(_ notification: Notification) {
         windowManager.showResumeRevision()
     }
 

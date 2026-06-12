@@ -1,4 +1,25 @@
+import AppKit
 import SwiftUI
+
+// MARK: - Resolved Card (view-side transcript retention)
+
+/// A proposal/question/completion card that the user has resolved, retained in
+/// the transcript with its outcome. This is view-side state only — the agent
+/// keeps no record of dismissed cards.
+struct ResolvedRevisionCard: Identifiable {
+    enum Kind {
+        case proposal(ChangeProposal, response: ProposalResponse)
+        case question(String, answer: String)
+        case completion(summary: String, accepted: Bool)
+    }
+
+    let id = UUID()
+    /// Index into the agent's message list this card precedes. Captured as
+    /// `messages.count` at resolution time — the agent appends the user's
+    /// response message immediately after, so the card renders just before it.
+    let anchorIndex: Int
+    let kind: Kind
+}
 
 /// Chat-like message stream for the revision agent session.
 struct RevisionChatView: View {
@@ -7,6 +28,7 @@ struct RevisionChatView: View {
     let currentQuestion: String?
     let currentCompletionSummary: String?
     let isRunning: Bool
+    let sessionEnded: Bool
     let onProposalResponse: (ProposalResponse) -> Void
     let onQuestionResponse: (String) -> Void
     let onCompletionResponse: (Bool) -> Void
@@ -17,6 +39,7 @@ struct RevisionChatView: View {
     @State private var questionAnswer: String = ""
     @State private var chatInput: String = ""
     @State private var shouldAutoScroll = true
+    @State private var resolvedCards: [ResolvedRevisionCard] = []
 
     var body: some View {
         VStack(spacing: 0) {
@@ -24,16 +47,26 @@ struct RevisionChatView: View {
             ScrollViewReader { scrollProxy in
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 12) {
-                        ForEach(messages) { message in
-                            messageRow(message)
-                                .id(message.id)
+                        // Index-based identity keeps the streaming assistant row
+                        // stable while its content grows (the agent replaces the
+                        // last message value on every delta).
+                        ForEach(messages.indices, id: \.self) { index in
+                            anchoredResolvedCards(at: index)
+                            messageRow(messages[index])
                         }
+                        trailingResolvedCards()
 
                         // Active proposal card
                         if let proposal = currentProposal {
                             RevisionProposalView(
                                 proposal: proposal,
-                                onRespond: { response in onProposalResponse(response) }
+                                onRespond: { response in
+                                    resolvedCards.append(ResolvedRevisionCard(
+                                        anchorIndex: messages.count,
+                                        kind: .proposal(proposal, response: response)
+                                    ))
+                                    onProposalResponse(response)
+                                }
                             )
                             .id("proposal")
                         }
@@ -78,6 +111,12 @@ struct RevisionChatView: View {
                         }
                     }
                 }
+                // Follow content growth while the last message streams in.
+                .onChange(of: messages.last?.content) {
+                    if shouldAutoScroll {
+                        scrollProxy.scrollTo("bottom", anchor: .bottom)
+                    }
+                }
                 .onChange(of: currentProposal != nil) {
                     if shouldAutoScroll {
                         withAnimation(.easeInOut(duration: 0.3)) {
@@ -113,54 +152,98 @@ struct RevisionChatView: View {
 
     @ViewBuilder
     private var chatInputBar: some View {
-        HStack(alignment: .bottom, spacing: 10) {
-            TextField("Send a message...", text: $chatInput, axis: .vertical)
-                .textFieldStyle(.plain)
-                .lineLimit(1...4)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(Color(nsColor: .controlBackgroundColor))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                .strokeBorder(Color(nsColor: .separatorColor), lineWidth: 0.5)
-                        )
-                )
-                .onSubmit { submitMessage(interrupt: false) }
-                .onKeyPress(.escape) {
-                    if isRunning {
-                        onCancelStream()
+        if sessionEnded {
+            HStack(spacing: 8) {
+                Image(systemName: "checkmark.circle")
+                    .foregroundStyle(.secondary)
+                Text("Session ended — close this window and start a new Customize session to continue.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Spacer()
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .background(.bar)
+        } else {
+            HStack(alignment: .bottom, spacing: 10) {
+                TextField("Send a message...", text: $chatInput, axis: .vertical)
+                    .textFieldStyle(.plain)
+                    .lineLimit(1...4)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .fill(Color(nsColor: .controlBackgroundColor))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                    .strokeBorder(Color(nsColor: .separatorColor), lineWidth: 0.5)
+                            )
+                    )
+                    .onSubmit { submitMessage(interrupt: false) }
+                    .onKeyPress(.return, phases: .down) { press in
+                        // ⌥⏎ interrupts the agent immediately with the message.
+                        guard press.modifiers.contains(.option) else { return .ignored }
+                        submitMessage(interrupt: true)
                         return .handled
                     }
-                    return .ignored
-                }
+                    .onKeyPress(.escape) {
+                        if isRunning {
+                            onCancelStream()
+                            return .handled
+                        }
+                        return .ignored
+                    }
 
-            // Send button — click queues, Option-click interrupts
-            Button {
-                submitMessage(interrupt: false)
-            } label: {
-                Image(systemName: "arrow.up.circle.fill")
-                    .font(.title2)
+                // Send button — click queues, ⌥-click interrupts now
+                Button {
+                    submitMessage(interrupt: NSEvent.modifierFlags.contains(.option))
+                } label: {
+                    Image(systemName: "arrow.up.circle.fill")
+                        .font(.title2)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(chatInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? Color.secondary : Color.accentColor)
+                .disabled(chatInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .help("Send at the next turn boundary (⏎). ⌥-click or ⌥⏎ interrupts the agent now.")
             }
-            .buttonStyle(.plain)
-            .foregroundStyle(chatInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? Color.secondary : Color.accentColor)
-            .disabled(chatInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            .help("Send at next turn boundary (⏎). Hold ⌥ to interrupt now.")
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(.bar)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .background(.bar)
     }
 
     private func submitMessage(interrupt: Bool) {
         let text = chatInput.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
         chatInput = ""
+        recordPendingCardResolution(answeredBy: text)
         if interrupt {
             onInterruptWithMessage(text)
         } else {
             onUserMessage(text)
+        }
+    }
+
+    /// A chat message sent while a card is pending resolves that card inside
+    /// the agent (completion → continue editing, proposal → feedback,
+    /// question → answer). Mirror the agent's resolution priority so the
+    /// transcript retains the card with the outcome the agent applied.
+    private func recordPendingCardResolution(answeredBy text: String) {
+        if let summary = currentCompletionSummary {
+            resolvedCards.append(ResolvedRevisionCard(
+                anchorIndex: messages.count,
+                kind: .completion(summary: summary, accepted: false)
+            ))
+        } else if let proposal = currentProposal {
+            resolvedCards.append(ResolvedRevisionCard(
+                anchorIndex: messages.count,
+                kind: .proposal(proposal, response: .modified(feedback: text))
+            ))
+        } else if let question = currentQuestion {
+            resolvedCards.append(ResolvedRevisionCard(
+                anchorIndex: messages.count,
+                kind: .question(question, answer: text)
+            ))
         }
     }
 
@@ -248,6 +331,10 @@ struct RevisionChatView: View {
                 Button("Submit") {
                     let answer = questionAnswer
                     questionAnswer = ""
+                    resolvedCards.append(ResolvedRevisionCard(
+                        anchorIndex: messages.count,
+                        kind: .question(question, answer: answer)
+                    ))
                     onQuestionResponse(answer)
                 }
                 .buttonStyle(.borderedProminent)
@@ -264,15 +351,51 @@ struct RevisionChatView: View {
 
     // MARK: - Completion Card
 
+    /// Presentation tone for a completion card. The agent reuses the
+    /// completion-card machinery for its keep-changes-so-far offers and
+    /// publishes only the summary string, so tone is inferred from the fixed
+    /// agent-authored openings of those offers
+    /// (`ResumeRevisionAgent.handleExitCleanup` / `finishAfterStalledSession`).
+    /// The agent's status is still `.running` while the card is presented, so
+    /// status cannot distinguish the cases. Unrecognized summaries — the
+    /// model's own `complete_revision` text — render as success; if the agent
+    /// wording drifts this degrades to the success presentation, never the
+    /// reverse.
+    private enum CompletionTone {
+        /// Genuine completion via `complete_revision`.
+        case success
+        /// Error exit with applied work — Accept keeps it, declining discards
+        /// it and ends the session.
+        case errorExit
+        /// Stalled session with applied work — Accept keeps it, declining
+        /// continues the session.
+        case stalled
+    }
+
+    private func completionTone(for summary: String) -> CompletionTone {
+        if summary.hasPrefix("The revision session ended early") { return .errorExit }
+        if summary.hasPrefix("The assistant stopped taking actions") { return .stalled }
+        return .success
+    }
+
+    private func completionHeadline(for tone: CompletionTone) -> String {
+        switch tone {
+        case .success: return "Revision Complete"
+        case .errorExit: return "Session Ended Early — Keep Applied Changes?"
+        case .stalled: return "Session Stalled — Keep Changes So Far?"
+        }
+    }
+
     @ViewBuilder
     private func completionCard(_ summary: String) -> some View {
+        let tone = completionTone(for: summary)
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .top, spacing: 8) {
-                Image(systemName: "checkmark.seal.fill")
-                    .foregroundStyle(.green)
+                Image(systemName: tone == .success ? "checkmark.seal.fill" : "exclamationmark.triangle.fill")
+                    .foregroundStyle(tone == .success ? Color.green : Color.orange)
                     .font(.title3)
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Revision Complete")
+                    Text(completionHeadline(for: tone))
                         .font(.headline)
                     Text(summary)
                         .font(.body)
@@ -282,12 +405,23 @@ struct RevisionChatView: View {
 
             HStack(spacing: 10) {
                 Spacer()
+                // Button labels stay fixed across tones: the agent-authored
+                // offer summaries name these buttons verbatim ("Accept to keep
+                // them…", "Choosing \"Continue Editing\"…").
                 Button("Continue Editing") {
+                    resolvedCards.append(ResolvedRevisionCard(
+                        anchorIndex: messages.count,
+                        kind: .completion(summary: summary, accepted: false)
+                    ))
                     onCompletionResponse(false)
                 }
                 .buttonStyle(.bordered)
 
                 Button("Accept") {
+                    resolvedCards.append(ResolvedRevisionCard(
+                        anchorIndex: messages.count,
+                        kind: .completion(summary: summary, accepted: true)
+                    ))
                     onCompletionResponse(true)
                 }
                 .buttonStyle(.borderedProminent)
@@ -299,5 +433,194 @@ struct RevisionChatView: View {
                 .fill(.background)
                 .shadow(color: .black.opacity(0.08), radius: 4, y: 2)
         )
+    }
+
+    // MARK: - Resolved Cards (transcript retention)
+
+    /// Resolved cards anchored immediately before the message at `index`.
+    @ViewBuilder
+    private func anchoredResolvedCards(at index: Int) -> some View {
+        ForEach(resolvedCards.filter { $0.anchorIndex == index }) { card in
+            resolvedCardView(card)
+        }
+    }
+
+    /// Resolved cards whose anchor sits at or past the end of the message list
+    /// (no response message has been appended after them yet).
+    @ViewBuilder
+    private func trailingResolvedCards() -> some View {
+        ForEach(resolvedCards.filter { $0.anchorIndex >= messages.count }) { card in
+            resolvedCardView(card)
+        }
+    }
+
+    @ViewBuilder
+    private func resolvedCardView(_ card: ResolvedRevisionCard) -> some View {
+        switch card.kind {
+        case .proposal(let proposal, let response):
+            resolvedProposalCard(proposal, response: response)
+        case .question(let question, _):
+            resolvedQuestionCard(question)
+        case .completion(let summary, let accepted):
+            resolvedCompletionCard(summary, accepted: accepted)
+        }
+    }
+
+    @ViewBuilder
+    private func resolvedProposalCard(_ proposal: ChangeProposal, response: ProposalResponse) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .top, spacing: 8) {
+                Image(systemName: "doc.text.magnifyingglass")
+                    .foregroundStyle(.secondary)
+                Text(proposal.summary)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+                Spacer()
+                outcomeBadge(proposalOutcomeLabel(response), color: proposalOutcomeColor(response))
+            }
+
+            ForEach(Array(proposal.changes.enumerated()), id: \.offset) { index, change in
+                HStack(alignment: .top, spacing: 6) {
+                    Text(change.section)
+                        .font(.caption2.weight(.medium))
+                        .foregroundStyle(.secondary)
+                    Text(change.description)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                    Spacer()
+                    if let label = itemizedDecisionLabel(response, index: index) {
+                        Text(label)
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+            }
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(resolvedCardBackground)
+    }
+
+    @ViewBuilder
+    private func resolvedQuestionCard(_ question: String) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: "questionmark.circle")
+                .foregroundStyle(.secondary)
+            Text(question)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .textSelection(.enabled)
+            Spacer()
+            outcomeBadge("Answered", color: .blue)
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(resolvedCardBackground)
+    }
+
+    @ViewBuilder
+    private func resolvedCompletionCard(_ summary: String, accepted: Bool) -> some View {
+        let tone = completionTone(for: summary)
+        let badge = resolvedCompletionBadge(tone: tone, accepted: accepted)
+        HStack(alignment: .top, spacing: 8) {
+            resolvedCompletionIcon(tone: tone, accepted: accepted)
+            Text(summary)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .textSelection(.enabled)
+            Spacer()
+            outcomeBadge(badge.label, color: badge.color)
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(resolvedCardBackground)
+    }
+
+    @ViewBuilder
+    private func resolvedCompletionIcon(tone: CompletionTone, accepted: Bool) -> some View {
+        switch tone {
+        case .success:
+            Image(systemName: accepted ? "checkmark.seal.fill" : "checkmark.seal")
+                .foregroundStyle(accepted ? Color.green : Color.secondary)
+        case .errorExit, .stalled:
+            Image(systemName: "exclamationmark.triangle")
+                .foregroundStyle(Color.orange)
+        }
+    }
+
+    private func resolvedCompletionBadge(tone: CompletionTone, accepted: Bool) -> (label: String, color: Color) {
+        switch (tone, accepted) {
+        case (.success, true):
+            return ("Accepted", .green)
+        case (.errorExit, true), (.stalled, true):
+            return ("Kept changes", .green)
+        case (.errorExit, false):
+            return ("Discarded", .red)
+        case (.success, false), (.stalled, false):
+            return ("Continued editing", .orange)
+        }
+    }
+
+    private func outcomeBadge(_ label: String, color: Color) -> some View {
+        Text(label)
+            .font(.caption2.weight(.semibold))
+            .foregroundStyle(color)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(Capsule().fill(color.opacity(0.12)))
+            .fixedSize()
+    }
+
+    private var resolvedCardBackground: some View {
+        RoundedRectangle(cornerRadius: 10, style: .continuous)
+            .fill(Color(nsColor: .controlBackgroundColor).opacity(0.5))
+            .overlay(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .strokeBorder(Color(nsColor: .separatorColor), lineWidth: 0.5)
+            )
+    }
+
+    private func proposalOutcomeLabel(_ response: ProposalResponse) -> String {
+        switch response {
+        case .accepted:
+            return "Accepted"
+        case .rejected:
+            return "Rejected"
+        case .modified:
+            return "Feedback sent"
+        case .itemized(let items):
+            var parts: [String] = []
+            let accepted = items.filter { $0.kind == .accept }.count
+            let edited = items.filter { $0.kind == .edit }.count
+            let rejected = items.filter { $0.kind == .reject }.count
+            let feedback = items.filter { $0.kind == .feedback }.count
+            if accepted > 0 { parts.append("\(accepted) accepted") }
+            if edited > 0 { parts.append("\(edited) edited") }
+            if rejected > 0 { parts.append("\(rejected) rejected") }
+            if feedback > 0 { parts.append("\(feedback) feedback") }
+            return parts.isEmpty ? "Reviewed" : parts.joined(separator: ", ")
+        }
+    }
+
+    private func proposalOutcomeColor(_ response: ProposalResponse) -> Color {
+        switch response {
+        case .accepted: return .green
+        case .rejected: return .red
+        case .modified: return .blue
+        case .itemized: return .orange
+        }
+    }
+
+    private func itemizedDecisionLabel(_ response: ProposalResponse, index: Int) -> String? {
+        guard case .itemized(let items) = response,
+              let item = items.first(where: { $0.index == index }) else { return nil }
+        switch item.kind {
+        case .accept: return "accepted"
+        case .reject: return "rejected"
+        case .feedback: return "feedback"
+        case .edit: return "edited"
+        }
     }
 }

@@ -64,7 +64,6 @@ struct ResumeEditorModuleView: View {
             VStack(spacing: 0) {
                 BestJobButton()
                 CoverLetterGenerateButton()
-                ResumeCustomizeButton(selectedTab: $navigationState.selectedTab)
             }
             .frame(width: 0, height: 0)
             .clipped()

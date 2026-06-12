@@ -63,8 +63,6 @@ extension Notification.Name {
     static let showDiscoveryEvents = Notification.Name("showDiscoveryEvents")
     static let showDiscoveryDailyBriefing = Notification.Name("showDiscoveryDailyBriefing")
     static let showDiscoveryWeeklyReview = Notification.Name("showDiscoveryWeeklyReview")
-    // Revision Agent
-    static let polishResume = Notification.Name("polishResume")
     // Panel Toggle Commands
     static let toggleJobAppPane = Notification.Name("toggleJobAppPane")
 
@@ -75,7 +73,6 @@ extension Notification.Name {
     static let showExperienceEditor = Notification.Name("showExperienceEditor")
     // Menu-to-Toolbar Bridge Commands (for programmatically triggering toolbar buttons)
     static let triggerBestJobButton = Notification.Name("triggerBestJobButton")
-    static let triggerCustomizeButton = Notification.Name("triggerCustomizeButton")
     static let triggerGenerateCoverLetterButton = Notification.Name("triggerGenerateCoverLetterButton")
     static let triggerReviseCoverLetterButton = Notification.Name("triggerReviseCoverLetterButton")
     static let triggerTTSButton = Notification.Name("triggerTTSButton")

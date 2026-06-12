@@ -25,6 +25,15 @@ final class SecondaryWindowManager {
     var resumeRevisionWindow: NSWindow?
     var backgroundActivityWindow: NSWindow?
 
+    // MARK: - Resume Revision Session State
+
+    /// Live agent for the current revision session. The hosting view owns the
+    /// agent; this weak handle exists so window teardown can cancel it.
+    private weak var activeRevisionAgent: ResumeRevisionAgent?
+    /// Resume targeted by the live revision session, used to detect when
+    /// Customize is invoked for a different resume than the open window serves.
+    private weak var activeRevisionResume: Resume?
+
     // MARK: - Dependencies (assigned from SprungApp.onAppear)
 
     var appEnvironment: AppEnvironment?
@@ -174,6 +183,13 @@ final class SecondaryWindowManager {
         } else if notification.object as? NSWindow == experienceEditorWindow {
             experienceEditorWindow = nil
         } else if notification.object as? NSWindow == resumeRevisionWindow {
+            // Single teardown choke point for the revision session: every close
+            // path (title-bar close, in-view Cancel/Close, window replacement
+            // for a different resume) lands here and cancels the live agent
+            // exactly once. cancel() is idempotent and continuation-safe.
+            activeRevisionAgent?.cancel()
+            activeRevisionAgent = nil
+            activeRevisionResume = nil
             resumeRevisionWindow = nil
         }
     }
@@ -446,62 +462,128 @@ final class SecondaryWindowManager {
 
     // MARK: - Resume Revision Window
 
+    /// Single, module-independent choke point for the Customize entry.
+    /// All entry paths (menu ⌘R, toolbar button, editor drawer button) post
+    /// `.customizeResume`, which AppDelegate routes here. Gating and session
+    /// identity checks live here and nowhere else.
     func showResumeRevision() {
-        guard let jobAppStore,
-              let selectedResume = jobAppStore.selectedApp?.selectedRes else {
-            Logger.warning("No resume selected for revision", category: .ui)
+        guard let jobAppStore else {
+            Logger.warning("Resume revision requested before app services were configured", category: .ui)
+            return
+        }
+        guard let selectedResume = jobAppStore.selectedApp?.selectedRes else {
+            presentRevisionGuidanceAlert(
+                title: "No Resume Selected",
+                message: "Select a job application with a resume before starting a Customize session."
+            )
+            return
+        }
+        guard selectedResume.hasUpdatableNodes else {
+            presentRevisionGuidanceAlert(
+                title: "Nothing Marked for AI Revision",
+                message: "Mark the sections, entries, or fields you want the agent to revise (AI status icons in the resume editor) before starting a Customize session."
+            )
             return
         }
 
-        if let window = resumeRevisionWindow, !window.isVisible {
-            resumeRevisionWindow = nil
-        }
-        if resumeRevisionWindow == nil {
-            let revisionView = ResumeRevisionView(resume: selectedResume)
-            let hostingView: NSHostingView<AnyView>
-            if let modelContainer,
-               let appEnvironment,
-               let templateStore,
-               let knowledgeCardStore,
-               let skillStore,
-               let coverRefStore,
-               let titleSetStore {
-                hostingView = NSHostingView(rootView: AnyView(
-                    revisionView
-                        .modelContainer(modelContainer)
-                        .environment(appEnvironment.llmFacade)
-                        .environment(templateStore)
-                        .environment(appEnvironment.applicantProfileStore)
-                        .environment(knowledgeCardStore)
-                        .environment(skillStore)
-                        .environment(coverRefStore)
-                        .environment(titleSetStore)
-                ))
-            } else {
-                Logger.error("Missing dependencies for resume revision window", category: .ui)
+        // Reuse the open window only when it still serves the selected resume.
+        // Otherwise close it — windowWillClose cancels the old agent — and
+        // start a fresh session for the new target.
+        if let window = resumeRevisionWindow {
+            if activeRevisionResume === selectedResume {
+                if window.isMiniaturized { window.deminiaturize(nil) }
+                window.makeKeyAndOrderFront(nil)
+                NSApp.activate(ignoringOtherApps: true)
                 return
             }
-            resumeRevisionWindow = NSWindow(
-                contentRect: NSRect(x: 0, y: 0, width: 1300, height: 800),
-                styleMask: [.titled, .closable, .miniaturizable, .resizable],
-                backing: .buffered,
-                defer: false
-            )
-            resumeRevisionWindow?.title = "Resume Revision"
-            resumeRevisionWindow?.tabbingMode = .disallowed
-            resumeRevisionWindow?.contentView = hostingView
-            resumeRevisionWindow?.isReleasedWhenClosed = false
-            resumeRevisionWindow?.center()
-            resumeRevisionWindow?.minSize = NSSize(width: 1100, height: 650)
-            NotificationCenter.default.addObserver(
-                self,
-                selector: #selector(windowWillClose(_:)),
-                name: NSWindow.willCloseNotification,
-                object: resumeRevisionWindow
-            )
+            window.close()
         }
-        resumeRevisionWindow?.makeKeyAndOrderFront(nil)
+
+        guard let modelContainer,
+              let appEnvironment,
+              let templateStore,
+              let knowledgeCardStore,
+              let skillStore,
+              let coverRefStore,
+              let titleSetStore else {
+            Logger.error("Missing dependencies for resume revision window", category: .ui)
+            return
+        }
+
+        let revisionView = ResumeRevisionView(
+            resume: selectedResume,
+            onAgentCreated: { [weak self, weak selectedResume] agent in
+                // The view creates its agent asynchronously (after an awaited
+                // PDF render), so a replaced window's view could register late.
+                // Only accept the registration while this session is still the
+                // active one; a stale view's agent is torn down by its own
+                // task cancellation (run() honors Task.isCancelled).
+                guard let self, let selectedResume,
+                      self.activeRevisionResume === selectedResume else { return }
+                self.activeRevisionAgent = agent
+            },
+            onRequestClose: { [weak self] in
+                self?.resumeRevisionWindow?.close()
+            }
+        )
+        let hostingView = NSHostingView(rootView: AnyView(
+            revisionView
+                .modelContainer(modelContainer)
+                .environment(appEnvironment.llmFacade)
+                .environment(templateStore)
+                .environment(appEnvironment.applicantProfileStore)
+                .environment(knowledgeCardStore)
+                .environment(skillStore)
+                .environment(coverRefStore)
+                .environment(titleSetStore)
+        ))
+
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 1300, height: 800),
+            styleMask: [.titled, .closable, .miniaturizable, .resizable],
+            backing: .buffered,
+            defer: false
+        )
+        window.title = revisionWindowTitle(for: selectedResume)
+        window.tabbingMode = .disallowed
+        window.contentView = hostingView
+        window.isReleasedWhenClosed = false
+        window.center()
+        window.minSize = NSSize(width: 1100, height: 650)
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(windowWillClose(_:)),
+            name: NSWindow.willCloseNotification,
+            object: window
+        )
+
+        resumeRevisionWindow = window
+        activeRevisionResume = selectedResume
+        window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+    }
+
+    /// Title identifying the revision session by job position and company.
+    private func revisionWindowTitle(for resume: Resume) -> String {
+        guard let jobApp = resume.jobApp else { return "Customize Resume" }
+        let position = jobApp.jobPosition.trimmingCharacters(in: .whitespacesAndNewlines)
+        let company = jobApp.companyName.trimmingCharacters(in: .whitespacesAndNewlines)
+        switch (position.isEmpty, company.isEmpty) {
+        case (false, false): return "Customize Resume — \(position) at \(company)"
+        case (false, true): return "Customize Resume — \(position)"
+        case (true, false): return "Customize Resume — \(company)"
+        case (true, true): return "Customize Resume"
+        }
+    }
+
+    private func presentRevisionGuidanceAlert(title: String, message: String) {
+        NSApp.activate(ignoringOtherApps: true)
+        let alert = NSAlert()
+        alert.messageText = title
+        alert.informativeText = message
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "OK")
+        alert.runModal()
     }
 
     // MARK: - Debug Logs Window

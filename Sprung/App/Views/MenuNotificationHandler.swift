@@ -69,6 +69,9 @@ class MenuNotificationHandler {
             }
         }
         // Resume Commands
+        // .customizeResume opens the revision window via AppDelegate (the
+        // module-independent choke point). This module-scoped observer only
+        // syncs the visible tab when the Resume Editor module is active.
         NotificationCenter.default.addObserver(
             forName: .customizeResume,
             object: nil,
@@ -76,7 +79,6 @@ class MenuNotificationHandler {
         ) { [weak self] _ in
             Task { @MainActor in
                 self?.selectedTab?.wrappedValue = .resume
-                self?.handleCustomizeResume()
             }
         }
         NotificationCenter.default.addObserver(
@@ -372,13 +374,6 @@ class MenuNotificationHandler {
     private func handleBestJob() {
         // Trigger the same action as the BestJobButton in the toolbar
         NotificationCenter.default.post(name: .triggerBestJobButton, object: nil)
-    }
-    @MainActor
-    private func handleCustomizeResume() {
-        // Switch to resume tab first (same as toolbar button does)
-        selectedTab?.wrappedValue = .resume
-        // Trigger the same action as ResumeCustomizeButton
-        NotificationCenter.default.post(name: .triggerCustomizeButton, object: nil)
     }
     @MainActor
     private func handleGenerateCoverLetter() {
