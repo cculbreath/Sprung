@@ -60,8 +60,19 @@ class ResumeRevisionAgent {
     private var questionContinuation: CheckedContinuation<String, Never>?
     private var completionContinuation: CheckedContinuation<Bool, Never>?
 
-    // Conversation state (Anthropic messages)
+    // Conversation state (Anthropic messages). Clean history — cache
+    // breakpoints are applied at request-build time only, never persisted
+    // (byte-stability invariant: history is append-only so cache prefixes
+    // keep matching turn over turn).
     private var conversationMessages: [AnthropicMessage] = []
+
+    // Session-cumulative token usage (logged once at session end; per-turn
+    // values are logged as each turn's usage event arrives).
+    private var sessionInputTokens = 0
+    private var sessionCacheReadTokens = 0
+    private var sessionCacheCreationTokens = 0
+    private var sessionOutputTokens = 0
+    private var usageTurnCount = 0
 
     // Queued user messages (injected between turns)
     private var pendingUserMessages: [String] = []
@@ -78,6 +89,13 @@ class ResumeRevisionAgent {
     /// stream emits deltas continuously, so even a maximal 32K-token write
     /// is never cut off mid-flight; a genuinely stalled connection is.
     private let streamStallTimeoutSeconds: TimeInterval = 180
+
+    /// Cache control for every prompt-cache breakpoint in this agent. The
+    /// session is human-in-the-loop: idle gaps while the user reviews
+    /// proposals routinely exceed the default 5-minute cache TTL, so all
+    /// breakpoints use the 1-hour TTL (2x write cost, paid back many times
+    /// over by 0.1x reads across a multi-turn session).
+    private static let oneHourCacheControl = AnthropicCacheControl(type: "ephemeral", ttl: "1h")
 
     // MARK: - Init
 
@@ -136,6 +154,15 @@ class ResumeRevisionAgent {
         successfulWriteCount = 0
         consecutiveStreamFailures = 0
         pendingUserMessages.removeAll()
+        sessionInputTokens = 0
+        sessionCacheReadTokens = 0
+        sessionCacheCreationTokens = 0
+        sessionOutputTokens = 0
+        usageTurnCount = 0
+
+        // Session totals are logged on every exit path (completion, Save,
+        // cancel, error) — run() is the only entry point to the loop.
+        defer { logSessionUsageTotals() }
 
         do {
             // 1. Create workspace and export materials
@@ -158,13 +185,19 @@ class ResumeRevisionAgent {
             try workspaceService.exportFontSizeNodes(resume.fontSizeNodes)
             try workspaceService.exportTitleSets(titleSets)
 
-            // 2. Build system prompt
+            // 2. Build system prompt — static for the session, with a cache
+            // breakpoint on the system block. Together with the breakpoint on
+            // the last tool, this caches the full tools → system prefix
+            // (tools render before system in the prompt).
             let systemPrompt = ResumeRevisionAgentPrompts.systemPrompt(
                 targetPageCount: manifest.targetPageCount,
                 hasTitleSets: !titleSets.isEmpty,
                 writersVoice: writersVoice,
                 avoidPhrases: avoidPhrases
             )
+            let systemContent: AnthropicSystemContent = .blocks([
+                AnthropicSystemBlock(text: systemPrompt, cacheControl: Self.oneHourCacheControl)
+            ])
 
             // 3. Build initial user message with PDF attachment
             let pdfPath = workspacePath.appendingPathComponent("resume.pdf")
@@ -250,11 +283,14 @@ class ResumeRevisionAgent {
                 // and the repairer logs it as an error.
                 AnthropicConversationRepairer.repairOrphanedToolUse(in: &conversationMessages)
 
-                // Call Anthropic
+                // Call Anthropic. The message-tier cache breakpoints are
+                // applied to a per-request copy — conversationMessages itself
+                // stays marker-free so the breakpoints move naturally each
+                // turn and turn N+1 reads the prefix turn N wrote.
                 let parameters = AnthropicMessageParameter(
                     model: modelId,
-                    messages: conversationMessages,
-                    system: .text(systemPrompt),
+                    messages: applyCacheBreakpoints(to: conversationMessages),
+                    system: systemContent,
                     maxTokens: maxOutputTokensPerTurn,
                     stream: true,
                     tools: tools,
@@ -310,6 +346,14 @@ class ResumeRevisionAgent {
 
                             case .stopReason(let reason):
                                 result.stopReason = reason
+
+                            case .usage(let input, let cacheRead, let cacheCreation, let output):
+                                self.recordTurnUsage(
+                                    input: input,
+                                    cacheRead: cacheRead,
+                                    cacheCreation: cacheCreation,
+                                    output: output
+                                )
 
                             case .streamError(let message):
                                 result.streamErrors.append(message)
@@ -1030,6 +1074,9 @@ class ResumeRevisionAgent {
 
     // MARK: - Tool Building
 
+    /// Fixed, deterministic tool order (prompt-cache invariant: tools render
+    /// at position 0; any reorder invalidates the entire cache). The cache
+    /// breakpoint on the LAST tool caches the whole tool block.
     private func buildAnthropicTools() -> [AnthropicTool] {
         [
             AnthropicSchemaConverter.anthropicTool(from: ReadFileTool.self),
@@ -1039,8 +1086,169 @@ class ResumeRevisionAgent {
             AnthropicSchemaConverter.anthropicTool(from: WriteJsonFileTool.self),
             AnthropicSchemaConverter.anthropicTool(from: ProposeChangesTool.self),
             AnthropicSchemaConverter.anthropicTool(from: AskUserTool.self),
-            AnthropicSchemaConverter.anthropicTool(from: CompleteRevisionTool.self)
+            AnthropicSchemaConverter.anthropicTool(from: CompleteRevisionTool.self, cacheControl: Self.oneHourCacheControl)
         ]
+    }
+
+    // MARK: - Prompt-Cache Breakpoints
+
+    /// Position of a content block in the assembled message array.
+    private struct BlockPosition: Equatable {
+        let messageIndex: Int
+        let blockIndex: Int
+    }
+
+    /// Apply the message-tier cache breakpoints to a per-request copy of the
+    /// conversation. Applied at request-build time ONLY — the stored history
+    /// is never mutated (byte-stability invariant), so the breakpoints move
+    /// naturally each turn and turn N+1 reads the prefix turn N wrote.
+    ///
+    /// Breakpoint budget (HARD LIMIT 4 per request, all 1h TTL):
+    /// 1. Last tool (buildAnthropicTools) — caches the whole tool block.
+    /// 2. System block — caches tools + system.
+    /// 3. Moving tail: last markable block of the final message — incremental
+    ///    conversation caching. The initial PDF document block sits at the
+    ///    front of the conversation, inside this cached prefix from turn 1.
+    /// 4. Lookback anchor (conditional): Anthropic matches cache prefixes by
+    ///    walking at most ~20 content blocks back from a breakpoint, and a
+    ///    write_json_file turn appends several tool_result + page-image
+    ///    blocks at once. When the array exceeds 20 blocks, plant a boundary
+    ///    on the last markable block of the latest message that ends at
+    ///    least 20 blocks before the end, so the next turn's tail breakpoint
+    ///    always finds a prior cache entry inside the lookback window.
+    private func applyCacheBreakpoints(to messages: [AnthropicMessage]) -> [AnthropicMessage] {
+        guard !messages.isEmpty else { return messages }
+
+        // Flatten block geometry (string content counts as one text block).
+        let blocksByMessage: [[AnthropicContentBlock]] = messages.map { Self.contentBlocks(of: $0) }
+        var flatStartIndex: [Int] = []
+        var totalBlocks = 0
+        for blocks in blocksByMessage {
+            flatStartIndex.append(totalBlocks)
+            totalBlocks += blocks.count
+        }
+
+        func isMarkable(_ block: AnthropicContentBlock) -> Bool {
+            if case .toolUse = block { return false }
+            return true
+        }
+
+        func lastMarkableBlock(inMessage messageIndex: Int) -> BlockPosition? {
+            for blockIndex in blocksByMessage[messageIndex].indices.reversed()
+            where isMarkable(blocksByMessage[messageIndex][blockIndex]) {
+                return BlockPosition(messageIndex: messageIndex, blockIndex: blockIndex)
+            }
+            return nil
+        }
+
+        // Moving tail breakpoint — last markable block of the final message
+        // (walking back if the final message has none: tool_use blocks cannot
+        // carry cache_control).
+        var tail: BlockPosition?
+        for messageIndex in blocksByMessage.indices.reversed() {
+            if let position = lastMarkableBlock(inMessage: messageIndex) {
+                tail = position
+                break
+            }
+        }
+
+        // Lookback anchor — only when a breakpoint could fall out of range of
+        // the previous turn's prefix.
+        var lookback: BlockPosition?
+        if totalBlocks > 20 {
+            for messageIndex in blocksByMessage.indices.reversed() {
+                let lastFlatIndex = flatStartIndex[messageIndex] + blocksByMessage[messageIndex].count - 1
+                guard totalBlocks - 1 - lastFlatIndex >= 20 else { continue }
+                if let position = lastMarkableBlock(inMessage: messageIndex) {
+                    lookback = position
+                    break
+                }
+            }
+        }
+
+        // Tools (1) + system (1) leave a budget of exactly 2 message-tier
+        // breakpoints — tail and lookback. Collapse duplicates.
+        var kept: [BlockPosition] = []
+        for candidate in [tail, lookback] {
+            guard let candidate, !kept.contains(candidate) else { continue }
+            kept.append(candidate)
+        }
+        guard !kept.isEmpty else { return messages }
+
+        // Apply marks, grouping by message so multiple marks in one message stack.
+        var marksByMessage: [Int: [Int]] = [:]
+        for position in kept {
+            marksByMessage[position.messageIndex, default: []].append(position.blockIndex)
+        }
+
+        var result = messages
+        for (messageIndex, blockIndexes) in marksByMessage {
+            var blocks = blocksByMessage[messageIndex]
+            for blockIndex in blockIndexes {
+                guard let marked = Self.addingCacheControl(to: blocks[blockIndex]) else { continue }
+                blocks[blockIndex] = marked
+            }
+            result[messageIndex] = AnthropicMessage(role: messages[messageIndex].role, content: .blocks(blocks))
+        }
+
+        return result
+    }
+
+    private static func contentBlocks(of message: AnthropicMessage) -> [AnthropicContentBlock] {
+        switch message.content {
+        case .text(let text):
+            return [.text(AnthropicTextBlock(text: text))]
+        case .blocks(let blocks):
+            return blocks
+        }
+    }
+
+    /// tool_use blocks cannot carry cache_control; everything else can.
+    private static func addingCacheControl(to block: AnthropicContentBlock) -> AnthropicContentBlock? {
+        switch block {
+        case .text(let textBlock):
+            return .text(AnthropicTextBlock(text: textBlock.text, cacheControl: oneHourCacheControl))
+        case .toolResult(let resultBlock):
+            return .toolResult(AnthropicToolResultBlock(
+                toolUseId: resultBlock.toolUseId,
+                content: resultBlock.content,
+                isError: resultBlock.isError ?? false,
+                cacheControl: oneHourCacheControl
+            ))
+        case .image(let imageBlock):
+            return .image(AnthropicImageBlock(source: imageBlock.source, cacheControl: oneHourCacheControl))
+        case .document(let documentBlock):
+            return .document(AnthropicDocumentBlock(source: documentBlock.source, cacheControl: oneHourCacheControl))
+        case .toolUse:
+            return nil
+        }
+    }
+
+    // MARK: - Usage Tracking
+
+    /// Log per-turn token usage and accumulate session totals. From turn 2
+    /// onward cache_read should cover tools + system + prior conversation
+    /// (including the resume PDF and accumulated page images); a zero there
+    /// is the regression signal.
+    private func recordTurnUsage(input: Int, cacheRead: Int, cacheCreation: Int, output: Int) {
+        Logger.info(
+            "🤖 RevisionAgent turn \(turnCount) usage (\(modelId)): input=\(input) cache_read=\(cacheRead) cache_create=\(cacheCreation) output=\(output)",
+            category: .ai
+        )
+        sessionInputTokens += input
+        sessionCacheReadTokens += cacheRead
+        sessionCacheCreationTokens += cacheCreation
+        sessionOutputTokens += output
+        usageTurnCount += 1
+    }
+
+    /// Log session-cumulative usage once, on every exit path out of run().
+    private func logSessionUsageTotals() {
+        guard usageTurnCount > 0 else { return }
+        Logger.info(
+            "🤖 RevisionAgent session usage (\(modelId)): turns=\(usageTurnCount) input=\(sessionInputTokens) cache_read=\(sessionCacheReadTokens) cache_create=\(sessionCacheCreationTokens) output=\(sessionOutputTokens)",
+            category: .ai
+        )
     }
 
     // MARK: - Tool Execution Result

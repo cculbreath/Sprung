@@ -89,11 +89,18 @@ enum AnthropicSchemaConverter {
 
     /// Convert an AgentTool's [String: Any] schema directly to AnthropicTool.
     /// Convenience for agents using AgentTool protocol — bypasses SwiftOpenAI intermediate types.
-    static func anthropicTool<T: AgentTool>(from tool: T.Type) -> AnthropicTool {
+    /// `cacheControl` marks the tool as a prompt-cache breakpoint: place it on
+    /// the LAST tool in the array to cache the entire tool block (tools render
+    /// at position 0 of the prompt, so this is the first prefix boundary).
+    static func anthropicTool<T: AgentTool>(
+        from tool: T.Type,
+        cacheControl: AnthropicCacheControl? = nil
+    ) -> AnthropicTool {
         .function(AnthropicFunctionTool(
             name: tool.name,
             description: tool.description,
-            inputSchema: tool.parametersSchema
+            inputSchema: tool.parametersSchema,
+            cacheControl: cacheControl
         ))
     }
 }

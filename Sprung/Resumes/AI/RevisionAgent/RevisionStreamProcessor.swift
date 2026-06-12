@@ -11,6 +11,11 @@ enum RevisionStreamEvent {
     /// Stop reason from `message_delta` (e.g. "end_turn", "tool_use",
     /// "max_tokens"). Surfaced so the loop can detect truncated output.
     case stopReason(String)
+    /// Final per-turn token usage, assembled from `message_start` (input and
+    /// cache fields) and `message_delta` (final output). Emitted at
+    /// `message_stop` so the loop can log per-turn cache hit rates and
+    /// accumulate session totals.
+    case usage(inputTokens: Int, cacheReadTokens: Int, cacheCreationTokens: Int, outputTokens: Int)
     /// In-stream `error` event, formatted "type: message". Surfaced so the
     /// loop can classify it and back off or abort instead of retrying blind.
     case streamError(String)
@@ -24,6 +29,14 @@ struct RevisionStreamProcessor {
     private var accumulatedText: String = ""
     private var currentToolCall: PartialToolCall?
     private var pendingToolCalls: [ToolCallInfo] = []
+
+    // Per-turn token usage. input/cache fields arrive on message_start; the
+    // final output count arrives on message_delta. Surfaced as one .usage
+    // event at message_stop.
+    private var inputTokens = 0
+    private var cacheReadTokens = 0
+    private var cacheCreationTokens = 0
+    private var outputTokens = 0
 
     struct ToolCallInfo {
         let id: String
@@ -40,10 +53,14 @@ struct RevisionStreamProcessor {
     /// Process an Anthropic stream event and return domain events.
     mutating func process(_ event: AnthropicStreamEvent) -> [RevisionStreamEvent] {
         switch event {
-        case .messageStart:
+        case .messageStart(let event):
             accumulatedText = ""
             pendingToolCalls = []
             currentToolCall = nil
+            inputTokens = event.message.usage.inputTokens ?? 0
+            cacheReadTokens = event.message.usage.cacheReadInputTokens ?? 0
+            cacheCreationTokens = event.message.usage.cacheCreationInputTokens ?? 0
+            outputTokens = event.message.usage.outputTokens ?? 0
             return []
 
         case .contentBlockStart(let blockStart):
@@ -78,8 +95,12 @@ struct RevisionStreamProcessor {
             return []
 
         case .messageDelta(let event):
-            // Usage fields are intentionally not surfaced here (telemetry is
-            // a separate workstream); only the stop reason matters to the loop.
+            if let usage = event.usage {
+                if let input = usage.inputTokens { inputTokens = input }
+                if let cacheRead = usage.cacheReadInputTokens { cacheReadTokens = cacheRead }
+                if let cacheCreation = usage.cacheCreationInputTokens { cacheCreationTokens = cacheCreation }
+                if let output = usage.outputTokens { outputTokens = output }
+            }
             if let stopReason = event.delta.stopReason {
                 return [.stopReason(stopReason)]
             }
@@ -100,9 +121,20 @@ struct RevisionStreamProcessor {
                 ))
             }
 
+            events.append(.usage(
+                inputTokens: inputTokens,
+                cacheReadTokens: cacheReadTokens,
+                cacheCreationTokens: cacheCreationTokens,
+                outputTokens: outputTokens
+            ))
+
             // Reset
             accumulatedText = ""
             pendingToolCalls = []
+            inputTokens = 0
+            cacheReadTokens = 0
+            cacheCreationTokens = 0
+            outputTokens = 0
 
             return events
 
