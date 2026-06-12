@@ -107,7 +107,11 @@ enum HandlebarsContextAugmentor {
             ("languagesBool", "languages"),
             ("referencesBool", "references")
         ]
-        for section in sections {
+        // Only fill flags that are absent. Section-visibility (manifest defaults
+        // + per-resume overrides, applied by ResumeTemplateDataBuilder) already
+        // set these flags for configured sections; recomputing them here would
+        // clobber the user's hide/show choices.
+        for section in sections where context[section.flag] == nil {
             context[section.flag] = truthy(context[section.key])
         }
     }

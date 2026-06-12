@@ -1,6 +1,78 @@
 // Sprung/Resumes/AI/Views/ResumeReviewViewModel.swift
 import Foundation
 import SwiftUI
+
+/// Pre-mutation snapshot of the 'Skills and Expertise' subtree.
+/// Captures node values, ordering, and child membership so AI mutations
+/// (rewrites, merges, reorders) can be rejected and fully restored.
+@MainActor
+private struct SkillsTreeSnapshot {
+    private struct NodeState {
+        let node: TreeNode
+        let name: String
+        let value: String
+        let myIndex: Int
+        /// Ordered child references at snapshot time (nil when node had no children array).
+        let orderedChildren: [TreeNode]?
+    }
+    private var states: [NodeState] = []
+
+    init?(resume: Resume) {
+        guard let section = FixOverflowService.skillsSection(in: resume) else { return nil }
+        capture(section)
+    }
+
+    private mutating func capture(_ node: TreeNode) {
+        states.append(NodeState(
+            node: node,
+            name: node.name,
+            value: node.value,
+            myIndex: node.myIndex,
+            orderedChildren: node.children.map { children in
+                children.sorted { $0.myIndex < $1.myIndex }
+            }
+        ))
+        for child in node.children ?? [] {
+            capture(child)
+        }
+    }
+
+    /// Whether the live tree currently differs from the snapshot.
+    var hasChanges: Bool {
+        states.contains { state in
+            if state.node.name != state.name || state.node.value != state.value || state.node.myIndex != state.myIndex {
+                return true
+            }
+            guard let expected = state.orderedChildren else { return false }
+            let current = (state.node.children ?? []).sorted { $0.myIndex < $1.myIndex }
+            return current.map(\.id) != expected.map(\.id)
+        }
+    }
+
+    /// Restore every captured node to its snapshot state, re-attaching any
+    /// nodes that were detached by merge operations.
+    func restore() {
+        for state in states {
+            state.node.name = state.name
+            state.node.value = state.value
+            state.node.myIndex = state.myIndex
+        }
+        for state in states {
+            guard let expected = state.orderedChildren else { continue }
+            let current = (state.node.children ?? []).sorted { $0.myIndex < $1.myIndex }
+            if current.map(\.id) != expected.map(\.id) {
+                state.node.children = expected
+            }
+        }
+    }
+}
+
+/// A completed AI skills mutation awaiting the user's accept/reject decision.
+struct PendingSkillsChangeReview {
+    let operationTitle: String
+    let diffSummary: String
+}
+
 @MainActor
 @Observable
 class ResumeReviewViewModel {
@@ -14,17 +86,32 @@ class ResumeReviewViewModel {
     private(set) var fixOverflowChangeMessage: String = ""
     private(set) var isProcessingFixOverflow: Bool = false
     private(set) var fixOverflowError: String?
-    private(set) var currentOverflowLineCount: Int = 0
+    private(set) var currentPageCount: Int = 0
+    private(set) var currentPageLimit: Int = 0
+    // Accept/reject gate for AI skills mutations
+    private(set) var pendingChangeReview: PendingSkillsChangeReview?
+    private var skillsSnapshot: SkillsTreeSnapshot?
+    private var reviewedResume: Resume?
     // MARK: - Dependencies
     private var reasoningStreamManager: ReasoningStreamManager?
     private var openRouterService: OpenRouterService?
+    private var exportCoordinator: ResumeExportCoordinator?
+    private var coverRefStore: CoverRefStore?
     private var reviewService: ResumeReviewService?
     private var fixOverflowService: FixOverflowService?
     private var reorderSkillsService: ReorderSkillsService?
     // MARK: - Initialization
-    func initialize(llmFacade: LLMFacade, exportCoordinator: ResumeExportCoordinator, reasoningStreamManager: ReasoningStreamManager, openRouterService: OpenRouterService) {
+    func initialize(
+        llmFacade: LLMFacade,
+        exportCoordinator: ResumeExportCoordinator,
+        reasoningStreamManager: ReasoningStreamManager,
+        openRouterService: OpenRouterService,
+        coverRefStore: CoverRefStore
+    ) {
         self.reasoningStreamManager = reasoningStreamManager
         self.openRouterService = openRouterService
+        self.exportCoordinator = exportCoordinator
+        self.coverRefStore = coverRefStore
         reviewService = ResumeReviewService(llmFacade: llmFacade)
         fixOverflowService = FixOverflowService(llm: llmFacade, exportCoordinator: exportCoordinator)
         reorderSkillsService = ReorderSkillsService(llm: llmFacade, exportCoordinator: exportCoordinator)
@@ -39,6 +126,17 @@ class ResumeReviewViewModel {
         allowEntityMerge: Bool
     ) {
         resetState()
+        // No model configured → surface the configuration error; never substitute a default.
+        guard !selectedModel.trimmingCharacters(in: .whitespaces).isEmpty else {
+            let error = ModelConfigurationError.modelNotConfigured(
+                settingKey: "resumeReviewSelectedModel",
+                operationName: "Resume Review"
+            )
+            generalError = [error.localizedDescription, error.recoverySuggestion]
+                .compactMap { $0 }
+                .joined(separator: " ")
+            return
+        }
         switch reviewType {
         case .fixOverflow:
             Task {
@@ -74,6 +172,32 @@ class ResumeReviewViewModel {
     func resetChangeMessage() {
         fixOverflowChangeMessage = ""
     }
+    // MARK: - Accept/Reject
+    /// Keep the AI mutations: discard the snapshot.
+    func acceptPendingChanges() {
+        pendingChangeReview = nil
+        skillsSnapshot = nil
+        reviewedResume = nil
+        fixOverflowStatusMessage = "Changes accepted."
+    }
+    /// Discard the AI mutations: restore the snapshot and re-render.
+    func rejectPendingChanges() async {
+        guard let snapshot = skillsSnapshot, let resume = reviewedResume else {
+            pendingChangeReview = nil
+            return
+        }
+        snapshot.restore()
+        pendingChangeReview = nil
+        skillsSnapshot = nil
+        reviewedResume = nil
+        fixOverflowChangeMessage = ""
+        do {
+            try await exportCoordinator?.forceRender(for: resume)
+            fixOverflowStatusMessage = "Changes rejected — original content restored."
+        } catch {
+            fixOverflowStatusMessage = "Changes rejected — original content restored, but re-rendering failed: \(error.localizedDescription)"
+        }
+    }
     // MARK: - Private Methods
     private func resetState() {
         reviewResponseText = ""
@@ -81,6 +205,24 @@ class ResumeReviewViewModel {
         fixOverflowChangeMessage = ""
         generalError = nil
         fixOverflowError = nil
+        pendingChangeReview = nil
+        skillsSnapshot = nil
+        reviewedResume = nil
+        currentPageCount = 0
+        currentPageLimit = 0
+    }
+    /// Present the accept/reject gate when the operation actually mutated the tree.
+    private func presentReviewIfNeeded(resume: Resume, operationTitle: String, diffSummary: String) {
+        guard let snapshot = skillsSnapshot, snapshot.hasChanges else {
+            skillsSnapshot = nil
+            reviewedResume = nil
+            return
+        }
+        reviewedResume = resume
+        pendingChangeReview = PendingSkillsChangeReview(
+            operationTitle: operationTitle,
+            diffSummary: diffSummary
+        )
     }
     private func performGeneralReview(
         reviewType: ResumeReviewType,
@@ -158,17 +300,21 @@ class ResumeReviewViewModel {
         if supportsReasoning {
             reasoningStreamManager.startReasoning(modelName: selectedModel)
         }
+        // Snapshot the skills subtree so the user can reject the mutations.
+        skillsSnapshot = SkillsTreeSnapshot(resume: resume)
         let result = await fixOverflowService?.performFixOverflow(
             resume: resume,
             allowEntityMerge: allowEntityMerge,
             selectedModel: selectedModel,
             maxIterations: UserDefaults.standard.integer(forKey: "fixOverflowMaxIterations") == 0 ? 3 : UserDefaults.standard.integer(forKey: "fixOverflowMaxIterations"),
+            writersVoice: coverRefStore?.writersVoice ?? "",
             supportsReasoning: supportsReasoning,
             onStatusUpdate: { [weak self] status in
                 Task { @MainActor in
                     self?.fixOverflowStatusMessage = status.statusMessage
                     self?.fixOverflowChangeMessage = status.changeMessage
-                    self?.currentOverflowLineCount = status.overflowLineCount
+                    self?.currentPageCount = status.pageCount
+                    self?.currentPageLimit = status.pageLimit
                 }
             },
             onReasoningUpdate: reasoningCallback
@@ -181,6 +327,12 @@ class ResumeReviewViewModel {
         case .none:
             fixOverflowError = "Fix Overflow service unavailable."
         }
+        // Even on failure, applied iterations must be reviewable — never silent.
+        presentReviewIfNeeded(
+            resume: resume,
+            operationTitle: "Fix Overflow",
+            diffSummary: fixOverflowChangeMessage
+        )
         // Complete reasoning stream
         if supportsReasoning {
             reasoningStreamManager.stopStream()
@@ -190,6 +342,8 @@ class ResumeReviewViewModel {
     private func performReorderSkills(resume: Resume, selectedModel: String) async {
         isProcessingFixOverflow = true
         fixOverflowStatusMessage = "Starting skills reordering..."
+        // Snapshot the skills subtree so the user can reject the reordering.
+        skillsSnapshot = SkillsTreeSnapshot(resume: resume)
         let result = await reorderSkillsService?.performReorderSkills(
             resume: resume,
             selectedModel: selectedModel
@@ -207,6 +361,11 @@ class ResumeReviewViewModel {
         case .none:
             fixOverflowError = "Reorder Skills service unavailable."
         }
+        presentReviewIfNeeded(
+            resume: resume,
+            operationTitle: "Reorder Skills",
+            diffSummary: fixOverflowChangeMessage
+        )
         isProcessingFixOverflow = false
     }
 }

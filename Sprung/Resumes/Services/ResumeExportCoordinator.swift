@@ -63,6 +63,10 @@ final class ResumeExportCoordinator {
     /// Performs an immediate export and waits for completion.
     /// Skips the expensive PDF+text render if the resume already has rendered text
     /// and no edits are pending, avoiding redundant work during batch operations.
+    ///
+    /// NOTE: This freshness check only sees debounced edits. Callers that mutate
+    /// TreeNodes directly (e.g. AI revision loops) must use `forceRender(for:)`
+    /// so each evaluation sees the post-mutation render.
     func ensureFreshRenderedText(for resume: Resume) async throws {
         let hasPendingChanges = pendingWorkItems[resume.id] != nil
 
@@ -71,6 +75,13 @@ final class ResumeExportCoordinator {
             return
         }
 
+        try await forceRender(for: resume)
+    }
+
+    /// Performs an unconditional export and waits for completion, bypassing the
+    /// freshness short-circuit. Use after direct TreeNode mutations so the
+    /// rendered PDF/text reflect the current tree state.
+    func forceRender(for resume: Resume) async throws {
         cancelPendingExport(for: resume)
         exportingResumeIDs.insert(resume.id)
         defer { exportingResumeIDs.remove(resume.id) }

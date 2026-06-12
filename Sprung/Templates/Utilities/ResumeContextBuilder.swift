@@ -6,7 +6,6 @@
 //  Single entry point for all resume context generation.
 //
 import Foundation
-import OrderedCollections
 
 /// Builds the complete Mustache-renderable context for a resume.
 ///
@@ -49,7 +48,9 @@ enum ResumeContextBuilder {
         for resume: Resume,
         profile: ApplicantProfile
     ) throws -> [String: Any] {
-        // Step 1: Build base context from TreeNode
+        // Step 1: Build base context from TreeNode. This already applies section
+        // visibility (manifest defaults + per-resume overrides) — the single
+        // visibility code path lives in ResumeTemplateDataBuilder.
         var treeContext = try ResumeTemplateDataBuilder.buildContext(from: resume)
 
         // Step 1.5: Nest custom fields under "custom" key for template compatibility
@@ -60,15 +61,14 @@ enum ResumeContextBuilder {
         // Step 2: Overlay ApplicantProfile onto basics.* (by convention)
         var context = mergeApplicantProfile(profile, into: treeContext)
 
-        // Step 3: Apply section visibility from manifest + resume overrides
-        // Step 4: Add template fields from manifest (sectionLabels, fontSizes)
+        // Step 3: Add template fields from manifest (sectionLabels, fontSizes)
         if let template = resume.template,
            let manifest = TemplateManifestLoader.manifest(for: template) {
-            applySectionVisibility(to: &context, manifest: manifest, resume: resume)
             addTemplateFields(to: &context, manifest: manifest)
         }
 
-        // Step 5: Augment with computed fields
+        // Step 4: Augment with computed fields. The augmentor never overwrites
+        // section flags that visibility already decided.
         context = HandlebarsContextAugmentor.augment(context)
 
         return context
@@ -261,45 +261,6 @@ enum ResumeContextBuilder {
         }
     }
 
-    // MARK: - Section Visibility
-
-    /// Apply section visibility flags from manifest defaults and resume overrides.
-    private static func applySectionVisibility(
-        to context: inout [String: Any],
-        manifest: TemplateManifest,
-        resume: Resume
-    ) {
-        // Start with manifest defaults
-        var visibility = manifest.sectionVisibilityDefaults ?? [:]
-
-        // Apply resume-specific overrides
-        for (key, value) in resume.sectionVisibilityOverrides {
-            visibility[key] = value
-        }
-
-        guard !visibility.isEmpty else { return }
-
-        // For each visibility setting, update the corresponding Bool flag
-        for (sectionKey, shouldDisplay) in visibility {
-            let boolKey = "\(sectionKey)Bool"
-
-            // Determine base visibility (does section have content?)
-            let baseVisible: Bool
-            if let numeric = context[boolKey] as? NSNumber {
-                baseVisible = numeric.boolValue
-            } else if let flag = context[boolKey] as? Bool {
-                baseVisible = flag
-            } else if let value = context[sectionKey] {
-                baseVisible = truthy(value)
-            } else {
-                baseVisible = false
-            }
-
-            // Final visibility = has content AND should display
-            context[boolKey] = baseVisible && shouldDisplay
-        }
-    }
-
     // MARK: - Custom Fields
 
     /// Nest custom fields under a "custom" key for template compatibility.
@@ -335,23 +296,5 @@ enum ResumeContextBuilder {
     private static func sanitized(_ value: String) -> String? {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed
-    }
-
-    /// Check if a value is "truthy" for template purposes.
-    private static func truthy(_ value: Any) -> Bool {
-        switch value {
-        case let number as NSNumber:
-            return number.boolValue
-        case let string as String:
-            return !string.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        case let array as [Any]:
-            return !array.isEmpty
-        case let dict as [String: Any]:
-            return !dict.isEmpty
-        case let ordered as OrderedDictionary<String, Any>:
-            return !ordered.isEmpty
-        default:
-            return true
-        }
     }
 }

@@ -21,6 +21,10 @@ struct RevisionPDFRenderer {
 
     /// Re-render the resume PDF from current workspace state.
     /// Returns render info including the PDF data for preview and page count.
+    ///
+    /// The temp preview resume is built in a scratch ModelContext that is never
+    /// saved, so it can never reach the live graph (no phantom resumes on the
+    /// JobApp, no leaks when rendering fails).
     @MainActor
     func autoRenderResume(from resume: Resume) async -> RevisionRenderInfo {
         guard let workspacePath = workspaceService.workspacePath else {
@@ -31,24 +35,40 @@ struct RevisionPDFRenderer {
             let revisedNodes = try workspaceService.importRevisedTreeNodes()
             let revisedFontSizes = try workspaceService.importRevisedFontSizes()
 
+            // Same store-backed template resolution as export — never a hardcoded slug.
+            let template = try pdfGenerator.resolveTemplate(for: resume)
+
+            // Persist pending live-context changes so the scratch context sees
+            // the current tree state.
+            if modelContext.hasChanges {
+                try modelContext.save()
+            }
+
+            let scratchContext = ModelContext(modelContext.container)
+            scratchContext.autosaveEnabled = false
+            guard let scratchOriginal = scratchContext.model(for: resume.persistentModelID) as? Resume else {
+                throw ResumeRevisionWorkspaceService.WorkspaceError.invalidResumeData(
+                    "Could not load the resume into the preview context"
+                )
+            }
+
             let tempResume = try workspaceService.buildNewResume(
-                from: resume,
+                from: scratchOriginal,
                 revisedNodes: revisedNodes,
                 revisedFontSizes: revisedFontSizes,
-                context: modelContext
+                context: scratchContext
             )
+            // Scratch context is never saved, so this is belt-and-suspenders:
+            // the clone is discarded even if rendering below throws.
+            defer { scratchContext.delete(tempResume) }
 
-            let slug = resume.template?.slug ?? "default"
-            let pdfData = try await pdfGenerator.generatePDF(for: tempResume, template: slug)
+            let pdfData = try await pdfGenerator.generatePDF(for: tempResume, template: template.slug)
 
             // Write to workspace (so read_file can access it too)
             let pdfPath = workspacePath.appendingPathComponent("resume.pdf")
             try pdfData.write(to: pdfPath)
 
             let pageCount = Self.countPDFPages(pdfData)
-
-            // Clean up temp resume
-            modelContext.delete(tempResume)
 
             Logger.info("RevisionAgent: Auto-rendered PDF (\(pdfData.count) bytes, \(pageCount) pages)", category: .ai)
             return RevisionRenderInfo(success: true, pageCount: pageCount, pdfData: pdfData)

@@ -9,6 +9,7 @@ struct ResumeReviewSheet: View {
     @Environment(AppEnvironment.self) private var appEnvironment
     @Environment(ReasoningStreamManager.self) private var reasoningStreamManager
     @Environment(OpenRouterService.self) private var openRouterService
+    @Environment(CoverRefStore.self) private var coverRefStore
     @Binding var selectedResume: Resume?
     @State private var viewModel = ResumeReviewViewModel()
     @Environment(LLMFacade.self) private var llmFacade
@@ -38,8 +39,8 @@ struct ResumeReviewSheet: View {
                     Text(viewModel.fixOverflowStatusMessage.isEmpty ? "Optimizing skills section..." : viewModel.fixOverflowStatusMessage)
                         .multilineTextAlignment(.center)
                         .frame(maxWidth: .infinity, alignment: .center)
-                    if viewModel.currentOverflowLineCount > 0 {
-                        Text("Overflow detected: ~\(viewModel.currentOverflowLineCount) lines")
+                    if viewModel.currentPageLimit > 0 && viewModel.currentPageCount > viewModel.currentPageLimit {
+                        Text("Currently \(viewModel.currentPageCount) pages (limit \(viewModel.currentPageLimit))")
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
@@ -51,6 +52,42 @@ struct ResumeReviewSheet: View {
                     Spacer()
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if let pendingReview = viewModel.pendingChangeReview {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("\(pendingReview.operationTitle): Review Changes")
+                            .font(.headline)
+                        if !viewModel.fixOverflowStatusMessage.isEmpty {
+                            Text(viewModel.fixOverflowStatusMessage)
+                                .textSelection(.enabled)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        if let error = viewModel.fixOverflowError {
+                            Text(error)
+                                .foregroundColor(.red)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        Divider()
+                        Text(pendingReview.diffSummary.isEmpty ? "The AI modified the skills section." : pendingReview.diffSummary)
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .multilineTextAlignment(.leading)
+                        HStack {
+                            Button("Reject Changes") {
+                                Task { await viewModel.rejectPendingChanges() }
+                            }
+                            .buttonStyle(.bordered)
+                            Button("Accept Changes") {
+                                viewModel.acceptPendingChanges()
+                            }
+                            .buttonStyle(.borderedProminent)
+                        }
+                        .padding(.top, 4)
+                    }
+                    .padding()
+                    .background(Color.gray.opacity(0.1))
+                    .cornerRadius(8)
+                }
             } else if !viewModel.reviewResponseText.isEmpty {
                 MarkdownView(markdown: viewModel.reviewResponseText)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -176,7 +213,7 @@ struct ResumeReviewSheet: View {
                             handleSubmit()
                         }
                         .buttonStyle(.borderedProminent)
-                        .disabled(selectedResume == nil)
+                        .disabled(selectedResume == nil || viewModel.pendingChangeReview != nil)
                         Spacer()
                         Button("Close") {
                             viewModel.resetChangeMessage()
@@ -196,7 +233,8 @@ struct ResumeReviewSheet: View {
                 llmFacade: llmFacade,
                 exportCoordinator: appEnvironment.resumeExportCoordinator,
                 reasoningStreamManager: reasoningStreamManager,
-                openRouterService: openRouterService
+                openRouterService: openRouterService,
+                coverRefStore: coverRefStore
             )
         }
     }

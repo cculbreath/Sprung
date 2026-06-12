@@ -52,9 +52,14 @@ import Foundation
         prompt = prompt.replacingOccurrences(of: "{jobDescription}", with: jobApp.jobDescription)
         let resumeText = resume.textResume
         prompt = prompt.replacingOccurrences(of: "{resumeText}", with: resumeText)
-        if includeImage {
-            prompt += "\n\nAdditionally, I am including a PDF image of the resume for visual context."
-        }
+        // Background docs: knowledge cards enabled for this resume
+        let bgDocs = resume.enabledSources.map { "\($0.title):\n\($0.narrative)\n\n" }.joined()
+        prompt = prompt.replacingOccurrences(of: "{backgroundDocs}", with: bgDocs)
+        // Image context sentence
+        let imageText = includeImage
+            ? "I've also attached rasterized resume page image(s) so you can assess the visual layout, typography, and overall design professionalism."
+            : ""
+        prompt = prompt.replacingOccurrences(of: "{includeImage}", with: imageText)
         return prompt
     }
     /// Build custom prompt from options
@@ -73,6 +78,9 @@ import Foundation
             {resumeText}
             """)
         }
+        if options.includeResumeImage {
+            promptComponents.append("{includeImage}")
+        }
         let basePrompt = """
         Please review this resume for the position of {jobPosition} at {companyName}.
         \(promptComponents.joined(separator: "\n\n"))
@@ -85,37 +93,88 @@ import Foundation
     /// Build the fix fits prompt for standard (non-Grok) models
     /// - Parameters:
     ///   - skillsJsonString: JSON representation of skills
+    ///   - pageCount: Current rendered page count of the resume
+    ///   - pageLimit: Page budget from the template manifest
+    ///   - editableNodeIds: IDs of the only nodes the model may modify
+    ///   - writersVoice: Canonical voice block (empty when unavailable)
     ///   - allowEntityMerge: Whether to allow merging redundant entries
     /// - Returns: Complete prompt for fix fits operation
-    func buildFixFitsPrompt(skillsJsonString: String, allowEntityMerge: Bool = false) -> String {
+    func buildFixFitsPrompt(
+        skillsJsonString: String,
+        pageCount: Int,
+        pageLimit: Int,
+        editableNodeIds: Set<String>,
+        writersVoice: String,
+        allowEntityMerge: Bool = false
+    ) -> String {
         let mergeInstructions = allowEntityMerge ? loadPromptTemplate(named: "resume_merge_instructions") : ""
-        return loadPromptTemplateWithSubstitutions(named: "resume_fix_fits", substitutions: [
+        let prompt = loadPromptTemplateWithSubstitutions(named: "resume_fix_fits", substitutions: [
             "skillsJsonString": skillsJsonString,
             "mergeInstructions": mergeInstructions
         ])
+        return prompt + fixFitsConstraintSections(
+            pageCount: pageCount,
+            pageLimit: pageLimit,
+            editableNodeIds: editableNodeIds,
+            writersVoice: writersVoice
+        )
     }
     /// Build the Grok-specific fix fits prompt (text-only approach)
     /// - Parameters:
     ///   - skillsJsonString: JSON representation of skills
-    ///   - overflowLineCount: Number of overflowing lines
+    ///   - pageCount: Current rendered page count of the resume
+    ///   - pageLimit: Page budget from the template manifest
+    ///   - editableNodeIds: IDs of the only nodes the model may modify
+    ///   - writersVoice: Canonical voice block (empty when unavailable)
     ///   - allowEntityMerge: Whether to allow merging redundant entries
     /// - Returns: Complete prompt for Grok fix fits operation
-    func buildGrokFixFitsPrompt(skillsJsonString: String, overflowLineCount: Int = 0, allowEntityMerge: Bool = false) -> String {
-        let overflowGuidance = overflowLineCount > 0
-            ? "Visual analysis indicates approximately \(overflowLineCount) lines of text are overflowing the intended space. Focus your editing efforts on reducing content by roughly this amount."
-            : "Visual analysis indicates the content boundaries are overlapping but no significant text overflow. Make minimal adjustments to ensure clean spacing."
+    func buildGrokFixFitsPrompt(
+        skillsJsonString: String,
+        pageCount: Int,
+        pageLimit: Int,
+        editableNodeIds: Set<String>,
+        writersVoice: String,
+        allowEntityMerge: Bool = false
+    ) -> String {
+        let overflowGuidance = "The rendered resume currently spans \(pageCount) page\(pageCount == 1 ? "" : "s"); the limit is \(pageLimit) page\(pageLimit == 1 ? "" : "s"). Tighten the skills content so the resume fits within the limit."
         let mergeInstructions = allowEntityMerge ? loadPromptTemplate(named: "resume_merge_instructions") : ""
-        return loadPromptTemplateWithSubstitutions(named: "resume_grok_fix_fits", substitutions: [
+        let prompt = loadPromptTemplateWithSubstitutions(named: "resume_grok_fix_fits", substitutions: [
             "overflowGuidance": overflowGuidance,
             "skillsJsonString": skillsJsonString,
             "mergeInstructions": mergeInstructions
         ])
+        return prompt + fixFitsConstraintSections(
+            pageCount: pageCount,
+            pageLimit: pageLimit,
+            editableNodeIds: editableNodeIds,
+            writersVoice: writersVoice
+        )
     }
-    // MARK: - Content Fit Check Prompt
-    /// Build the contents fit prompt for checking if content fits on page
-    /// - Returns: Complete prompt for contents fit check
-    func buildContentsFitPrompt() -> String {
-        return loadPromptTemplate(named: "resume_contents_fit")
+    /// Shared constraint sections appended to both fix fits prompt variants:
+    /// page budget, editable-node restriction, and the writer's voice anchor.
+    private func fixFitsConstraintSections(
+        pageCount: Int,
+        pageLimit: Int,
+        editableNodeIds: Set<String>,
+        writersVoice: String
+    ) -> String {
+        var sections: [String] = []
+        sections.append("""
+
+        PAGE BUDGET:
+        The rendered resume currently spans \(pageCount) page\(pageCount == 1 ? "" : "s") but must fit within \(pageLimit) page\(pageLimit == 1 ? "" : "s"). Reduce the skills content enough to bring the resume within that budget.
+        """)
+        let idList = editableNodeIds.sorted().joined(separator: "\n- ")
+        sections.append("""
+
+        EDITABLE ENTRIES:
+        You may ONLY revise or merge entries with the following ids. Return revisions for these ids exclusively; any other entry must be left untouched:
+        - \(idList)
+        """)
+        if !writersVoice.isEmpty {
+            sections.append("\n\(writersVoice)\n\nAll rewritten titles and descriptions MUST match the voice characteristics above.")
+        }
+        return sections.joined(separator: "\n")
     }
     // MARK: - Console Print Friendly Methods
     /// Creates a console-friendly version of the prompt with truncated long strings

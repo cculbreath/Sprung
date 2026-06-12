@@ -45,12 +45,3 @@ struct FixFitsResponseContainer: Codable, Equatable {
         case mergeOperation = "merge_operation"
     }
 }
-/// Response struct for the "contentsFit" LLM call.
-struct ContentsFitResponse: Codable, Equatable {
-    var contentsFit: Bool
-    var overflowLineCount: Int
-    enum CodingKeys: String, CodingKey {
-        case contentsFit
-        case overflowLineCount = "overflow_line_count"
-    }
-}

@@ -228,6 +228,21 @@ class NativePDFGenerator {
         }
         return try await generatePDFWithChrome(html: htmlContent)
     }
+    /// Resolve the rendering template for a resume using the same store-backed
+    /// logic as export: the resume's own template when the store still has it,
+    /// otherwise the store's default template. Throws when no template can be
+    /// resolved — callers must never substitute a hardcoded slug.
+    @MainActor
+    func resolveTemplate(for resume: Resume) throws -> Template {
+        if let template = resume.template,
+           templateStore.template(slug: template.slug) != nil {
+            return template
+        }
+        if let fallback = templateStore.defaultTemplate() {
+            return fallback
+        }
+        throw PDFGeneratorError.templateNotFound(resume.template?.slug ?? "(no template assigned)")
+    }
     // MARK: - Custom Template Rendering
     @MainActor
     func generatePDFFromCustomTemplate(
