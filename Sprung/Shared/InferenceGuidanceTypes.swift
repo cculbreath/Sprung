@@ -100,6 +100,10 @@ struct VoiceProfile: Codable, Equatable {
     var aspirationalPhrases: [String]   // "What excites me...", "I want to build..."
     var avoidPhrases: [String]          // "leverage", "utilize", "synergy"
     var sampleExcerpts: [String]        // Verbatim voice samples
+    // Lexical register analysis. Optional so profiles stored before these
+    // fields existed still decode.
+    var vocabularyRegister: String?     // Dominant mix of Anglo-Saxon / Latinate / Greek-derived lexis
+    var registerModulation: String?     // When and how the author shifts between registers
 
     init(
         enthusiasm: EnthusiasmLevel = .moderate,
@@ -107,7 +111,9 @@ struct VoiceProfile: Codable, Equatable {
         connectiveStyle: String = "causal",
         aspirationalPhrases: [String] = [],
         avoidPhrases: [String] = [],
-        sampleExcerpts: [String] = []
+        sampleExcerpts: [String] = [],
+        vocabularyRegister: String? = nil,
+        registerModulation: String? = nil
     ) {
         self.enthusiasm = enthusiasm
         self.useFirstPerson = useFirstPerson
@@ -115,6 +121,8 @@ struct VoiceProfile: Codable, Equatable {
         self.aspirationalPhrases = aspirationalPhrases
         self.avoidPhrases = avoidPhrases
         self.sampleExcerpts = sampleExcerpts
+        self.vocabularyRegister = vocabularyRegister
+        self.registerModulation = registerModulation
     }
 }
 

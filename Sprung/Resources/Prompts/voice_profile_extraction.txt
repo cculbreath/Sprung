@@ -36,6 +36,16 @@ Corporate buzzwords they never use (or mock):
 ### 6. Sample Excerpts
 Pull 2-3 verbatim excerpts (20-50 words) that capture their authentic voice.
 
+### 7. Vocabulary Register
+English vocabulary splits into three broad etymological registers:
+- **Anglo-Saxon / Germanic** (plain, casual, concrete): get, build, make, work, show, find, strong
+- **Latinate** (formal, abstract, professional): obtain, construct, fabricate, collaborate, demonstrate, discover, robust
+- **Greek-derived** (technical, scientific): analyze, synthesize, methodology, paradigm, hypothesis, system
+
+Assess BOTH:
+- **vocabularyRegister**: the author's dominant blend. Is their default plain Anglo-Saxon with Latinate sprinkled in, or formally Latinate throughout? Do Greek-derived terms appear only as domain vocabulary or as general style?
+- **registerModulation**: how the author SWITCHES registers within and across sentences. Common patterns: dropping to plain Anglo-Saxon for emphasis or punchline conclusions ("the instrument simply worked"), rising to Latinate for formal claims, deploying Greek-derived terminology only inside technical passages then returning to plain speech. Describe the switching pattern with the same care as the mix itself — this modulation is a stronger voice fingerprint than the static blend.
+
 ## Output
 
 Return JSON with exactly this structure:
@@ -43,13 +53,17 @@ Return JSON with exactly this structure:
 ```json
 {
   "enthusiasm": "moderate",
-  "use_first_person": true,
-  "connective_style": "causal",
-  "aspirational_phrases": ["What excites me", "I want to build"],
-  "avoid_phrases": ["leverage", "utilize", "synergy"],
-  "sample_excerpts": ["I've amended my design philosophy over the years..."]
+  "useFirstPerson": true,
+  "connectiveStyle": "causal",
+  "aspirationalPhrases": ["What excites me", "I want to build"],
+  "avoidPhrases": ["leverage", "utilize", "synergy"],
+  "sampleExcerpts": ["I've amended my design philosophy over the years..."],
+  "vocabularyRegister": "Anglo-Saxon core (build, work, fix) with Latinate vocabulary reserved for design claims; Greek-derived terms appear only as physics domain vocabulary",
+  "registerModulation": "Rises to Latinate when framing a formal argument, then deliberately drops to plain Anglo-Saxon for the concluding point; technical Greek-derived terms stay confined to methods passages"
 }
 ```
+
+Return ONLY the JSON object — no surrounding prose, no markdown fences, and use exactly the camelCase key names shown above.
 
 ## Notes
 

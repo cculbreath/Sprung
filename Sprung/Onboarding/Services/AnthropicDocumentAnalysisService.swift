@@ -114,6 +114,12 @@ enum DocumentAnalysisPrompts {
             if !profile.avoidPhrases.isEmpty {
                 lines.append("- Never use: \(profile.avoidPhrases.joined(separator: ", "))")
             }
+            if let register = profile.vocabularyRegister, !register.isEmpty {
+                lines.append("- Vocabulary register: \(register)")
+            }
+            if let modulation = profile.registerModulation, !modulation.isEmpty {
+                lines.append("- Register modulation: \(modulation)")
+            }
             sections.append("## Author Voice Profile\n\n" + lines.joined(separator: "\n"))
         }
 

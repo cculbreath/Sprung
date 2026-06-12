@@ -105,14 +105,15 @@ final class VoiceProfileExtractionHandler {
                 await eventBus.publish(.artifact(.voicePrimerExtractionStarted(sampleCount: samples.count)))
 
                 guard !samples.isEmpty else {
-                    Logger.warning("🎤 No writing samples found, using default profile", category: .ai)
-                    let defaultProfile = VoiceProfile()
-                    voiceProfileService.storeVoiceProfile(defaultProfile, in: guidanceStore)
-                    await markObjectiveComplete()
+                    Logger.warning("🎤 No writing samples found — completing without a voice profile", category: .ai)
+                    await markObjectiveComplete(
+                        notes: "Completed without voice profile (no writing samples available)",
+                        details: ["noWritingSamples": "true"]
+                    )
                     agentActivityTracker.appendTranscript(
                         agentId: trackerId,
                         entryType: .assistant,
-                        content: "No writing samples available; stored default voice profile"
+                        content: "No writing samples available; no voice profile stored"
                     )
                     agentActivityTracker.markCompleted(agentId: trackerId)
                     return
@@ -126,7 +127,7 @@ final class VoiceProfileExtractionHandler {
                     await eventBus.publish(.artifact(.voicePrimerExtractionCompleted(primer: json)))
                 }
 
-                await markObjectiveComplete()
+                await markObjectiveComplete(notes: "Voice profile extracted and stored")
                 await notifyLLMOfCompletion(profile: profile)
                 Logger.info("🎤 Voice profile extraction complete", category: .ai)
                 agentActivityTracker.appendTranscript(
@@ -140,9 +141,18 @@ final class VoiceProfileExtractionHandler {
                 Logger.error("🎤 Voice profile extraction failed: \(error.localizedDescription)", category: .ai)
                 await eventBus.publish(.artifact(.voicePrimerExtractionFailed(error: error.localizedDescription)))
 
-                let defaultProfile = VoiceProfile()
-                voiceProfileService.storeVoiceProfile(defaultProfile, in: guidanceStore)
-                await markObjectiveComplete()
+                // No fallback profile: a fabricated default would silently
+                // steer downstream voice anchoring. Complete the objective so
+                // onboarding continues, but record the failure — the phase
+                // script reads these details and tells the coordinator the
+                // truth (no voice profile stored).
+                await markObjectiveComplete(
+                    notes: "Completed without voice profile — extraction failed",
+                    details: [
+                        "extractionFailed": "true",
+                        "error": error.localizedDescription
+                    ]
+                )
                 agentActivityTracker.markFailed(agentId: trackerId, error: error.localizedDescription)
             }
         }
@@ -166,13 +176,13 @@ final class VoiceProfileExtractionHandler {
         }
     }
 
-    private func markObjectiveComplete() async {
+    private func markObjectiveComplete(notes: String, details: [String: String]? = nil) async {
         await eventBus.publish(.objective(.statusUpdateRequested(
             id: OnboardingObjectiveId.voicePrimersExtracted.rawValue,
             status: ObjectiveStatus.completed.rawValue,
             source: "voice_profile_handler",
-            notes: "Voice profile extracted and stored",
-            details: nil
+            notes: notes,
+            details: details
         )))
     }
 

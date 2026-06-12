@@ -42,8 +42,7 @@ final class VoiceProfileService {
         }
 
         guard !samples.isEmpty else {
-            Logger.warning("🎤 No writing samples provided, returning default profile", category: .ai)
-            return VoiceProfile()
+            throw VoiceProfileError.noWritingSamples
         }
 
         let modelId = try getModelId()
@@ -59,76 +58,103 @@ final class VoiceProfileService {
         let userEffort = UserDefaults.standard.string(forKey: "reasoningEffort") ?? "medium"
         let reasoning = OpenRouterReasoning(effort: userEffort, includeReasoning: true)
 
-        activeStreamingHandle?.cancel()
-        reasoningStreamManager.clear()
-        reasoningStreamManager.startReasoning(modelName: modelId)
+        let maxAttempts = 3
+        for attempt in 1...maxAttempts {
+            Logger.info("🎤 Voice profile extraction attempt \(attempt)/\(maxAttempts)", category: .ai)
 
-        do {
-            let handle = try await facade.startConversationStreaming(
-                userMessage: prompt,
-                modelId: modelId,
-                reasoning: reasoning,
-                jsonSchema: jsonSchema
-            )
-            activeStreamingHandle = handle
+            activeStreamingHandle?.cancel()
+            reasoningStreamManager.clear()
+            reasoningStreamManager.startReasoning(modelName: modelId)
 
-            var fullResponse = ""
-            var collectingJSON = false
-            var jsonResponse = ""
+            do {
+                let handle = try await facade.startConversationStreaming(
+                    userMessage: prompt,
+                    modelId: modelId,
+                    reasoning: reasoning,
+                    jsonSchema: jsonSchema
+                )
+                activeStreamingHandle = handle
 
-            for try await chunk in handle.stream {
-                if let reasoningContent = chunk.allReasoningText {
-                    reasoningStreamManager.reasoningText += reasoningContent
-                }
-                if let content = chunk.content {
-                    fullResponse += content
-                    if content.contains("{") || collectingJSON {
-                        collectingJSON = true
-                        jsonResponse += content
+                var fullResponse = ""
+
+                for try await chunk in handle.stream {
+                    if let reasoningContent = chunk.allReasoningText {
+                        reasoningStreamManager.reasoningText += reasoningContent
+                    }
+                    if let content = chunk.content {
+                        fullResponse += content
+                    }
+                    if chunk.isFinished {
+                        reasoningStreamManager.isStreaming = false
+                        reasoningStreamManager.isVisible = false
                     }
                 }
-                if chunk.isFinished {
-                    reasoningStreamManager.isStreaming = false
-                    reasoningStreamManager.isVisible = false
+
+                activeStreamingHandle = nil
+
+                // The parser handles fenced/embedded JSON, so feed it the full
+                // response rather than a chunk-boundary-dependent slice.
+                do {
+                    let profile: VoiceProfile = try JSONResponseParser.parseText(fullResponse, as: VoiceProfile.self)
+                    Logger.info(
+                        "🎤 Extracted voice profile: \(profile.enthusiasm.displayName), first person: \(profile.useFirstPerson)",
+                        category: .ai
+                    )
+                    return profile
+                } catch {
+                    // Keep the unparseable response diagnosable from the console log.
+                    Logger.warning(
+                        "🎤 Voice profile response failed to parse (attempt \(attempt)/\(maxAttempts), \(fullResponse.count) chars): \(fullResponse.prefix(2000))",
+                        category: .ai
+                    )
+                    throw error
                 }
+            } catch let error as ModelConfigurationError {
+                cleanUpAfterFailure()
+                throw error
+            } catch {
+                cleanUpAfterFailure()
+                if attempt < maxAttempts { continue }
+                throw error
             }
-
-            activeStreamingHandle = nil
-
-            let responseText = jsonResponse.isEmpty ? fullResponse : jsonResponse
-            let profile: VoiceProfile = try JSONResponseParser.parseText(responseText, as: VoiceProfile.self)
-
-            Logger.info(
-                "🎤 Extracted voice profile: \(profile.enthusiasm.displayName), first person: \(profile.useFirstPerson)",
-                category: .ai
-            )
-            return profile
-        } catch {
-            activeStreamingHandle = nil
-            reasoningStreamManager.isStreaming = false
-            reasoningStreamManager.isVisible = false
-            throw error
         }
+
+        // Unreachable: the loop either returns a profile or throws on the last attempt.
+        throw VoiceProfileError.extractionFailed
+    }
+
+    private func cleanUpAfterFailure() {
+        activeStreamingHandle = nil
+        reasoningStreamManager.isStreaming = false
+        reasoningStreamManager.isVisible = false
     }
 
     /// Store extracted voice profile in guidance store
     func storeVoiceProfile(_ profile: VoiceProfile, in guidanceStore: InferenceGuidanceStore) {
         let attachments = GuidanceAttachments(voiceProfile: profile)
 
+        var promptLines = [
+            "Voice profile for content generation:",
+            "- Enthusiasm: \(profile.enthusiasm.displayName)",
+            "- Person: \(profile.useFirstPerson ? "First person (I built, I discovered)" : "Third person")",
+            "- Connectives: \(profile.connectiveStyle)",
+            "- Aspirational phrases: \(profile.aspirationalPhrases.joined(separator: ", "))",
+            "- NEVER use: \(profile.avoidPhrases.joined(separator: ", "))"
+        ]
+        if let register = profile.vocabularyRegister, !register.isEmpty {
+            promptLines.append("- Vocabulary register: \(register)")
+        }
+        if let modulation = profile.registerModulation, !modulation.isEmpty {
+            promptLines.append("- Register modulation: \(modulation)")
+        }
+        promptLines.append("")
+        promptLines.append("Sample excerpts preserving voice:")
+        promptLines.append(profile.sampleExcerpts.map { "• \"\($0)\"" }.joined(separator: "\n"))
+
         let guidance = InferenceGuidance(
             nodeKey: "objective",
             displayName: "Voice Profile",
-            prompt: """
-            Voice profile for content generation:
-            - Enthusiasm: \(profile.enthusiasm.displayName)
-            - Person: \(profile.useFirstPerson ? "First person (I built, I discovered)" : "Third person")
-            - Connectives: \(profile.connectiveStyle)
-            - Aspirational phrases: \(profile.aspirationalPhrases.joined(separator: ", "))
-            - NEVER use: \(profile.avoidPhrases.joined(separator: ", "))
-
-            Sample excerpts preserving voice:
-            \(profile.sampleExcerpts.map { "• \"\($0)\"" }.joined(separator: "\n"))
-            """,
+            prompt: promptLines.joined(separator: "\n"),
             attachmentsJSON: attachments.asJSON(),
             source: .auto
         )
@@ -139,11 +165,17 @@ final class VoiceProfileService {
 
     enum VoiceProfileError: Error, LocalizedError {
         case llmNotConfigured
+        case noWritingSamples
+        case extractionFailed
 
         var errorDescription: String? {
             switch self {
             case .llmNotConfigured:
                 return "LLM facade not configured"
+            case .noWritingSamples:
+                return "No writing samples available for voice profile extraction"
+            case .extractionFailed:
+                return "Voice profile extraction failed"
             }
         }
     }
@@ -180,9 +212,17 @@ private enum VoiceProfileSchemas {
                 "type": "array",
                 "items": ["type": "string"],
                 "description": "Verbatim excerpts showing voice (20-50 words each)"
+            ],
+            "vocabularyRegister": [
+                "type": "string",
+                "description": "Dominant lexical register mix: plain Anglo-Saxon/Germanic words (get, build, work), formal Latinate vocabulary (obtain, construct, collaborate), and Greek-derived technical terms (analyze, synthesize, methodology). Characterize the blend, e.g. 'Anglo-Saxon core with Latinate terms reserved for technical claims'"
+            ],
+            "registerModulation": [
+                "type": "string",
+                "description": "When and how the author shifts between vocabulary registers — e.g. drops to plain Anglo-Saxon for emphasis or conclusions, rises to Latinate for formal framing, deploys Greek-derived terminology only inside technical passages. Cite the pattern, not just the mix"
             ]
         ],
-        "required": ["enthusiasm", "useFirstPerson", "connectiveStyle"],
+        "required": ["enthusiasm", "useFirstPerson", "connectiveStyle", "vocabularyRegister", "registerModulation"],
         "additionalProperties": false
     ]
 }

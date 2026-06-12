@@ -116,12 +116,30 @@ struct PhaseOneScript: PhaseScript {
                 id: OnboardingObjectiveId.voicePrimersExtracted.rawValue,
                 dependsOn: [OnboardingObjectiveId.writingSamplesCollected.rawValue],
                 autoStartWhenReady: true,
-                onComplete: { _ in
-                    // Voice primers complete in background - no interruption needed
-                    let title = """
-                        Voice primer extraction complete. Voice patterns have been analyzed and stored. \
-                        Continue with current workflow without interruption.
-                        """
+                onComplete: { context in
+                    // Voice primers run in background — no interruption either
+                    // way, but the coordinator must hear the truth when
+                    // extraction failed (no profile was stored).
+                    let title: String
+                    if context.details["extractionFailed"] == "true" {
+                        let error = context.details["error"] ?? "unknown error"
+                        title = """
+                            Voice primer extraction FAILED (\(error)). No voice profile was stored; \
+                            content generation will proceed without voice anchoring. Briefly let the \
+                            user know voice analysis didn't complete and that they can re-run it from \
+                            the Agents panel, then continue with the current workflow.
+                            """
+                    } else if context.details["noWritingSamples"] == "true" {
+                        title = """
+                            Voice primer extraction skipped — no writing samples were available, so no \
+                            voice profile was stored. Continue with current workflow without interruption.
+                            """
+                    } else {
+                        title = """
+                            Voice primer extraction complete. Voice patterns have been analyzed and stored. \
+                            Continue with current workflow without interruption.
+                            """
+                    }
                     return [.coordinatorMessage(title: title, details: ["background": "true"], payload: nil)]
                 }
             ),
