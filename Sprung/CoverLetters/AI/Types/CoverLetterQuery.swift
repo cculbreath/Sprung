@@ -60,6 +60,22 @@ struct BestCoverLetterResponse: Codable {
         scoreAllocations = try container.decodeIfPresent([CoverLetterScore].self, forKey: .scoreAllocations)
     }
 }
+/// Errors thrown while assembling cover letter prompts.
+enum CoverLetterQueryError: LocalizedError {
+    case resumeContextUnavailable(underlying: String)
+
+    var errorDescription: String? {
+        switch self {
+        case .resumeContextUnavailable(let underlying):
+            return "Unable to build the resume context for the cover letter prompt: \(underlying)"
+        }
+    }
+
+    var recoverySuggestion: String? {
+        "Verify the selected resume renders correctly in the Resume tab, then try again."
+    }
+}
+
 @Observable class CoverLetterQuery {
     // MARK: - Properties
     /// Set this to `true` if you want to save a debug file containing the prompt text.
@@ -133,15 +149,32 @@ struct BestCoverLetterResponse: Codable {
     var jobListing: String {
         return jobApp.jobListingString
     }
-    var resumeText: String {
+    /// Builds the resume context for the prompt. Throws when no usable
+    /// resume text exists — cover letters must never be generated against an
+    /// empty RESUME CONTEXT.
+    func resumeContext() throws -> String {
         if !resume.textResume.isEmpty {
             return resume.textResume
         }
-        Logger.debug("⚠️BLANK TEXT RES⚠️")
-        guard let context = try? ResumeTemplateDataBuilder.buildContext(from: resume),
-              let data = try? JSONSerialization.data(withJSONObject: context, options: [.prettyPrinted]),
-              let string = String(data: data, encoding: .utf8) else {
-            return ""
+        let string: String
+        do {
+            let context = try ResumeTemplateDataBuilder.buildContext(from: resume)
+            let data = try JSONSerialization.data(withJSONObject: context, options: [.prettyPrinted])
+            guard let encoded = String(data: data, encoding: .utf8) else {
+                throw CoverLetterQueryError.resumeContextUnavailable(
+                    underlying: "Resume context could not be encoded as UTF-8 text."
+                )
+            }
+            string = encoded
+        } catch let error as CoverLetterQueryError {
+            throw error
+        } catch {
+            throw CoverLetterQueryError.resumeContextUnavailable(underlying: error.localizedDescription)
+        }
+        guard !string.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw CoverLetterQueryError.resumeContextUnavailable(
+                underlying: "The resume produced no content."
+            )
         }
         let byteCount = string.utf8.count
         guard byteCount > Self.maxResumeContextBytes else {
@@ -203,34 +236,58 @@ struct BestCoverLetterResponse: Codable {
         self.exportCoordinator = exportCoordinator
         applicant = Applicant(profile: applicantProfile)
     }
-    // MARK: - System Prompts
-    /// System prompt for cover letter generation
-    func systemPrompt(for modelId: String) -> String {
-        var systemPrompt = CoverLetterPrompts.systemMessage.textContent
-        // Model-specific formatting instructions
-        if modelId.lowercased().contains("gemini") {
-            systemPrompt += " Do not format your response as JSON. Return the cover letter text directly without any JSON wrapping or structure."
-        } else if modelId.lowercased().contains("claude") {
-            systemPrompt += "\n\nIMPORTANT: Return ONLY the plain text body of the cover letter. Do NOT include JSON formatting, do NOT include 'Dear Hiring Manager' or any salutation, do NOT include any closing or signature. Start directly with the first paragraph of the letter body and end with the last paragraph. No JSON, no formatting, just the plain text paragraphs."
-        }
-        return systemPrompt
+    // MARK: - Shared Prompt Blocks
+    /// Anti-fabrication and register constraints applied to every prompt that
+    /// produces employer-facing prose. Ported from the SGM reference
+    /// generators (ObjectiveGenerator).
+    private var constraintsBlock: String {
+        """
+        CONSTRAINTS:
+        1. Use ONLY facts from the job listing, resume context, and background documents provided
+        2. Do NOT invent metrics, percentages, or quantitative claims — any number in the letter must appear verbatim in the provided materials
+        3. Do NOT claim skills, credentials, or experiences that are not documented above
+        4. Match the candidate's writing voice — study the writing style reference carefully
+        5. Avoid generic cover letter phrases
+
+        FORBIDDEN:
+        - Fabricated numbers ("X years of experience", "improved by Y%")
+        - Generic phrases ("results-driven", "passionate about", "proven track record")
+        - Vague claims ("significantly improved", "extensive experience")
+        - LinkedIn buzzwords ("leveraged", "spearheaded", "synergized")
+        """
     }
+
+    /// Output-format rules shared by generation and revision prompts.
+    private var formatBlock: String {
+        """
+        FORMAT:
+        - Return ONLY the body text of the letter: no date, address, salutation, closing, signature, or contact information
+        - Start immediately with the first paragraph and end with the final paragraph
+        - Block-format paragraphs with no indentation; a single newline at the end of each paragraph; no blank lines between paragraphs
+        - Plain text only: no markdown, no JSON, no commentary or explanations
+        """
+    }
+
     // MARK: - Cover Letter Prompts
-    /// Generate prompt for cover letter generation
+    /// Self-contained prompt for cover letter generation.
     @MainActor
-    func generationPrompt() async -> String {
-        // Ensure resume text is fresh
-        try? await exportCoordinator.ensureFreshRenderedText(for: resume)
+    func generationPrompt() async throws -> String {
+        // Ensure resume text is fresh; a stale or failed render must surface,
+        // never silently produce a letter with no resume context.
+        try await exportCoordinator.ensureFreshRenderedText(for: resume)
+        let resumeContextText = try resumeContext()
         var sections = """
+        You are a professional writer drafting a cover letter on behalf of \(applicant.name). \
+        Write grounded, specific prose in the candidate's own voice, based strictly on the documented evidence below.
         ================================================================================
         COVER LETTER GENERATION REQUEST
         ================================================================================
         GOAL:
-        Create a compelling cover letter for \(applicant.name) to secure an interview for the following position:
+        Write the body of a cover letter for \(applicant.name)'s application for the following position:
         JOB LISTING:
         \(jobListing)
         RESUME CONTEXT:
-        \(resumeText)
+        \(resumeContextText)
         """
         if !knowledgeCardDocs.isEmpty {
             sections += """
@@ -246,18 +303,24 @@ struct BestCoverLetterResponse: Codable {
             \(dossier)
             """
         }
+        if !writersVoice.isEmpty {
+            sections += """
+
+            WRITING STYLE REFERENCE:
+            \(writersVoice)
+            """
+        }
         sections += """
 
-        WRITING STYLE REFERENCE:
-        \(writersVoice)
         INSTRUCTIONS:
-        - Write a personalized cover letter that aligns with the job requirements
-        - Reflect the candidate's authentic voice based on the writing samples
-        - Highlight relevant achievements from the resume
-        - Use keywords from the job listing appropriately
-        - Keep the tone professional yet engaging
-        - Focus on value proposition and fit for the role
-        Return only the body text of the cover letter without salutation or closing.
+        - Tailor the letter to the job listing, connecting the candidate's documented experience to the role's actual requirements
+        - Be specific: ground every claim in named projects, technologies, and accomplishments from the resume and background documents
+        - Reflect the candidate's authentic voice as shown in the writing style reference
+        - Keep the tone professional and direct
+
+        \(constraintsBlock)
+
+        \(formatBlock)
         ================================================================================
         """
         let prompt = sections
@@ -266,35 +329,58 @@ struct BestCoverLetterResponse: Codable {
         }
         return prompt
     }
-    /// Generate prompt for cover letter revision
+    /// Self-contained prompt for cover letter revision. Every revision request
+    /// carries the full job/resume/voice context plus the current draft, so it
+    /// is deterministic and independent of any prior conversation state.
     @MainActor
     func revisionPrompt(
         feedback: String,
         editorPrompt: CoverLetterPrompts.EditorPrompts = .improve
-    ) async -> String {
-        try? await exportCoordinator.ensureFreshRenderedText(for: resume)
-        let prompt: String
+    ) async throws -> String {
+        try await exportCoordinator.ensureFreshRenderedText(for: resume)
+        let resumeContextText = try resumeContext()
+        let instruction: String
         if editorPrompt == .custom {
-            prompt = """
-            Upon reading your latest draft, \(applicant.name) has provided the following feedback:
-                \(feedback)
-            Please prepare a revised draft that improves upon the original while incorporating this feedback.
-            Your response should only include the plain full text of the revised letter draft without any
-            markdown formatting or additional explanations or reasoning.
-            Current draft:
-            \(coverLetter.content)
+            instruction = """
+            \(editorPrompt.rawValue)
+            \(feedback)
             """
         } else {
-            prompt = CoverLetterPrompts.generate(
-                coverLetter: coverLetter,
-                resume: resume,
-                mode: .rewrite,
-                applicant: applicant,
-                writersVoice: writersVoice,
-                customFeedbackString: feedback,
-                editorPrompt: editorPrompt
-            )
+            instruction = editorPrompt.rawValue
         }
+        var sections = """
+        You are a professional writer revising a cover letter on behalf of \(applicant.name). \
+        Produce grounded, specific prose in the candidate's own voice, based strictly on the documented evidence below.
+        ================================================================================
+        COVER LETTER REVISION REQUEST
+        ================================================================================
+        The letter accompanies \(applicant.name)'s application for the following position:
+        JOB LISTING:
+        \(jobListing)
+        RESUME CONTEXT:
+        \(resumeContextText)
+        """
+        if !writersVoice.isEmpty {
+            sections += """
+
+            WRITING STYLE REFERENCE:
+            \(writersVoice)
+            """
+        }
+        sections += """
+
+        CURRENT DRAFT:
+        \(coverLetter.content)
+
+        REVISION INSTRUCTIONS:
+        \(instruction)
+
+        \(constraintsBlock)
+
+        \(formatBlock)
+        ================================================================================
+        """
+        let prompt = sections
         if saveDebugPrompt {
             savePromptToDownloads(content: prompt, fileName: "coverLetterRevisionPrompt.txt")
         }

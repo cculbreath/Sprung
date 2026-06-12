@@ -5,6 +5,9 @@ struct CoverLetterReviseButton: View {
     @Environment(CoverLetterStore.self) private var coverLetterStore: CoverLetterStore
     @Environment(CoverLetterService.self) private var coverLetterService: CoverLetterService
     @State private var showReviseCoverLetterSheet = false
+    @State private var errorMessage: String?
+    @State private var showErrorAlert = false
+    @State private var errorNeedsModelSettings = false
     var body: some View {
         Button(action: {
             showReviseCoverLetterSheet = true
@@ -40,6 +43,18 @@ struct CoverLetterReviseButton: View {
         .onReceive(NotificationCenter.default.publisher(for: .triggerReviseCoverLetterButton)) { _ in
             // Programmatically trigger the button action (from menu commands)
             showReviseCoverLetterSheet = true
+        }
+        .alert("Cover Letter Revision Failed", isPresented: $showErrorAlert) {
+            if errorNeedsModelSettings {
+                Button("Open Model Settings") {
+                    NotificationCenter.default.post(name: .showSettings, object: nil)
+                }
+                Button("Cancel", role: .cancel) {}
+            } else {
+                Button("OK", role: .cancel) {}
+            }
+        } message: {
+            Text(errorMessage ?? "An unknown error occurred.")
         }
     }
     @MainActor
@@ -98,10 +113,29 @@ struct CoverLetterReviseButton: View {
                 coverLetterStore.cL = persistedLetter
             }
             Logger.debug("✅ Cover letter revision completed successfully")
+        } catch let error as ModelConfigurationError {
+            // Missing model configuration: route the user to the model
+            // settings picker instead of failing silently.
+            Logger.error("Cover letter revision failed: \(error.localizedDescription)")
+            presentError(error, needsModelSettings: true)
         } catch {
             Logger.error("Error during cover letter revision: \(error.localizedDescription)")
             // If we were working on a new revision, no draft was created
             // If we were updating an existing draft, it remains unchanged
+            presentError(error, needsModelSettings: false)
         }
+    }
+
+    @MainActor
+    private func presentError(_ error: Error, needsModelSettings: Bool) {
+        var message = error.localizedDescription
+        let suggestion = (error as? LocalizedError)?.recoverySuggestion
+            ?? (error as NSError).localizedRecoverySuggestion
+        if let suggestion, !suggestion.isEmpty {
+            message += "\n\n\(suggestion)"
+        }
+        errorMessage = message
+        errorNeedsModelSettings = needsModelSettings
+        showErrorAlert = true
     }
 }

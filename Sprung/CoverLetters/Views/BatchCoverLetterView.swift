@@ -10,7 +10,6 @@ struct BatchCoverLetterView: View {
     @Environment(JobAppStore.self) var jobAppStore: JobAppStore
     @Environment(CoverLetterStore.self) var coverLetterStore: CoverLetterStore
     @Environment(LLMFacade.self) private var llmFacade: LLMFacade
-    @Environment(CoverLetterService.self) private var coverLetterService: CoverLetterService
     @Environment(AppEnvironment.self) private var appEnvironment: AppEnvironment
     @Environment(OpenRouterService.self) private var openRouterService: OpenRouterService
     @Environment(ApplicantProfileStore.self) private var applicantProfileStore: ApplicantProfileStore
@@ -128,7 +127,7 @@ struct BatchCoverLetterView: View {
                                     }
                                 }
                             )) {
-                                Text(revision.rawValue.capitalized)
+                                Text(revision.operation.rawValue)
                                     .font(.system(.body))
                             }
                             .toggleStyle(CheckboxToggleStyle())
@@ -220,7 +219,7 @@ struct BatchCoverLetterView: View {
                                 }
                             }
                         )) {
-                            Text(revision.rawValue.capitalized)
+                            Text(revision.operation.rawValue)
                         }
                         .toggleStyle(CheckboxToggleStyle())
                     }
@@ -329,7 +328,6 @@ struct BatchCoverLetterView: View {
             let generator = BatchCoverLetterGenerator(
                 coverLetterStore: coverLetterStore,
                 llmFacade: llmFacade,
-                coverLetterService: coverLetterService,
                 exportCoordinator: appEnvironment.resumeExportCoordinator,
                 applicantProfileStore: applicantProfileStore,
                 coverRefStore: coverRefStore
@@ -409,6 +407,14 @@ struct BatchCoverLetterView: View {
                 }
                 await MainActor.run {
                     dismiss()
+                }
+            } catch let error as ModelConfigurationError {
+                // Missing model configuration: direct the user to the model
+                // settings picker instead of dismissing as success.
+                await MainActor.run {
+                    let suggestion = error.recoverySuggestion ?? "Open Settings > Models to select a model."
+                    errorMessage = "\(error.localizedDescription) \(suggestion)"
+                    isGenerating = false
                 }
             } catch {
                 await MainActor.run {

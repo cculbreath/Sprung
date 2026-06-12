@@ -33,6 +33,9 @@ struct MultiModelProgressSheet: View {
                 if !service.failedModels.isEmpty {
                     failedModelsSection
                 }
+                if !service.voteIntegrityIssues.isEmpty {
+                    voteIntegritySection
+                }
                 if !service.modelReasonings.isEmpty || service.reasoningSummary != nil || service.isGeneratingSummary {
                     reasoningsSection
                 }
@@ -170,6 +173,27 @@ struct MultiModelProgressSheet: View {
                     .padding(.vertical, 2)
                     if modelId != service.failedModels.keys.max() {
                         Divider()
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+    private var voteIntegritySection: some View {
+        GroupBox("Ballot Integrity") {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Some ballots contained invalid votes. Invalid allocations were excluded from the tallies.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                ForEach(Array(service.voteIntegrityIssues.enumerated()), id: \.offset) { _, issue in
+                    HStack(alignment: .top, spacing: 6) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundColor(.yellow)
+                            .font(.caption)
+                        Text(issue)
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                 }
             }

@@ -8,6 +8,9 @@ struct CoverLetterGenerateButton: View {
     @Environment(CandidateDossierStore.self) private var candidateDossierStore: CandidateDossierStore
     @State private var showCoverLetterModelSheet = false
     @State private var selectedCoverLetterModel = ""
+    @State private var errorMessage: String?
+    @State private var showErrorAlert = false
+    @State private var errorNeedsModelSettings = false
     var body: some View {
         Button(action: {
             showCoverLetterModelSheet = true
@@ -52,6 +55,18 @@ struct CoverLetterGenerateButton: View {
             // Programmatically trigger the button action (from menu commands)
             showCoverLetterModelSheet = true
         }
+        .alert("Cover Letter Generation Failed", isPresented: $showErrorAlert) {
+            if errorNeedsModelSettings {
+                Button("Open Model Settings") {
+                    NotificationCenter.default.post(name: .showSettings, object: nil)
+                }
+                Button("Cancel", role: .cancel) {}
+            } else {
+                Button("OK", role: .cancel) {}
+            }
+        } message: {
+            Text(errorMessage ?? "An unknown error occurred.")
+        }
     }
     @MainActor
     private func generateCoverLetter(
@@ -87,9 +102,29 @@ struct CoverLetterGenerateButton: View {
                 dossierContext: dossierContext
             )
             coverLetterStore.isGeneratingCoverLetter = false
+        } catch let error as ModelConfigurationError {
+            // Missing model configuration: route the user to the model
+            // settings picker instead of failing silently.
+            Logger.error("Cover letter generation failed: \(error.localizedDescription)")
+            coverLetterStore.isGeneratingCoverLetter = false
+            presentError(error, needsModelSettings: true)
         } catch {
             Logger.error("Error generating cover letter: \(error.localizedDescription)")
             coverLetterStore.isGeneratingCoverLetter = false
+            presentError(error, needsModelSettings: false)
         }
+    }
+
+    @MainActor
+    private func presentError(_ error: Error, needsModelSettings: Bool) {
+        var message = error.localizedDescription
+        let suggestion = (error as? LocalizedError)?.recoverySuggestion
+            ?? (error as NSError).localizedRecoverySuggestion
+        if let suggestion, !suggestion.isEmpty {
+            message += "\n\n\(suggestion)"
+        }
+        errorMessage = message
+        errorNeedsModelSettings = needsModelSettings
+        showErrorAlert = true
     }
 }

@@ -22,8 +22,13 @@ class MultiModelCoverLetterService {
     var failedModels: [String: String] = [:]
     var isCompleted = false
     var pendingModels: Set<String> = []
+    /// Recorded ballot problems (votes for absent letters, duplicate
+    /// allocations, malformed point totals). Invalid ballots are excluded from
+    /// the tallies and surfaced here instead of being silently counted.
+    var voteIntegrityIssues: [String] = []
     // MARK: - Private Properties
     private var currentTask: Task<Void, Never>?
+    private var validLetterIds: Set<UUID> = []
     private let modelNameFormatter = CoverLetterModelNameFormatter()
     private let votingProcessor = CoverLetterVotingProcessor()
     private let summaryGenerator = CoverLetterCommitteeSummaryGenerator()
@@ -152,6 +157,7 @@ class MultiModelCoverLetterService {
         modelReasonings.removeAll()
         reasoningSummary = nil
         failedModels.removeAll()
+        voteIntegrityIssues.removeAll()
         Logger.info("✅ All cover letter votes and analysis cleared")
     }
     private func performMultiModelSelection(
@@ -163,6 +169,7 @@ class MultiModelCoverLetterService {
         initializeSelectionState(modelCount: selectedModels.count, models: selectedModels)
         guard let validationResult = await validateSelectionPrerequisites(coverLetter: coverLetter) else { return }
         let (jobApp, query, coverLetters) = validationResult
+        validLetterIds = Set(coverLetters.map { $0.id })
         let modelPrompts = prepareModelPrompts(
             selectedModels: selectedModels,
             query: query,
@@ -198,6 +205,8 @@ class MultiModelCoverLetterService {
         completedOperations = 0
         progress = 0
         pendingModels = models
+        voteIntegrityIssues = []
+        validLetterIds = []
     }
     private func validateSelectionPrerequisites(
         coverLetter: CoverLetter
@@ -218,13 +227,23 @@ class MultiModelCoverLetterService {
             await setError("Applicant profile store unavailable")
             return nil
         }
+        guard let coverRefStore else {
+            await setError("Cover reference store unavailable")
+            return nil
+        }
+        // The committee evaluates every letter for this job app, so it gets
+        // the full style reference: all stored writing samples plus the voice
+        // primer, deterministically ordered and uncapped.
         let query = CoverLetterQuery(
             coverLetter: coverLetter,
             resume: resume,
             jobApp: jobApp,
             exportCoordinator: exportCoordinator,
             applicantProfile: applicantProfileStore.currentProfile(),
-            writersVoice: coverRefStore?.writersVoice ?? "",
+            writersVoice: CoverLetterVoiceContext.build(
+                selectedRefs: coverRefStore.storedCoverRefs,
+                allRefs: coverRefStore.storedCoverRefs
+            ),
             saveDebugPrompt: UserDefaults.standard.bool(forKey: "saveDebugPrompts")
         )
         return (jobApp, query, jobApp.coverLetters)
@@ -235,15 +254,13 @@ class MultiModelCoverLetterService {
         coverLetters: [CoverLetter],
         votingScheme: VotingScheme
     ) -> [String: String] {
-        let modelCapabilities = Dictionary(uniqueKeysWithValues: selectedModels.map { modelId in
+        return Dictionary(uniqueKeysWithValues: selectedModels.map { modelId in
+            // Capability gates come from EnabledLLMStore, never from
+            // model-name heuristics.
             let model = enabledLLMStore?.enabledModels.first(where: { $0.modelId == modelId })
             let supportsSchema = model?.supportsJSONSchema ?? false
             let shouldAvoidSchema = model?.shouldAvoidJSONSchema ?? false
-            return (modelId, (supportsSchema: supportsSchema, shouldAvoidSchema: shouldAvoidSchema))
-        })
-        return Dictionary(uniqueKeysWithValues: selectedModels.map { modelId in
-            let capabilities = modelCapabilities[modelId]!
-            let includeJSONInstructions = !capabilities.supportsSchema || capabilities.shouldAvoidSchema
+            let includeJSONInstructions = !supportsSchema || shouldAvoidSchema
             let prompt = query.bestCoverLetterPrompt(
                 coverLetters: coverLetters,
                 votingScheme: votingScheme,
@@ -269,7 +286,11 @@ class MultiModelCoverLetterService {
                 try Task.checkCancellation()
                 Logger.info("🚀 Starting all \(selectedModels.count) model tasks in parallel")
                 for modelId in selectedModels {
-                    let prompt = modelPrompts[modelId]!
+                    guard let prompt = modelPrompts[modelId] else {
+                        failedModels[modelId] = "No prepared prompt for this model"
+                        Logger.error("🚨 Missing prepared committee prompt for model \(modelId)", category: .ai)
+                        continue
+                    }
                     group.addTask {
                         do {
                             try Task.checkCancellation()
@@ -325,22 +346,62 @@ class MultiModelCoverLetterService {
     private func processSuccessfulResponse(modelId: String, response: BestCoverLetterResponse, votingScheme: VotingScheme) {
         modelReasonings.append((model: modelId, response: response))
         if votingScheme == .firstPastThePost {
-            if let bestUuid = response.bestLetterUuid, let uuid = UUID(uuidString: bestUuid) {
-                voteTally[uuid, default: 0] += 1
-                Logger.debug("🗳️ \(modelId) voted for \(getLetterName(for: bestUuid) ?? bestUuid)")
-            }
-        } else if let scoreAllocations = response.scoreAllocations {
-            let totalAllocated = scoreAllocations.reduce(0) { $0 + $1.score }
-            if totalAllocated != 20 {
-                Logger.debug("⚠️ Model \(modelId) allocated \(totalAllocated) points instead of 20!")
-            }
-            for allocation in scoreAllocations {
-                if let uuid = UUID(uuidString: allocation.letterUuid) {
-                    scoreTally[uuid, default: 0] += allocation.score
-                    Logger.debug("📊 Model \(modelId) allocated \(allocation.score) points to \(getLetterName(for: allocation.letterUuid) ?? allocation.letterUuid)")
-                }
-            }
+            processFirstPastThePostBallot(modelId: modelId, response: response)
+        } else {
+            processScoreVotingBallot(modelId: modelId, response: response)
         }
+    }
+    private func processFirstPastThePostBallot(modelId: String, response: BestCoverLetterResponse) {
+        guard let bestUuid = response.bestLetterUuid, let uuid = UUID(uuidString: bestUuid) else {
+            recordVoteIntegrityIssue("\(modelId) returned no parseable letter UUID for its vote; ballot not counted.")
+            return
+        }
+        guard validLetterIds.contains(uuid) else {
+            recordVoteIntegrityIssue("\(modelId) voted for a letter that is not among the candidates (\(bestUuid)); ballot not counted.")
+            return
+        }
+        voteTally[uuid, default: 0] += 1
+        Logger.debug("🗳️ \(modelId) voted for \(getLetterName(for: bestUuid) ?? bestUuid)")
+    }
+    private func processScoreVotingBallot(modelId: String, response: BestCoverLetterResponse) {
+        guard let scoreAllocations = response.scoreAllocations, !scoreAllocations.isEmpty else {
+            recordVoteIntegrityIssue("\(modelId) returned no score allocations; ballot not counted.")
+            return
+        }
+        var allocatedLetterIds: Set<UUID> = []
+        var countedTotal = 0
+        for allocation in scoreAllocations {
+            let letterLabel = getLetterName(for: allocation.letterUuid) ?? allocation.letterUuid
+            guard let uuid = UUID(uuidString: allocation.letterUuid) else {
+                recordVoteIntegrityIssue("\(modelId) allocated \(allocation.score) points to an unparseable letter id (\(allocation.letterUuid)); allocation discarded.")
+                continue
+            }
+            guard validLetterIds.contains(uuid) else {
+                recordVoteIntegrityIssue("\(modelId) allocated \(allocation.score) points to a letter that is not among the candidates (\(allocation.letterUuid)); allocation discarded.")
+                continue
+            }
+            guard !allocatedLetterIds.contains(uuid) else {
+                recordVoteIntegrityIssue("\(modelId) allocated points to \(letterLabel) more than once; duplicate allocation discarded.")
+                continue
+            }
+            guard allocation.score >= 0 else {
+                recordVoteIntegrityIssue("\(modelId) allocated a negative score (\(allocation.score)) to \(letterLabel); allocation discarded.")
+                continue
+            }
+            allocatedLetterIds.insert(uuid)
+            countedTotal += allocation.score
+            scoreTally[uuid, default: 0] += allocation.score
+            Logger.debug("📊 Model \(modelId) allocated \(allocation.score) points to \(letterLabel)")
+        }
+        if countedTotal != 20 {
+            recordVoteIntegrityIssue("\(modelId)'s counted ballot totals \(countedTotal) points instead of the required 20.")
+        }
+    }
+    /// Records a ballot problem so it surfaces in the UI instead of being
+    /// silently absorbed into the tallies.
+    private func recordVoteIntegrityIssue(_ description: String) {
+        voteIntegrityIssues.append(description)
+        Logger.warning("🗳️ Vote integrity: \(description)", category: .ai)
     }
     private func updateErrorMessageForProgress(totalModels: Int) {
         let successCount = modelReasonings.count
@@ -447,8 +508,8 @@ class MultiModelCoverLetterService {
             }
             // Provide a fallback summary
             let fallbackSummary = summaryGenerator.createFallbackSummary(
-                coverLetter: coverLetters.first!,
                 coverLetters: coverLetters,
+                jobApp: jobApp,
                 modelReasonings: modelReasonings,
                 voteTally: voteTally,
                 scoreTally: scoreTally,

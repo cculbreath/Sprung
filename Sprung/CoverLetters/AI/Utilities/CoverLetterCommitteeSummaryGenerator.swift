@@ -145,8 +145,8 @@ class CoverLetterCommitteeSummaryGenerator {
         return displaySummary
     }
     func createFallbackSummary(
-        coverLetter: CoverLetter,
         coverLetters: [CoverLetter],
+        jobApp: JobApp?,
         modelReasonings: [(model: String, response: BestCoverLetterResponse)],
         voteTally: [UUID: Int],
         scoreTally: [UUID: Int],
@@ -169,7 +169,7 @@ class CoverLetterCommitteeSummaryGenerator {
         }
         fallbackSummary += "\n**Model Verdicts:**\n"
         for reasoning in modelReasonings {
-            if let jobApp = coverLetter.jobApp {
+            if let jobApp {
                 fallbackSummary += "• **\(reasoning.model)**: \(jobApp.replaceUUIDsWithLetterNames(in: reasoning.response.verdict))\n"
             } else {
                 fallbackSummary += "• **\(reasoning.model)**: \(reasoning.response.verdict)\n"

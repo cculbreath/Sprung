@@ -1,47 +1,45 @@
 import Foundation
 import SwiftUI
+
+/// Errors surfaced by batch cover letter operations.
+enum BatchCoverLetterError: LocalizedError {
+    case operationsFailed(failureCount: Int, totalCount: Int, details: [String])
+
+    var errorDescription: String? {
+        switch self {
+        case let .operationsFailed(failureCount, totalCount, details):
+            let summary = "\(failureCount) of \(totalCount) cover letter operations failed."
+            guard !details.isEmpty else { return summary }
+            return summary + "\n" + details.joined(separator: "\n")
+        }
+    }
+}
+
 @MainActor
 class BatchCoverLetterGenerator {
     private let coverLetterStore: CoverLetterStore
     private let llmFacade: LLMFacade
-    private let coverLetterService: CoverLetterService
     private let exportCoordinator: ResumeExportCoordinator
     private let applicantProfileStore: ApplicantProfileStore
     private let coverRefStore: CoverRefStore
     init(
         coverLetterStore: CoverLetterStore,
         llmFacade: LLMFacade,
-        coverLetterService: CoverLetterService,
         exportCoordinator: ResumeExportCoordinator,
         applicantProfileStore: ApplicantProfileStore,
         coverRefStore: CoverRefStore
     ) {
         self.coverLetterStore = coverLetterStore
         self.llmFacade = llmFacade
-        self.coverLetterService = coverLetterService
         self.exportCoordinator = exportCoordinator
         self.applicantProfileStore = applicantProfileStore
         self.coverRefStore = coverRefStore
     }
-    private func executeText(_ prompt: String, modelId: String) async throws -> String {
-        return try await llmFacade.executeText(prompt: prompt, modelId: modelId)
-    }
-    private func startConversation(systemPrompt: String?, userMessage: String, modelId: String) async throws -> (UUID, String) {
-        return try await llmFacade.startConversation(
-            systemPrompt: systemPrompt,
-            userMessage: userMessage,
-            modelId: modelId
-        )
-    }
-    private func continueConversation(userMessage: String, modelId: String, conversationId: UUID) async throws -> String {
-        return try await llmFacade.continueConversation(
-            userMessage: userMessage,
-            modelId: modelId,
-            conversationId: conversationId,
-            images: []
-        )
-    }
-    /// Generates cover letters in batch for multiple models and revisions
+    /// Generates cover letters in batch for multiple models and revisions.
+    /// Each operation is fully self-contained (no shared conversation state),
+    /// so parallel tasks cannot race on each other's context.
+    /// Throws when any operation fails; successfully generated letters are
+    /// already persisted at that point.
     /// - Parameters:
     ///   - baseCoverLetter: The base cover letter to use as template
     ///   - resume: The resume to use for generation
@@ -62,8 +60,7 @@ class BatchCoverLetterGenerator {
     ) async throws {
         // Clean up any existing ungenerated drafts before starting
         cleanupUngeneratedDrafts()
-        // Additional safety: Ensure we're starting with a clean state
-        Logger.info("🚀 Starting batch generation with \(models.count) models and \(revisions.count) revisions")
+        Logger.info("🚀 Starting batch generation with \(models.count) models and \(revisions.count) revisions", category: .ai)
         // Calculate total operations
         let baseGenerations = models.count
         let revisionOperations = models.count * revisions.count
@@ -82,6 +79,10 @@ class BatchCoverLetterGenerator {
         let progressTracker = ProgressTracker()
         // Store generated base letters for revision
         var generatedBaseLetters: [CoverLetter] = []
+        // Accumulate failures so they surface to the caller instead of
+        // silently presenting a partial batch as success.
+        var failureDetails: [String] = []
+        var firstModelConfigurationError: ModelConfigurationError?
         // Phase 1: Generate base cover letters in parallel
         await withTaskGroup(of: GenerationResult.self) { group in
             for model in models {
@@ -101,8 +102,13 @@ class BatchCoverLetterGenerator {
                         )
                         return GenerationResult(success: true, model: model, generatedLetter: coverLetter)
                     } catch {
-                        Logger.error("🚨 Failed to generate base cover letter for model \(model): \(error)")
-                        return GenerationResult(success: false, model: model, error: error.localizedDescription)
+                        Logger.error("🚨 Failed to generate base cover letter for model \(model): \(error)", category: .ai)
+                        return GenerationResult(
+                            success: false,
+                            model: model,
+                            error: error.localizedDescription,
+                            modelConfigurationError: error as? ModelConfigurationError
+                        )
                     }
                 }
             }
@@ -113,7 +119,10 @@ class BatchCoverLetterGenerator {
                 if result.success, let letter = result.generatedLetter {
                     generatedBaseLetters.append(letter)
                 } else {
-                    Logger.error("🚨 Base generation failed for model \(result.model ?? "unknown"): \(result.error ?? "Unknown error")")
+                    failureDetails.append("Generation (\(result.model ?? "unknown model")): \(result.error ?? "Unknown error")")
+                    if firstModelConfigurationError == nil {
+                        firstModelConfigurationError = result.modelConfigurationError
+                    }
                 }
             }
         }
@@ -158,8 +167,13 @@ class BatchCoverLetterGenerator {
                                 )
                                 return GenerationResult(success: true, model: modelToUseForRevisions)
                             } catch {
-                                Logger.error("🚨 Failed to generate revision \(revision.rawValue) for base letter \(baseLetter.name): \(error)")
-                                return GenerationResult(success: false, model: revisionModel, error: error.localizedDescription)
+                                Logger.error("🚨 Failed to generate revision \(revision.operation.rawValue) for base letter \(baseLetter.name): \(error)", category: .ai)
+                                return GenerationResult(
+                                    success: false,
+                                    model: revisionModel,
+                                    error: "\(revision.operation.rawValue) revision of \(baseLetter.name): \(error.localizedDescription)",
+                                    modelConfigurationError: error as? ModelConfigurationError
+                                )
                             }
                         }
                     }
@@ -169,15 +183,31 @@ class BatchCoverLetterGenerator {
                     let completed = await progressTracker.increment()
                     await onProgress(completed, totalOperations)
                     if !result.success {
-                        Logger.error("🚨 Revision generation failed: \(result.error ?? "Unknown error")")
+                        failureDetails.append("Revision: \(result.error ?? "Unknown error")")
+                        if firstModelConfigurationError == nil {
+                            firstModelConfigurationError = result.modelConfigurationError
+                        }
                     }
                 }
             }
         }
         // Final cleanup: Remove any empty letters that might have been created during failed generations
         emergencyCleanup(for: jobApp)
+        // Surface failures: a missing model configuration takes priority so the
+        // UI can route the user to the model settings picker.
+        if let modelConfigurationError = firstModelConfigurationError {
+            throw modelConfigurationError
+        }
+        if !failureDetails.isEmpty {
+            throw BatchCoverLetterError.operationsFailed(
+                failureCount: failureDetails.count,
+                totalCount: totalOperations,
+                details: failureDetails
+            )
+        }
     }
-    /// Generates revisions for existing cover letters
+    /// Generates revisions for existing cover letters.
+    /// Throws when any revision fails; successful revisions are already persisted.
     /// - Parameters:
     ///   - existingLetters: Array of existing cover letters to revise
     ///   - resume: The resume to use for context
@@ -202,6 +232,8 @@ class BatchCoverLetterGenerator {
             }
         }
         let progressTracker = ProgressTracker()
+        var failureDetails: [String] = []
+        var firstModelConfigurationError: ModelConfigurationError?
         // Create task group for parallel execution
         await withTaskGroup(of: GenerationResult.self) { group in
             // For each existing letter
@@ -216,7 +248,13 @@ class BatchCoverLetterGenerator {
                             // Handle "same as generating model" option
                             let modelToUse: String
                             if revisionModel == "SAME_AS_GENERATING" {
-                                modelToUse = letter.generationModel ?? ""
+                                guard let generationModel = letter.generationModel, !generationModel.isEmpty else {
+                                    throw ModelConfigurationError.modelNotConfigured(
+                                        settingKey: "generationModel",
+                                        operationName: "Batch Cover Letter Revision"
+                                    )
+                                }
+                                modelToUse = generationModel
                             } else {
                                 modelToUse = revisionModel
                             }
@@ -233,7 +271,12 @@ class BatchCoverLetterGenerator {
                             )
                             return GenerationResult(success: true, model: modelToUse)
                         } catch {
-                            return GenerationResult(success: false, model: revisionModel, error: error.localizedDescription)
+                            return GenerationResult(
+                                success: false,
+                                model: revisionModel,
+                                error: "\(revision.operation.rawValue) revision of \(letter.sequencedName): \(error.localizedDescription)",
+                                modelConfigurationError: error as? ModelConfigurationError
+                            )
                         }
                     }
                 }
@@ -243,12 +286,27 @@ class BatchCoverLetterGenerator {
                 let completed = await progressTracker.increment()
                 await onProgress(completed, totalOperations)
                 if !result.success {
-                    Logger.error("🚨 Revision generation failed for model \(result.model ?? "unknown"): \(result.error ?? "Unknown error")")
+                    Logger.error("🚨 Revision generation failed for model \(result.model ?? "unknown"): \(result.error ?? "Unknown error")", category: .ai)
+                    failureDetails.append(result.error ?? "Unknown error")
+                    if firstModelConfigurationError == nil {
+                        firstModelConfigurationError = result.modelConfigurationError
+                    }
                 }
             }
         }
+        if let modelConfigurationError = firstModelConfigurationError {
+            throw modelConfigurationError
+        }
+        if !failureDetails.isEmpty {
+            throw BatchCoverLetterError.operationsFailed(
+                failureCount: failureDetails.count,
+                totalCount: totalOperations,
+                details: failureDetails
+            )
+        }
     }
-    /// Generates a single cover letter with specified model
+    /// Generates a single cover letter with the specified model using one
+    /// self-contained request (no conversation state).
     @MainActor
     private func generateSingleCoverLetter(
         baseCoverLetter: CoverLetter,
@@ -259,8 +317,6 @@ class BatchCoverLetterGenerator {
         dossierContext: String? = nil,
         revision: CoverLetterPrompts.EditorPrompts?
     ) async throws -> CoverLetter {
-        // Debug: Verify jobApp parameter is provided
-        Logger.debug("🔍 generateSingleCoverLetter called with jobApp: \(jobApp.id.uuidString)")
         let applicantProfile = applicantProfileStore.currentProfile()
         // Prepare name for the letter (will be used after successful generation)
         let modelName = AIModels.friendlyModelName(for: model) ?? model
@@ -278,79 +334,32 @@ class BatchCoverLetterGenerator {
         }
         // Set up mode
         let mode: CoverAiMode = revision != nil ? .rewrite : .generate
-        // Generate content using direct LLM calls (no temporary CoverLetter objects)
-        let responseText: String
-        var conversationIdForNewLetter: UUID?
-        var usesReasoningModelForNewLetter = false
+        // The voice block comes from the writing samples selected for the base
+        // letter — the same selection the user made in the sheet.
+        let query = CoverLetterQuery(
+            coverLetter: baseCoverLetter,
+            resume: resume,
+            jobApp: jobApp,
+            exportCoordinator: exportCoordinator,
+            applicantProfile: applicantProfile,
+            writersVoice: CoverLetterVoiceContext.build(
+                selectedRefs: baseCoverLetter.enabledRefs,
+                allRefs: coverRefStore.storedCoverRefs
+            ),
+            knowledgeCards: knowledgeCards,
+            dossierContext: dossierContext,
+            saveDebugPrompt: UserDefaults.standard.bool(forKey: "saveDebugPrompts")
+        )
+        let prompt: String
         if let revision = revision {
-            // This is a revision - build prompt and call LLM directly
-            let query = CoverLetterQuery(
-                coverLetter: baseCoverLetter,
-                resume: resume,
-                jobApp: jobApp,
-                exportCoordinator: exportCoordinator,
-                applicantProfile: applicantProfile,
-                writersVoice: coverRefStore.writersVoice,
-                knowledgeCards: knowledgeCards,
-                dossierContext: dossierContext,
-                saveDebugPrompt: UserDefaults.standard.bool(forKey: "saveDebugPrompts")
-            )
-            let userMessage = await query.revisionPrompt(
-                feedback: "",
-                editorPrompt: revision
-            )
-            // Check if we have an existing conversation for revisions
-            if let conversationId = coverLetterService.conversations[baseCoverLetter.id] {
-                responseText = try await continueConversation(
-                    userMessage: userMessage,
-                    modelId: model,
-                    conversationId: conversationId
-                )
-            } else {
-                let systemPrompt = query.systemPrompt(for: model)
-                let (conversationId, initialResponse) = try await startConversation(
-                    systemPrompt: systemPrompt,
-                    userMessage: userMessage,
-                    modelId: model
-                )
-                coverLetterService.conversations[baseCoverLetter.id] = conversationId
-                responseText = initialResponse
-            }
+            prompt = try await query.revisionPrompt(feedback: "", editorPrompt: revision)
         } else {
-            // This is a new generation - build prompt and call LLM directly
-            let query = CoverLetterQuery(
-                coverLetter: baseCoverLetter,
-                resume: resume,
-                jobApp: jobApp,
-                exportCoordinator: exportCoordinator,
-                applicantProfile: applicantProfile,
-                writersVoice: coverRefStore.writersVoice,
-                knowledgeCards: knowledgeCards,
-                dossierContext: dossierContext,
-                saveDebugPrompt: UserDefaults.standard.bool(forKey: "saveDebugPrompts")
-            )
-            let systemPrompt = query.systemPrompt(for: model)
-            let userMessage = await query.generationPrompt()
-            // Check if this is an o1 model that doesn't support system messages
-            let isO1Model = coverLetterService.isReasoningModel(model)
-            usesReasoningModelForNewLetter = isO1Model
-            if isO1Model {
-                let combinedMessage = systemPrompt + "\n\n" + userMessage
-                responseText = try await executeText(combinedMessage, modelId: model)
-            } else {
-                let (newConversationId, initialResponse) = try await startConversation(
-                    systemPrompt: systemPrompt,
-                    userMessage: userMessage,
-                    modelId: model
-                )
-                conversationIdForNewLetter = newConversationId
-                responseText = initialResponse
-            }
+            prompt = try await query.generationPrompt()
         }
-        // Extract cover letter content from response
-        let content = coverLetterService.extractCoverLetterContent(from: responseText, modelId: model)
+        let responseText = try await llmFacade.executeText(prompt: prompt, modelId: model)
+        let content = responseText.trimmingCharacters(in: .whitespacesAndNewlines)
         // Validate that the content is not empty
-        guard !content.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines).isEmpty else {
+        guard !content.isEmpty else {
             throw NSError(domain: "BatchGeneration", code: 1, userInfo: [NSLocalizedDescriptionKey: "Empty response from AI model"])
         }
         // Now create the actual letter object that will be persisted
@@ -375,22 +384,11 @@ class BatchCoverLetterGenerator {
         // Set the final name - always use "Option X" format for consistency
         let nextOptionLetter = newLetter.getNextOptionLetter()
         newLetter.name = "Option \(nextOptionLetter): \(letterName)"
-        // Only persist the letter if generation was successful and content is not empty
-        guard !newLetter.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            Logger.error("🚨 Not persisting cover letter with empty content for model: \(model)")
-            throw NSError(domain: "BatchGeneration", code: 5, userInfo: [NSLocalizedDescriptionKey: "Generated content was empty, letter not persisted"])
-        }
         // Persist the letter after it's fully populated
-        // Note: jobApp is guaranteed to exist due to guard statement above
         coverLetterStore.addLetter(letter: newLetter, to: jobApp)
-        if let conversationIdForNewLetter, !usesReasoningModelForNewLetter {
-            coverLetterService.conversations[newLetter.id] = conversationIdForNewLetter
-        }
-        Logger.debug("📝 Created cover letter: \(newLetter.name) for model: \(model)")
+        Logger.debug("📝 Created cover letter: \(newLetter.name) for model: \(model)", category: .ai)
         return newLetter
     }
-    // REMOVED: generateRevisions method is no longer needed as revision generation
-    // is now handled inline with proper progress tracking
     /// Cleans up any ungenerated draft letters in the store
     func cleanupUngeneratedDrafts() {
         coverLetterStore.deleteUngeneratedDrafts()
@@ -401,7 +399,7 @@ class BatchCoverLetterGenerator {
             letter.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !letter.generated
         }
         for letter in emptyLetters {
-            Logger.warning("🧹 Emergency cleanup: Removing empty cover letter: \(letter.sequencedName)")
+            Logger.warning("🧹 Emergency cleanup: Removing empty cover letter: \(letter.sequencedName)", category: .ai)
             coverLetterStore.deleteLetter(letter)
         }
     }
@@ -412,10 +410,18 @@ private struct GenerationResult {
     let model: String?
     let error: String?
     let generatedLetter: CoverLetter?
-    init(success: Bool, model: String? = nil, error: String? = nil, generatedLetter: CoverLetter? = nil) {
+    let modelConfigurationError: ModelConfigurationError?
+    init(
+        success: Bool,
+        model: String? = nil,
+        error: String? = nil,
+        generatedLetter: CoverLetter? = nil,
+        modelConfigurationError: ModelConfigurationError? = nil
+    ) {
         self.success = success
         self.model = model
         self.error = error
         self.generatedLetter = generatedLetter
+        self.modelConfigurationError = modelConfigurationError
     }
 }
