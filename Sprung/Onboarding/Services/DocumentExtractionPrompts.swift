@@ -56,7 +56,8 @@ enum DocumentExtractionPrompts {
                 "description": "Hints about what types of knowledge cards this doc could support"
             ]
         ],
-        "required": ["documentType", "briefDescription", "summary", "timePeriod", "companies", "roles", "skills", "achievements", "relevanceHints"]
+        "required": ["documentType", "briefDescription", "summary", "timePeriod", "companies", "roles", "skills", "achievements", "relevanceHints"],
+        "additionalProperties": false
     ]
 
     // MARK: - Summarization Prompts

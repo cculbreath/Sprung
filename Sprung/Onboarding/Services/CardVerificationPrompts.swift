@@ -166,7 +166,8 @@ enum CardVerificationPrompts {
                                         "description": "Excerpt copied exactly from the document at the corrected location"
                                     ]
                                 ],
-                                "required": ["documentId", "location"]
+                                "required": ["documentId", "location"],
+                                "additionalProperties": false
                             ]
                         ],
                         "revisedNarrative": [
@@ -174,11 +175,13 @@ enum CardVerificationPrompts {
                             "description": "REQUIRED when verdict is revise: the full narrative with unsupported claims removed, everything else preserved verbatim"
                         ]
                     ],
-                    "required": ["cardIndex", "cardId", "verdict", "unsupportedClaims", "anchorsValid"]
+                    "required": ["cardIndex", "cardId", "verdict", "unsupportedClaims", "anchorsValid"],
+                    "additionalProperties": false
                 ]
             ]
         ],
-        "required": ["verdicts"]
+        "required": ["verdicts"],
+        "additionalProperties": false
     ]
 }
 

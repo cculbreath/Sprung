@@ -206,6 +206,12 @@ actor AnthropicDocumentAnalysisService {
         var summary: DocumentSummary?
         var skills: [Skill]?
         var narrativeCards: [KnowledgeCard]?
+        /// Human-readable descriptions of analysis passes that failed after
+        /// exhausting retries (e.g. "skills (pages 1–50): Status 400 …").
+        /// Empty when every requested pass succeeded. Callers surface these to
+        /// the event log and the user — a failed pass must never silently
+        /// masquerade as "0 results".
+        var passFailures: [String] = []
     }
 
     private let llmFacade: LLMFacade
@@ -316,6 +322,7 @@ actor AnthropicDocumentAnalysisService {
             if let cards = result.narrativeCards {
                 merged.narrativeCards = (merged.narrativeCards ?? []) + cards
             }
+            merged.passFailures += result.passFailures
         }
 
         merged.summary = mergeSummaries(summaryParts, totalChunks: chunks.count)
@@ -379,6 +386,7 @@ actor AnthropicDocumentAnalysisService {
                 Logger.info("✅ Summary generated for \(filename) (\(result.summary?.summary.count ?? 0) chars)", category: .ai)
             } catch {
                 Logger.warning("⚠️ Summary pass failed for \(filename): \(error.localizedDescription)", category: .ai)
+                result.passFailures.append("summary — \(filename): \(error.localizedDescription)")
             }
         }
 
@@ -390,20 +398,35 @@ actor AnthropicDocumentAnalysisService {
         if passes.skills || passes.narrativeCards {
             statusCallback?("Extracting skills and narrative cards from \(filename)...")
 
+            let skillsOutcome: Result<[Skill], Error>?
+            let cardsOutcome: Result<[KnowledgeCard], Error>?
             if passes.skills && passes.narrativeCards && !passes.summary {
-                result.skills = await extractSkills(documentId: documentId, filename: filename, source: source)
-                result.narrativeCards = await extractCards(
+                skillsOutcome = await extractSkills(documentId: documentId, filename: filename, source: source)
+                cardsOutcome = await extractCards(
                     documentId: documentId, filename: filename, source: source, voiceAnchor: voiceAnchor
                 )
             } else {
-                async let skillsTask: [Skill]? = passes.skills
+                async let skillsTask: Result<[Skill], Error>? = passes.skills
                     ? extractSkills(documentId: documentId, filename: filename, source: source)
                     : nil
-                async let cardsTask: [KnowledgeCard]? = passes.narrativeCards
+                async let cardsTask: Result<[KnowledgeCard], Error>? = passes.narrativeCards
                     ? extractCards(documentId: documentId, filename: filename, source: source, voiceAnchor: voiceAnchor)
                     : nil
 
-                (result.skills, result.narrativeCards) = await (skillsTask, cardsTask)
+                (skillsOutcome, cardsOutcome) = await (skillsTask, cardsTask)
+            }
+
+            switch skillsOutcome {
+            case .success(let skills): result.skills = skills
+            case .failure(let error):
+                result.passFailures.append("skill extraction — \(filename): \(error.localizedDescription)")
+            case nil: break
+            }
+            switch cardsOutcome {
+            case .success(let cards): result.narrativeCards = cards
+            case .failure(let error):
+                result.passFailures.append("narrative cards — \(filename): \(error.localizedDescription)")
+            case nil: break
             }
         }
 
@@ -455,16 +478,16 @@ actor AnthropicDocumentAnalysisService {
         documentId: String,
         filename: String,
         source: DocumentAnalysisSource
-    ) async -> [Skill]? {
+    ) async -> Result<[Skill], Error> {
         do {
-            return try await skillBankService.extractSkills(
+            return .success(try await skillBankService.extractSkills(
                 documentId: documentId,
                 filename: filename,
                 source: source
-            )
+            ))
         } catch {
             Logger.warning("🔧 Skill pass failed for \(filename): \(error.localizedDescription)", category: .ai)
-            return nil
+            return .failure(error)
         }
     }
 
@@ -473,17 +496,17 @@ actor AnthropicDocumentAnalysisService {
         filename: String,
         source: DocumentAnalysisSource,
         voiceAnchor: String?
-    ) async -> [KnowledgeCard]? {
+    ) async -> Result<[KnowledgeCard], Error> {
         do {
-            return try await kcExtractionService.extractCards(
+            return .success(try await kcExtractionService.extractCards(
                 documentId: documentId,
                 filename: filename,
                 source: source,
                 voiceAnchor: voiceAnchor
-            )
+            ))
         } catch {
             Logger.warning("📖 Narrative-card pass failed for \(filename): \(error.localizedDescription)", category: .ai)
-            return nil
+            return .failure(error)
         }
     }
 

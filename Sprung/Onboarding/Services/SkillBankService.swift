@@ -79,7 +79,9 @@ actor SkillBankService {
             } catch {
                 Logger.warning("🔧 Error on attempt \(attempt): \(error.localizedDescription)", category: .ai)
                 if attempt < maxAttempts { continue }
-                throw SkillBankError.invalidResponse
+                // Rethrow the underlying error so callers can surface the real
+                // failure (e.g. an API 400) instead of a generic message.
+                throw error
             }
         }
 

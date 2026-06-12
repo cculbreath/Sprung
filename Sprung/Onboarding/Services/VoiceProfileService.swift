@@ -182,6 +182,7 @@ private enum VoiceProfileSchemas {
                 "description": "Verbatim excerpts showing voice (20-50 words each)"
             ]
         ],
-        "required": ["enthusiasm", "useFirstPerson", "connectiveStyle"]
+        "required": ["enthusiasm", "useFirstPerson", "connectiveStyle"],
+        "additionalProperties": false
     ]
 }

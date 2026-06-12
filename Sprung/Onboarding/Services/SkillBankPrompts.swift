@@ -97,7 +97,8 @@ enum SkillBankPrompts {
                                         "description": "How strongly evidence demonstrates skill; implied skills are capped at supporting or mention, never primary"
                                     ]
                                 ],
-                                "required": ["document_id", "location", "context", "strength"]
+                                "required": ["document_id", "location", "context", "strength"],
+                                "additionalProperties": false
                             ]
                         ],
                         "related_skills": [
@@ -110,11 +111,13 @@ enum SkillBankPrompts {
                             "description": "When skill was last used (year or 'present')"
                         ]
                     ],
-                    "required": ["id", "canonical", "ats_variants", "category", "proficiency", "implied", "evidence"]
+                    "required": ["id", "canonical", "ats_variants", "category", "proficiency", "implied", "evidence"],
+                    "additionalProperties": false
                 ]
             ]
         ],
-        "required": ["skills"]
+        "required": ["skills"],
+        "additionalProperties": false
     ]
 
     // MARK: - Curation (post-merge gate)
@@ -194,7 +197,8 @@ enum SkillBankPrompts {
                             "description": "One-line justification for the collapse"
                         ]
                     ],
-                    "required": ["intoSkillId", "absorbedSkillIds", "reasoning"]
+                    "required": ["intoSkillId", "absorbedSkillIds", "reasoning"],
+                    "additionalProperties": false
                 ]
             ],
             "drops": [
@@ -212,10 +216,12 @@ enum SkillBankPrompts {
                             "description": "Why the implied skill has no independent support"
                         ]
                     ],
-                    "required": ["skillId", "reason"]
+                    "required": ["skillId", "reason"],
+                    "additionalProperties": false
                 ]
             ]
         ],
-        "required": ["merges", "drops"]
+        "required": ["merges", "drops"],
+        "additionalProperties": false
     ]
 }

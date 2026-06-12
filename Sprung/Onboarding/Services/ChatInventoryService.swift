@@ -273,7 +273,8 @@ actor ChatInventoryService {
                                         "description": "Short verbatim quote from the user (20-50 words)"
                                     ]
                                 ],
-                                "required": ["document_id", "location"]
+                                "required": ["document_id", "location"],
+                                "additionalProperties": false
                             ]
                         ],
                         "extractable": [
@@ -295,14 +296,17 @@ actor ChatInventoryService {
                                     "items": ["type": "string"],
                                     "description": "High-level terms for job matching"
                                 ]
-                            ]
+                            ],
+                            "additionalProperties": false
                         ]
                     ],
-                    "required": ["id", "card_type", "title", "narrative", "evidence_anchors"]
+                    "required": ["id", "card_type", "title", "narrative", "evidence_anchors"],
+                    "additionalProperties": false
                 ]
             ]
         ],
-        "required": ["cards"]
+        "required": ["cards"],
+        "additionalProperties": false
     ]
 }
 

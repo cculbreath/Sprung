@@ -281,9 +281,14 @@ actor DocumentArtifactMessenger: OnboardingEventEmitter {
         let messageText = buildExtractedContentMessage(artifacts: artifacts)
 
         // Build UI action result with extracted content
+        let docsWithFailures = artifacts.filter { !$0["extractionFailures"].arrayValue.isEmpty }.count
         var result = JSON()
-        result["status"].string = "completed"
-        result["message"].string = "Document extraction complete. \(artifacts.count) document(s) processed."
+        result["status"].string = docsWithFailures > 0 ? "completed_with_errors" : "completed"
+        var completionMessage = "Document extraction complete. \(artifacts.count) document(s) processed."
+        if docsWithFailures > 0 {
+            completionMessage += " ⚠️ \(docsWithFailures) document(s) had extraction passes fail — see per-document notes. Tell the user which documents were affected and that they can re-upload to retry."
+        }
+        result["message"].string = completionMessage
         result["extractedContent"].string = messageText
 
         let resultString = result.rawString() ?? "{}"
@@ -331,6 +336,15 @@ actor DocumentArtifactMessenger: OnboardingEventEmitter {
                 messageText += "- **Detected Type**: \(formatDocType(docType))\n"
             }
             messageText += "- **Size**: \(sizeKB) KB\n\n"
+
+            let extractionFailures = artifact["extractionFailures"].arrayValue.map(\.stringValue)
+            if !extractionFailures.isEmpty {
+                messageText += "⚠️ **Extraction incomplete** — these analysis passes failed (results below are partial):\n"
+                for failure in extractionFailures {
+                    messageText += "  - \(failure)\n"
+                }
+                messageText += "\n"
+            }
 
             if includeFullContent && !extractedText.isEmpty {
                 // Full content for interview context artifacts (writing samples, resumes)

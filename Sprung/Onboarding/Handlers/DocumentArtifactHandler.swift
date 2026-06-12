@@ -275,12 +275,23 @@ actor DocumentArtifactHandler: OnboardingEventEmitter {
                 }
             )
 
-            // Mark agent as completed
+            // Mark agent as completed, noting any analysis passes that failed
+            let extractionFailures = artifactRecord["extractionFailures"].arrayValue.map(\.stringValue)
             await MainActor.run {
+                for failure in extractionFailures {
+                    agentTracker.appendTranscript(
+                        agentId: agentId,
+                        entryType: .error,
+                        content: "Analysis pass failed",
+                        details: failure
+                    )
+                }
                 agentTracker.appendTranscript(
                     agentId: agentId,
                     entryType: .system,
-                    content: "Extraction completed",
+                    content: extractionFailures.isEmpty
+                        ? "Extraction completed"
+                        : "Extraction completed with \(extractionFailures.count) failed analysis pass(es)",
                     details: "Artifact ID: \(artifactRecord["id"].stringValue)"
                 )
                 agentTracker.markCompleted(agentId: agentId)

@@ -234,10 +234,12 @@ actor CardEnrichmentService {
                                 "location": ["type": "string"],
                                 "verbatim_quote": ["type": "string"]
                             ],
-                            "required": ["artifact_id", "location"]
+                            "required": ["artifact_id", "location"],
+                            "additionalProperties": false
                         ]
                     ],
-                    "required": ["category", "statement", "confidence"]
+                    "required": ["category", "statement", "confidence"],
+                    "additionalProperties": false
                 ]
             ],
             "suggested_bullets": [
@@ -266,11 +268,13 @@ actor CardEnrichmentService {
                         "text": ["type": "string"],
                         "preservation_reason": ["type": "string"]
                     ],
-                    "required": ["context", "location", "text", "preservation_reason"]
+                    "required": ["context", "location", "text", "preservation_reason"],
+                    "additionalProperties": false
                 ]
             ]
         ],
-        "required": ["facts", "suggested_bullets", "outcomes", "technologies", "verbatim_excerpts"]
+        "required": ["facts", "suggested_bullets", "outcomes", "technologies", "verbatim_excerpts"],
+        "additionalProperties": false
     ]
 }
 

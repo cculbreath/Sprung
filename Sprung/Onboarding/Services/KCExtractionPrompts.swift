@@ -88,7 +88,8 @@ enum KCExtractionPrompts {
                                         "description": "Verbatim excerpt showing the author's reasoning and voice, not just achievement statements (20-50 words)"
                                     ]
                                 ],
-                                "required": ["document_id", "location"]
+                                "required": ["document_id", "location"],
+                                "additionalProperties": false
                             ]
                         ],
                         "extractable": [
@@ -110,7 +111,8 @@ enum KCExtractionPrompts {
                                     "items": ["type": "string"],
                                     "description": "High-level terms for job matching"
                                 ]
-                            ]
+                            ],
+                            "additionalProperties": false
                         ],
                         "date_range": [
                             "type": "string",
@@ -126,10 +128,12 @@ enum KCExtractionPrompts {
                             "description": "IDs of related cards"
                         ]
                     ],
-                    "required": ["id", "card_type", "title", "narrative", "evidence_anchors"]
+                    "required": ["id", "card_type", "title", "narrative", "evidence_anchors"],
+                    "additionalProperties": false
                 ]
             ]
         ],
-        "required": ["document_type", "cards"]
+        "required": ["document_type", "cards"],
+        "additionalProperties": false
     ]
 }

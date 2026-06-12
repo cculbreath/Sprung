@@ -106,6 +106,7 @@ actor DocumentProcessingService {
         let documentSummary: DocumentSummary?
         let skills: [Skill]?
         let narrativeCards: [KnowledgeCard]?
+        let passFailures: [String]
 
         // For writing samples, generate a descriptive name
         var writingSampleName: String?
@@ -131,6 +132,7 @@ actor DocumentProcessingService {
             documentSummary = nil
             skills = nil
             narrativeCards = nil
+            passFailures = []
         } else if isResume {
             // Resumes skip summary (full text sent to LLM via interviewContext)
             // but still generate skills and narrative cards
@@ -148,9 +150,14 @@ actor DocumentProcessingService {
             )
             skills = analysis?.skills
             narrativeCards = analysis?.narrativeCards
+            passFailures = analysis?.passFailures ?? []
             let skillCount = skills?.count ?? 0
             let kcCount = narrativeCards?.count ?? 0
-            statusCallback?("Extraction complete: \(skillCount) skills, \(kcCount) narrative cards")
+            if passFailures.isEmpty {
+                statusCallback?("Extraction complete: \(skillCount) skills, \(kcCount) narrative cards")
+            } else {
+                statusCallback?("⚠️ Extraction incomplete (\(skillCount) skills, \(kcCount) narrative cards) — \(Self.failureSummary(passFailures))")
+            }
         } else {
             // Steps 3 & 4: Run the full Anthropic analysis pass-set against one
             // cached document prefix: summary first (warms the prompt cache),
@@ -168,12 +175,17 @@ actor DocumentProcessingService {
             documentSummary = analysis?.summary ?? DocumentSummary.fallback(from: extractedText, filename: filename)
             skills = analysis?.skills
             narrativeCards = analysis?.narrativeCards
+            passFailures = analysis?.passFailures ?? []
 
             let summaryChars = documentSummary?.summary.count ?? 0
             let skillCount = skills?.count ?? 0
             let kcCount = narrativeCards?.count ?? 0
-            statusCallback?("Summary (\(summaryChars) chars) + \(skillCount) skills + \(kcCount) narrative cards complete")
-            Logger.info("Document analysis complete: summary=\(summaryChars) chars, skills=\(skillCount), KCs=\(kcCount)", category: .ai)
+            if passFailures.isEmpty {
+                statusCallback?("Summary (\(summaryChars) chars) + \(skillCount) skills + \(kcCount) narrative cards complete")
+            } else {
+                statusCallback?("⚠️ Extraction incomplete: summary (\(summaryChars) chars), \(skillCount) skills, \(kcCount) narrative cards — \(Self.failureSummary(passFailures))")
+            }
+            Logger.info("Document analysis complete: summary=\(summaryChars) chars, skills=\(skillCount), KCs=\(kcCount), failedPasses=\(passFailures.count)", category: .ai)
         }
 
         // Step 5: Create artifact record
@@ -269,6 +281,13 @@ actor DocumentProcessingService {
             artifactRecord["narrativeCards_stats"] = kcStats
         }
 
+        // Record analysis passes that failed after exhausting retries so the
+        // failure is visible downstream (event log, coordinator message, UI)
+        // instead of masquerading as "0 results".
+        if !passFailures.isEmpty {
+            artifactRecord["extractionFailures"].arrayObject = passFailures
+        }
+
         // Persist both upload metadata and extraction metadata
         var combinedMetadata = metadata
         if !artifact.metadata.isEmpty {
@@ -286,6 +305,15 @@ actor DocumentProcessingService {
         }
         Logger.info("📦 Artifact record created: \(artifactId)", category: .ai)
         return artifactRecord
+    }
+
+    /// Condense pass-failure descriptions for a one-line status message.
+    /// Full failure strings travel on the artifact record; the status line
+    /// keeps each entry short enough to read in the processing indicator.
+    private static func failureSummary(_ failures: [String], perEntryLimit: Int = 200) -> String {
+        failures
+            .map { $0.count > perEntryLimit ? String($0.prefix(perEntryLimit)) + "…" : $0 }
+            .joined(separator: " | ")
     }
 
     // MARK: - Anthropic Analysis
