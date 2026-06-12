@@ -161,54 +161,65 @@ actor DocumentArtifactHandler: OnboardingEventEmitter {
         queueProcessingTask = Task { [weak self] in
             guard let self else { return }
             await self.processQueue()
-            await self.clearQueueTask()
+            await self.finishQueueTask()
         }
     }
 
-    /// Clear the queue processing task reference (must be called from actor context)
-    private func clearQueueTask() {
+    /// Clear the queue task, then restart if files landed between the queue
+    /// draining and this cleanup — handleEvent's startQueueProcessingIfNeeded
+    /// saw a live task for those files, so they're this method's to pick up.
+    private func finishQueueTask() {
         queueProcessingTask = nil
+        if !pendingFiles.isEmpty {
+            startQueueProcessingIfNeeded()
+        }
     }
 
-    /// Process files from the queue with controlled concurrency using TaskGroup
+    /// Process files from the queue with controlled concurrency using TaskGroup.
+    ///
+    /// Pulls from the LIVE `pendingFiles` queue at every refill — never a
+    /// snapshot. Files uploaded while extraction is running are appended by
+    /// handleEvent (whose startQueueProcessingIfNeeded is a no-op because this
+    /// task is alive), so they MUST join the running drain or they'd be
+    /// stranded until the next upload after this task clears.
     private func processQueue() async {
         await withTaskGroup(of: Void.self) { group in
-            var fileIterator = pendingFiles.makeIterator()
-            pendingFiles.removeAll()  // Clear the pending list as we're processing them
-
             // Start initial batch up to max concurrency
             var activeCount = 0
-            while activeCount < maxConcurrentExtractions,
-                  let file = fileIterator.next() {
+            while activeCount < maxConcurrentExtractions, !pendingFiles.isEmpty {
+                let queued = pendingFiles.removeFirst()
                 activeProcessingCount += 1
                 activeCount += 1
                 updateExtractionStatus()
                 group.addTask { [weak self] in
                     guard let self else { return }
-                    await self.processQueuedFile(file)
+                    await self.processQueuedFile(queued)
                 }
             }
 
-            // As tasks complete, start new ones
+            // As tasks complete, top back up to max concurrency (late arrivals
+            // may have queued more than one file since the last completion)
             for await _ in group {
                 activeProcessingCount -= 1
                 activeCount -= 1
                 updateExtractionStatus()
 
-                if let file = fileIterator.next() {
+                while activeCount < maxConcurrentExtractions, !pendingFiles.isEmpty {
+                    let queued = pendingFiles.removeFirst()
                     activeProcessingCount += 1
                     activeCount += 1
                     updateExtractionStatus()
                     group.addTask { [weak self] in
                         guard let self else { return }
-                        await self.processQueuedFile(file)
+                        await self.processQueuedFile(queued)
                     }
                 }
             }
         }
 
-        // All done - clear extraction indicator
-        await emit(.processing(.extractionStateChanged(inProgress: false, statusMessage: nil)))
+        // Reflect final state — emits inProgress: false only when nothing is
+        // pending or active (finishQueueTask may be about to restart the drain)
+        updateExtractionStatus()
         Logger.info("📄 Queue processing complete", category: .ai)
     }
 
