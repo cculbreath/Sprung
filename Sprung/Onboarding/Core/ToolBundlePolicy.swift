@@ -115,7 +115,11 @@ struct ToolBundlePolicy {
 
         .p1_jobSearchContext: [
             OnboardingToolName.getUserOption.rawValue,        // PRIMARY TOOL - use liberally
-            OnboardingToolName.ingestWritingSample.rawValue   // If they paste something
+            OnboardingToolName.ingestWritingSample.rawValue,  // If they paste something
+            // next_phase must be reachable here: job_search_context_captured has no
+            // automated completion signal, so the LLM decides when context is captured.
+            // Phase 1→2 validation (profile name+email) still gates the transition.
+            OnboardingToolName.nextPhase.rawValue
         ],
 
         .p1_profileIntake: [

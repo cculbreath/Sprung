@@ -22,6 +22,10 @@ actor QueueDrainCoordinator {
 
     private var isDraining = false
 
+    /// Returns the live interview phase, used to detect stale queued phase advances.
+    /// Wired post-init by OnboardingDependencyContainer (StateCoordinator is built later).
+    private var phaseProvider: (() async -> InterviewPhase)?
+
     // MARK: - Initialization
 
     init(queue: UserActionQueue, gate: DrainGate, eventBus: EventCoordinator) {
@@ -37,6 +41,11 @@ actor QueueDrainCoordinator {
         }
 
         Logger.info("QueueDrainCoordinator initialized", category: .ai)
+    }
+
+    /// Wire the live phase source. Called once during dependency container setup.
+    func setPhaseProvider(_ provider: @escaping () async -> InterviewPhase) {
+        phaseProvider = provider
     }
 
     // MARK: - Drain Operations
@@ -136,6 +145,21 @@ actor QueueDrainCoordinator {
     }
 
     private func processPhaseAdvance(from: InterviewPhase, to: InterviewPhase) async {
+        // STALE-ACTION GUARD: the action captured `from` at enqueue time, but the
+        // phase may have moved while the action sat in the queue (e.g., a forced
+        // skip transition). Replaying it would rewind the phase and tell the LLM
+        // a transition happened that contradicts its system context.
+        if let phaseProvider {
+            let livePhase = await phaseProvider()
+            guard livePhase == from else {
+                Logger.warning(
+                    "🚮 QueueDrainCoordinator: Dropping stale phase advance \(from.rawValue) → \(to.rawValue) (current phase: \(livePhase.rawValue))",
+                    category: .ai
+                )
+                return
+            }
+        }
+
         // Block gate while awaiting LLM response to phase notification
         await MainActor.run { gate.blockForLLMResponse() }
 

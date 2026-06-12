@@ -511,6 +511,14 @@ final class OnboardingDependencyContainer {
             Task { @MainActor in services.extractionManagementService.updateExtractionProgress(with: update) }
         }
 
+        // Wire live phase source so queued phase advances are dropped when stale
+        // (StateCoordinator does not exist yet when QueueDrainCoordinator is built)
+        let stateForPhaseProvider = self.state
+        let drainCoordinator = self.queueDrainCoordinator
+        Task {
+            await drainCoordinator.setPhaseProvider { await stateForPhaseProvider.phase }
+        }
+
         // 15. Start conversation log listening
         conversationLogStore.startListening(eventBus: core.eventBus)
 

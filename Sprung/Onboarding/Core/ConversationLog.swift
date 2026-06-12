@@ -281,10 +281,38 @@ actor ConversationLog {
             toolCalls: calls,
             timestamp: Date()
         )
-        entries.append(entry)
+
+        // CAUSAL ORDERING: this turn answers a request that predates any user
+        // entries enqueued while its stream was in flight (user entries append at
+        // enqueue/chatbox time; assistant entries append at stream finalize). If
+        // such entries sit at the tail awaiting their own request build (no wire
+        // text recorded yet), insert the assistant turn BEFORE them — otherwise
+        // their request would serialize assistant-final and the API rejects it
+        // ("this model does not support assistant message prefill"). Only
+        // text-only turns are reordered: turns WITH tool calls must stay last
+        // (pending slots are only fillable on the last entry) and their wire form
+        // ends with a tool_result user message, so they can never go out
+        // assistant-final.
+        var insertionIndex = entries.count
+        if calls?.isEmpty ?? true {
+            while insertionIndex > 0 {
+                let previous = entries[insertionIndex - 1]
+                guard previous.isUser, userWireText[previous.id] == nil else { break }
+                insertionIndex -= 1
+            }
+        }
 
         let toolCount = calls?.count ?? 0
-        Logger.info("ConversationLog: Appended assistant message with \(toolCount) tool call(s)", category: .ai)
+        if insertionIndex < entries.count {
+            entries.insert(entry, at: insertionIndex)
+            Logger.info(
+                "ConversationLog: Inserted assistant message before \(entries.count - 1 - insertionIndex) pending user entr(ies) to preserve causal order",
+                category: .ai
+            )
+        } else {
+            entries.append(entry)
+            Logger.info("ConversationLog: Appended assistant message with \(toolCount) tool call(s)", category: .ai)
+        }
 
         // Publish event for persistence
         await eventBus.publish(.llm(.conversationEntryAppended(entry: entry)))

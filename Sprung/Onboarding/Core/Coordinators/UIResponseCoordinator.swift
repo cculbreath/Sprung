@@ -84,14 +84,20 @@ final class UIResponseCoordinator {
         // Handle special skip phase approval
         if result.source == "skip_phase_approval" {
             let approved = selectionIds.contains("approve")
-            await state.setUserApprovedKCSkip(approved)
+            let currentPhase = await state.phase
+
+            // The KC-skip flag is only consumed by Phase 3→4 validation; setting it
+            // from any other phase would silently pre-approve skipping KC generation.
+            if currentPhase == .phase3EvidenceCollection {
+                await state.setUserApprovedKCSkip(approved)
+            }
             Logger.info("📋 Skip phase approval: \(approved ? "approved" : "rejected")", category: .ai)
 
             // FORCED PHASE TRANSITION: When user approves, execute immediately
             // This bypasses the LLM to prevent dead-end stalls where the LLM
             // acknowledges but fails to call next_phase
-            if approved {
-                await forcePhaseTransition(to: .phase4StrategicSynthesis, reason: "User approved skip to next phase")
+            if approved, let nextPhase = currentPhase.next() {
+                await forcePhaseTransition(to: nextPhase, reason: "User approved skip to next phase")
                 Logger.info("⚡ Forced phase transition executed after user approval", category: .ai)
             }
         }
