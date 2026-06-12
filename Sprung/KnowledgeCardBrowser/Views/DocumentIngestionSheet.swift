@@ -269,8 +269,8 @@ struct DocumentIngestionSheet: View {
 
     private func sourceRowView(_ url: URL) -> some View {
         HStack {
-            Image(systemName: isGitRepository(url) ? "folder.fill" : documentIcon(for: url))
-                .foregroundStyle(isGitRepository(url) ? .orange : .blue)
+            Image(systemName: isDirectory(url) ? "folder.fill" : documentIcon(for: url))
+                .foregroundStyle(isDirectory(url) ? .orange : .blue)
                 .frame(width: 24)
 
             VStack(alignment: .leading, spacing: 2) {
@@ -278,7 +278,7 @@ struct DocumentIngestionSheet: View {
                     .font(.subheadline)
                     .lineLimit(1)
 
-                Text(isGitRepository(url) ? "Git Repository" : url.pathExtension.uppercased())
+                Text(isDirectory(url) ? "Code Folder" : url.pathExtension.uppercased())
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }
@@ -381,10 +381,9 @@ struct DocumentIngestionSheet: View {
         }
     }
 
-    private func isGitRepository(_ url: URL) -> Bool {
-        let gitDir = url.appendingPathComponent(".git")
+    private func isDirectory(_ url: URL) -> Bool {
         var isDirectory: ObjCBool = false
-        return FileManager.default.fileExists(atPath: gitDir.path, isDirectory: &isDirectory) && isDirectory.boolValue
+        return FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory) && isDirectory.boolValue
     }
 
     private func handleFileSelection(_ result: Result<[URL], Error>) {
@@ -405,17 +404,12 @@ struct DocumentIngestionSheet: View {
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
         panel.allowsMultipleSelection = false
-        panel.message = "Select a Git repository folder"
+        panel.message = "Select a code folder (git history is used when available)"
         panel.prompt = "Select"
 
         if panel.runModal() == .OK, let url = panel.url {
-            if isGitRepository(url) {
-                if !sources.contains(where: { $0.absoluteString == url.absoluteString }) {
-                    sources.append(url)
-                }
-            } else {
-                // Show error - not a git repo
-                Logger.warning("⚠️ DocumentIngestionSheet: Selected folder is not a git repository", category: .ai)
+            if !sources.contains(where: { $0.absoluteString == url.absoluteString }) {
+                sources.append(url)
             }
         }
     }

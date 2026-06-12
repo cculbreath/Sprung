@@ -116,21 +116,15 @@ struct PersistentUploadDropZone: View {
 
     private func selectGitRepository() {
         let panel = NSOpenPanel()
-        panel.title = "Select Git Repository"
-        panel.message = "Choose the root folder of a git repository to analyze"
+        panel.title = "Select Code Folder"
+        panel.message = "Choose the root folder of a codebase to analyze (git history is used when available)"
         panel.canChooseFiles = false
         panel.canChooseDirectories = true
         panel.allowsMultipleSelection = false
         panel.canCreateDirectories = false
 
         if panel.runModal() == .OK, let url = panel.url {
-            // Verify it's a git repo
-            let gitDir = url.appendingPathComponent(".git")
-            if FileManager.default.fileExists(atPath: gitDir.path) {
-                onSelectGitRepo?(url)
-            } else {
-                Logger.warning("Selected directory is not a git repository: \(url.path)", category: .ai)
-            }
+            onSelectGitRepo?(url)
         }
     }
 }

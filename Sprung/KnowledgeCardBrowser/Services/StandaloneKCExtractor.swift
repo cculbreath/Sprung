@@ -87,7 +87,9 @@ class StandaloneKCExtractor {
                 group.addTask { [weak self] in
                     guard let self else { return (index, nil) }
                     do {
-                        if await self.isGitRepository(url) {
+                        if await self.isDirectory(url) {
+                            // Directories ingest as codebases — git history when
+                            // usable, filesystem evidence otherwise.
                             return (index, try await self.extractGitRepository(url, onGitProgress: onGitProgress))
                         } else {
                             return (index, try await self.extractDocument(url))
@@ -258,10 +260,9 @@ class StandaloneKCExtractor {
 
     // MARK: - Private: Git Repository Extraction
 
-    private func isGitRepository(_ url: URL) -> Bool {
-        let gitDir = url.appendingPathComponent(".git")
+    private func isDirectory(_ url: URL) -> Bool {
         var isDirectory: ObjCBool = false
-        return FileManager.default.fileExists(atPath: gitDir.path, isDirectory: &isDirectory) && isDirectory.boolValue
+        return FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory) && isDirectory.boolValue
     }
 
     private func extractGitRepository(_ url: URL, onGitProgress: @escaping (Int, Int, String) -> Void) async throws -> JSON {

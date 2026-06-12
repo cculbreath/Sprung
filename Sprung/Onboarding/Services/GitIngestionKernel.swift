@@ -51,10 +51,13 @@ actor GitIngestionKernel {
         let pendingId = UUID().uuidString
         let repoName = source.lastPathComponent
 
-        // Verify it's a git repo
-        let gitDir = source.appendingPathComponent(".git")
-        guard FileManager.default.fileExists(atPath: gitDir.path) else {
-            throw GitIngestionError.notAGitRepository(source.path)
+        // Any readable directory ingests as a codebase. Git history is the
+        // preferred evidence but optional — GitEvidenceCollector falls back to
+        // a filesystem scan when history is missing or corrupt.
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: source.path, isDirectory: &isDirectory),
+              isDirectory.boolValue else {
+            throw GitIngestionError.notADirectory(source.path)
         }
 
         let pending = PendingArtifact(
@@ -320,15 +323,20 @@ actor GitIngestionKernel {
 // MARK: - Errors
 
 enum GitIngestionError: LocalizedError {
-    case notAGitRepository(String)
+    case notADirectory(String)
+    case noReadableFiles(String)
     case noLLMFacade
     case analysisEmpty
     case invalidOutput
 
     var errorDescription: String? {
         switch self {
-        case .notAGitRepository(let path):
-            return "The selected directory is not a git repository: \(path)"
+        case .notADirectory(let path):
+            return "The selected path is not a directory: \(path)"
+        case .noReadableFiles(let path):
+            return "The directory contains no readable source files — it may be an incomplete copy "
+                + "(empty folder structure only). Check the directory contents, or point the scan at "
+                + "an intact copy of the codebase: \(path)"
         case .noLLMFacade:
             return "LLM service is not configured. Please check your API settings."
         case .analysisEmpty:
