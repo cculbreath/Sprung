@@ -12,6 +12,15 @@ struct OnboardingInterviewView: View {
     )
     @State private var showResumePrompt = false
     @State private var showSetupWizard = false
+    @State private var showBudgetSheet = false
+    @State private var pendingStartAction: PendingStartAction?
+
+    /// Interview start deferred until the budget sheet confirms model choices.
+    enum PendingStartAction {
+        case fresh
+        case resume
+        case startOver
+    }
     @AppStorage("onboardingAnthropicModelId") private var anthropicModelId = ""
     @AppStorage("onboardingInterviewAllowWebSearchDefault") private var defaultWebSearchAllowed = true
 
@@ -148,10 +157,12 @@ struct OnboardingInterviewView: View {
             })
             .alert("Existing Onboarding Data Found", isPresented: $showResumePrompt) {
                 Button("Resume") {
-                    resumeInterview()
+                    pendingStartAction = .resume
+                    showBudgetSheet = true
                 }
                 Button("Start Over", role: .destructive) {
-                    startOverInterview()
+                    pendingStartAction = .startOver
+                    showBudgetSheet = true
                 }
                 Button("Cancel", role: .cancel) { }
             } message: {
@@ -177,6 +188,22 @@ struct OnboardingInterviewView: View {
                 .environment(appEnvironment.appState)
                 .environment(enabledLLMStore)
                 .environment(appEnvironment.openRouterService)
+            }
+            // Pre-run budget chooser — every interview start passes through here
+            .sheet(isPresented: $showBudgetSheet) {
+                ModelBudgetSheet(
+                    llmFacade: appEnvironment.llmFacade,
+                    openRouterService: appEnvironment.openRouterService,
+                    onProceed: {
+                        showBudgetSheet = false
+                        executePendingStart()
+                    },
+                    onOpenSettings: openSettings,
+                    onCancel: {
+                        showBudgetSheet = false
+                        pendingStartAction = nil
+                    }
+                )
             }
         return withSheets
             .onAppear {
@@ -363,33 +390,36 @@ private extension OnboardingInterviewView {
         return "Using \(display) with web search \(webText)."
     }
     func beginInterview() {
-        Task { @MainActor in
-            guard interviewCoordinator.ui.isActive == false else { return }
+        guard interviewCoordinator.ui.isActive == false else { return }
 
-            // Check for existing onboarding data (session, ResRefs, CoverRefs, ExperienceDefaults)
-            if interviewCoordinator.hasExistingOnboardingData() {
-                Logger.info("📝 Found existing onboarding data, showing resume prompt", category: .ai)
-                showResumePrompt = true
-                return
+        // Check for existing onboarding data (session, ResRefs, CoverRefs, ExperienceDefaults)
+        if interviewCoordinator.hasExistingOnboardingData() {
+            Logger.info("📝 Found existing onboarding data, showing resume prompt", category: .ai)
+            showResumePrompt = true
+            return
+        }
+
+        pendingStartAction = .fresh
+        showBudgetSheet = true
+    }
+
+    /// Runs the start action deferred behind the budget sheet.
+    func executePendingStart() {
+        guard let action = pendingStartAction else { return }
+        pendingStartAction = nil
+        Task { @MainActor in
+            switch action {
+            case .fresh:
+                Logger.info("📝 Starting fresh interview", category: .ai)
+                _ = await interviewCoordinator.startInterview(resumeExisting: false)
+            case .resume:
+                Logger.info("📝 Resuming existing interview", category: .ai)
+                _ = await interviewCoordinator.startInterview(resumeExisting: true)
+            case .startOver:
+                Logger.info("📝 Starting over - clearing all onboarding data", category: .ai)
+                interviewCoordinator.clearAllOnboardingData()
+                _ = await interviewCoordinator.startInterview(resumeExisting: false)
             }
-
-            Logger.info("📝 Starting fresh interview", category: .ai)
-            _ = await interviewCoordinator.startInterview(resumeExisting: false)
-        }
-    }
-
-    func resumeInterview() {
-        Task { @MainActor in
-            Logger.info("📝 Resuming existing interview", category: .ai)
-            _ = await interviewCoordinator.startInterview(resumeExisting: true)
-        }
-    }
-
-    func startOverInterview() {
-        Task { @MainActor in
-            Logger.info("📝 Starting over - clearing all onboarding data", category: .ai)
-            interviewCoordinator.clearAllOnboardingData()
-            _ = await interviewCoordinator.startInterview(resumeExisting: false)
         }
     }
 }

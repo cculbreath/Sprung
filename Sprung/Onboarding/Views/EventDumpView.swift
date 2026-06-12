@@ -655,6 +655,7 @@ struct EventDumpView: View {
             }
             lines.append("  Requests:        \(stats.requestCount)")
             lines.append("  Session Time:    \(tracker.formattedDuration)")
+            lines.append(contentsOf: estimatedCostLines(tracker: tracker))
             lines.append("")
         }
 
@@ -666,6 +667,35 @@ struct EventDumpView: View {
         }
         return lines.joined(separator: "\n")
     }
+    /// Cost-so-far at live list prices, computed per model from the persisted
+    /// price table (refreshed whenever the budget sheet or settings fetch
+    /// prices). Omitted entirely when no price table is available.
+    private func estimatedCostLines(tracker: TokenUsageTracker) -> [String] {
+        guard let persisted = ModelPricing.loadPersistedTable() else { return [] }
+        var totalUSD = 0.0
+        var unpricedModels: [String] = []
+        for (modelId, stats) in tracker.statsByModel {
+            guard let price = ModelPricing.price(for: modelId, in: persisted.table) else {
+                unpricedModels.append(modelId)
+                continue
+            }
+            totalUSD += ModelPricing.costUSD(
+                inputTokens: stats.inputTokens,
+                outputTokens: stats.outputTokens,
+                cacheReadTokens: stats.cacheReadTokens,
+                cacheCreationTokens: stats.cacheCreationTokens,
+                at: price
+            )
+        }
+        var lines = [String(format: "  Est. Cost:       $%.2f (list prices as of %@)",
+                            totalUSD,
+                            persisted.asOf.formatted(date: .abbreviated, time: .shortened))]
+        if !unpricedModels.isEmpty {
+            lines.append("                   (excludes unpriced: \(unpricedModels.joined(separator: ", ")))")
+        }
+        return lines
+    }
+
     private func exportEventDump() {
         // Telemetry: emit the session-total token readout alongside the dump.
         coordinator.tokenUsageTracker.logSessionSummary(trigger: "event dump export")

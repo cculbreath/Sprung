@@ -20,9 +20,15 @@ struct OpenRouterModel: Codable, Identifiable, Hashable, Equatable {
         let prompt: String?
         let completion: String?
         let internalReasoning: String?
+        /// USD per token charged when a prompt prefix is served from cache.
+        let inputCacheRead: String?
+        /// USD per token charged when a prompt prefix is written to cache.
+        let inputCacheWrite: String?
         enum CodingKeys: String, CodingKey {
             case prompt, completion
             case internalReasoning = "internal_reasoning"
+            case inputCacheRead = "input_cache_read"
+            case inputCacheWrite = "input_cache_write"
         }
         var promptCostPer1M: Double {
             guard let prompt = prompt else { return 0.0 }
@@ -32,6 +38,11 @@ struct OpenRouterModel: Codable, Identifiable, Hashable, Equatable {
             guard let completion = completion else { return 0.0 }
             return Double(completion) ?? 0.0
         }
+        // OpenRouter prices are USD per single token (e.g. "0.000003" = $3/MTok).
+        var promptUSDPerToken: Double? { prompt.flatMap(Double.init) }
+        var completionUSDPerToken: Double? { completion.flatMap(Double.init) }
+        var cacheReadUSDPerToken: Double? { inputCacheRead.flatMap(Double.init) }
+        var cacheWriteUSDPerToken: Double? { inputCacheWrite.flatMap(Double.init) }
     }
     struct Endpoint: Codable, Hashable {
         let pricing: Pricing?
