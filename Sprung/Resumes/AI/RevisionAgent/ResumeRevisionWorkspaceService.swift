@@ -67,6 +67,16 @@ final class ResumeRevisionWorkspaceService {
     /// Workspace directory path (per-session: revision-workspace/<UUID>/)
     private(set) var workspacePath: URL?
 
+    /// Ground-truth snapshot directory (per-session sibling:
+    /// revision-workspace/snapshots-<UUID>/). Deliberately OUTSIDE the
+    /// workspace the agent tools are rooted at: the read/glob/grep tools
+    /// validate paths with a `hasPrefix(workspacePath)` check and the write
+    /// tool with a path-component prefix check, so a sibling whose name does
+    /// not extend the session directory name is unreachable by every tool.
+    /// These files stay byte-identical to the export and are the ground truth
+    /// for diffs, proposal verification, and mid-session-edit detection.
+    private(set) var snapshotDirectory: URL?
+
     /// IDs of nodes that were marked editable at export time.
     /// These are the only nodes the agent was actually handed; import-time
     /// authorization additionally re-derives editability from the live resume.
@@ -91,10 +101,6 @@ final class ResumeRevisionWorkspaceService {
     private var treenodesPath: URL? { workspacePath?.appendingPathComponent("treenodes") }
     private var knowledgeCardsPath: URL? { workspacePath?.appendingPathComponent("knowledge_cards") }
     private var writingSamplesPath: URL? { workspacePath?.appendingPathComponent("writing_samples") }
-    /// Pristine copies of the exported treenode JSON. The write tool's allowlist
-    /// does not permit writing here, so these stay byte-identical to the export
-    /// and are used at import to detect mid-session manual edits.
-    private var snapshotsPath: URL? { workspacePath?.appendingPathComponent("snapshots") }
     private var manifestPath: URL? { workspacePath?.appendingPathComponent("manifest.txt") }
 
     // MARK: - Workspace Lifecycle
@@ -143,20 +149,36 @@ final class ResumeRevisionWorkspaceService {
             }
         }
 
-        let session = baseDir.appendingPathComponent(UUID().uuidString, isDirectory: true)
-        for subdir in ["treenodes", "knowledge_cards", "writing_samples", "snapshots"] {
+        let sessionID = UUID().uuidString
+        let session = baseDir.appendingPathComponent(sessionID, isDirectory: true)
+        for subdir in ["treenodes", "knowledge_cards", "writing_samples"] {
             let dir = session.appendingPathComponent(subdir)
             try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         }
 
+        // Ground-truth snapshots live in a SIBLING directory whose name does
+        // not extend the session path, so no agent tool (rooted at the session
+        // directory) can read or write them. Swept with everything else in the
+        // base directory at the next session's startup.
+        let snapshots = baseDir.appendingPathComponent("snapshots-\(sessionID)", isDirectory: true)
+        try FileManager.default.createDirectory(at: snapshots, withIntermediateDirectories: true)
+
         workspacePath = session
+        snapshotDirectory = snapshots
         Logger.info("Created revision workspace at \(session.path)", category: .ai)
         return session
     }
 
-    /// Deletes only the current session directory. Tolerates an already-missing
-    /// directory; never touches sibling sessions.
+    /// Deletes only the current session directory (and its snapshot sibling).
+    /// Tolerates already-missing directories; never touches sibling sessions.
     func deleteWorkspace() throws {
+        if let snapshots = snapshotDirectory {
+            if FileManager.default.fileExists(atPath: snapshots.path) {
+                try? FileManager.default.removeItem(at: snapshots)
+            }
+            snapshotDirectory = nil
+        }
+
         guard let workspace = workspacePath else { return }
 
         if FileManager.default.fileExists(atPath: workspace.path) {
@@ -189,7 +211,7 @@ final class ResumeRevisionWorkspaceService {
     /// Writes a pristine snapshot of each file to the protected snapshot area and
     /// returns a manifest describing exported sections and target page count.
     func exportModifiableTreeNodes(from resume: Resume) throws -> WorkspaceManifest {
-        guard let treenodesDir = treenodesPath, let snapshotsDir = snapshotsPath else {
+        guard let treenodesDir = treenodesPath, let snapshotsDir = snapshotDirectory else {
             throw WorkspaceError.workspaceNotCreated
         }
 
@@ -228,8 +250,9 @@ final class ResumeRevisionWorkspaceService {
             let nodeArray = editableRoots.map { $0.toRevisionDictionary() }
             let jsonData = try JSONSerialization.data(withJSONObject: nodeArray, options: [.prettyPrinted, .sortedKeys])
             try jsonData.write(to: treenodesDir.appendingPathComponent("\(slug).json"))
-            // Pristine snapshot — the write tool cannot touch this area, so it
-            // stays byte-identical to the export for mid-session-edit detection.
+            // Pristine snapshot — written outside the tool-visible workspace,
+            // so it stays byte-identical to the export. Ground truth for
+            // diffs, proposal verification, and mid-session-edit detection.
             try jsonData.write(to: snapshotsDir.appendingPathComponent("\(slug).json"))
 
             sectionMeta.append(WorkspaceManifest.SectionInfo(
@@ -974,7 +997,7 @@ final class ResumeRevisionWorkspaceService {
 
     /// Load original values from the protected export snapshots, keyed by node id.
     private func loadSnapshotValues() -> [String: String] {
-        guard let snapshotsDir = snapshotsPath else { return [:] }
+        guard let snapshotsDir = snapshotDirectory else { return [:] }
         var values: [String: String] = [:]
 
         let files: [URL]
@@ -1285,6 +1308,281 @@ final class ResumeRevisionWorkspaceService {
         context.delete(node)
     }
 
+    // MARK: - Ground Truth: Snapshot Diff
+
+    /// Compute the ground-truth diff between the pristine export snapshots and
+    /// the current workspace treenode files: every editable node whose value
+    /// the agent changed, added, or deleted. This is REALITY — derived from
+    /// bytes on disk, never from the model's own claims about what it did.
+    func computeWorkspaceDiff() throws -> RevisionWorkspaceDiff {
+        guard let treenodesDir = treenodesPath, let snapshotsDir = snapshotDirectory else {
+            throw WorkspaceError.workspaceNotCreated
+        }
+
+        let snapshotNodes = try flattenNodeFiles(in: snapshotsDir)
+        let currentNodes = try flattenNodeFiles(in: treenodesDir)
+
+        var entries: [RevisionNodeDiff] = []
+        let slugs = Set(snapshotNodes.keys).union(currentNodes.keys)
+
+        for slug in slugs.sorted() {
+            let snapshot = snapshotNodes[slug] ?? []
+            let current = currentNodes[slug] ?? []
+            let snapshotByID = Dictionary(snapshot.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+            let currentIDs = Set(current.map(\.id))
+
+            for node in current {
+                if let original = snapshotByID[node.id] {
+                    if original.value != node.value {
+                        entries.append(RevisionNodeDiff(
+                            kind: .modified,
+                            sectionSlug: slug,
+                            nodePath: node.path,
+                            nodeId: node.id,
+                            oldValue: original.value,
+                            newValue: node.value
+                        ))
+                    }
+                } else if !node.value.isEmpty {
+                    entries.append(RevisionNodeDiff(
+                        kind: .added,
+                        sectionSlug: slug,
+                        nodePath: node.path,
+                        nodeId: node.id,
+                        oldValue: nil,
+                        newValue: node.value
+                    ))
+                }
+            }
+
+            for node in snapshot where !currentIDs.contains(node.id) && !node.value.isEmpty {
+                entries.append(RevisionNodeDiff(
+                    kind: .removed,
+                    sectionSlug: slug,
+                    nodePath: node.path,
+                    nodeId: node.id,
+                    oldValue: node.value,
+                    newValue: nil
+                ))
+            }
+        }
+
+        return RevisionWorkspaceDiff(entries: entries)
+    }
+
+    /// Parse every treenode JSON file in a directory into flat node lists,
+    /// keyed by section slug. Unreadable files are skipped with a log —
+    /// diffing is advisory and must never abort a completion.
+    private func flattenNodeFiles(in directory: URL) throws -> [String: [WorkspaceNodeSnapshot]] {
+        let fileURLs = try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
+            .filter { $0.pathExtension == "json" }
+            .sorted { $0.lastPathComponent < $1.lastPathComponent }
+
+        var result: [String: [WorkspaceNodeSnapshot]] = [:]
+        for fileURL in fileURLs {
+            let slug = fileURL.deletingPathExtension().lastPathComponent
+            do {
+                let data = try Data(contentsOf: fileURL)
+                guard let nodes = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
+                    Logger.warning("Diff: '\(fileURL.lastPathComponent)' is not a node array — skipped", category: .ai)
+                    continue
+                }
+                var flat: [WorkspaceNodeSnapshot] = []
+                Self.flatten(nodes: nodes, parentPath: slug, into: &flat)
+                result[slug] = flat
+            } catch {
+                Logger.warning("Diff: could not read '\(fileURL.lastPathComponent)': \(error.localizedDescription)", category: .ai)
+            }
+        }
+        return result
+    }
+
+    private static func flatten(
+        nodes: [[String: Any]],
+        parentPath: String,
+        into result: inout [WorkspaceNodeSnapshot]
+    ) {
+        for (index, node) in nodes.enumerated() {
+            let id = node["id"] as? String ?? ""
+            let name = node["name"] as? String ?? ""
+            let value = node["value"] as? String ?? ""
+            let segment = name.isEmpty ? "[\(index)]" : name
+            let path = "\(parentPath) › \(segment)"
+            if !id.isEmpty {
+                result.append(WorkspaceNodeSnapshot(id: id, name: name, value: value, path: path))
+            }
+            if let children = node["children"] as? [[String: Any]] {
+                flatten(nodes: children, parentPath: path, into: &result)
+            }
+        }
+    }
+
+    // MARK: - Ground Truth: Proposal Verification
+
+    /// Verify each proposed change's before-preview against the ACTUAL
+    /// workspace content. The proposal card must show reality, not the model's
+    /// claims — a mismatch surfaces the real content alongside the claim.
+    /// Both the current files and the pristine snapshot count as ground truth
+    /// for the "before" claim (an already-applied edit's before lives in the
+    /// snapshot; the unreviewed-write check at completion catches premature
+    /// writes separately).
+    func verifyProposedChanges(_ changes: [ProposeChangesTool.ChangeDetail]) -> [ChangeProposal.BeforeVerification] {
+        let nodesBySlug: [String: [WorkspaceNodeSnapshot]]
+        if let treenodesDir = treenodesPath, let flattened = try? flattenNodeFiles(in: treenodesDir) {
+            nodesBySlug = flattened
+        } else {
+            nodesBySlug = [:]
+        }
+        let snapshotValues: [String]
+        if let snapshotsDir = snapshotDirectory, let flattened = try? flattenNodeFiles(in: snapshotsDir) {
+            snapshotValues = flattened.values.flatMap { $0 }.map(\.value).filter { !$0.isEmpty }
+        } else {
+            snapshotValues = []
+        }
+        let allValues = nodesBySlug.values.flatMap { $0 }.map(\.value).filter { !$0.isEmpty } + snapshotValues
+        let allNormalized = Set(allValues.map(Self.normalizedForMatch))
+
+        return changes.map { change in
+            guard let before = change.beforePreview, !Self.normalizedForMatch(before).isEmpty else {
+                return .notApplicable
+            }
+            if Self.matches(before: before, against: allNormalized, fullValues: allValues) {
+                return .verified
+            }
+            // Mismatch: provide the actual content of the best-guess section.
+            let slugGuess = Self.normalizedForMatch(change.section).replacingOccurrences(of: " ", with: "_")
+            let sectionNodes = nodesBySlug.first { key, _ in
+                key == slugGuess || key.contains(slugGuess) || slugGuess.contains(key)
+            }?.value ?? []
+            let actual = sectionNodes.map(\.value).filter { !$0.isEmpty }.prefix(8)
+            return .mismatch(actualContent: Array(actual))
+        }
+    }
+
+    /// True when the model's before-preview is found in the actual content:
+    /// exact node-value match, every preview line matching a node value (list
+    /// bundles render as multi-line previews), or containment either way.
+    private static func matches(before: String, against normalizedValues: Set<String>, fullValues: [String]) -> Bool {
+        let normalized = normalizedForMatch(before)
+        if normalizedValues.contains(normalized) { return true }
+
+        // Line-wise: every non-empty preview line matches some node value.
+        let lines = before.components(separatedBy: .newlines)
+            .map { line -> String in
+                var trimmed = line.trimmingCharacters(in: .whitespaces)
+                while let first = trimmed.first, "-•*".contains(first) {
+                    trimmed = String(trimmed.dropFirst()).trimmingCharacters(in: .whitespaces)
+                }
+                return normalizedForMatch(trimmed)
+            }
+            .filter { !$0.isEmpty }
+        if lines.count > 1, lines.allSatisfy({ normalizedValues.contains($0) }) { return true }
+
+        // Containment either way (guarded against trivially short strings).
+        if normalized.count >= 24 {
+            for value in fullValues {
+                let normalizedValue = normalizedForMatch(value)
+                if normalizedValue.contains(normalized) || (normalizedValue.count >= 24 && normalized.contains(normalizedValue)) {
+                    return true
+                }
+            }
+        }
+        return false
+    }
+
+    /// Case- and whitespace-insensitive normalization for ground-truth matching.
+    static func normalizedForMatch(_ text: String) -> String {
+        text.lowercased()
+            .split(whereSeparator: { $0.isWhitespace })
+            .joined(separator: " ")
+    }
+
+    // MARK: - Verification Inputs
+
+    /// Render the CURRENT revised editable content as readable text for the
+    /// coherence pass. Only editable content lives in the workspace; locked
+    /// content is visible to the verifier via the conversation's resume PDF.
+    func renderCurrentResumeText() throws -> String {
+        guard let treenodesDir = treenodesPath else {
+            throw WorkspaceError.workspaceNotCreated
+        }
+        let nodeFiles = try FileManager.default.contentsOfDirectory(at: treenodesDir, includingPropertiesForKeys: nil)
+            .filter { $0.pathExtension == "json" }
+            .sorted { $0.lastPathComponent < $1.lastPathComponent }
+
+        var lines: [String] = []
+        for fileURL in nodeFiles {
+            let slug = fileURL.deletingPathExtension().lastPathComponent
+            guard let data = try? Data(contentsOf: fileURL),
+                  let nodes = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
+                continue
+            }
+            lines.append("## \(slug)")
+            Self.renderNodes(nodes, indent: 0, into: &lines)
+            lines.append("")
+        }
+        return lines.joined(separator: "\n")
+    }
+
+    private static func renderNodes(_ nodes: [[String: Any]], indent: Int, into lines: inout [String]) {
+        let prefix = String(repeating: "  ", count: indent)
+        for node in nodes {
+            let name = node["name"] as? String ?? ""
+            let value = node["value"] as? String ?? ""
+            if !name.isEmpty && !value.isEmpty {
+                lines.append("\(prefix)\(name): \(value)")
+            } else if !value.isEmpty {
+                lines.append("\(prefix)- \(value)")
+            } else if !name.isEmpty {
+                lines.append("\(prefix)\(name):")
+            }
+            if let children = node["children"] as? [[String: Any]], !children.isEmpty {
+                renderNodes(children, indent: indent + 1, into: &lines)
+            }
+        }
+    }
+
+    /// Assemble the evidence corpus for the grounding verification pass from
+    /// the SAME files the agent was shown: every exported knowledge card plus
+    /// the skill bank. Capped so a pathological card library cannot blow up
+    /// the verification request; truncation is noted inline.
+    func readGroundingCorpus(maxCharacters: Int = 120_000) -> String {
+        guard let workspace = workspacePath, let cardsDir = knowledgeCardsPath else { return "" }
+
+        var sections: [String] = []
+        var remaining = maxCharacters
+
+        func append(_ text: String) {
+            guard remaining > 0, !text.isEmpty else { return }
+            if text.count <= remaining {
+                sections.append(text)
+                remaining -= text.count
+            } else {
+                sections.append(String(text.prefix(remaining)) + "\n[... truncated for length ...]")
+                remaining = 0
+            }
+        }
+
+        if let skillBank = try? String(contentsOf: workspace.appendingPathComponent("skill_bank.txt"), encoding: .utf8) {
+            append(skillBank)
+        }
+
+        let cardFiles = (try? FileManager.default.contentsOfDirectory(at: cardsDir, includingPropertiesForKeys: nil))?
+            .filter { $0.pathExtension == "txt" }
+            .sorted { $0.lastPathComponent < $1.lastPathComponent } ?? []
+        for cardFile in cardFiles {
+            guard remaining > 0 else {
+                sections.append("[... additional knowledge cards omitted for length ...]")
+                break
+            }
+            if let card = try? String(contentsOf: cardFile, encoding: .utf8) {
+                append(card)
+            }
+        }
+
+        return sections.joined(separator: "\n\n---\n\n")
+    }
+
     // MARK: - Labels
 
     private func nodeLabel(_ node: TreeNode) -> String {
@@ -1320,6 +1618,42 @@ final class ResumeRevisionWorkspaceService {
             }
         }
     }
+}
+
+// MARK: - Ground-Truth Diff Types
+
+/// A flattened treenode read from a workspace or snapshot JSON file.
+struct WorkspaceNodeSnapshot {
+    let id: String
+    let name: String
+    let value: String
+    /// Human-readable location, e.g. "work › [0] › highlights › [2]".
+    let path: String
+}
+
+/// One ground-truth difference between the export snapshot and the current
+/// workspace state.
+struct RevisionNodeDiff: Identifiable {
+    enum Kind: String {
+        case modified
+        case added
+        case removed
+    }
+
+    let id = UUID()
+    let kind: Kind
+    let sectionSlug: String
+    let nodePath: String
+    let nodeId: String
+    let oldValue: String?
+    let newValue: String?
+}
+
+/// The full ground-truth diff for a session: every editable node the agent
+/// actually changed, added, or removed in the workspace.
+struct RevisionWorkspaceDiff {
+    let entries: [RevisionNodeDiff]
+    var isEmpty: Bool { entries.isEmpty }
 }
 
 // MARK: - Workspace Manifest

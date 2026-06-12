@@ -42,7 +42,7 @@ struct WriteJsonFileTool: AgentTool {
 
         // Resolve the path FIRST, then authorize against the resolved location.
         // A prefix check on the raw string would let "treenodes/../…" traverse
-        // into protected areas (e.g. the pristine export snapshots).
+        // into read-only areas of the workspace (or out of it entirely).
         guard !path.isEmpty, !path.hasPrefix("/") else {
             throw AgentToolError.pathOutsideRepo(
                 "Write paths must be workspace-relative (got '\(path)'). Allowed: treenodes/<section>.json, fontsizenodes.json"

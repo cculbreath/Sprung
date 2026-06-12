@@ -15,36 +15,21 @@ enum RevisionAgentStatus: Equatable {
 
 enum RevisionAgentError: LocalizedError {
     case noLLMFacade
-    case modelNotConfigured
     case maxTurnsExceeded
-    case agentDidNotComplete
     case invalidToolCall(String)
-    case toolExecutionFailed(String)
     case timeout
-    case workspaceError(String)
-    case pdfRenderFailed(String)
     case streamFailed(String)
 
     var errorDescription: String? {
         switch self {
         case .noLLMFacade:
             return "LLM service is not available"
-        case .modelNotConfigured:
-            return "Resume revision model is not configured in Settings"
         case .maxTurnsExceeded:
             return "Agent exceeded maximum number of turns without completing"
-        case .agentDidNotComplete:
-            return "Agent stopped without calling complete_revision"
         case .invalidToolCall(let msg):
             return "Invalid tool call: \(msg)"
-        case .toolExecutionFailed(let msg):
-            return "Tool execution failed: \(msg)"
         case .timeout:
             return "Agent timed out"
-        case .workspaceError(let msg):
-            return "Workspace error: \(msg)"
-        case .pdfRenderFailed(let msg):
-            return "PDF render failed: \(msg)"
         case .streamFailed(let msg):
             return "The connection to the model failed: \(msg)"
         }

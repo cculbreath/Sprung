@@ -86,16 +86,31 @@ struct RevisionProposalView: View {
                 .font(.callout)
                 .textSelection(.enabled)
 
+            evidenceRow(change.evidence)
+
+            let verification = proposal.verification(at: index)
+
             if let before = change.beforePreview, !before.isEmpty,
                let after = change.afterPreview, !after.isEmpty {
                 HStack(alignment: .top, spacing: 8) {
-                    previewBlock(label: "Before", text: before, color: .red)
-                    previewBlock(label: "After", text: after, color: .green)
+                    beforeBlock(before, verification: verification, isRemoval: false)
+                    previewBlock(label: "After (proposed)", text: after, color: .green)
                 }
             } else if let after = change.afterPreview, !after.isEmpty {
-                previewBlock(label: "New", text: after, color: .green)
+                previewBlock(label: "New (proposed)", text: after, color: .green)
             } else if let before = change.beforePreview, !before.isEmpty {
-                previewBlock(label: "Removed", text: before, color: .red)
+                beforeBlock(before, verification: verification, isRemoval: true)
+            }
+
+            // Ground truth: when the model's "before" does not match the
+            // actual workspace content, show the real content so the user
+            // approves reality, not the model's claim.
+            if case .mismatch(let actualContent) = verification, !actualContent.isEmpty {
+                previewBlock(
+                    label: "Actual current content (ground truth)",
+                    text: actualContent.map { "• \($0)" }.joined(separator: "\n"),
+                    color: .orange
+                )
             }
 
             // Inline editor: edit the proposed text directly; applied verbatim (no agent rephrasing).
@@ -143,6 +158,60 @@ struct RevisionProposalView: View {
                         .strokeBorder(rowStroke(for: kind))
                 )
         )
+    }
+
+    // MARK: - Evidence & Ground Truth
+
+    /// Cited evidence source for a change; the absence of one is flagged.
+    @ViewBuilder
+    private func evidenceRow(_ evidence: String?) -> some View {
+        if let evidence, !evidence.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            HStack(alignment: .top, spacing: 4) {
+                Image(systemName: "text.book.closed")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                Text("Evidence: \(evidence)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+            }
+        } else {
+            HStack(spacing: 4) {
+                Image(systemName: "exclamationmark.triangle")
+                    .font(.caption2)
+                    .foregroundStyle(.orange)
+                Text("No evidence cited for this change")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+            }
+        }
+    }
+
+    /// The "before" preview, labeled by its ground-truth verification status.
+    @ViewBuilder
+    private func beforeBlock(
+        _ text: String,
+        verification: ChangeProposal.BeforeVerification,
+        isRemoval: Bool
+    ) -> some View {
+        switch verification {
+        case .verified:
+            previewBlock(
+                label: isRemoval ? "Removed (matches current resume)" : "Before (matches current resume)",
+                text: text,
+                color: .red
+            )
+        case .mismatch:
+            previewBlock(
+                label: isRemoval
+                    ? "Removed (assistant's claim — not found in resume)"
+                    : "Before (assistant's claim — not found in resume)",
+                text: text,
+                color: .orange
+            )
+        case .notApplicable:
+            previewBlock(label: isRemoval ? "Removed" : "Before", text: text, color: .red)
+        }
     }
 
     // MARK: - Per-item Decision Control

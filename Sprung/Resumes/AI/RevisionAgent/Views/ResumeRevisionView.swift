@@ -124,6 +124,7 @@ struct ResumeRevisionView: View {
                 currentProposal: agent.currentProposal,
                 currentQuestion: agent.currentQuestion,
                 currentCompletionSummary: agent.currentCompletionSummary,
+                currentAdvisoryReport: agent.currentAdvisoryReport,
                 isRunning: agent.status == .running,
                 sessionEnded: sessionEnded,
                 onProposalResponse: { response in

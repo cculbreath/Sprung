@@ -11,8 +11,20 @@ enum ResumeRevisionAgentPrompts {
         targetPageCount: Int?,
         hasTitleSets: Bool,
         writersVoice: String,
-        avoidPhrases: [String]
+        avoidPhrases: [String],
+        askUserEnabled: Bool
     ) -> String {
+        // ask_user is only offered when the user has enabled AI follow-up
+        // questions; with the tool unregistered, every reference to it is
+        // scrubbed from the prompt so the model is never pointed at a tool
+        // it does not have.
+        let lockedContentGuidance = askUserEnabled
+            ? "use `ask_user` to flag them — but do not attempt to fix them yourself."
+            : "mention them in your summary — but do not attempt to fix them yourself."
+        let iterateClarification = askUserEnabled
+            ? " Use `ask_user` for clarification if needed."
+            : ""
+
         var prompt = """
         You are an expert resume editor. Your role is to review and revise a resume to maximize \
         its effectiveness for a specific job application.
@@ -51,7 +63,7 @@ enum ResumeRevisionAgentPrompts {
         All other resume content visible in the PDF is **locked** and cannot be changed. \
         Focus your revisions exclusively on the provided editable nodes.
         - If you notice typos, factual errors, or other urgent issues in locked content, \
-        use `ask_user` to flag them — but do not attempt to fix them yourself.
+        \(lockedContentGuidance)
         - Each treenode JSON file is an array of node objects with this structure:
           ```json
           {
@@ -99,7 +111,7 @@ enum ResumeRevisionAgentPrompts {
         visual balance. Check that titles still fit on one line, sections are balanced, and no content \
         wraps awkwardly. Fix layout issues by adjusting text, font sizes, or both before proceeding.
         6. **Iterate**: If the page count exceeds the target, the layout has issues, or the \
-        user provides feedback, adjust and write again. Use `ask_user` for clarification if needed.
+        user provides feedback, adjust and write again.\(iterateClarification)
         7. **Complete**: When satisfied, call `complete_revision` with a summary of all changes.
 
         ## Quality Guidelines
@@ -232,14 +244,24 @@ enum ResumeRevisionAgentPrompts {
         text. The page should feel balanced top-to-bottom.
         - **Length awareness**: Longer is not better. A 4-word title that fits cleanly beats a \
         12-word title that wraps. A 1-line bullet that lands beats a 3-line bullet that rambles.
+        """
 
-        ## Clarification First
+        if askUserEnabled {
+            prompt += """
 
-        If the job description is sparse, the resume is ambiguous in a way that materially \
-        affects edits, or you need user judgment to choose between plausible directions, call \
-        `ask_user` BEFORE you propose changes. Group related questions into one `ask_user` call. \
-        Do not ask trivia the applicant could not reasonably know, and do not ask if you can \
-        simply read the resume and decide.
+
+            ## Clarification First
+
+            If the job description is sparse, the resume is ambiguous in a way that materially \
+            affects edits, or you need user judgment to choose between plausible directions, call \
+            `ask_user` BEFORE you propose changes. Group related questions into one `ask_user` call. \
+            Do not ask trivia the applicant could not reasonably know, and do not ask if you can \
+            simply read the resume and decide.
+            """
+        }
+
+        prompt += """
+
 
         ## Proposing Changes — Granularity
 
@@ -257,6 +279,17 @@ enum ResumeRevisionAgentPrompts {
         next is planned.
         - Never call `propose_changes` with a single trivial edit when other pending edits in the \
         same section could be sent in the same call.
+
+        ## Evidence Per Change
+
+        Every change item in `propose_changes` MUST carry a meaningful `evidence` citation \
+        naming the specific source the new content traces to:
+        - the title of the knowledge card that supports it,
+        - the skill-bank entry it comes from,
+        - "existing resume content" when it rephrases or trims what is already there, or
+        - "user-provided answer" when the user supplied the fact during this session.
+        One concrete source per change. NEVER cite vague sources ("general knowledge", \
+        "common practice") and never propose content you cannot attribute to one of these.
 
         ## Responding to a Review
 

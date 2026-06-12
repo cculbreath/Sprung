@@ -77,6 +77,40 @@ class ResumeRevisionAgent {
     // Queued user messages (injected between turns)
     private var pendingUserMessages: [String] = []
 
+    // MARK: Completion-Boundary Verification State
+
+    /// Advisory findings for the completion card currently presented (ground
+    /// truth diff vs accepted proposals, grounding audit, coherence pass).
+    private(set) var currentAdvisoryReport: RevisionAdvisoryReport?
+
+    /// Everything the user explicitly accepted (or hand-edited) in proposal
+    /// reviews this session. The completion gate matches the real workspace
+    /// diff against this ledger to flag writes that bypassed review.
+    private struct AcceptedChangeRecord {
+        let section: String
+        let type: String
+        let beforeText: String
+        let afterText: String
+    }
+    private var acceptedChangeLedger: [AcceptedChangeRecord] = []
+
+    /// Question/answer pairs from ask_user, fed to the grounding audit as a
+    /// valid evidence source ("user-provided answer").
+    private var askUserExchanges: [(question: String, answer: String)] = []
+
+    /// System content and tool list for the session — stored so completion
+    /// gate continuations send the byte-identical prefix every turn sent.
+    private var sessionSystemContent: AnthropicSystemContent?
+    private var sessionTools: [AnthropicTool] = []
+
+    // MARK: Session Toggles (LD-1)
+
+    /// Read ONCE at agent creation and frozen for the session (byte-stability:
+    /// the tool list and prompts derived from these must never change
+    /// mid-session). Defaults mirror @AppStorage semantics: true when unset.
+    private let askUserToolEnabled: Bool
+    private let coherencePassEnabled: Bool
+
     // Limits
     private let maxTurns = 50
     private let timeoutSeconds: TimeInterval = 1800 // 30 min
@@ -126,6 +160,16 @@ class ResumeRevisionAgent {
         self.titleSets = titleSets
         self.writersVoice = writersVoice
         self.avoidPhrases = avoidPhrases
+        // LD-1: both toggles are read once here and frozen for the session.
+        // `object(forKey:) == nil ? true : bool(forKey:)` matches @AppStorage
+        // defaulting (default true when the key has never been written).
+        let defaults = UserDefaults.standard
+        self.askUserToolEnabled = defaults.object(forKey: "enableResumeCustomizationTools") == nil
+            ? true
+            : defaults.bool(forKey: "enableResumeCustomizationTools")
+        self.coherencePassEnabled = defaults.object(forKey: "enableCoherencePass") == nil
+            ? true
+            : defaults.bool(forKey: "enableCoherencePass")
         self.pdfRenderer = RevisionPDFRenderer(
             workspaceService: workspaceService,
             pdfGenerator: pdfGenerator,
@@ -154,6 +198,9 @@ class ResumeRevisionAgent {
         successfulWriteCount = 0
         consecutiveStreamFailures = 0
         pendingUserMessages.removeAll()
+        acceptedChangeLedger.removeAll()
+        askUserExchanges.removeAll()
+        currentAdvisoryReport = nil
         sessionInputTokens = 0
         sessionCacheReadTokens = 0
         sessionCacheCreationTokens = 0
@@ -194,11 +241,13 @@ class ResumeRevisionAgent {
                 targetPageCount: manifest.targetPageCount,
                 hasTitleSets: !titleSets.isEmpty,
                 writersVoice: writersVoice,
-                avoidPhrases: avoidPhrases
+                avoidPhrases: avoidPhrases,
+                askUserEnabled: askUserToolEnabled
             )
             let systemContent: AnthropicSystemContent = .blocks([
                 AnthropicSystemBlock(text: systemPrompt, cacheControl: Self.oneHourCacheControl)
             ])
+            sessionSystemContent = systemContent
 
             // 3. Build initial user message with PDF attachment
             let pdfPath = workspacePath.appendingPathComponent("resume.pdf")
@@ -227,12 +276,14 @@ class ResumeRevisionAgent {
 
             // 4. Build tools
             let tools = buildAnthropicTools()
+            sessionTools = tools
 
             // 5. Agent loop
             timeoutDeadline = Date().addingTimeInterval(timeoutSeconds)
 
             while turnCount < maxTurns {
                 if shouldExitLoop() {
+                    guard await confirmExitAfterCompletionGate() else { continue }
                     await handleExitCleanup(errorMessage: nil)
                     return
                 }
@@ -452,6 +503,7 @@ class ResumeRevisionAgent {
                 )
 
                 if shouldExitLoop() {
+                    guard await confirmExitAfterCompletionGate() else { continue }
                     await handleExitCleanup(errorMessage: nil)
                     return
                 }
@@ -554,7 +606,29 @@ class ResumeRevisionAgent {
                         completionIndex: completionIndex
                     )
 
+                    // Completion gate (once per completion attempt): ground-
+                    // truth diff → unreviewed-write check → grounding audit →
+                    // coherence pass. Its continuation request must answer
+                    // every pending tool_use id, so hand it the real sibling
+                    // results plus an ephemeral pending placeholder for
+                    // complete_revision itself (never persisted — the real
+                    // result is appended below once the user decides).
+                    var gateToolResults: [AnthropicContentBlock] = []
+                    for (index, call) in pendingToolCalls.enumerated() {
+                        if index == completionIndex {
+                            gateToolResults.append(.toolResult(AnthropicToolResultBlock(
+                                toolUseId: call.id,
+                                content: "{\"status\": \"pending_user_review\"}"
+                            )))
+                        } else if let block = resultBlocks[index] {
+                            gateToolResults.append(block)
+                        }
+                    }
+                    let advisoryReport = await runCompletionGate(pendingToolResults: gateToolResults)
+                    currentAdvisoryReport = advisoryReport.isEmpty ? nil : advisoryReport
+
                     let accepted = await handleCompleteRevision(arguments: completionCall.arguments)
+                    currentAdvisoryReport = nil
                     resultBlocks[completionIndex] = .toolResult(AnthropicToolResultBlock(
                         toolUseId: completionCall.id,
                         content: accepted ? "{\"accepted\": true}" : "{\"accepted\": false}"
@@ -714,7 +788,7 @@ class ResumeRevisionAgent {
         timeoutDeadline = Date().addingTimeInterval(timeoutSeconds)
         messages.append(RevisionMessage(
             role: .user,
-            content: accepted ? "Revision accepted" : "Revision rejected"
+            content: accepted ? "Revision accepted" : "Continue editing"
         ))
         cont.resume(returning: accepted)
     }
@@ -1094,18 +1168,24 @@ class ResumeRevisionAgent {
 
     /// Fixed, deterministic tool order (prompt-cache invariant: tools render
     /// at position 0; any reorder invalidates the entire cache). The cache
-    /// breakpoint on the LAST tool caches the whole tool block.
+    /// breakpoint on the LAST tool caches the whole tool block. AskUserTool
+    /// is registered only when the user enabled AI follow-up questions —
+    /// the toggle is frozen at session start, so the list never changes
+    /// mid-session.
     private func buildAnthropicTools() -> [AnthropicTool] {
-        [
+        var tools: [AnthropicTool] = [
             AnthropicSchemaConverter.anthropicTool(from: ReadFileTool.self),
             AnthropicSchemaConverter.anthropicTool(from: ListDirectoryTool.self),
             AnthropicSchemaConverter.anthropicTool(from: GlobSearchTool.self),
             AnthropicSchemaConverter.anthropicTool(from: GrepSearchTool.self),
             AnthropicSchemaConverter.anthropicTool(from: WriteJsonFileTool.self),
-            AnthropicSchemaConverter.anthropicTool(from: ProposeChangesTool.self),
-            AnthropicSchemaConverter.anthropicTool(from: AskUserTool.self),
-            AnthropicSchemaConverter.anthropicTool(from: CompleteRevisionTool.self, cacheControl: Self.oneHourCacheControl)
+            AnthropicSchemaConverter.anthropicTool(from: ProposeChangesTool.self)
         ]
+        if askUserToolEnabled {
+            tools.append(AnthropicSchemaConverter.anthropicTool(from: AskUserTool.self))
+        }
+        tools.append(AnthropicSchemaConverter.anthropicTool(from: CompleteRevisionTool.self, cacheControl: Self.oneHourCacheControl))
+        return tools
     }
 
     // MARK: - Prompt-Cache Breakpoints
@@ -1388,9 +1468,13 @@ class ResumeRevisionAgent {
     // MARK: - Human-in-the-Loop Tools
 
     private func executeProposal(_ params: ProposeChangesTool.Parameters) async -> String {
+        // Ground-truth verification: check each before-preview against the
+        // ACTUAL workspace content so the user reviews reality, not the
+        // model's claims about reality.
         let proposal = ChangeProposal(
             summary: params.summary,
-            changes: params.changes
+            changes: params.changes,
+            verifications: workspaceService.verifyProposedChanges(params.changes)
         )
 
         currentProposal = proposal
@@ -1401,7 +1485,40 @@ class ResumeRevisionAgent {
 
         let response = await awaitProposalDecision()
         currentProposal = nil
+        recordAcceptedChanges(from: proposal, response: response)
         return response.toolResultJSON
+    }
+
+    /// Record what the user actually approved, so the completion gate can
+    /// flag workspace writes that match no accepted proposal.
+    private func recordAcceptedChanges(from proposal: ChangeProposal, response: ProposalResponse) {
+        func record(_ change: ProposeChangesTool.ChangeDetail, editedText: String? = nil) {
+            acceptedChangeLedger.append(AcceptedChangeRecord(
+                section: change.section,
+                type: change.type,
+                beforeText: change.beforePreview ?? "",
+                afterText: editedText ?? change.afterPreview ?? ""
+            ))
+        }
+
+        switch response {
+        case .accepted:
+            for change in proposal.changes { record(change) }
+        case .rejected, .modified:
+            break
+        case .itemized(let items):
+            for item in items {
+                guard proposal.changes.indices.contains(item.index) else { continue }
+                switch item.kind {
+                case .accept:
+                    record(proposal.changes[item.index])
+                case .edit:
+                    record(proposal.changes[item.index], editedText: item.editedText)
+                case .reject, .feedback:
+                    break
+                }
+            }
+        }
     }
 
     private func executeAskUser(_ params: AskUserTool.Parameters) async -> String {
@@ -1413,6 +1530,10 @@ class ResumeRevisionAgent {
 
         let answer = await awaitQuestionAnswer()
         currentQuestion = nil
+        if !answer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            // Evidence source for the grounding audit ("user-provided answer").
+            askUserExchanges.append((question: params.question, answer: answer))
+        }
 
         let payload = ["answer": answer]
         if let data = try? JSONSerialization.data(withJSONObject: payload),
@@ -1442,6 +1563,167 @@ class ResumeRevisionAgent {
         ))
 
         return await presentCompletionCard(summary: summary)
+    }
+
+    // MARK: - Completion Gate (Ground Truth → Grounding → Coherence)
+
+    /// Assemble the advisory report for a completion attempt. Order is fixed:
+    /// ground-truth diff → unreviewed-write check → grounding audit →
+    /// coherence pass (when enabled). An empty diff skips both LLM passes
+    /// entirely. Advisory by design: every failure degrades to a note and the
+    /// completion proceeds — verification is a quality gate, never a blocker.
+    /// Runs once per completion attempt, so a later attempt after further
+    /// edits re-audits the updated diff.
+    private func runCompletionGate(pendingToolResults: [AnthropicContentBlock]) async -> RevisionAdvisoryReport {
+        var report = RevisionAdvisoryReport()
+
+        // A cancelled session is being torn down — don't spend LLM calls on a
+        // completion card that will never be answered.
+        guard !isCancelled else { return report }
+
+        let diff: RevisionWorkspaceDiff
+        do {
+            diff = try workspaceService.computeWorkspaceDiff()
+        } catch {
+            Logger.warning("RevisionAgent: Completion gate could not compute the workspace diff: \(error.localizedDescription)", category: .ai)
+            return report
+        }
+        guard !diff.isEmpty else { return report }
+
+        currentAction = "Verifying changes..."
+
+        // 1. Unreviewed writes: real changes that match no accepted proposal.
+        report.unreviewedWrites = diff.entries.filter { !isCoveredByAcceptedProposal($0) }
+
+        // 2 & 3. LLM verification passes, issued as continuations of the live
+        // session conversation so the cached prefix is read, not re-billed.
+        guard let facade = llmFacade, let systemContent = sessionSystemContent, !sessionTools.isEmpty else {
+            report.notes.append("Verification passes could not run (session context unavailable).")
+            return report
+        }
+        let service = RevisionVerificationService(llmFacade: facade, modelId: modelId)
+        let baseMessages = applyCacheBreakpoints(to: conversationMessages)
+        let usageCallback: RevisionVerificationService.UsageCallback = { [weak self] input, cacheRead, cacheCreation, output in
+            self?.accumulateVerificationUsage(input: input, cacheRead: cacheRead, cacheCreation: cacheCreation, output: output)
+        }
+
+        if let groundingFlags = await service.verifyGrounding(
+            baseMessages: baseMessages,
+            pendingToolResults: pendingToolResults,
+            system: systemContent,
+            tools: sessionTools,
+            diff: diff,
+            corpus: workspaceService.readGroundingCorpus(),
+            askUserExchanges: askUserExchanges,
+            onUsage: usageCallback
+        ) {
+            report.grounding = groundingFlags
+        } else {
+            report.notes.append("The grounding check could not run — claims in the changes were not independently verified.")
+        }
+
+        if coherencePassEnabled {
+            if let resumeText = try? workspaceService.renderCurrentResumeText(), !resumeText.isEmpty {
+                if let coherenceFlags = await service.verifyCoherence(
+                    baseMessages: baseMessages,
+                    pendingToolResults: pendingToolResults,
+                    system: systemContent,
+                    tools: sessionTools,
+                    resumeText: resumeText,
+                    onUsage: usageCallback
+                ) {
+                    report.coherence = coherenceFlags
+                } else {
+                    report.notes.append("The coherence check could not run for this completion.")
+                }
+            }
+        }
+
+        return report
+    }
+
+    /// Gate a Save exit (`acceptCurrentState`) on the completion verification.
+    /// Returns true when the loop should proceed to exit (build + cleanup),
+    /// false when the user reviewed the advisories and chose to keep editing.
+    private func confirmExitAfterCompletionGate() async -> Bool {
+        // Only a Save (build) intent is gated; cancellation always exits.
+        guard shouldBuildResumeOnExit, !isCancelled else { return true }
+
+        let report = await runCompletionGate(pendingToolResults: [])
+        // Notes alone never gate a save — a failed check must not block it.
+        guard report.hasActionableFlags, !isCancelled else { return true }
+
+        // Present the completion card with the advisories. The save flag is
+        // cleared first so presentCompletionCard does not short-circuit;
+        // Cancel and a racing second Save are honored by the re-checks below.
+        shouldBuildResumeOnExit = false
+        currentAdvisoryReport = report
+        let summary = "Save requested — the verification pass flagged the items below. "
+            + "Accept to save the revised resume anyway, or choose \"Continue Editing\" to address them first."
+        messages.append(RevisionMessage(role: .assistant, content: summary))
+        Logger.info(
+            "RevisionAgent: Save gated on \(report.unreviewedWrites.count) unreviewed write(s), \(report.grounding.count) grounding flag(s), \(report.coherence.count) coherence flag(s)",
+            category: .ai
+        )
+
+        let accepted = await presentCompletionCard(summary: summary)
+        currentAdvisoryReport = nil
+
+        if accepted || shouldBuildResumeOnExit || isCancelled {
+            // Cancel wins (discard); otherwise the save intent is restored.
+            if !isCancelled { shouldBuildResumeOnExit = true }
+            return true
+        }
+
+        // The user chose to keep editing: hand the findings to the model so
+        // the next turn addresses them.
+        pendingUserMessages.append(
+            "I asked to save, but the pre-save verification flagged issues, and I chose to continue editing instead. Please address these findings:\n\(report.modelReadableSummary)"
+        )
+        return false
+    }
+
+    /// True when a ground-truth diff entry is plausibly covered by a change
+    /// the user accepted (or hand-edited) in a proposal review. Heuristic by
+    /// necessity — proposal previews are free text — and used for ADVISORY
+    /// flags only, never to block anything.
+    private func isCoveredByAcceptedProposal(_ entry: RevisionNodeDiff) -> Bool {
+        func covered(_ value: String, by recordText: KeyPath<AcceptedChangeRecord, String>) -> Bool {
+            let target = ResumeRevisionWorkspaceService.normalizedForMatch(value)
+            guard !target.isEmpty else { return true }
+            for record in acceptedChangeLedger {
+                let text = ResumeRevisionWorkspaceService.normalizedForMatch(record[keyPath: recordText])
+                guard !text.isEmpty else { continue }
+                // Equality, or the node value appearing inside the reviewed
+                // preview (list proposals render whole lists in one preview).
+                if text == target || text.contains(target) { return true }
+                // The reviewed preview appearing inside the node value, with
+                // a length guard so trivia cannot match everything.
+                if target.count >= 24, text.count >= 24, target.contains(text) { return true }
+            }
+            return false
+        }
+
+        switch entry.kind {
+        case .modified, .added:
+            guard let newValue = entry.newValue else { return true }
+            return covered(newValue, by: \.afterText)
+        case .removed:
+            // A removal is covered when the removed text appeared in a
+            // reviewed before-preview (the user saw it on its way out).
+            guard let oldValue = entry.oldValue else { return true }
+            return covered(oldValue, by: \.beforeText)
+        }
+    }
+
+    /// Fold verification-pass usage into the session totals (the per-call
+    /// line is logged by the verification service itself).
+    private func accumulateVerificationUsage(input: Int, cacheRead: Int, cacheCreation: Int, output: Int) {
+        sessionInputTokens += input
+        sessionCacheReadTokens += cacheRead
+        sessionCacheCreationTokens += cacheCreation
+        sessionOutputTokens += output
+        usageTurnCount += 1
     }
 
     // MARK: - Continuation Awaits

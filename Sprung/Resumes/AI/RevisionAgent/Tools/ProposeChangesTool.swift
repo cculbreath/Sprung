@@ -6,8 +6,8 @@ struct ProposeChangesTool: AgentTool {
         Present a structured change proposal to the user for review. Group related edits — \
         especially items in the same list (skills, keywords, bullets) — into a SINGLE call. The \
         user accepts or rejects each call as a unit; one call per list element is too granular. \
-        Include a summary and the list of changes with before/after previews. Wait for the user's \
-        response before writing any files.
+        Include a summary and the list of changes with before/after previews. Every change MUST \
+        cite its supporting evidence source. Wait for the user's response before writing any files.
         """
 
     static let parametersSchema: [String: Any] = [
@@ -36,6 +36,10 @@ struct ProposeChangesTool: AgentTool {
                             "type": "string",
                             "description": "What changed and why"
                         ],
+                        "evidence": [
+                            "type": "string",
+                            "description": "The supporting source that grounds this change. Cite the specific knowledge-card title, skill-bank entry, \"existing resume content\", or \"user-provided answer\" the new content traces to. Never cite vague sources like \"general knowledge\"."
+                        ],
                         "before_preview": [
                             "type": "string",
                             "description": "Preview of the content before the change (empty for 'add')"
@@ -45,7 +49,7 @@ struct ProposeChangesTool: AgentTool {
                             "description": "Preview of the content after the change (empty for 'remove')"
                         ]
                     ] as [String: Any],
-                    "required": ["section", "type", "description"]
+                    "required": ["section", "type", "description", "evidence"]
                 ] as [String: Any]
             ]
         ] as [String: Any],
@@ -57,11 +61,14 @@ struct ProposeChangesTool: AgentTool {
         let section: String
         let type: String
         let description: String
+        /// Required by the schema; decoded as optional so a malformed call
+        /// degrades to "no evidence cited" in the UI instead of failing decode.
+        let evidence: String?
         let beforePreview: String?
         let afterPreview: String?
 
         enum CodingKeys: String, CodingKey {
-            case section, type, description
+            case section, type, description, evidence
             case beforePreview = "before_preview"
             case afterPreview = "after_preview"
         }
@@ -78,6 +85,26 @@ struct ProposeChangesTool: AgentTool {
 struct ChangeProposal {
     let summary: String
     let changes: [ProposeChangesTool.ChangeDetail]
+    /// Ground-truth verification of each change's before-preview against the
+    /// ACTUAL current workspace content, parallel to `changes`. The user
+    /// approves reality, not the model's claims — a mismatch is surfaced with
+    /// the real content alongside the model's asserted preview.
+    let verifications: [BeforeVerification]
+
+    enum BeforeVerification {
+        /// The model's before-preview matches the actual workspace content.
+        case verified
+        /// The model's before-preview was not found in the actual workspace
+        /// content; `actualContent` carries the real values for display.
+        case mismatch(actualContent: [String])
+        /// No before-content to verify (e.g. an `add` change).
+        case notApplicable
+    }
+
+    /// Safe indexed access (verifications is parallel to changes by construction).
+    func verification(at index: Int) -> BeforeVerification {
+        verifications.indices.contains(index) ? verifications[index] : .notApplicable
+    }
 }
 
 /// A per-item decision when the user reviews a multi-change proposal individually.
