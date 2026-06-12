@@ -1,5 +1,6 @@
 import Foundation
 import SwiftData
+import SwiftyJSON
 
 // MARK: - Import Report
 
@@ -306,43 +307,208 @@ final class ResumeRevisionWorkspaceService {
         }
 
         let file = workspace.appendingPathComponent("job_description.txt")
-        try text.write(to: file, atomically: true, encoding: .utf8)
+        try Self.wrapText(text).write(to: file, atomically: true, encoding: .utf8)
         Logger.info("Exported job description (\(text.count) chars)", category: .ai)
+    }
+
+    // MARK: - Export: Job Metadata
+
+    /// Export the structured job listing metadata (title, company, location,
+    /// seniority, salary, …) so the agent sees more than the raw description.
+    func exportJobMetadata(for jobApp: JobApp) throws {
+        guard let workspace = workspacePath else {
+            throw WorkspaceError.workspaceNotCreated
+        }
+
+        var lines: [String] = ["# Job Listing Metadata", ""]
+        func add(_ label: String, _ value: String) {
+            guard !value.isEmpty else { return }
+            lines.append("- \(label): \(value)")
+        }
+        add("Position", jobApp.jobPosition)
+        add("Company", jobApp.companyName)
+        add("Location", jobApp.jobLocation)
+        add("Seniority Level", jobApp.seniorityLevel)
+        add("Employment Type", jobApp.employmentType)
+        add("Job Function", jobApp.jobFunction)
+        add("Industries", jobApp.industries)
+        add("Salary", jobApp.salary)
+        add("Posted", jobApp.jobPostingTime)
+
+        let file = workspace.appendingPathComponent("job_metadata.txt")
+        try lines.joined(separator: "\n").write(to: file, atomically: true, encoding: .utf8)
+        Logger.info("Exported job metadata", category: .ai)
+    }
+
+    // MARK: - Export: Job Requirements
+
+    /// Export the preprocessed, tiered job requirements. Skipped (with a log)
+    /// when preprocessing has not produced results for this job yet.
+    func exportJobRequirements(_ requirements: ExtractedRequirements?) throws {
+        guard let workspace = workspacePath else {
+            throw WorkspaceError.workspaceNotCreated
+        }
+
+        guard let requirements, requirements.isValid else {
+            Logger.info("No preprocessed job requirements to export", category: .ai)
+            return
+        }
+
+        var lines: [String] = [
+            "# Job Requirements (extracted from the posting, tiered by priority)",
+            ""
+        ]
+        func addTier(_ title: String, _ items: [String]) {
+            guard !items.isEmpty else { return }
+            lines.append("## \(title)")
+            lines.append(contentsOf: items.map { Self.wrapText("- \($0)") })
+            lines.append("")
+        }
+        addTier("Must Have (explicitly required)", requirements.mustHave)
+        addTier("Strong Signal (emphasized or repeated)", requirements.strongSignal)
+        addTier("Preferred (nice to have)", requirements.preferred)
+        addTier("Cultural / Soft Skills", requirements.cultural)
+
+        let file = workspace.appendingPathComponent("job_requirements.txt")
+        try lines.joined(separator: "\n").write(to: file, atomically: true, encoding: .utf8)
+        Logger.info("Exported tiered job requirements", category: .ai)
     }
 
     // MARK: - Export: Knowledge Cards
 
-    func exportKnowledgeCards(_ cards: [KnowledgeCard]) throws {
+    /// Export each card as readable Markdown (the agent's read tool truncates
+    /// long lines, so single-line Codable JSON is unreadable to it) and write
+    /// an overview ordered by job relevance: cards flagged relevant during
+    /// preprocessing come first, but ALL cards are listed — curation is by
+    /// ordering, never exclusion.
+    func exportKnowledgeCards(_ cards: [KnowledgeCard], relevantCardIds: [String]?) throws {
         guard let cardsDir = knowledgeCardsPath, let workspace = workspacePath else {
             throw WorkspaceError.workspaceNotCreated
         }
 
+        let relevantIds = Set((relevantCardIds ?? []).map { $0.lowercased() })
+        let relevant = cards.filter { relevantIds.contains($0.id.uuidString.lowercased()) }
+        let remaining = cards.filter { !relevantIds.contains($0.id.uuidString.lowercased()) }
+        let ordered = relevant + remaining
+
         for card in cards {
             let cardFile = cardsDir.appendingPathComponent("\(card.id.uuidString).txt")
-            let cardData = try encoder.encode(card)
-            try cardData.write(to: cardFile)
+            try renderCardMarkdown(card).write(to: cardFile, atomically: true, encoding: .utf8)
         }
 
-        // Write overview
+        // Write overview, relevance-ordered
         var overviewLines: [String] = ["# Knowledge Cards Overview", ""]
-        for card in cards {
+        if !relevant.isEmpty {
+            overviewLines.append(
+                "Cards marked RELEVANT were identified as relevant to this job during "
+                + "preprocessing and are listed first. All cards remain available."
+            )
+            overviewLines.append("")
+        }
+        for card in ordered {
             let type = card.cardType?.displayName ?? "General"
             let org = card.organization ?? ""
             let dates = card.dateRange ?? ""
-            let preview = String(card.narrative.prefix(200))
-            overviewLines.append("## \(card.title)")
-            overviewLines.append("- ID: \(card.id.uuidString)")
+            let preview = card.narrative
+                .replacingOccurrences(of: "\n", with: " ")
+                .prefix(200)
+            let isRelevant = relevantIds.contains(card.id.uuidString.lowercased())
+            overviewLines.append("## \(card.title)\(isRelevant ? " [RELEVANT TO THIS JOB]" : "")")
+            overviewLines.append("- File: knowledge_cards/\(card.id.uuidString).txt")
             overviewLines.append("- Type: \(type)")
             if !org.isEmpty { overviewLines.append("- Organization: \(org)") }
             if !dates.isEmpty { overviewLines.append("- Date Range: \(dates)") }
-            overviewLines.append("- Narrative: \(preview)...")
+            overviewLines.append(Self.wrapText("- Narrative: \(preview)..."))
             overviewLines.append("")
         }
 
         let overviewFile = workspace.appendingPathComponent("knowledge_cards_overview.txt")
         try overviewLines.joined(separator: "\n").write(to: overviewFile, atomically: true, encoding: .utf8)
 
-        Logger.info("Exported \(cards.count) knowledge cards", category: .ai)
+        Logger.info("Exported \(cards.count) knowledge cards (\(relevant.count) flagged relevant)", category: .ai)
+    }
+
+    /// Render a knowledge card as readable Markdown: header metadata, wrapped
+    /// narrative, and decoded enrichment fields as bullet lists. Modeled on how
+    /// CardVerificationPrompts.renderCards presents cards to the onboarding auditor.
+    private func renderCardMarkdown(_ card: KnowledgeCard) -> String {
+        var lines: [String] = ["# \(card.title)", ""]
+
+        lines.append("- Type: \(card.cardType?.displayName ?? "General")")
+        if let org = card.organization, !org.isEmpty {
+            lines.append("- Organization: \(org)")
+        }
+        if let dates = card.dateRange, !dates.isEmpty {
+            lines.append("- Date Range: \(dates)")
+        }
+        if let location = card.location, !location.isEmpty {
+            lines.append("- Location: \(location)")
+        }
+        if let quality = card.evidenceQuality, !quality.isEmpty {
+            lines.append("- Evidence Quality: \(quality)")
+        }
+
+        if !card.narrative.isEmpty {
+            lines.append("")
+            lines.append("## Narrative")
+            lines.append("")
+            lines.append(Self.wrapText(card.narrative))
+        }
+
+        let facts = card.facts
+        if !facts.isEmpty {
+            lines.append("")
+            lines.append("## Facts")
+            lines.append("")
+            for fact in facts {
+                lines.append(Self.wrapText("- [\(fact.category)] \(fact.statement)"))
+            }
+        }
+
+        let bullets = card.suggestedBullets
+        if !bullets.isEmpty {
+            lines.append("")
+            lines.append("## Suggested Resume Bullets")
+            lines.append("")
+            for bullet in bullets {
+                lines.append(Self.wrapText("- \(bullet)"))
+            }
+        }
+
+        let technologies = card.technologies
+        if !technologies.isEmpty {
+            lines.append("")
+            lines.append("## Technologies")
+            lines.append("")
+            lines.append(Self.wrapText(technologies.joined(separator: ", ")))
+        }
+
+        let outcomes = card.outcomes
+        if !outcomes.isEmpty {
+            lines.append("")
+            lines.append("## Outcomes")
+            lines.append("")
+            for outcome in outcomes {
+                lines.append(Self.wrapText("- \(outcome)"))
+            }
+        }
+
+        let excerpts = card.verbatimExcerpts
+        if !excerpts.isEmpty {
+            lines.append("")
+            lines.append("## Verbatim Excerpts (author's own voice)")
+            for excerpt in excerpts {
+                lines.append("")
+                lines.append("### \(excerpt.context)")
+                if !excerpt.location.isEmpty {
+                    lines.append("- Source: \(excerpt.location)")
+                }
+                lines.append("")
+                lines.append(Self.wrapText(excerpt.text))
+            }
+        }
+
+        return lines.joined(separator: "\n")
     }
 
     // MARK: - Export: Skill Bank
@@ -379,23 +545,116 @@ final class ResumeRevisionWorkspaceService {
         Logger.info("Exported \(skills.count) skills across \(categories.count) categories", category: .ai)
     }
 
-    // MARK: - Export: Writing Samples
+    // MARK: - Export: Voice Materials
 
-    func exportWritingSamples(_ coverRefs: [CoverRef]) throws {
-        guard let samplesDir = writingSamplesPath else {
+    /// What the voice export actually wrote, so prompt construction can key off
+    /// the same selection the workspace contains.
+    struct VoiceExportSummary {
+        let samplesExported: Int
+        let voiceProfileExported: Bool
+    }
+
+    /// Export the user's voice materials: the writing samples selected by the
+    /// canonical writer's-voice criteria (same selection as
+    /// `CoverRefStore.writersVoice` — enabled-by-default samples, capped at 3)
+    /// and the distilled voice primer as `voice_profile.txt`.
+    @discardableResult
+    func exportVoiceMaterials(_ coverRefs: [CoverRef]) throws -> VoiceExportSummary {
+        guard let samplesDir = writingSamplesPath, let workspace = workspacePath else {
             throw WorkspaceError.workspaceNotCreated
         }
 
-        let samples = coverRefs.filter { $0.type == .writingSample }
+        // Canonical selection — mirrors CoverRefStore.writersVoice.
+        let samples = coverRefs
+            .filter { $0.type == .writingSample && $0.enabledByDefault }
+            .prefix(3)
+        let primer = coverRefs.first { $0.type == .voicePrimer }
+
         for sample in samples {
             let slugName = sample.name.lowercased()
                 .replacingOccurrences(of: " ", with: "-")
                 .filter { $0.isLetter || $0.isNumber || $0 == "-" }
             let file = samplesDir.appendingPathComponent("\(slugName).txt")
-            try sample.content.write(to: file, atomically: true, encoding: .utf8)
+            try Self.wrapText(sample.content).write(to: file, atomically: true, encoding: .utf8)
         }
 
-        Logger.info("Exported \(samples.count) writing samples", category: .ai)
+        var profileExported = false
+        if let primer {
+            let profileFile = workspace.appendingPathComponent("voice_profile.txt")
+            try renderVoiceProfile(primer).write(to: profileFile, atomically: true, encoding: .utf8)
+            profileExported = true
+        }
+
+        Logger.info(
+            "Exported \(samples.count) writing samples"
+                + (profileExported ? " and the voice profile" : ""),
+            category: .ai
+        )
+        return VoiceExportSummary(samplesExported: samples.count, voiceProfileExported: profileExported)
+    }
+
+    /// Render the distilled voice primer (summary + structured analysis) as
+    /// readable Markdown.
+    private func renderVoiceProfile(_ primer: CoverRef) -> String {
+        var lines: [String] = ["# Voice Profile", ""]
+
+        if !primer.content.isEmpty {
+            lines.append(Self.wrapText(primer.content))
+        }
+
+        if let analysis = primer.voicePrimer {
+            func add(_ label: String, _ value: String?) {
+                guard let value, !value.isEmpty else { return }
+                lines.append("")
+                lines.append("## \(label)")
+                lines.append(Self.wrapText(value))
+            }
+            add("Tone", analysis["tone"]["description"].string)
+            add("Sentence Structure", analysis["structure"]["description"].string)
+            add("Vocabulary", analysis["vocabulary"]["description"].string)
+            add("Rhetoric Style", analysis["rhetoric"]["description"].string)
+
+            func addList(_ label: String, _ values: [String]) {
+                guard !values.isEmpty else { return }
+                lines.append("")
+                lines.append("## \(label)")
+                lines.append(contentsOf: values.map { Self.wrapText("- \($0)") })
+            }
+            addList("Writing Strengths", analysis["markers"]["strengths"].arrayValue.compactMap(\.string))
+            addList("Distinctive Traits", analysis["markers"]["quirks"].arrayValue.compactMap(\.string))
+            addList("Style Notes", analysis["markers"]["recommendations"].arrayValue.compactMap(\.string))
+        }
+
+        return lines.joined(separator: "\n")
+    }
+
+    // MARK: - Text Wrapping
+
+    /// Wrap text to readable line lengths for the agent's line-oriented read
+    /// tool (it truncates long lines and paginates by line index). Existing
+    /// newlines are preserved; each line is word-wrapped at `width` columns.
+    static func wrapText(_ text: String, width: Int = 100) -> String {
+        text.components(separatedBy: "\n")
+            .map { wrapLine($0, width: width) }
+            .joined(separator: "\n")
+    }
+
+    private static func wrapLine(_ line: String, width: Int) -> String {
+        guard line.count > width else { return line }
+        var wrapped: [String] = []
+        var current = ""
+        for word in line.split(separator: " ") {
+            if current.isEmpty {
+                current = String(word)
+            } else if current.count + 1 + word.count <= width {
+                current += " \(word)"
+            } else {
+                wrapped.append(current)
+                current = String(word)
+            }
+        }
+        if !current.isEmpty { wrapped.append(current) }
+        return wrapped.joined(separator: "\n")
     }
 
     // MARK: - Export: Font Size Nodes

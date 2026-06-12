@@ -82,6 +82,12 @@ class ResumeRevisionAgent {
     // MARK: - Init
 
     private let titleSets: [TitleSetRecord]
+    /// Canonical writer's-voice block (CoverRefStore.writersVoice), inlined
+    /// into the system prompt. Static for the session.
+    private let writersVoice: String
+    /// Phrases the user has explicitly banned (VoiceProfile.avoidPhrases),
+    /// surfaced as a NEVER-use list in the system prompt.
+    private let avoidPhrases: [String]
 
     init(
         resume: Resume,
@@ -89,7 +95,9 @@ class ResumeRevisionAgent {
         modelId: String,
         pdfGenerator: NativePDFGenerator,
         modelContext: ModelContext,
-        titleSets: [TitleSetRecord] = []
+        titleSets: [TitleSetRecord] = [],
+        writersVoice: String = "",
+        avoidPhrases: [String] = []
     ) {
         self.resume = resume
         self.llmFacade = llmFacade
@@ -98,6 +106,8 @@ class ResumeRevisionAgent {
         self.modelContext = modelContext
         self.workspaceService = ResumeRevisionWorkspaceService()
         self.titleSets = titleSets
+        self.writersVoice = writersVoice
+        self.avoidPhrases = avoidPhrases
         self.pdfRenderer = RevisionPDFRenderer(
             workspaceService: workspaceService,
             pdfGenerator: pdfGenerator,
@@ -135,18 +145,25 @@ class ResumeRevisionAgent {
             try await workspaceService.exportResumePDF(resume: resume, pdfGenerator: pdfGenerator)
             let manifest = try workspaceService.exportModifiableTreeNodes(from: resume)
             try workspaceService.exportJobDescription(jobDescription)
-            try workspaceService.exportKnowledgeCards(knowledgeCards)
+            if let jobApp = resume.jobApp {
+                try workspaceService.exportJobMetadata(for: jobApp)
+                try workspaceService.exportJobRequirements(jobApp.extractedRequirements)
+            }
+            try workspaceService.exportKnowledgeCards(
+                knowledgeCards,
+                relevantCardIds: resume.jobApp?.relevantCardIds
+            )
             try workspaceService.exportSkillBank(skills)
-            try workspaceService.exportWritingSamples(coverRefs)
+            let voiceExport = try workspaceService.exportVoiceMaterials(coverRefs)
             try workspaceService.exportFontSizeNodes(resume.fontSizeNodes)
             try workspaceService.exportTitleSets(titleSets)
-
-            let writingSamplesAvailable = coverRefs.contains { $0.type == .writingSample }
 
             // 2. Build system prompt
             let systemPrompt = ResumeRevisionAgentPrompts.systemPrompt(
                 targetPageCount: manifest.targetPageCount,
-                hasTitleSets: !titleSets.isEmpty
+                hasTitleSets: !titleSets.isEmpty,
+                writersVoice: writersVoice,
+                avoidPhrases: avoidPhrases
             )
 
             // 3. Build initial user message with PDF attachment
@@ -156,7 +173,7 @@ class ResumeRevisionAgent {
 
             let userText = ResumeRevisionAgentPrompts.initialUserMessage(
                 jobDescription: jobDescription,
-                writingSamplesAvailable: writingSamplesAvailable
+                writingSamplesAvailable: voiceExport.samplesExported > 0
             )
 
             let initialMessage = AnthropicMessage(

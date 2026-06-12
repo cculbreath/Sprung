@@ -224,6 +224,7 @@ final class JobAppStore: SwiftDataStore {
             Logger.error("No job application available to save.")
             return
         }
+        let jobDescriptionChanged = jobAppToSave.jobDescription != form.jobDescription
         // Directly assign properties from form
         jobAppToSave.jobPosition = form.jobPosition
         jobAppToSave.jobLocation = form.jobLocation
@@ -238,6 +239,19 @@ final class JobAppStore: SwiftDataStore {
         jobAppToSave.jobApplyLink = form.jobApplyLink
         jobAppToSave.postingURL = form.postingURL
         saveContext()
+
+        // Preprocessing results are derived from the job description — they
+        // must never silently outlive an edit to it. Clear them first (even if
+        // re-queueing is impossible), then re-queue when a description exists.
+        if jobDescriptionChanged {
+            jobAppToSave.extractedRequirements = nil
+            jobAppToSave.relevantCardIds = nil
+            saveContext()
+            Logger.info("🧹 [JobAppStore] Job description changed — cleared stale preprocessing for: \(jobAppToSave.jobPosition)", category: .ai)
+            if !jobAppToSave.jobDescription.isEmpty {
+                rerunPreprocessing(for: jobAppToSave)
+            }
+        }
     }
     func updateJobApp(_: JobApp) {
         // Persist the changes that should already be reflected on the entity

@@ -169,6 +169,17 @@ struct ResumeRevisionView: View {
     }
 
     private func startAgent() async {
+        // A revision session is meaningless without a job description — the
+        // agent would tailor the resume to nothing. Refuse to start and tell
+        // the user exactly what to fix.
+        let jobDescription = (resume.jobApp?.jobDescription ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !jobDescription.isEmpty else {
+            errorMessage = "This job application has no job description. Add one to the job application before starting a Customize session."
+            showError = true
+            return
+        }
+
         let pdfGenerator = NativePDFGenerator(
             templateStore: templateStore,
             profileProvider: applicantProfileStore
@@ -194,7 +205,13 @@ struct ResumeRevisionView: View {
         let knowledgeCards = knowledgeCardStore.knowledgeCards
         let skills = skillStore.skills
         let coverRefs = coverRefStore.storedCoverRefs
-        let jobDescription = resume.jobApp?.jobDescription ?? ""
+        // Canonical voice context: the same block every other LLM surface uses.
+        let writersVoice = coverRefStore.writersVoice
+        // Explicitly banned phrases from the onboarding voice profile. The
+        // guidance store is a stateless query facade over the model context;
+        // the revision window's environment does not carry one.
+        let avoidPhrases = InferenceGuidanceStore(context: modelContext)
+            .voiceProfile()?.avoidPhrases ?? []
 
         let revisionAgent = ResumeRevisionAgent(
             resume: resume,
@@ -202,7 +219,9 @@ struct ResumeRevisionView: View {
             modelId: modelId,
             pdfGenerator: pdfGenerator,
             modelContext: modelContext,
-            titleSets: titleSetStore.allTitleSets
+            titleSets: titleSetStore.allTitleSets,
+            writersVoice: writersVoice,
+            avoidPhrases: avoidPhrases
         )
         agent = revisionAgent
         onAgentCreated(revisionAgent)

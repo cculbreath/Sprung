@@ -236,6 +236,10 @@ class JobAppPreprocessor {
             throw PreprocessingError.llmNotAvailable
         }
 
+        guard !jobDescription.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw PreprocessingError.emptyJobDescription
+        }
+
         guard let modelId = preprocessingModel, !modelId.isEmpty else {
             throw ModelConfigurationError.modelNotConfigured(
                 settingKey: "backgroundProcessingModelId",
