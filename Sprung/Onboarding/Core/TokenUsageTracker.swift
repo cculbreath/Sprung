@@ -161,6 +161,11 @@ class TokenUsageTracker {
     /// Session start time
     let sessionStartTime: Date
 
+    /// Prompt size (input + cacheRead + cacheCreation) of the previous
+    /// main-coordinator request — the next request should read (almost) all of
+    /// it from cache; a large shortfall means the prefix was invalidated.
+    private var lastCoordinatorPromptTokens: Int?
+
     // MARK: - Computed Properties
 
     /// Total stats across all models and sources
@@ -255,10 +260,38 @@ class TokenUsageTracker {
         sourceStats.add(entry)
         statsBySource[entry.source] = sourceStats
 
+        checkCacheRegression(entry)
+
         Logger.debug(
             "📊 Token usage: +\(entry.inputTokens) in, +\(entry.outputTokens) out (\(entry.modelId), \(entry.source.displayName))",
             category: .ai
         )
+    }
+
+    /// Warn when a main-coordinator request fails to read the previous request's
+    /// prompt from cache. The interview is a single linear conversation, so each
+    /// request should serve its predecessor's entire prompt as cache reads;
+    /// anything else means the byte-stable replay invariant broke (see
+    /// CachePrefixAuditor for the block-level culprit). Expected exceptions:
+    /// phase transitions (tools+system swap) and idle gaps beyond the 5-minute
+    /// cache TTL. Scoped to the coordinator — fan-out sources (git agent, doc
+    /// passes) interleave independent conversations and would alarm spuriously.
+    private func checkCacheRegression(_ entry: TokenUsageEntry) {
+        guard entry.source == .mainCoordinator else { return }
+        let promptTokens = entry.inputTokens + entry.cacheReadTokens + entry.cacheCreationTokens
+        defer { lastCoordinatorPromptTokens = promptTokens }
+        guard let expected = lastCoordinatorPromptTokens else { return }
+
+        let served = entry.cacheReadTokens + entry.inputTokens
+        let lost = expected - served
+        if lost > 1024 {
+            Logger.warning(
+                "📉 Prompt-cache regression (main coordinator): read \(Self.formatTokenCount(entry.cacheReadTokens)) " +
+                "but previous prompt was \(Self.formatTokenCount(expected)) tokens — ~\(Self.formatTokenCount(lost)) " +
+                "re-billed as cache writes. Expected only at phase transitions or after a >5 min idle gap.",
+                category: .ai
+            )
+        }
     }
 
     /// Record usage with raw values

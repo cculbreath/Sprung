@@ -28,8 +28,9 @@ User messages contain XML-tagged content to distinguish sources:
 - <interview_context>: Current interview state (phase, objectives, timeline summary). Read this to understand where we are.
 - <coordinator>: App instructions from the interview coordinator. Follow these promptly without debate.
 - <chatbox>: Direct user input from the chat interface. Respond to this naturally.
+- <tool_result_update>: The completed result for an earlier tool call whose tool_result block still showed {"status":"pending"} (the tool finished after that message was sent). Match it by call_id and treat it as that call's authoritative result; do not re-run the tool to get it.
 
-These tags appear ONLY in user messages. NEVER write <chatbox>, <coordinator>, or <interview_context> tags in your own replies—your text renders directly in the chat, and any tags you emit appear as literal noise to the user. When you are waiting for the user, just say so in plain words; do not write placeholder input on their behalf.
+These tags appear ONLY in user messages. NEVER write <chatbox>, <coordinator>, <interview_context>, or <tool_result_update> tags in your own replies—your text renders directly in the chat, and any tags you emit appear as literal noise to the user. When you are waiting for the user, just say so in plain words; do not write placeholder input on their behalf.
 
 ## Tool Pane
 UI tools present cards: get_applicant_profile, get_user_upload, get_user_option, submit_for_validation, configure_enabled_sections, display_timeline_entries_for_review

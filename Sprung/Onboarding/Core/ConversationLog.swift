@@ -29,8 +29,13 @@
 //  - toolResultWireText[callId] — exact tool_result content string as FIRST
 //                                 serialized to the wire (pending placeholder if
 //                                 the tool hadn't finished); reused on every
-//                                 rebuild so the prefix never flips between
-//                                 placeholder and real result mid-history
+//                                 rebuild — NEVER mutated. A result that lands
+//                                 after its placeholder was serialized is queued
+//                                 in pendingWireUpdates and delivered as a
+//                                 <tool_result_update> block in the next request's
+//                                 tail (in-place upgrades invalidated the cached
+//                                 prefix on every later request — 26 busts in one
+//                                 session, ~6.6M cache-write tokens)
 //  - coordinatorWireTurns       — standalone coordinator user turns that have no
 //                                 ConversationEntry at all (wire-only)
 //  getWireSnapshot() interleaves these so AnthropicHistoryBuilder reproduces the
@@ -150,9 +155,15 @@ actor ConversationLog {
     /// (nil anchor = before the first entry)
     private var coordinatorWireTurns: [(afterEntryId: UUID?, text: String)] = []
 
+    /// Late tool results awaiting cache-stable delivery: the slot's wire bytes are
+    /// frozen (placeholder or synthetic fill), so the real output is rendered as a
+    /// <tool_result_update> block in the next request's volatile tail instead of
+    /// being written back into history. Deduped by callId, drained at request build.
+    private var pendingWireUpdates: [WireToolUpdate] = []
+
     /// Placeholder serialized for a tool_result whose tool hasn't finished when the
     /// request is built. Recorded into `toolResultWireText` so the same bytes replay
-    /// until the real result arrives (one documented cache-busting upgrade).
+    /// forever; the real result is delivered via `pendingWireUpdates`.
     static let pendingToolResultPlaceholder = #"{"status":"pending","reason":"Tool execution in progress"}"#
 
     /// Serialized in place of an empty tool output (Anthropic rejects empty
@@ -325,23 +336,55 @@ actor ConversationLog {
 
     /// Fill a tool result slot in the last assistant entry
     /// Returns true if slot was found and filled, false if slot not found (orphaned/already filled)
+    ///
+    /// PROMPT-CACHE INVARIANT: a result that arrives after its slot's wire bytes
+    /// were serialized (pending placeholder) or after the slot was synthetically
+    /// resolved (auto-fill/gating) is queued for tail delivery as a
+    /// <tool_result_update> block — the recorded wire bytes are never mutated.
     @discardableResult
     func setToolResult(callId: String, output: String, status: ToolCallStatus = .completed) -> Bool {
+        let wireOutput = output.isEmpty ? Self.emptyToolResultSubstitute : output
+
         guard case .assistant(let id, let text, var toolCalls?, let timestamp) = entries.last,
               let index = toolCalls.firstIndex(where: { $0.callId == callId }) else {
-            Logger.warning("ConversationLog: Tool result for unknown call \(callId.prefix(8))", category: .ai)
+            // Slot is not in the last entry. If the call exists earlier in history
+            // its wire bytes are frozen (placeholder or synthetic fill) and the
+            // model has never seen this real output — deliver it at the tail.
+            if let slot = findSlot(callId: callId) {
+                if toolResultWireText[callId] != wireOutput {
+                    enqueueWireUpdate(callId: callId, name: slot.name, output: wireOutput, status: status)
+                    Logger.info("ConversationLog: Late result for \(callId.prefix(8)) (slot not in last entry) — queued tail delivery", category: .ai)
+                }
+            } else {
+                Logger.warning("ConversationLog: Tool result for unknown call \(callId.prefix(8))", category: .ai)
+            }
             return false
         }
 
-        // Check if already resolved (prevent double-fill)
+        // Check if already resolved (prevent double-fill). The slot's recorded
+        // result (typically a synthetic auto-fill) keeps its frozen wire bytes;
+        // the real output still reaches the model via tail delivery.
         if toolCalls[index].isResolved {
-            Logger.warning("ConversationLog: Tool slot \(callId.prefix(8)) already resolved, skipping", category: .ai)
+            if toolResultWireText[callId] != wireOutput {
+                enqueueWireUpdate(callId: callId, name: toolCalls[index].name, output: wireOutput, status: status)
+                Logger.info("ConversationLog: Late result for \(callId.prefix(8)) (slot already resolved) — queued tail delivery", category: .ai)
+            } else {
+                Logger.warning("ConversationLog: Tool slot \(callId.prefix(8)) already resolved, skipping", category: .ai)
+            }
             return false
         }
 
         // Fill the slot
         toolCalls[index].result = output
         toolCalls[index].status = status
+
+        // If this slot was already serialized to the wire (as the pending
+        // placeholder), those bytes stay frozen — queue the real result for
+        // tail delivery instead of mutating history.
+        if let recorded = toolResultWireText[callId], recorded != wireOutput {
+            enqueueWireUpdate(callId: callId, name: toolCalls[index].name, output: wireOutput, status: status)
+            Logger.info("ConversationLog: Result for \(callId.prefix(8)) arrived after placeholder serialization — queued tail delivery", category: .ai)
+        }
 
         // Replace last entry with updated version
         entries[entries.count - 1] = .assistant(
@@ -386,6 +429,16 @@ actor ConversationLog {
         let name: String
         let arguments: String
         let result: String
+    }
+
+    /// A tool result that completed after its slot's wire bytes were frozen.
+    /// Rendered as a <tool_result_update> block in the next request's volatile
+    /// tail (where it freezes into history like all other wire text).
+    struct WireToolUpdate: Sendable {
+        let callId: String
+        let name: String
+        let output: String
+        let status: ToolCallStatus
     }
 
     /// A conversation turn in exact wire form, for byte-identical history replay.
@@ -510,28 +563,19 @@ actor ConversationLog {
     /// Resolve the exact tool_result wire string for a slot.
     ///
     /// First serialization records the string (the real result, or the pending
-    /// placeholder if the tool hasn't finished). Rebuilds reuse the record so the
-    /// prefix stays byte-identical — with ONE exception: if the record is the
-    /// pending placeholder and a real result now exists, upgrade to the real result
-    /// and accept a one-time cache bust. Quality wins over one bust; a permanent
-    /// "pending" would hide the real result from the model forever.
+    /// placeholder if the tool hasn't finished). Rebuilds reuse the record
+    /// UNCONDITIONALLY — recorded bytes are never mutated. A result that lands
+    /// after its placeholder was serialized reaches the model via
+    /// `pendingWireUpdates` tail delivery (see setToolResult). The old in-place
+    /// "one-time bust" upgrade fired on nearly every slow UI tool and rewrote the
+    /// entire cached suffix each time.
     private func wireToolCall(for slot: ToolCallSlot) -> WireToolCall {
         // Empty outputs are substituted HERE, not downstream, so the recorded
         // string is the exact wire string in all cases.
         let liveResult = slot.result.map { $0.isEmpty ? Self.emptyToolResultSubstitute : $0 }
         let resolved: String
         if let recorded = toolResultWireText[slot.callId] {
-            if recorded == Self.pendingToolResultPlaceholder,
-               let live = liveResult, live != recorded {
-                toolResultWireText[slot.callId] = live
-                Logger.info(
-                    "ConversationLog: tool_result \(slot.callId.prefix(8)) upgraded from pending placeholder to real result (one-time prompt-cache bust)",
-                    category: .ai
-                )
-                resolved = live
-            } else {
-                resolved = recorded
-            }
+            resolved = recorded
         } else {
             let wire = liveResult ?? Self.pendingToolResultPlaceholder
             if liveResult == nil {
@@ -546,6 +590,35 @@ actor ConversationLog {
             arguments: slot.arguments,
             result: resolved
         )
+    }
+
+    // MARK: - Late Tool-Result Tail Delivery
+
+    /// Find a tool call slot anywhere in history (newest entry first).
+    private func findSlot(callId: String) -> ToolCallSlot? {
+        for entry in entries.reversed() {
+            if case .assistant(_, _, let toolCalls?, _) = entry,
+               let slot = toolCalls.first(where: { $0.callId == callId }) {
+                return slot
+            }
+        }
+        return nil
+    }
+
+    /// Queue a late tool result for delivery in the next request's volatile tail.
+    /// Deduped by callId — the latest output wins.
+    private func enqueueWireUpdate(callId: String, name: String, output: String, status: ToolCallStatus) {
+        pendingWireUpdates.removeAll { $0.callId == callId }
+        pendingWireUpdates.append(WireToolUpdate(callId: callId, name: name, output: output, status: status))
+    }
+
+    /// Drain queued late tool results at request-build time. The caller renders
+    /// them into the request's volatile text, where they freeze into the wire
+    /// history (first-write-wins) like all other tail content.
+    func drainPendingWireUpdates() -> [WireToolUpdate] {
+        let drained = pendingWireUpdates
+        pendingWireUpdates.removeAll()
+        return drained
     }
 
     // MARK: - Persistence Support
@@ -566,6 +639,7 @@ actor ConversationLog {
         toolContextText.removeAll()
         toolResultWireText.removeAll()
         coordinatorWireTurns.removeAll()
+        pendingWireUpdates.removeAll()
         Logger.info("ConversationLog: Restored \(self.entries.count) entries", category: .ai)
     }
 
@@ -651,6 +725,7 @@ actor ConversationLog {
         toolContextText.removeAll()
         toolResultWireText.removeAll()
         coordinatorWireTurns.removeAll()
+        pendingWireUpdates.removeAll()
         Logger.info("ConversationLog: Reset", category: .ai)
     }
 

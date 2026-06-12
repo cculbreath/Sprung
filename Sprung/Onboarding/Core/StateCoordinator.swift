@@ -625,6 +625,12 @@ actor StateCoordinator: OnboardingEventEmitter {
 
     // MARK: - Completed Tool Results (Anthropic History)
 
+    /// Drain late tool results queued for cache-stable tail delivery
+    /// (rendered as <tool_result_update> blocks by AnthropicRequestBuilder).
+    func drainPendingToolWireUpdates() async -> [ConversationLog.WireToolUpdate] {
+        await conversationLog.drainPendingWireUpdates()
+    }
+
     /// Store a completed tool result - ConversationLog is the sole source of truth
     /// Returns true if the slot was found and filled, false if slot not found (orphaned/already filled)
     @discardableResult

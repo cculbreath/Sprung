@@ -48,6 +48,9 @@ struct AnthropicRequestBuilder {
     private let historyBuilder: AnthropicHistoryBuilder
     private let toolConverter: AnthropicToolConverter
     private let workingMemoryBuilder: WorkingMemoryBuilder
+    /// Per-request prefix fingerprinting — logs the first divergent block when
+    /// the byte-stability invariant breaks (see CachePrefixAuditor).
+    private let cacheAuditor = CachePrefixAuditor()
 
     init(
         baseSystemPrompt: String,
@@ -85,6 +88,12 @@ struct AnthropicRequestBuilder {
         // 1. Interview context (volatile tail: state, objectives, todo list)
         if let interviewContext = await workingMemoryBuilder.buildInterviewContext() {
             fullMessageParts.append(interviewContext)
+        }
+
+        // 1b. Late tool results — delivered at the tail instead of mutating the
+        // frozen tool_result bytes earlier in history (prompt-cache invariant).
+        if let updates = await renderToolResultUpdates() {
+            fullMessageParts.append(updates)
         }
 
         // 2. Coordinator instructions (app-generated guidance for the model)
@@ -193,6 +202,8 @@ struct AnthropicRequestBuilder {
             category: .ai
         )
 
+        cacheAuditor.audit(tools: tools, system: baseSystemPrompt, messages: messages)
+
         return parameters
     }
 
@@ -204,6 +215,11 @@ struct AnthropicRequestBuilder {
     func buildCoordinatorMessageRequest(
         text: String
     ) async throws -> AnthropicMessageParameter {
+        // Resolve the model FIRST: it can throw, and a coordinator wire turn (and
+        // any drained tool-result updates) must never be consumed by a request
+        // that fails to build.
+        let modelId = try await stateCoordinator.getAnthropicModelId()
+
         // Build message with interview context + coordinator instruction
         var messageParts: [String] = []
 
@@ -212,15 +228,15 @@ struct AnthropicRequestBuilder {
             messageParts.append(interviewContext)
         }
 
+        // 1b. Late tool results (cache-stable tail delivery)
+        if let updates = await renderToolResultUpdates() {
+            messageParts.append(updates)
+        }
+
         // 2. Coordinator instruction (app-generated guidance)
         messageParts.append("<coordinator>\(text)</coordinator>")
 
         let fullMessageText = messageParts.joined(separator: "\n\n")
-
-        // Resolve the model FIRST: it can throw, and a coordinator wire turn must
-        // never be recorded for a request that fails to build (the turn would
-        // replay forever in history, and a retried send would duplicate it).
-        let modelId = try await stateCoordinator.getAnthropicModelId()
 
         // PROMPT-CACHE INVARIANT: coordinator turns have no ConversationEntry, so
         // record a wire-only turn in the log BEFORE building history — the turn
@@ -248,6 +264,8 @@ struct AnthropicRequestBuilder {
             category: .ai
         )
 
+        cacheAuditor.audit(tools: tools, system: baseSystemPrompt, messages: messages)
+
         return parameters
     }
 
@@ -274,11 +292,21 @@ struct AnthropicRequestBuilder {
         callId: String,
         instruction: String? = nil
     ) async throws -> AnthropicMessageParameter {
+        // Resolve the model FIRST: it can throw, and drained tool-result updates
+        // must never be consumed by a request that fails to build.
+        let modelId = try await stateCoordinator.getAnthropicModelId()
+
         // Build computed context: interview_context + optional coordinator instruction
         var textParts: [String] = []
 
         if let interviewContext = await workingMemoryBuilder.buildInterviewContext() {
             textParts.append(interviewContext)
+        }
+
+        // Late tool results whose history bytes are frozen (placeholder/synthetic)
+        // — delivered here at the tail, where they freeze into this turn's context.
+        if let updates = await renderToolResultUpdates() {
+            textParts.append(updates)
         }
 
         if let instruction = instruction {
@@ -298,7 +326,6 @@ struct AnthropicRequestBuilder {
         let messages = applyMessageCacheBreakpoints(to: await historyBuilder.buildAnthropicHistory())
 
         let tools = await toolConverter.getAnthropicTools()
-        let modelId = try await stateCoordinator.getAnthropicModelId()
 
         let parameters = AnthropicMessageParameter(
             model: modelId,
@@ -326,6 +353,8 @@ struct AnthropicRequestBuilder {
                 category: .ai
             )
         }
+
+        cacheAuditor.audit(tools: tools, system: baseSystemPrompt, messages: messages)
 
         return parameters
     }
@@ -366,11 +395,20 @@ struct AnthropicRequestBuilder {
     ///
     /// - Parameter payloads: Payloads containing callIds and optional instructions (output not needed)
     func buildBatchedToolResponseRequest(payloads: [JSON]) async throws -> AnthropicMessageParameter {
+        // Resolve the model FIRST: it can throw, and drained tool-result updates
+        // must never be consumed by a request that fails to build.
+        let modelId = try await stateCoordinator.getAnthropicModelId()
+
         // Build computed context: interview_context + optional coordinator instruction
         var textParts: [String] = []
 
         if let interviewContext = await workingMemoryBuilder.buildInterviewContext() {
             textParts.append(interviewContext)
+        }
+
+        // Late tool results (cache-stable tail delivery)
+        if let updates = await renderToolResultUpdates() {
+            textParts.append(updates)
         }
 
         // Check for instruction in any payload (typically the last one for UI tool completions)
@@ -389,7 +427,6 @@ struct AnthropicRequestBuilder {
         let messages = applyMessageCacheBreakpoints(to: await historyBuilder.buildAnthropicHistory())
 
         let tools = await toolConverter.getAnthropicTools()
-        let modelId = try await stateCoordinator.getAnthropicModelId()
 
         let parameters = AnthropicMessageParameter(
             model: modelId,
@@ -406,7 +443,34 @@ struct AnthropicRequestBuilder {
             category: .ai
         )
 
+        cacheAuditor.audit(tools: tools, system: baseSystemPrompt, messages: messages)
+
         return parameters
+    }
+
+    // MARK: - Late Tool-Result Delivery
+
+    /// Render tool results that completed after their history bytes were frozen
+    /// (pending placeholder or synthetic auto-fill) as <tool_result_update>
+    /// blocks. Drained from ConversationLog and merged into the request's
+    /// volatile text, where the wire capture freezes them like all other tail
+    /// content — the model gets the real output without any in-place history
+    /// mutation (which would invalidate the cached prefix on every later turn).
+    private func renderToolResultUpdates() async -> String? {
+        let updates = await stateCoordinator.drainPendingToolWireUpdates()
+        guard !updates.isEmpty else { return nil }
+        let rendered = updates.map { update in
+            """
+            <tool_result_update call_id="\(update.callId)" tool="\(update.name)" status="\(update.status.rawValue)">
+            \(update.output)
+            </tool_result_update>
+            """
+        }
+        Logger.info(
+            "📦 Delivering \(updates.count) late tool result(s) as <tool_result_update> (cache-stable tail delivery)",
+            category: .ai
+        )
+        return rendered.joined(separator: "\n")
     }
 
     // MARK: - Message Cache Breakpoints
