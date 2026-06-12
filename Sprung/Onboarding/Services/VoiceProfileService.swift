@@ -221,7 +221,7 @@ private enum VoiceProfileSchemas {
             "sampleExcerpts": [
                 "type": "array",
                 "items": ["type": "string"],
-                "description": "Verbatim excerpts showing voice (20-50 words each)"
+                "description": "Verbatim excerpts showing voice (20-50 words each), chosen to demonstrate the register modulation pattern — e.g. one formal Latinate passage and one plain Anglo-Saxon punchline"
             ],
             "vocabularyRegister": [
                 "type": "string",

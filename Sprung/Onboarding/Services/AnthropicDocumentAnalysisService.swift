@@ -120,6 +120,15 @@ enum DocumentAnalysisPrompts {
             if let modulation = profile.registerModulation, !modulation.isEmpty {
                 lines.append("- Register modulation: \(modulation)")
             }
+            // Curated excerpts are LLM-selected for voice-distinctiveness —
+            // higher signal per token than the raw-sample excerpt below, which
+            // stays for paragraph-scale sentence rhythm.
+            if !profile.sampleExcerpts.isEmpty {
+                let curated = profile.sampleExcerpts
+                    .map { "  - \"\($0)\"" }
+                    .joined(separator: "\n")
+                lines.append("- Curated voice excerpts:\n\(curated)")
+            }
             sections.append("## Author Voice Profile\n\n" + lines.joined(separator: "\n"))
         }
 
