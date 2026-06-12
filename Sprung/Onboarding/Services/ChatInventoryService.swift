@@ -168,7 +168,7 @@ actor ChatInventoryService {
         Extract a COMPREHENSIVE skill inventory from the conversation transcript above.
 
         This is a BANK of all possible skills — completeness matters more than selectivity. \
-        When in doubt, INCLUDE the skill at a lower proficiency level.
+        When in doubt, INCLUDE the skill.
 
         Extract ALL skills, including:
         - Technical skills and technologies mentioned explicitly
@@ -185,7 +185,6 @@ actor ChatInventoryService {
         - Set `implied` to false when the skill was explicitly demonstrated or discussed, \
           and true when it is only inferred from context. Cap implied-skill evidence \
           strength at "supporting" or "mention" — never "primary".
-        - Set proficiency (expert, proficient, familiar) based on how they discuss it.
         - Provide evidence with document_id "chat", a location like "conversation", a brief \
           context note, and a strength (primary, supporting, mention).
         - List ATS variants of the skill name inside ats_variants — variants are NEVER \

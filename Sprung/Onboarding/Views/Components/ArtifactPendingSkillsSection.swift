@@ -38,14 +38,6 @@ struct ArtifactPendingSkillsSection: View {
 
                                 Spacer()
 
-                                Text(skill.proficiency.rawValue.capitalized)
-                                    .font(.caption2)
-                                    .padding(.horizontal, 5)
-                                    .padding(.vertical, 2)
-                                    .background(artifactProficiencyColor(skill.proficiency).opacity(0.15))
-                                    .foregroundStyle(artifactProficiencyColor(skill.proficiency))
-                                    .cornerRadius(3)
-
                                 Button {
                                     onDeleteSkill(skill)
                                 } label: {

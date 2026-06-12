@@ -220,9 +220,6 @@ final class SkillsProcessingService {
             var mergedVariants = Set(primary.atsVariants)
             var mergedRelated = Set(primary.relatedSkills)
 
-            // Take highest proficiency
-            var highestProficiency = primary.proficiency
-
             for skill in skills where skill.id != primary.id {
                 // Merge evidence (dedupe by document+location)
                 for evidence in skill.evidence {
@@ -241,11 +238,6 @@ final class SkillsProcessingService {
                 // Merge related skills
                 mergedRelated.formUnion(skill.relatedSkills)
 
-                // Take highest proficiency
-                if skill.proficiency.sortOrder < highestProficiency.sortOrder {
-                    highestProficiency = skill.proficiency
-                }
-
                 // Delete the duplicate
                 skillStore.delete(skill)
                 mergedCount += 1
@@ -258,7 +250,6 @@ final class SkillsProcessingService {
             primary.evidence = mergedEvidence
             primary.atsVariants = Array(mergedVariants)
             primary.relatedSkills = Array(mergedRelated)
-            primary.proficiency = highestProficiency
             skillStore.update(primary)
         }
 

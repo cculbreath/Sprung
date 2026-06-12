@@ -18,7 +18,7 @@ struct CompleteAnalysisTool: AgentTool {
         Each card must have specific evidence from files you examined — include a skill only if the \
         evidence would survive an interviewer asking "tell me about a time you used X".
         Card types: skill (technologies/tools/techniques), project (the repo itself or sub-projects), achievement (notable accomplishments).
-        Skill cards MUST set proficiency, category, and atsVariants.
+        Skill cards MUST set category and atsVariants.
         """
 
     static let parametersSchema: [String: Any] = [
@@ -69,11 +69,6 @@ struct CompleteAnalysisTool: AgentTool {
                             "items": ["type": "string"],
                             "description": "Metrics only when the number means something to an outsider: scale served, performance achieved, duration sustained. Do NOT include lines of code or file counts."
                         ],
-                        "proficiency": [
-                            "type": "string",
-                            "enum": ["expert", "proficient", "familiar"],
-                            "description": "REQUIRED for skill cards. Proficiency per the evidence rubric, grounded in the longitudinal git evidence (tenure in the area, sustained activity). Rubric assessments at Competent level map to 'familiar'."
-                        ],
                         "category": [
                             "type": "string",
                             "description": "REQUIRED for skill cards. Skill-bank category: use the universal anchors (Tools & Software, Leadership & Management, Communication & Writing, Methodologies & Processes) plus domain-appropriate categories you propose (e.g., Programming Languages, Frameworks & Libraries, Scientific & Analysis)."
@@ -108,7 +103,7 @@ struct CompleteAnalysisTool: AgentTool {
     // MARK: - Parameter Types for Decoding
 
     /// Matches DocumentInventory.ProposedCardEntry for unified pipeline,
-    /// plus skill-card judgment fields (proficiency, category, atsVariants).
+    /// plus skill-card judgment fields (category, atsVariants).
     struct ProposedCard: Codable {
         let cardType: String
         let proposedTitle: String
@@ -120,8 +115,6 @@ struct CompleteAnalysisTool: AgentTool {
         let dateRange: String?
         let crossReferences: [String]
         let extractionNotes: String?
-        /// Skill cards only: expert | proficient | familiar
-        let proficiency: String?
         /// Skill cards only: skill-bank category (universal anchors + domain categories)
         let category: String?
         /// Skill cards only: search-term variants of the skill's name

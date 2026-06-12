@@ -3,7 +3,7 @@
 //  Sprung
 //
 //  SwiftData model for skills extracted during onboarding.
-//  Comprehensive ATS-optimized skill tracking with evidence and proficiency.
+//  Comprehensive ATS-optimized skill tracking with evidence.
 //
 
 import Foundation
@@ -71,23 +71,6 @@ enum SkillCategoryUtils {
     ]
 }
 
-// MARK: - Proficiency Level
-
-/// Proficiency level for a skill
-enum Proficiency: String, Codable, CaseIterable {
-    case expert      // Years of deep use, can teach others
-    case proficient  // Regular use, comfortable independently
-    case familiar    // Some experience, would need ramp-up
-
-    var sortOrder: Int {
-        switch self {
-        case .expert: return 0
-        case .proficient: return 1
-        case .familiar: return 2
-        }
-    }
-}
-
 // MARK: - Evidence Strength
 
 /// How strongly the evidence demonstrates the skill
@@ -129,9 +112,6 @@ class Skill: Identifiable, Codable {
     /// Category for organizing skills
     var categoryRaw: String
 
-    /// Proficiency level
-    var proficiencyRaw: String
-
     /// JSON-encoded array of SkillEvidence
     var evidenceJSON: String?
 
@@ -161,7 +141,6 @@ class Skill: Identifiable, Codable {
         canonical: String,
         atsVariants: [String] = [],
         category: String,
-        proficiency: Proficiency,
         evidence: [SkillEvidence] = [],
         relatedSkills: [UUID] = [],
         lastUsed: String? = nil,
@@ -172,7 +151,6 @@ class Skill: Identifiable, Codable {
         self.id = id
         self.canonical = canonical
         self.categoryRaw = SkillCategoryUtils.normalizeCategory(category)
-        self.proficiencyRaw = proficiency.rawValue
         self.lastUsed = lastUsed
         self.implied = implied
         self.isFromOnboarding = isFromOnboarding
@@ -190,7 +168,6 @@ class Skill: Identifiable, Codable {
         case id, canonical
         case atsVariantsJSON = "ats_variants"
         case categoryRaw = "category"
-        case proficiencyRaw = "proficiency"
         case evidenceJSON = "evidence"
         case relatedSkillsJSON = "related_skills"
         case lastUsed = "last_used"
@@ -211,7 +188,6 @@ class Skill: Identifiable, Codable {
 
         self.canonical = try container.decode(String.self, forKey: .canonical)
         self.categoryRaw = try container.decode(String.self, forKey: .categoryRaw)
-        self.proficiencyRaw = try container.decode(String.self, forKey: .proficiencyRaw)
         self.lastUsed = try container.decodeIfPresent(String.self, forKey: .lastUsed)
         self.implied = try container.decodeIfPresent(Bool.self, forKey: .implied) ?? false
         self.isFromOnboarding = try container.decodeIfPresent(Bool.self, forKey: .isFromOnboarding) ?? false
@@ -257,7 +233,6 @@ class Skill: Identifiable, Codable {
         try container.encode(canonical, forKey: .canonical)
         try container.encodeIfPresent(atsVariantsJSON, forKey: .atsVariantsJSON)
         try container.encode(categoryRaw, forKey: .categoryRaw)
-        try container.encode(proficiencyRaw, forKey: .proficiencyRaw)
         try container.encodeIfPresent(evidenceJSON, forKey: .evidenceJSON)
         try container.encodeIfPresent(relatedSkillsJSON, forKey: .relatedSkillsJSON)
         try container.encodeIfPresent(lastUsed, forKey: .lastUsed)
@@ -275,16 +250,6 @@ class Skill: Identifiable, Codable {
         }
         set {
             categoryRaw = SkillCategoryUtils.normalizeCategory(newValue)
-        }
-    }
-
-    /// Proficiency as enum
-    var proficiency: Proficiency {
-        get {
-            Proficiency(rawValue: proficiencyRaw) ?? .familiar
-        }
-        set {
-            proficiencyRaw = newValue.rawValue
         }
     }
 

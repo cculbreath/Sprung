@@ -413,7 +413,7 @@ struct ChipChildrenView: View {
             }
             if !alreadyExists {
                 let parentCategory = parent.parent?.computedTitle ?? "General"
-                let newSkill = Skill(canonical: trimmed, category: parentCategory, proficiency: .familiar)
+                let newSkill = Skill(canonical: trimmed, category: parentCategory)
                 skillStore.add(newSkill)
                 Logger.info("Synced new skill to library: '\(trimmed)' in category '\(parentCategory)'")
             }
@@ -507,7 +507,7 @@ struct ChipChildrenView: View {
             }
             if !alreadyExists {
                 let parentCategory = parent.parent?.computedTitle ?? "General"
-                let newSkill = Skill(canonical: rec.skillName, category: parentCategory, proficiency: .familiar)
+                let newSkill = Skill(canonical: rec.skillName, category: parentCategory)
                 skillStore.add(newSkill)
                 Logger.info("Synced new skill to library: '\(rec.skillName)' in category '\(parentCategory)'")
             }
@@ -524,7 +524,7 @@ struct ChipChildrenView: View {
                 skill.atsVariants.contains { $0.lowercased() == chipValue }
             }
             if !alreadyExists && !child.value.isEmpty {
-                let newSkill = Skill(canonical: child.value, category: parentCategory, proficiency: .familiar)
+                let newSkill = Skill(canonical: child.value, category: parentCategory)
                 skillStore.add(newSkill)
                 addedCount += 1
             }

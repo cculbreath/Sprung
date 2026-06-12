@@ -31,14 +31,11 @@ struct SkillBank: Codable {
         Dictionary(grouping: skills, by: { $0.category })
     }
 
-    /// Get top N skills per category (by proficiency, then evidence count)
+    /// Get top N skills per category (by evidence count)
     func topSkills(perCategory limit: Int) -> [String: [Skill]] {
         groupedByCategory().mapValues { categorySkills in
             categorySkills.sorted { a, b in
-                if a.proficiency != b.proficiency {
-                    return a.proficiency.sortOrder < b.proficiency.sortOrder
-                }
-                return a.evidence.count > b.evidence.count
+                a.evidence.count > b.evidence.count
             }.prefix(limit).map { $0 }
         }
     }

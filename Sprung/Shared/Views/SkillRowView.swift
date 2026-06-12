@@ -9,7 +9,6 @@ extension SkillsBankBrowser {
     func startAddingSkill(to category: String) {
         addingToCategory = category
         newSkillName = ""
-        newSkillProficiency = .proficient
         // Ensure category is expanded
         expandedCategories.insert(category)
     }
@@ -17,7 +16,6 @@ extension SkillsBankBrowser {
     func cancelAddingSkill() {
         addingToCategory = nil
         newSkillName = ""
-        newSkillProficiency = .proficient
         isAddingSkill = false
     }
 
@@ -33,8 +31,7 @@ extension SkillsBankBrowser {
             // Create the skill first
             let newSkill = Skill(
                 canonical: trimmedName,
-                category: category,
-                proficiency: newSkillProficiency
+                category: category
             )
             skillStore.add(newSkill)
 
@@ -64,10 +61,6 @@ extension SkillsBankBrowser {
                 ProgressView()
                     .controlSize(.small)
                     .frame(width: 10)
-            } else {
-                Circle()
-                    .fill(colorFor(newSkillProficiency))
-                    .frame(width: 8, height: 8)
             }
 
             VStack(alignment: .leading, spacing: 6) {
@@ -112,27 +105,10 @@ extension SkillsBankBrowser {
                     .disabled(isAddingSkill)
                 }
 
-                // Proficiency picker
-                HStack(spacing: 8) {
-                    Text("Proficiency:")
+                if isAddingSkill {
+                    Text("Generating ATS synonyms...")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-
-                    Picker("", selection: $newSkillProficiency) {
-                        Text("Expert").tag(Proficiency.expert)
-                        Text("Proficient").tag(Proficiency.proficient)
-                        Text("Familiar").tag(Proficiency.familiar)
-                    }
-                    .pickerStyle(.segmented)
-                    .controlSize(.small)
-                    .frame(maxWidth: 200)
-                    .disabled(isAddingSkill)
-
-                    if isAddingSkill {
-                        Text("Generating ATS synonyms...")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
                 }
             }
 
@@ -208,7 +184,6 @@ extension SkillsBankBrowser {
     func startEditing(_ skill: Skill) {
         editingSkillId = skill.id
         editingSkillName = skill.canonical
-        editingSkillProficiency = skill.proficiency
         editingSkillCategory = skill.category
         editingSkillCustomCategory = ""
     }
@@ -224,10 +199,6 @@ extension SkillsBankBrowser {
         let newName = editingSkillName.trimmingCharacters(in: .whitespacesAndNewlines)
         if !newName.isEmpty && newName != skill.canonical {
             skill.canonical = newName
-            didChange = true
-        }
-        if skill.proficiency != editingSkillProficiency {
-            skill.proficiency = editingSkillProficiency
             didChange = true
         }
         let resolvedCategory = editingSkillCategory == "__custom__"
@@ -339,10 +310,7 @@ extension SkillsBankBrowser {
                     }
 
                     ForEach(skills.sorted { a, b in
-                        if !sortFrozenOrder.isEmpty {
-                            return (sortFrozenOrder[a.id] ?? Int.max) < (sortFrozenOrder[b.id] ?? Int.max)
-                        }
-                        return a.proficiency.sortOrder < b.proficiency.sortOrder
+                        a.canonical.localizedCaseInsensitiveCompare(b.canonical) == .orderedAscending
                     }) { skill in
                         skillRow(skill)
                     }
@@ -373,30 +341,11 @@ extension SkillsBankBrowser {
                         .foregroundStyle(.secondary)
                         .frame(width: 10)
                         .padding(.top, 6)
-                } else {
-                    // Proficiency indicator when no variants (use editing value when editing)
-                    Circle()
-                        .fill(colorFor(editingSkillId == skill.id ? editingSkillProficiency : skill.proficiency))
-                        .frame(width: 8, height: 8)
-                        .padding(.top, 6)
-                        .onTapGesture {
-                            cycleProficiency(skill)
-                        }
                 }
 
                 VStack(alignment: .leading, spacing: 4) {
-                    // Skill name with proficiency dot - editable
+                    // Skill name - editable
                     HStack(spacing: 6) {
-                        if hasVariants {
-                            // Use editing value when editing this skill
-                            Circle()
-                                .fill(colorFor(editingSkillId == skill.id ? editingSkillProficiency : skill.proficiency))
-                                .frame(width: 8, height: 8)
-                                .onTapGesture {
-                                    cycleProficiency(skill)
-                                }
-                        }
-
                         if editingSkillId == skill.id {
                             // Inline editing mode
                             VStack(alignment: .leading, spacing: 6) {
@@ -444,22 +393,6 @@ extension SkillsBankBrowser {
                                     }
                                     .buttonStyle(.plain)
                                     .help("Delete skill")
-                                }
-
-                                // Proficiency picker
-                                HStack(spacing: 8) {
-                                    Text("Proficiency:")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-
-                                    Picker("", selection: $editingSkillProficiency) {
-                                        Text("Expert").tag(Proficiency.expert)
-                                        Text("Proficient").tag(Proficiency.proficient)
-                                        Text("Familiar").tag(Proficiency.familiar)
-                                    }
-                                    .pickerStyle(.segmented)
-                                    .controlSize(.small)
-                                    .frame(maxWidth: 200)
                                 }
 
                                 // Category picker
@@ -542,18 +475,6 @@ extension SkillsBankBrowser {
                         .background(Color.secondary.opacity(0.1))
                         .clipShape(Capsule())
                 }
-
-                // Proficiency badge - click to cycle
-                Text(skill.proficiency.rawValue.capitalized)
-                    .font(.caption2.weight(.medium))
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 2)
-                    .background(colorFor(skill.proficiency).opacity(0.15))
-                    .foregroundStyle(colorFor(skill.proficiency))
-                    .clipShape(Capsule())
-                    .onTapGesture {
-                        cycleProficiency(skill)
-                    }
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
@@ -599,32 +520,6 @@ extension SkillsBankBrowser {
     }
 
     // MARK: - UI Interaction Helpers
-
-    func cycleProficiency(_ skill: Skill) {
-        // Freeze current sort order before changing proficiency
-        if sortFrozenOrder.isEmpty {
-            let allSkills = groupedSkills.values.flatMap { $0 }
-            let sorted = allSkills.sorted { $0.proficiency.sortOrder < $1.proficiency.sortOrder }
-            sortFrozenOrder = Dictionary(uniqueKeysWithValues: sorted.enumerated().map { ($1.id, $0) })
-        }
-
-        switch skill.proficiency {
-        case .familiar: skill.proficiency = .proficient
-        case .proficient: skill.proficiency = .expert
-        case .expert: skill.proficiency = .familiar
-        }
-        skillStore?.update(skill)
-
-        // Reset debounce timer
-        sortUnfreezeTask?.cancel()
-        sortUnfreezeTask = Task { @MainActor in
-            try? await Task.sleep(for: .seconds(2.5))
-            guard !Task.isCancelled else { return }
-            withAnimation(.easeInOut(duration: 0.35)) {
-                sortFrozenOrder = [:]
-            }
-        }
-    }
 
     func toggleCategory(_ category: String) {
         withAnimation(.easeInOut(duration: 0.2)) {
@@ -688,13 +583,5 @@ extension SkillsBankBrowser {
         let palette: [Color] = [.blue, .purple, .orange, .red, .green, .cyan, .mint, .pink, .teal, .indigo]
         let index = abs(category.hashValue) % palette.count
         return palette[index]
-    }
-
-    func colorFor(_ proficiency: Proficiency) -> Color {
-        switch proficiency {
-        case .expert: return .blue
-        case .proficient: return .green
-        case .familiar: return .orange
-        }
     }
 }

@@ -149,10 +149,6 @@ private struct SkillRow: View {
                             .foregroundStyle(.tertiary)
                     }
                 }
-
-                Text(skill.proficiency.rawValue)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
             }
 
             Spacer()

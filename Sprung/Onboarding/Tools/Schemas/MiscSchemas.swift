@@ -76,14 +76,14 @@ enum MiscSchemas {
             description: "A skill category",
             properties: [
                 "name": JSONSchema(type: .string, description: "Skill category name (e.g., 'Software Development')"),
-                "level": JSONSchema(type: .string, description: "Proficiency level (Expert/Advanced/Intermediate)"),
+                "level": JSONSchema(type: .string, description: "Skill level (Expert/Advanced/Intermediate)"),
                 "keywords": JSONSchema(type: .array, description: "Specific technologies/skills", items: JSONSchema(type: .string))
             ],
             required: ["name", "keywords"]
         )
     }
 
-    /// Language proficiency schema
+    /// Language entry schema
     static func languageItemSchema() -> JSONSchema {
         JSONSchema(
             type: .object,
@@ -297,7 +297,7 @@ enum MiscSchemas {
     /// Languages array schema - used by SubmitExperienceDefaultsTool
     static let languagesArray = JSONSchema(
         type: .array,
-        description: "Language proficiencies (only if 'languages' section enabled)",
+        description: "Languages spoken with fluency levels (only if 'languages' section enabled)",
         items: languageItemSchema()
     )
 
@@ -386,7 +386,7 @@ enum MiscSchemas {
             - certificates: Professional certifications
             - publications: Published works
             - skills: Technical and professional skills
-            - languages: Language proficiencies
+            - languages: Languages spoken with fluency levels
             - interests: Personal interests and hobbies
             - references: Professional references
             - projects: Career projects and portfolio items

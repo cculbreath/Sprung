@@ -309,7 +309,7 @@ For `skill` card types, use a DIFFERENT output structure that references evidenc
     "card_type": "skill",
     "title": "Embedded C++ / Design Patterns",
 
-    "proficiency_summary": "Production embedded development using OOP patterns for hardware abstraction and state management",
+    "skill_summary": "Production embedded development using OOP patterns for hardware abstraction and state management",
 
     "evidence_cards": [
       {

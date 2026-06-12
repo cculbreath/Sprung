@@ -64,7 +64,7 @@ enum SectionCardSchema {
             ),
             "fluency": JSONSchema(
                 type: .string,
-                description: "Proficiency level (e.g., 'Native', 'Fluent', 'Professional', 'Conversational', 'Basic')"
+                description: "Fluency level (e.g., 'Native', 'Fluent', 'Professional', 'Conversational', 'Basic')"
             )
         ],
         required: ["language"],

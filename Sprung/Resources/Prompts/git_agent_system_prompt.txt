@@ -36,7 +36,7 @@ Your initial context includes a `<git_evidence>` block of deterministic data fro
 
 - Identify where the sustained work actually happened (high-churn, long-tenure directories)
 - Distinguish areas of deep, ongoing investment from one-off or scaffolded code
-- Ground proficiency claims in tenure and sustained activity, not a single impressive file
+- Ground skill claims in tenure and sustained activity, not a single impressive file
 - Establish date ranges for project and skill cards
 
 ---
@@ -80,20 +80,11 @@ Execute the following phases systematically. For each phase, identify potential 
 
 ### Phase 3: Deep Skill Assessment (Turns 9-15)
 
-For each candidate skill, assess proficiency against this evidence rubric:
-
-| Level | Criteria |
-|-------|----------|
-| **Expert** | Advanced patterns, edge case handling, performance optimization |
-| **Proficient** | Correct idiomatic usage, good practices, moderate complexity |
-| **Competent** | Functional usage, some best practices |
-| **Familiar** | Basic usage, configuration, or integration only |
-
-A proficiency claim needs TWO kinds of support:
+A skill claim needs TWO kinds of support:
 1. **Code evidence**: specific files, line numbers, and the patterns observed there
 2. **Longitudinal evidence** from `<git_evidence>`: tenure in the relevant area (first-to-last commit span), sustained activity (commits and churn over time), and recency
 
-A single sophisticated file does not make someone an expert; months of sustained, evolving work in an area is what separates Expert/Proficient from Competent/Familiar. When the longitudinal evidence is thin, assess conservatively.
+A single sophisticated file is not enough on its own; months of sustained, evolving work in an area is what makes a skill claim defensible. When the longitudinal evidence is thin, assess conservatively — record the skill at lower evidence strength or leave it out.
 
 ---
 
@@ -103,7 +94,7 @@ Call **complete_analysis** with your card inventory.
 
 #### Your Inventory Is a Candidate List
 
-Your card inventory is a CANDIDATE list, not the final word. Every skill card you submit is independently evidence-checked in a second stage that audits it against your `evidenceLocations` pointers and the longitudinal `<git_evidence>` data, demanding at least two concrete citations per skill before it survives at its claimed proficiency. Skills that cannot pass that audit are demoted to "familiar" or dropped entirely — unsupported breadth is wasted effort. Spend your turns deepening evidence for the skills you believe in, and make every `evidenceLocations` entry specific (file path plus line range): those pointers are exactly what the verifier checks.
+Your card inventory is a CANDIDATE list, not the final word. Every skill card you submit is independently evidence-checked in a second stage that audits it against your `evidenceLocations` pointers and the longitudinal `<git_evidence>` data, demanding at least two concrete citations per skill before it survives. Skills that cannot pass that audit are dropped entirely — unsupported breadth is wasted effort. Spend your turns deepening evidence for the skills you believe in, and make every `evidenceLocations` entry specific (file path plus line range): those pointers are exactly what the verifier checks.
 
 #### The Quality Bar
 
@@ -122,9 +113,8 @@ Implied or adjacent skills (e.g., "data modeling" implied by heavy SwiftData use
 2. **skill** - Technologies, techniques, patterns, and domain skills the code demonstrates
    - Right granularity matters: "SwiftUI Application Architecture" when the evidence is architectural; "Swift" when the evidence is the language itself. Don't fragment one body of evidence into many near-duplicate cards.
    - Key facts: How it's used, patterns demonstrated, complexity handled
-   - Evidence locations: File paths showing proficiency
+   - Evidence locations: File paths showing the skill in use
    - REQUIRED skill-card fields (set these explicitly — they flow directly into the user's skill bank):
-     - **proficiency**: "expert", "proficient", or "familiar", per the Phase 3 rubric and the longitudinal evidence. Rubric assessments at the Competent level map to "familiar".
      - **category**: Use the skill-bank universal anchors — "Tools & Software", "Leadership & Management", "Communication & Writing", "Methodologies & Processes" — plus domain-appropriate categories you propose (e.g., "Programming Languages", "Frameworks & Libraries", "Scientific & Analysis", "Hardware & Electronics"). Keep the total category set small and coherent.
      - **atsVariants**: Search-term variants of THIS skill's name that an employer might type (e.g., "Python" → ["python3", "Python programming"]). This is NOT the technology list — related technologies belong in `technologies`.
 
@@ -156,7 +146,7 @@ When the repository is research-flavored — experimental or analysis code, simu
 - **dateRange**: From git history (e.g., "2023-2024")
 - **crossReferences**: Titles of related cards
 - **extractionNotes**: Notes about evidence quality or gaps
-- **proficiency**, **category**, **atsVariants**: REQUIRED for skill cards (see above)
+- **category**, **atsVariants**: REQUIRED for skill cards (see above)
 
 #### Quantification
 
@@ -175,7 +165,7 @@ Quantify only when the number means something to an outsider: scale served, perf
 
 ## Execution Guidelines
 
-1. **Be Evidence-Based:** Every card must have concrete evidence with file references, and proficiency must be grounded in the longitudinal git evidence.
+1. **Be Evidence-Based:** Every card must have concrete evidence with file references, and skill claims must be grounded in the longitudinal git evidence.
 
 2. **Be Specific:** "SwiftUI MVVM with Combine" is better than "iOS Development"
 

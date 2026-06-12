@@ -196,11 +196,6 @@ final class SkillStore: SwiftDataStore {
         skills.filter { $0.category == category }
     }
 
-    /// Find skills by proficiency level
-    func skills(withProficiency proficiency: Proficiency) -> [Skill] {
-        skills.filter { $0.proficiency == proficiency }
-    }
-
     /// Find skills matching a search term (checks canonical name and variants)
     func skills(matching query: String) -> [Skill] {
         skills.filter { $0.matches(query) }

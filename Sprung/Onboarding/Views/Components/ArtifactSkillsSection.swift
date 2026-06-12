@@ -70,8 +70,8 @@ struct ArtifactSkillsSection: View {
         }
         .padding(.horizontal, 6)
         .padding(.vertical, 2)
-        .background(artifactProficiencyColor(skill.proficiency).opacity(0.15))
-        .foregroundStyle(artifactProficiencyColor(skill.proficiency))
+        .background(Color.purple.opacity(0.15))
+        .foregroundStyle(.purple)
         .cornerRadius(4)
     }
 }

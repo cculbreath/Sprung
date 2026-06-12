@@ -402,7 +402,6 @@ struct SkillExtractionSheet: View {
                         canonical: skill.canonical,
                         atsVariants: skill.atsVariants,
                         category: skill.category,
-                        proficiency: skill.proficiency,
                         evidence: skill.evidence,
                         relatedSkills: skill.relatedSkills,
                         lastUsed: skill.lastUsed,

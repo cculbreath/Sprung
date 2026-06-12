@@ -64,11 +64,6 @@ enum SkillBankPrompts {
                             "type": "string",
                             "description": "Category for organizing skills. Use universal anchors (Tools & Software, Leadership & Management, Communication & Writing, Methodologies & Processes) or propose 2-5 domain-appropriate categories that fit the user's profile. Keep total categories between 6-10."
                         ],
-                        "proficiency": [
-                            "type": "string",
-                            "enum": ["expert", "proficient", "familiar"],
-                            "description": "Proficiency level based on evidence"
-                        ],
                         "implied": [
                             "type": "boolean",
                             "description": "True when the skill is only inferred from context (tools, roles, or activities described) rather than explicitly demonstrated in the document"
@@ -111,7 +106,7 @@ enum SkillBankPrompts {
                             "description": "When skill was last used (year or 'present')"
                         ]
                     ],
-                    "required": ["id", "canonical", "ats_variants", "category", "proficiency", "implied", "evidence"],
+                    "required": ["id", "canonical", "ats_variants", "category", "implied", "evidence"],
                     "additionalProperties": false
                 ]
             ]

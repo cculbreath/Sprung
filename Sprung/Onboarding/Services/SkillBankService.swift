@@ -106,10 +106,6 @@ actor SkillBankService {
                     return true
                 }
 
-                // Take higher proficiency
-                let proficiency = existing.proficiency.sortOrder < skill.proficiency.sortOrder
-                    ? existing.proficiency : skill.proficiency
-
                 // Union ATS variants
                 let variants = Array(Set(existing.atsVariants + skill.atsVariants))
 
@@ -118,7 +114,6 @@ actor SkillBankService {
                     canonical: existing.canonical,
                     atsVariants: variants,
                     category: existing.category,
-                    proficiency: proficiency,
                     evidence: allEvidence,
                     relatedSkills: Array(Set(existing.relatedSkills + skill.relatedSkills)),
                     lastUsed: existing.lastUsed ?? skill.lastUsed,
@@ -213,7 +208,6 @@ actor SkillBankService {
                 "canonical": skill.canonical,
                 "atsVariants": skill.atsVariants,
                 "category": skill.category,
-                "proficiency": skill.proficiency.rawValue,
                 "implied": skill.implied,
                 "evidence": skill.evidence.map { evidence in
                     [
@@ -239,7 +233,7 @@ actor SkillBankService {
 
     /// Apply merge/drop decisions deterministically. Surviving skills keep
     /// their exact evidence; absorbed entries contribute their names as ATS
-    /// variants plus their evidence and best proficiency.
+    /// variants plus their evidence.
     private func apply(decisions: CurationDecisions, to skills: [Skill]) -> SkillCurationOutcome {
         var byId: [String: Skill] = [:]
         for skill in skills {
@@ -300,7 +294,6 @@ actor SkillBankService {
 
             var variants = Set(target.atsVariants)
             var evidence = target.evidence
-            var proficiency = target.proficiency
             var implied = target.implied
 
             for absorbedId in merge.absorbedSkillIds {
@@ -313,9 +306,6 @@ actor SkillBankService {
                 variants.insert(absorbed.canonical)
                 variants.formUnion(absorbed.atsVariants)
                 evidence.append(contentsOf: absorbed.evidence)
-                if absorbed.proficiency.sortOrder < proficiency.sortOrder {
-                    proficiency = absorbed.proficiency
-                }
                 implied = implied && absorbed.implied
             }
 
@@ -337,7 +327,6 @@ actor SkillBankService {
 
             target.atsVariants = variants.sorted()
             target.evidence = evidence
-            target.proficiency = proficiency
             target.implied = implied
         }
 

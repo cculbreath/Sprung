@@ -555,9 +555,8 @@ final class ResumeRevisionWorkspaceService {
                 .sorted { $0.canonical < $1.canonical }
 
             for skill in categorySkills {
-                let proficiency = skill.proficiencyRaw.capitalized
                 let variants = skill.atsVariants
-                var line = "- \(skill.canonical) (\(proficiency))"
+                var line = "- \(skill.canonical)"
                 if !variants.isEmpty {
                     line += " — ATS: \(variants.joined(separator: ", "))"
                 }

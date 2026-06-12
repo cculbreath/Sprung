@@ -44,10 +44,7 @@ struct ArtifactGitAnalysisSection: View {
 
                     FlowStack(spacing: 4) {
                         ForEach(skills.prefix(20).indices, id: \.self) { index in
-                            let skill = skills[index]
-                            let proficiency = skill["proficiencyLevel"].stringValue
-                            let color = gitProficiencyColor(proficiency)
-                            artifactBadgePill(skill["skillName"].stringValue, color: color)
+                            artifactBadgePill(skills[index]["skillName"].stringValue, color: .blue)
                         }
                     }
                 }
@@ -116,17 +113,5 @@ struct ArtifactGitAnalysisSection: View {
                 }
             }
         }
-    }
-}
-
-/// Maps a raw JSON proficiency string to a display color.
-/// Local to this file since the string values only appear in git analysis payloads.
-private func gitProficiencyColor(_ level: String) -> Color {
-    switch level.lowercased() {
-    case "expert": return .green
-    case "proficient": return .blue
-    case "competent": return .orange
-    case "familiar": return .gray
-    default: return .secondary
     }
 }

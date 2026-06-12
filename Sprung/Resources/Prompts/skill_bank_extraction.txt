@@ -15,7 +15,7 @@ The full document content is provided in the preceding attachment.
 
 Extract a COMPREHENSIVE skill inventory from this document. This is a BANK of
 all possible skills to draw from at resume time — completeness matters more
-than selectivity. When in doubt, INCLUDE the skill at a lower proficiency level.
+than selectivity. When in doubt, INCLUDE the skill.
 
 ### What Counts as a Skill
 
@@ -61,9 +61,9 @@ maximize the number of skills extracted:
 - **strength**: primary (deep use), supporting (significant), mention (referenced or implied)
 
 DO NOT skip a skill because you can't write a detailed evidence entry.
-A brief mention is valid evidence. The downstream system uses proficiency level
-and evidence strength to rank skills — light evidence at "mention" strength is
-far more useful than omitting the skill entirely.
+A brief mention is valid evidence. The downstream system uses evidence strength
+to rank skills — light evidence at "mention" strength is far more useful than
+omitting the skill entirely.
 
 ### ATS Variants
 
@@ -78,13 +78,6 @@ trivially-identical variants at extraction time: if you find yourself emitting
 the variants listed in `ats_variants`. The same applies to abbreviation pairs
 ("ML" / "Machine Learning") and capitalization or spelling variants — one entry,
 never near-duplicates.
-
-### Proficiency Signals
-
-Determine proficiency from evidence:
-- **expert**: Years of use, teaching others, deep customization, published work using it
-- **proficient**: Regular use, independent work, solid results
-- **familiar**: Some exposure, mentioned in context, implied by adjacent work
 
 ### Categories
 
@@ -107,6 +100,5 @@ Keep total categories between 6-10 to avoid over-fragmentation.
 - Implied skills: Did you extract skills implied by the tools, roles, and activities described?
 - Implied skills have `implied: true` and are capped at "supporting"/"mention" evidence strength
 - ATS variants cover common job listing phrasings — and stay inside `ats_variants`, never as separate entries
-- Proficiency matches demonstrated depth
 - No near-duplicate entries: trivially-identical variants merged into one skill at extraction time
 - Categories are appropriate

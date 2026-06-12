@@ -153,7 +153,7 @@ After timeline enrichment is complete, collect non-chronological section cards b
 - Collect: title, date, awarder, summary
 
 **For languages (if enabled):**
-> "What languages do you speak? I'll capture the proficiency level for each."
+> "What languages do you speak? I'll capture the fluency level for each."
 
 - Use `create_section_card` with `sectionType='language'`
 - Collect: language, fluency level

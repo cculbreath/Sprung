@@ -212,7 +212,6 @@ final class SkillBankCurationService {
         var mergedEvidence = primary.evidence
         var mergedVariants = Set(primary.atsVariants)
         var mergedRelated = Set(primary.relatedSkills)
-        var highestProficiency = primary.proficiency
 
         var mergedCount = 0
         for skill in skills where skill.id != primary.id {
@@ -233,11 +232,6 @@ final class SkillBankCurationService {
             // Merge related skills
             mergedRelated.formUnion(skill.relatedSkills)
 
-            // Take highest proficiency
-            if skill.proficiency.sortOrder < highestProficiency.sortOrder {
-                highestProficiency = skill.proficiency
-            }
-
             skillStore.delete(skill)
             mergedCount += 1
         }
@@ -248,7 +242,6 @@ final class SkillBankCurationService {
         primary.evidence = mergedEvidence
         primary.atsVariants = Array(mergedVariants)
         primary.relatedSkills = Array(mergedRelated)
-        primary.proficiency = highestProficiency
         skillStore.update(primary)
 
         return mergedCount
@@ -262,7 +255,7 @@ final class SkillBankCurationService {
 
         let skillDescriptions = skills.map { skill in
             let evidenceCount = skill.evidence.count
-            return "\(skill.id.uuidString): \(skill.canonical) [\(skill.category)] (proficiency: \(skill.proficiency.rawValue), evidence: \(evidenceCount))"
+            return "\(skill.id.uuidString): \(skill.canonical) [\(skill.category)] (evidence: \(evidenceCount))"
         }.joined(separator: "\n")
 
         return """
@@ -271,7 +264,7 @@ final class SkillBankCurationService {
         ## Category Distribution
         \(categoryStats)
 
-        ## Skills (format: "uuid: name [category] (proficiency, evidence count)")
+        ## Skills (format: "uuid: name [category] (evidence count)")
         \(skillDescriptions)
 
         ## Your Tasks

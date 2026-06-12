@@ -73,7 +73,7 @@ struct SkillsTabContent: View {
             .padding(.horizontal, 4)
 
             if expandedCategories.contains(category) {
-                ForEach(skills.sorted { $0.proficiency.sortOrder < $1.proficiency.sortOrder }) { skill in
+                ForEach(skills.sorted { $0.canonical.localizedCaseInsensitiveCompare($1.canonical) == .orderedAscending }) { skill in
                     SkillRow(
                         skill: skill,
                         isExpanded: expandedSkillIds.contains(skill.id),
@@ -136,9 +136,6 @@ private struct SkillRow: View {
 
                         Spacer()
 
-                        // Proficiency badge
-                        proficiencyBadge
-
                         // Evidence count
                         if !skill.evidence.isEmpty {
                             HStack(spacing: 2) {
@@ -180,26 +177,6 @@ private struct SkillRow: View {
             RoundedRectangle(cornerRadius: 6, style: .continuous)
                 .fill(Color(nsColor: .controlBackgroundColor))
         )
-    }
-
-    private var proficiencyBadge: some View {
-        Text(skill.proficiency.rawValue.capitalized)
-            .font(.caption2.weight(.medium))
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2)
-            .background(
-                Capsule()
-                    .fill(proficiencyColor.opacity(0.15))
-            )
-            .foregroundStyle(proficiencyColor)
-    }
-
-    private var proficiencyColor: Color {
-        switch skill.proficiency {
-        case .expert: return .green
-        case .proficient: return .blue
-        case .familiar: return .orange
-        }
     }
 
     @ViewBuilder

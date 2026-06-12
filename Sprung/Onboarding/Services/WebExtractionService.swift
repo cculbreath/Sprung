@@ -112,8 +112,7 @@ final class WebExtractionService {
                 var skillDict: [String: Any] = [
                     "canonical": skill.canonical,
                     "atsVariants": skill.atsVariants,
-                    "category": skill.category,
-                    "proficiency": skill.proficiency.rawValue
+                    "category": skill.category
                 ]
                 if !skill.evidence.isEmpty {
                     skillDict["evidence"] = skill.evidence.map { evidence -> [String: Any] in

@@ -5,7 +5,7 @@
 //  Deterministic git-history evidence gathering for GitAnalysisAgent.
 //  Runs cheap git commands (no LLM) and renders the results as the
 //  <git_evidence> block injected into the agent's initial context, so
-//  proficiency claims are grounded in longitudinal evidence.
+//  skill claims are grounded in longitudinal evidence.
 //
 //  Shared by every GitAnalysisAgent construction site (GitIngestionKernel,
 //  StandaloneKCExtractor).
@@ -287,7 +287,7 @@ enum GitEvidenceCollector {
         overview += "This directory has NO usable git history (missing or corrupt .git, or no commits). "
         overview += "The evidence below comes from a filesystem scan. Explore the code directly with "
         overview += "your file tools (glob, read_file, grep) — commit-based evidence is unavailable, "
-        overview += "so ground proficiency claims in the code itself.\n\n"
+        overview += "so ground skill claims in the code itself.\n\n"
         overview += "Total files: \(data["totalFiles"].intValue)"
         if data["filesystemTruncated"].boolValue {
             overview += " (scan capped — more files exist)"

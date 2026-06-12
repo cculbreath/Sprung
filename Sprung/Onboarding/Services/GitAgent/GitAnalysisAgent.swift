@@ -510,8 +510,8 @@ class GitAnalysisAgent {
 
     /// Stage A's complete_analysis output is a CANDIDATE inventory. Stage B
     /// re-checks every candidate skill against the deterministic git evidence
-    /// and demands concrete citations before a skill survives at its claimed
-    /// proficiency. Stage B failures degrade gracefully (candidates kept).
+    /// and demands concrete citations before a skill survives. Stage B
+    /// failures degrade gracefully (candidates kept).
     private func runStageB(on candidates: GitAnalysisResult, facade: LLMFacade) async -> GitAnalysisResult {
         guard !candidates.skills.isEmpty else { return candidates }
 
@@ -625,7 +625,7 @@ class GitAnalysisAgent {
             </git_evidence>
 
             The git evidence above is deterministic data gathered from the repository's commit \
-            history (each section states its coverage). Use it to ground proficiency judgments in \
+            history (each section states its coverage). Use it to ground skill claims in \
             longitudinal evidence: tenure in a directory (first/last commit dates), sustained \
             activity (commits and churn per area, monthly activity), and recency.
             """
@@ -744,7 +744,6 @@ class GitAnalysisAgent {
               "crossReferences": ["string"],  // required (may be empty)
               "dateRange": "string (optional) - e.g., '2023-2024'",
               "extractionNotes": "string (optional)",
-              "proficiency": "string (REQUIRED for skill cards) - one of: expert, proficient, familiar",
               "category": "string (REQUIRED for skill cards) - skill-bank category",
               "atsVariants": ["string"]  // skill cards - search-term variants of the skill's NAME
             }
@@ -774,12 +773,6 @@ class GitAnalysisAgent {
             for card in params.cards {
                 if card.cardType == "skill" {
                     // Convert skill cards to Skill objects, carrying the agent's judgments through
-                    guard let proficiencyRaw = card.proficiency,
-                          let proficiency = Proficiency(rawValue: proficiencyRaw) else {
-                        throw GitAgentError.invalidToolCall(
-                            "Skill card '\(card.proposedTitle)' is missing a valid 'proficiency' (expected one of: expert, proficient, familiar)"
-                        )
-                    }
                     guard let category = card.category, !category.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
                         throw GitAgentError.invalidToolCall(
                             "Skill card '\(card.proposedTitle)' is missing a 'category'"
@@ -804,7 +797,6 @@ class GitAnalysisAgent {
                         canonical: card.proposedTitle,
                         atsVariants: card.atsVariants ?? [],
                         category: category,
-                        proficiency: proficiency,
                         evidence: evidence
                     )
                     skills.append(skill)
@@ -854,6 +846,13 @@ class GitAnalysisAgent {
                             keywords: card.keyFacts.prefix(3).map { String($0) }
                         )
                     )
+                    // Populate the technologies enrichment field so git-derived
+                    // cards show skills chips in the UI.
+                    if !card.technologies.isEmpty,
+                       let technologiesData = try? JSONEncoder().encode(Array(card.technologies)),
+                       let technologiesJSON = String(data: technologiesData, encoding: .utf8) {
+                        narrativeCard.technologiesJSON = technologiesJSON
+                    }
                     narrativeCards.append(narrativeCard)
                 }
             }

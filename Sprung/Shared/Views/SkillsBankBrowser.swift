@@ -12,7 +12,6 @@ struct SkillsBankBrowser: View {
     @State var expandedCategories: Set<String> = []
     @State var expandedSkills: Set<UUID> = []
     @State var searchText = ""
-    @State var selectedProficiency: Proficiency?
 
     // Processing state
     @State var processingService: SkillsProcessingService?
@@ -32,7 +31,6 @@ struct SkillsBankBrowser: View {
     // Inline editing state
     @State var editingSkillId: UUID?
     @State var editingSkillName: String = ""
-    @State var editingSkillProficiency: Proficiency = .proficient
     @State var editingSkillCategory: String = ""
     @State var editingSkillCustomCategory: String = ""
 
@@ -40,14 +38,9 @@ struct SkillsBankBrowser: View {
     @State var showRefinePopover = false
     @State var refineInstruction = ""
 
-    // Sort debounce after proficiency cycling
-    @State var sortFrozenOrder: [UUID: Int] = [:]
-    @State var sortUnfreezeTask: Task<Void, Never>?
-
     // Add skill feature state (inline)
     @State var addingToCategory: String?
     @State var newSkillName = ""
-    @State var newSkillProficiency: Proficiency = .proficient
     @State var isAddingSkill = false
 
     // New category creation state
@@ -84,11 +77,6 @@ struct SkillsBankBrowser: View {
                 skill.canonical.lowercased().contains(search) ||
                 skill.atsVariants.contains { $0.lowercased().contains(search) }
             }
-        }
-
-        // Apply proficiency filter
-        if let proficiency = selectedProficiency {
-            skills = skills.filter { $0.proficiency == proficiency }
         }
 
         return Dictionary(grouping: skills, by: { $0.category })
@@ -205,41 +193,29 @@ struct SkillsBankBrowser: View {
     // MARK: - Filter Bar & Action Buttons
 
     private var filterBar: some View {
-        VStack(spacing: 10) {
-            // Search field with action buttons
-            HStack(spacing: 12) {
-                // Search field
-                HStack {
-                    Image(systemName: "magnifyingglass")
-                        .foregroundStyle(.secondary)
-                    TextField("Search skills...", text: $searchText)
-                        .textFieldStyle(.plain)
-                    if !searchText.isEmpty {
-                        Button(action: { searchText = "" }) {
-                            Image(systemName: "xmark.circle.fill")
-                                .foregroundStyle(.secondary)
-                        }
-                        .buttonStyle(.plain)
+        // Search field with action buttons
+        HStack(spacing: 12) {
+            // Search field
+            HStack {
+                Image(systemName: "magnifyingglass")
+                    .foregroundStyle(.secondary)
+                TextField("Search skills...", text: $searchText)
+                    .textFieldStyle(.plain)
+                if !searchText.isEmpty {
+                    Button(action: { searchText = "" }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.secondary)
                     }
-                }
-                .padding(8)
-                .background(Color(nsColor: .controlBackgroundColor))
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-
-                // Action buttons (show if we have facade; Extract always visible)
-                if llmFacade != nil {
-                    actionButtons
+                    .buttonStyle(.plain)
                 }
             }
+            .padding(8)
+            .background(Color(nsColor: .controlBackgroundColor))
+            .clipShape(RoundedRectangle(cornerRadius: 8))
 
-            // Proficiency filter chips
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 6) {
-                    proficiencyChip(nil, label: "All")
-                    ForEach([Proficiency.expert, .proficient, .familiar], id: \.self) { level in
-                        proficiencyChip(level, label: level.rawValue.capitalized)
-                    }
-                }
+            // Action buttons (show if we have facade; Extract always visible)
+            if llmFacade != nil {
+                actionButtons
             }
         }
         .padding(.horizontal, 20)
@@ -420,38 +396,6 @@ struct SkillsBankBrowser: View {
         .clipShape(RoundedRectangle(cornerRadius: 16))
     }
 
-    // MARK: - Proficiency Chip
-
-    func proficiencyChip(_ proficiency: Proficiency?, label: String) -> some View {
-        let isSelected = selectedProficiency == proficiency
-        let count: Int
-        if let proficiency = proficiency {
-            count = allSkills.filter { $0.proficiency == proficiency }.count
-        } else {
-            count = allSkills.count
-        }
-
-        return Button(action: { selectedProficiency = proficiency }) {
-            HStack(spacing: 4) {
-                Text(label)
-                    .font(.caption.weight(isSelected ? .semibold : .regular))
-                if count > 0 {
-                    Text("\(count)")
-                        .font(.caption2)
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 1)
-                        .background(Capsule().fill(isSelected ? Color.white.opacity(0.2) : Color.secondary.opacity(0.15)))
-                }
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background(isSelected ? Color.orange : Color(nsColor: .controlBackgroundColor))
-            .foregroundStyle(isSelected ? .white : .primary)
-            .clipShape(Capsule())
-        }
-        .buttonStyle(.plain)
-    }
-
     // MARK: - Empty / No-Match States
 
     private var emptyState: some View {
@@ -482,7 +426,6 @@ struct SkillsBankBrowser: View {
                 .foregroundStyle(.tertiary)
             Button("Clear Filters") {
                 searchText = ""
-                selectedProficiency = nil
             }
             .buttonStyle(.bordered)
         }

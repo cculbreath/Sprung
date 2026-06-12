@@ -10,12 +10,3 @@ func artifactBadgePill(_ text: String, color: Color) -> some View {
         .foregroundStyle(color)
         .cornerRadius(4)
 }
-
-/// Maps a `Proficiency` value to its display color.
-func artifactProficiencyColor(_ proficiency: Proficiency) -> Color {
-    switch proficiency {
-    case .expert: return .green
-    case .proficient: return .blue
-    case .familiar: return .orange
-    }
-}

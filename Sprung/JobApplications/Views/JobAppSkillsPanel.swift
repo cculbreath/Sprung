@@ -18,7 +18,6 @@ struct JobAppSkillsPanel: View {
 
     // Popover state
     @State private var addSkillTarget: JobSkillEvidence?
-    @State private var addSkillProficiency: Proficiency = .familiar
     @State private var addSkillCategory: String = ""
     @State private var addSkillCustomCategory: String = ""
     @State private var recentlyAddedSkills: Set<String> = []
@@ -120,7 +119,6 @@ struct JobAppSkillsPanel: View {
                                     addSkillCategory = existingCategories.first ?? "__custom__"
                                     addSkillCustomCategory = ""
                                 }
-                                addSkillProficiency = .familiar
                                 addSkillTarget = skill
                             } else {
                                 addSkillTarget = nil
@@ -221,20 +219,6 @@ struct JobAppSkillsPanel: View {
                 }
             }
 
-            // Proficiency picker
-            HStack(spacing: 8) {
-                Text("Proficiency:")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Picker("", selection: $addSkillProficiency) {
-                    Text("Expert").tag(Proficiency.expert)
-                    Text("Proficient").tag(Proficiency.proficient)
-                    Text("Familiar").tag(Proficiency.familiar)
-                }
-                .pickerStyle(.segmented)
-                .controlSize(.small)
-            }
-
             // Action
             if alreadyExists {
                 HStack {
@@ -265,8 +249,7 @@ struct JobAppSkillsPanel: View {
 
         let newSkill = Skill(
             canonical: evidence.skillName,
-            category: resolvedCategory,
-            proficiency: addSkillProficiency
+            category: resolvedCategory
         )
         skillStore.add(newSkill)
         recentlyAddedSkills.insert(evidence.skillName)

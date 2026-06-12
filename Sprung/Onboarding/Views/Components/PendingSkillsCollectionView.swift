@@ -124,7 +124,7 @@ struct PendingSkillsCollectionView: View {
             .buttonStyle(.plain)
 
             if expandedCategories.contains(category) {
-                ForEach(skills.sorted { $0.proficiency.sortOrder < $1.proficiency.sortOrder }) { skill in
+                ForEach(skills.sorted { $0.canonical.localizedCaseInsensitiveCompare($1.canonical) == .orderedAscending }) { skill in
                     PendingSkillRow(
                         skill: skill,
                         showDeleteButton: isReadyForApproval && !isGenerating,
@@ -164,17 +164,6 @@ private struct PendingSkillRow: View {
                 .foregroundStyle(.tertiary)
             }
 
-            // Proficiency badge
-            Text(skill.proficiency.rawValue.capitalized)
-                .font(.caption2.weight(.medium))
-                .padding(.horizontal, 5)
-                .padding(.vertical, 2)
-                .background(
-                    Capsule()
-                        .fill(proficiencyColor.opacity(0.15))
-                )
-                .foregroundStyle(proficiencyColor)
-
             // Delete button
             if showDeleteButton {
                 Button(action: onDelete) {
@@ -190,13 +179,5 @@ private struct PendingSkillRow: View {
         .padding(.vertical, 5)
         .background(Color(nsColor: .controlBackgroundColor))
         .cornerRadius(5)
-    }
-
-    private var proficiencyColor: Color {
-        switch skill.proficiency {
-        case .expert: return .green
-        case .proficient: return .blue
-        case .familiar: return .orange
-        }
     }
 }
