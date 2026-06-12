@@ -3,9 +3,12 @@ import SwiftOpenAI
 
 // MARK: - Anthropic Conversation Repairer
 
-/// Repairs an Anthropic message history that contains tool_use blocks with
-/// no matching tool_result responses. Injects synthetic "cancelled" results
-/// so the API accepts the conversation.
+/// SAFETY NET ONLY. The agent loop answers every tool_use id in the
+/// immediately following user message — including siblings of
+/// `complete_revision` and tools skipped during exit — so this should never
+/// find anything to repair. If it does, that is a loop bug: it injects
+/// synthetic error results so the API accepts the conversation, and logs the
+/// repair as an error so the bug gets noticed and fixed.
 struct AnthropicConversationRepairer {
     /// Mutates `messages` in-place, returning true if any repairs were made.
     @discardableResult
@@ -82,16 +85,14 @@ struct AnthropicConversationRepairer {
                 )
             }
 
-            Logger.warning(
-                "RevisionAgent: Repaired \(orphaned.count) orphaned tool_use ID(s) at message \(i)",
+            Logger.error(
+                "RevisionAgent LOOP BUG: repaired \(orphaned.count) orphaned tool_use id(s) at message \(i) "
+                    + "(\(orphaned.joined(separator: ", "))). The loop failed to answer every tool call — "
+                    + "this safety net should never fire.",
                 category: .ai
             )
             repaired = true
             i += 2 // skip both the assistant and the (now-repaired) user message
-        }
-
-        if repaired {
-            Logger.info("RevisionAgent: Conversation repaired before API call", category: .ai)
         }
 
         return repaired

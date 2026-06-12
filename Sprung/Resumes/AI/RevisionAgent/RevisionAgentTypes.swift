@@ -23,6 +23,7 @@ enum RevisionAgentError: LocalizedError {
     case timeout
     case workspaceError(String)
     case pdfRenderFailed(String)
+    case streamFailed(String)
 
     var errorDescription: String? {
         switch self {
@@ -44,6 +45,8 @@ enum RevisionAgentError: LocalizedError {
             return "Workspace error: \(msg)"
         case .pdfRenderFailed(let msg):
             return "PDF render failed: \(msg)"
+        case .streamFailed(let msg):
+            return "The connection to the model failed: \(msg)"
         }
     }
 }
@@ -70,4 +73,10 @@ struct RevisionAgentStreamResult {
     var textBlocks: [AnthropicContentBlock] = []
     var toolCallBlocks: [AnthropicContentBlock] = []
     var toolCalls: [RevisionStreamProcessor.ToolCallInfo] = []
+    /// Stop reason reported by the model ("end_turn", "tool_use",
+    /// "max_tokens", …). nil when the stream ended without one.
+    var stopReason: String?
+    /// In-stream error events ("type: message"). Non-empty means the turn
+    /// failed server-side and its partial output must be discarded.
+    var streamErrors: [String] = []
 }

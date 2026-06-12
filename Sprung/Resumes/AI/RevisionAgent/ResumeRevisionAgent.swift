@@ -26,13 +26,30 @@ class ResumeRevisionAgent {
     private(set) var turnCount: Int = 0
     private(set) var currentAction: String = ""
     private(set) var latestPDFData: Data?
+    /// True only when the user cancelled (Cancel button, window close, or task
+    /// cancellation from window teardown). `.cancelled` status iff this is set.
     private var isCancelled = false
-    /// When true, the main loop's cancellation path builds a new resume from
-    /// the workspace before deleting it — avoiding the race where a separate
-    /// Task tried to read from an already-deleted workspace.
+    /// Set by `acceptCurrentState()` (Save): the main loop builds a new resume
+    /// from the workspace at its exit boundary before deleting it — avoiding
+    /// the race where a separate Task read from an already-deleted workspace.
     private var shouldBuildResumeOnExit = false
     private var consecutiveNoToolTurns = 0
+    /// Count of `write_json_file` calls that succeeded this session. Any value
+    /// > 0 means applied work exists in the workspace that must never be
+    /// silently discarded on an early exit.
+    private var successfulWriteCount = 0
+    /// Consecutive stream failures (thrown transport errors or in-stream error
+    /// events). Reset on any successful turn.
+    private var consecutiveStreamFailures = 0
     private var activeStreamTask: Task<RevisionAgentStreamResult, Error>?
+    /// Timestamp of the most recent event received on the active stream.
+    /// The per-turn watchdog cancels the stream only when this goes stale
+    /// for `streamStallTimeoutSeconds` — total turn duration is unbounded.
+    private var lastStreamEventDate = Date()
+    /// Set by the watchdog when it cancels a stalled stream, so the
+    /// cancellation path can distinguish a stall (counted as a stream
+    /// failure, model nudged to split the work) from a user interrupt.
+    private var streamStallDetected = false
     /// Wall-clock deadline for the session. Reset whenever the user responds to
     /// a human-in-the-loop prompt (proposal, question, completion) so idle time
     /// waiting for user input doesn't count toward the timeout.
@@ -52,6 +69,15 @@ class ResumeRevisionAgent {
     // Limits
     private let maxTurns = 50
     private let timeoutSeconds: TimeInterval = 1800 // 30 min
+    private let maxConsecutiveStreamFailures = 3
+    /// Output budget per turn. Section rewrites stream large JSON tool inputs;
+    /// a small budget truncates them into undecodable tool calls.
+    private let maxOutputTokensPerTurn = 32_000
+    /// Inactivity threshold for the per-turn stream watchdog. The watchdog
+    /// only fires when NO stream events arrive for this long — a healthy
+    /// stream emits deltas continuously, so even a maximal 32K-token write
+    /// is never cut off mid-flight; a genuinely stalled connection is.
+    private let streamStallTimeoutSeconds: TimeInterval = 180
 
     // MARK: - Init
 
@@ -84,6 +110,9 @@ class ResumeRevisionAgent {
     /// Run the revision agent loop.
     func run(jobDescription: String, knowledgeCards: [KnowledgeCard], skills: [Skill], coverRefs: [CoverRef]) async throws {
         guard let facade = llmFacade else {
+            // Status is the source of truth for the view even on the earliest
+            // possible failure.
+            status = .failed(RevisionAgentError.noLLMFacade.localizedDescription)
             throw RevisionAgentError.noLLMFacade
         }
 
@@ -93,6 +122,10 @@ class ResumeRevisionAgent {
         conversationMessages = []
         isCancelled = false
         shouldBuildResumeOnExit = false
+        consecutiveNoToolTurns = 0
+        successfulWriteCount = 0
+        consecutiveStreamFailures = 0
+        pendingUserMessages.removeAll()
 
         do {
             // 1. Create workspace and export materials
@@ -147,8 +180,8 @@ class ResumeRevisionAgent {
             timeoutDeadline = Date().addingTimeInterval(timeoutSeconds)
 
             while turnCount < maxTurns {
-                guard !isCancelled else {
-                    await handleExitCleanup()
+                if shouldExitLoop() {
+                    await handleExitCleanup(errorMessage: nil)
                     return
                 }
 
@@ -193,10 +226,11 @@ class ResumeRevisionAgent {
                     }
                 }
 
-                // Repair any orphaned tool_use blocks before calling the API.
-                // When the user sends a chat message mid-stream, the stream is
-                // cancelled and tool results may never be generated, leaving
-                // tool_use IDs without matching tool_result blocks.
+                // SAFETY NET: the loop answers every tool_use id in the
+                // immediately following user message (including siblings of
+                // complete_revision and tools skipped during exit), so this
+                // should never repair anything. If it does, that's a loop bug
+                // and the repairer logs it as an error.
                 AnthropicConversationRepairer.repairOrphanedToolUse(in: &conversationMessages)
 
                 // Call Anthropic
@@ -204,7 +238,7 @@ class ResumeRevisionAgent {
                     model: modelId,
                     messages: conversationMessages,
                     system: .text(systemPrompt),
-                    maxTokens: 8192,
+                    maxTokens: maxOutputTokensPerTurn,
                     stream: true,
                     tools: tools,
                     toolChoice: .auto
@@ -212,10 +246,22 @@ class ResumeRevisionAgent {
 
                 let turnStart = ContinuousClock.now
                 logTurnRequest(turn: turnCount, messageCount: conversationMessages.count)
-                let stream = try await facade.anthropicMessagesStream(parameters: parameters)
+
+                let stream: AsyncThrowingStream<AnthropicStreamEvent, Error>
+                do {
+                    stream = try await facade.anthropicMessagesStream(parameters: parameters)
+                } catch is CancellationError {
+                    // Task torn down while opening the stream — exit at the top.
+                    continue
+                } catch {
+                    try await backOffOrAbort(after: error)
+                    continue
+                }
 
                 // Process stream in a child task so it can be cancelled by
-                // sendUserMessage() or the per-turn timeout.
+                // sendUserMessage() or the per-turn stall watchdog.
+                streamStallDetected = false
+                lastStreamEventDate = Date()
                 let streamTask = Task { @MainActor [weak self] () -> RevisionAgentStreamResult in
                     guard let self else { return RevisionAgentStreamResult() }
                     var processor = RevisionStreamProcessor()
@@ -223,6 +269,9 @@ class ResumeRevisionAgent {
 
                     for try await event in stream {
                         try Task.checkCancellation()
+                        // Any raw event counts as stream activity for the
+                        // stall watchdog, including pings and unknown events.
+                        self.lastStreamEventDate = Date()
 
                         let domainEvents = processor.process(event)
                         for domainEvent in domainEvents {
@@ -242,6 +291,12 @@ class ResumeRevisionAgent {
                                     id: id, name: name, input: inputDict
                                 )))
 
+                            case .stopReason(let reason):
+                                result.stopReason = reason
+
+                            case .streamError(let message):
+                                result.streamErrors.append(message)
+                                Logger.error("RevisionAgent: Stream error event on turn \(self.turnCount): \(message)", category: .ai)
                             }
                         }
                     }
@@ -250,18 +305,38 @@ class ResumeRevisionAgent {
                 }
                 activeStreamTask = streamTask
 
-                // Per-turn timeout: cancel stream if stalled for 3 minutes
-                let turnTimeoutTask = Task { @MainActor in
-                    try await Task.sleep(for: .seconds(180))
-                    streamTask.cancel()
-                    Logger.warning("RevisionAgent: Turn \(turnCount) stream timed out", category: .ai)
+                // Inactivity watchdog: cancel the stream only when no events
+                // have arrived for `streamStallTimeoutSeconds`. This is NOT a
+                // total-duration cap — long healthy streams (large
+                // write_json_file inputs under the 32K output budget) keep
+                // producing events and are never cut off.
+                let turnTimeoutTask = Task { @MainActor [weak self] in
+                    while !Task.isCancelled {
+                        try await Task.sleep(for: .seconds(15))
+                        guard let self else { return }
+                        if Date().timeIntervalSince(self.lastStreamEventDate) >= self.streamStallTimeoutSeconds {
+                            self.streamStallDetected = true
+                            Logger.warning("RevisionAgent: Turn \(self.turnCount) stream stalled — no events for \(Int(self.streamStallTimeoutSeconds))s, cancelling", category: .ai)
+                            streamTask.cancel()
+                            return
+                        }
+                    }
                 }
 
                 var streamResult: RevisionAgentStreamResult
                 var streamWasInterrupted = false
+                var streamFailure: Error?
 
                 do {
-                    streamResult = try await streamTask.value
+                    // streamTask is unstructured, so cancellation of run()'s
+                    // own task (window teardown) does not propagate to it.
+                    // Forward it explicitly so the loop exits promptly instead
+                    // of waiting for the stream to finish naturally.
+                    streamResult = try await withTaskCancellationHandler {
+                        try await streamTask.value
+                    } onCancel: {
+                        streamTask.cancel()
+                    }
                 } catch is CancellationError {
                     // Stream was interrupted by user message, timeout, or cancel
                     streamResult = RevisionAgentStreamResult()
@@ -270,9 +345,10 @@ class ResumeRevisionAgent {
                         Logger.info("RevisionAgent: Stream interrupted on turn \(turnCount)", category: .ai)
                     }
                 } catch {
-                    // Stream threw a real error — treat as interrupted
+                    // Transport error mid-stream — classified below for
+                    // backoff/abort once the turn bookkeeping is done.
                     streamResult = RevisionAgentStreamResult()
-                    streamWasInterrupted = true
+                    streamFailure = error
                     Logger.error("RevisionAgent: Stream error on turn \(turnCount): \(error.localizedDescription)", category: .ai)
                 }
 
@@ -296,10 +372,45 @@ class ResumeRevisionAgent {
                     durationMs: turnMs
                 )
 
-                guard !isCancelled else {
-                    await handleExitCleanup()
+                if shouldExitLoop() {
+                    await handleExitCleanup(errorMessage: nil)
                     return
                 }
+
+                // The watchdog cancelled a stalled stream. Partial output was
+                // discarded (tool calls only materialize at message_stop), so
+                // tell the model the turn was cut off and to retry in smaller
+                // pieces — and count the stall toward consecutive stream
+                // failures so a pathological session aborts with backoff
+                // instead of silently re-issuing the same request to maxTurns.
+                // `streamWasInterrupted` guards the race where the watchdog
+                // fires just as the stream completes: a completed turn's
+                // result is used normally, never discarded as a stall.
+                if streamStallDetected && streamWasInterrupted {
+                    pendingUserMessages.append(
+                        "Your previous turn was cut off because the response stream stalled, and any tool calls from that turn were discarded. Retry in smaller pieces — for example, write one section at a time or fewer entries per write_json_file call."
+                    )
+                    try await backOffOrAbort(
+                        message: "Stream stalled (no events for \(Int(streamStallTimeoutSeconds))s) on turn \(turnCount)",
+                        isFatal: false
+                    )
+                    continue
+                }
+
+                // Classify stream failures: transient errors back off and
+                // retry; fatal errors (auth, bad request) abort immediately.
+                if let streamFailure {
+                    try await backOffOrAbort(after: streamFailure)
+                    continue
+                }
+                if let streamErrorMessage = streamResult.streamErrors.first {
+                    try await backOffOrAbort(
+                        message: streamErrorMessage,
+                        isFatal: Self.isFatalStreamErrorEvent(streamErrorMessage)
+                    )
+                    continue
+                }
+                consecutiveStreamFailures = 0
 
                 // Interrupted streams may have partial tool calls — discard them
                 let assistantTextBlocks = streamResult.textBlocks
@@ -328,19 +439,24 @@ class ResumeRevisionAgent {
                     continue
                 }
 
+                // A text-only turn truncated at the output limit is not a
+                // "no progress" signal — tell the model and let it continue.
+                if pendingToolCalls.isEmpty && streamResult.stopReason == "max_tokens" {
+                    Logger.warning("RevisionAgent: Turn \(turnCount) text truncated at max_tokens", category: .ai)
+                    conversationMessages.append(AnthropicMessage.user(
+                        "Your previous response was cut off at the output-token limit. Continue from where you stopped, more concisely."
+                    ))
+                    continue
+                }
+
                 // If no tool calls and we weren't interrupted,
-                // nudge once then treat as done
+                // nudge once, then let the user settle the session.
                 if pendingToolCalls.isEmpty {
                     consecutiveNoToolTurns += 1
                     if consecutiveNoToolTurns >= 2 {
-                        Logger.info("RevisionAgent: LLM produced no tool calls for \(consecutiveNoToolTurns) turns, treating as complete", category: .ai)
-                        messages.append(RevisionMessage(
-                            role: .assistant,
-                            content: "Revision session complete."
-                        ))
-                        status = .completed
-                        try? workspaceService.deleteWorkspace()
-                        return
+                        if await finishAfterStalledSession() { return }
+                        consecutiveNoToolTurns = 0
+                        continue
                     }
                     conversationMessages.append(AnthropicMessage.user(
                         "If you have finished all changes, please call `complete_revision` with a summary. Otherwise, continue with your next action."
@@ -349,19 +465,36 @@ class ResumeRevisionAgent {
                 }
                 consecutiveNoToolTurns = 0
 
-                // Check for completion tool
-                if let completionCall = pendingToolCalls.first(where: { $0.name == CompleteRevisionTool.name }) {
-                    let result = try await handleCompleteRevision(arguments: completionCall.arguments)
-
-                    let toolResult = AnthropicMessage.toolResult(
-                        toolUseId: completionCall.id,
-                        content: result ? "{\"accepted\": true}" : "{\"accepted\": false}"
+                // Check for completion tool. Sibling tool calls in the same
+                // turn are executed (or explicitly answered) first so every
+                // tool_use id receives a tool_result.
+                if let completionIndex = pendingToolCalls.firstIndex(where: { $0.name == CompleteRevisionTool.name }) {
+                    let completionCall = pendingToolCalls[completionIndex]
+                    var resultBlocks = await executeCompletionSiblings(
+                        pendingToolCalls,
+                        completionIndex: completionIndex
                     )
-                    conversationMessages.append(toolResult)
 
-                    if result {
-                        status = .completed
-                        try? workspaceService.deleteWorkspace()
+                    let accepted = await handleCompleteRevision(arguments: completionCall.arguments)
+                    resultBlocks[completionIndex] = .toolResult(AnthropicToolResultBlock(
+                        toolUseId: completionCall.id,
+                        content: accepted ? "{\"accepted\": true}" : "{\"accepted\": false}"
+                    ))
+
+                    let userBlocks = resultBlocks.compactMap { $0 }
+                    conversationMessages.append(AnthropicMessage(
+                        role: "user",
+                        content: .blocks(userBlocks)
+                    ))
+
+                    if accepted {
+                        do {
+                            try await buildAndActivateResumeFromWorkspace()
+                            status = .completed
+                            cleanUpWorkspace()
+                        } catch {
+                            handleBuildFailure(error)
+                        }
                         return
                     }
                     // If rejected, continue the loop
@@ -375,6 +508,31 @@ class ResumeRevisionAgent {
                 var hadWriteCall = false
 
                 for toolCall in pendingToolCalls {
+                    // If the session is exiting (cancel/Save), don't start more
+                    // tools — especially interactive ones that would suspend
+                    // with no one left to answer. Synthesize results so the
+                    // conversation stays well-formed.
+                    if shouldExitLoop() {
+                        toolResultBlocks.append(.toolResult(AnthropicToolResultBlock(
+                            toolUseId: toolCall.id,
+                            content: "{\"error\": \"Session ended before this tool ran\"}",
+                            isError: true
+                        )))
+                        continue
+                    }
+
+                    // A tool call whose input JSON was truncated at the output
+                    // limit cannot be executed — tell the model to split it.
+                    if streamResult.stopReason == "max_tokens", !Self.isCompleteJSONObject(toolCall.arguments) {
+                        Logger.warning("RevisionAgent: Tool call \(toolCall.name) truncated at max_tokens — asking model to split", category: .ai)
+                        toolResultBlocks.append(.toolResult(AnthropicToolResultBlock(
+                            toolUseId: toolCall.id,
+                            content: "{\"error\": \"Tool input was truncated at the output-token limit. Split this into smaller pieces — for example, write one section at a time or fewer entries per call — and try again.\"}",
+                            isError: true
+                        )))
+                        continue
+                    }
+
                     currentAction = "Turn \(turnCount): \(toolDisplayName(toolCall.name))"
                     messages.append(RevisionMessage(
                         role: .toolActivity(toolCall.name),
@@ -392,7 +550,7 @@ class ResumeRevisionAgent {
                         isError: result.isError
                     )))
 
-                    if toolCall.name == WriteJsonFileTool.name {
+                    if toolCall.name == WriteJsonFileTool.name && !result.isError {
                         hadWriteCall = true
                     }
                 }
@@ -418,8 +576,15 @@ class ResumeRevisionAgent {
             throw RevisionAgentError.maxTurnsExceeded
 
         } catch {
-            let built = await handleExitCleanup()
-            if !built { throw error }
+            if error is CancellationError {
+                isCancelled = true
+            }
+            await handleExitCleanup(errorMessage: isCancelled ? nil : error.localizedDescription)
+            // Status is the source of truth for the view; rethrow only for
+            // genuine failures so callers that key off the throw stay correct.
+            if case .failed = status {
+                throw error
+            }
         }
     }
 
@@ -528,34 +693,322 @@ class ResumeRevisionAgent {
 
     /// Accept the current workspace state and create a new resume from it.
     /// If a completion continuation is active (the agent called complete_revision),
-    /// we resume it. Otherwise we flag the main loop to build the resume from the
-    /// workspace during its cancellation exit — this avoids the race where a
-    /// separate Task tried to read from an already-deleted workspace.
+    /// we approve it and the completion path builds. Otherwise we flag the main
+    /// loop to build the resume from the workspace at its exit boundary and
+    /// unblock any suspended human-in-the-loop tool so the loop can reach that
+    /// boundary — Save works at any moment. Pending (unwritten) proposals are
+    /// rejected; only changes already applied to the workspace are kept.
     func acceptCurrentState() {
         // If waiting on completion tool, approve it
         if completionContinuation != nil {
             respondToCompletion(true)
             return
         }
-        // Signal the main loop to build the resume from workspace before cleanup
         shouldBuildResumeOnExit = true
-        isCancelled = true
+        resumePendingContinuationsForExit()
         activeStreamTask?.cancel()
     }
 
+    /// Single teardown entry point. Idempotent: safe to call multiple times
+    /// and after the session has already ended. Cancels the active stream and
+    /// resumes ANY pending continuation so none can leak; the loop then exits
+    /// at its next boundary with status `.cancelled` and cleans up.
     func cancel() {
+        guard !isCancelled else { return }
         isCancelled = true
         activeStreamTask?.cancel()
-        // Resume any waiting continuations
-        proposalContinuation?.resume(returning: .rejected)
-        proposalContinuation = nil
-        currentProposal = nil
-        questionContinuation?.resume(returning: "")
-        questionContinuation = nil
-        currentQuestion = nil
-        completionContinuation?.resume(returning: false)
-        completionContinuation = nil
-        currentCompletionSummary = nil
+        resumePendingContinuationsForExit()
+    }
+
+    /// Resume any suspended human-in-the-loop continuation so the agent loop
+    /// can reach its exit boundary. Take-then-nil ordering guarantees no
+    /// continuation is ever resumed twice.
+    private func resumePendingContinuationsForExit() {
+        if let cont = proposalContinuation {
+            proposalContinuation = nil
+            currentProposal = nil
+            cont.resume(returning: .rejected)
+        }
+        if let cont = questionContinuation {
+            questionContinuation = nil
+            currentQuestion = nil
+            cont.resume(returning: "")
+        }
+        if let cont = completionContinuation {
+            completionContinuation = nil
+            currentCompletionSummary = nil
+            cont.resume(returning: false)
+        }
+    }
+
+    // MARK: - Exit Handling
+
+    /// True when the loop should exit: user cancel, Save, or structured-
+    /// concurrency cancellation (window teardown). Folds `Task.isCancelled`
+    /// into the internal flag so every exit path shares one source of truth.
+    private func shouldExitLoop() -> Bool {
+        if Task.isCancelled {
+            isCancelled = true
+        }
+        return isCancelled || shouldBuildResumeOnExit
+    }
+
+    /// Settle every early exit (Save, user cancel, task cancellation, or error).
+    /// Order is binding: settle the keep/discard decision first, then build if
+    /// keeping, then set the honest final status, then delete the workspace.
+    ///
+    /// Status semantics: `.cancelled` if and only if the user cancelled;
+    /// `.failed(message)` for every error exit (even when applied work was
+    /// kept); `.completed` only when the Save path built successfully.
+    private func handleExitCleanup(errorMessage: String?) async {
+        var shouldBuild = shouldBuildResumeOnExit
+
+        // Error exit with applied work the user hasn't decided about: offer to
+        // keep the changes BEFORE anything is deleted.
+        if let errorMessage, !shouldBuild, !isCancelled, successfulWriteCount > 0 {
+            let summary = """
+            The revision session ended early: \(errorMessage)
+            \(successfulWriteCount) change(s) had already been applied to the working copy. \
+            Accept to keep them in a revised resume. Choosing "Continue Editing" will \
+            discard them and end the session.
+            """
+            messages.append(RevisionMessage(role: .assistant, content: summary))
+            Logger.warning("RevisionAgent: Error exit with \(successfulWriteCount) applied write(s) — offering to keep changes", category: .ai)
+            let keep = await presentCompletionCard(summary: summary)
+            // `shouldBuildResumeOnExit` re-read: Save can race in while the
+            // card is presented (the card then resumes false), and the Save
+            // intent must still be honored. Cancel always wins: discard.
+            if (keep || shouldBuildResumeOnExit) && !isCancelled {
+                shouldBuild = true
+            }
+        }
+
+        if shouldBuild {
+            do {
+                try await buildAndActivateResumeFromWorkspace()
+                if let errorMessage {
+                    status = .failed("\(errorMessage) The changes applied before the failure were kept.")
+                } else {
+                    status = .completed
+                }
+            } catch {
+                handleBuildFailure(error)
+                // Workspace was moved aside for salvage — see handleBuildFailure.
+                return
+            }
+        } else if isCancelled {
+            status = .cancelled
+        } else if let errorMessage {
+            status = .failed(errorMessage)
+        } else {
+            // Defensive: no error, not cancelled, nothing to build — treat as
+            // a cancellation so the exit stays silent rather than lying about
+            // completion.
+            status = .cancelled
+        }
+
+        cleanUpWorkspace()
+    }
+
+    /// The model produced no tool calls on two consecutive turns. With no
+    /// applied writes the session completes quietly; with applied work the
+    /// user decides whether to keep it — applied work is never silently
+    /// deleted. Returns true when run() should return, false to continue.
+    private func finishAfterStalledSession() async -> Bool {
+        guard successfulWriteCount > 0 else {
+            Logger.info("RevisionAgent: No tool calls for two turns and no applied changes — completing", category: .ai)
+            messages.append(RevisionMessage(
+                role: .assistant,
+                content: "Revision session complete."
+            ))
+            status = .completed
+            cleanUpWorkspace()
+            return true
+        }
+
+        let summary = """
+        The assistant stopped taking actions without formally completing the revision, \
+        but \(successfulWriteCount) change(s) were already applied to the working copy. \
+        Accept to keep them in a revised resume, or choose "Continue Editing" to keep working.
+        """
+        messages.append(RevisionMessage(role: .assistant, content: summary))
+        Logger.warning("RevisionAgent: Stalled with \(successfulWriteCount) applied write(s) — asking user to keep or continue", category: .ai)
+
+        let accepted = await presentCompletionCard(summary: summary)
+
+        if accepted {
+            do {
+                try await buildAndActivateResumeFromWorkspace()
+                status = .completed
+                cleanUpWorkspace()
+            } catch {
+                handleBuildFailure(error)
+            }
+            return true
+        }
+
+        if shouldExitLoop() {
+            // The decision was settled by cancel()/Save, not the user clicking
+            // "Continue Editing" — let the loop's boundary handle the exit.
+            return false
+        }
+
+        // User chose to continue — give the model a fresh instruction.
+        conversationMessages.append(AnthropicMessage.user(
+            "The user chose to continue the session. Ask what they would like to change next, or proceed with any remaining improvements."
+        ))
+        return false
+    }
+
+    /// Terminal path when applying the workspace to a new resume fails after
+    /// the keep decision was already settled. The workspace holds the only
+    /// copy of the applied work, so it is moved OUT of the swept
+    /// `revision-workspace/` base directory — which the next session's
+    /// startup sweep clears wholesale — and the preserved location is
+    /// included in the failure message so the user can salvage the JSON.
+    private func handleBuildFailure(_ error: Error) {
+        Logger.error("RevisionAgent: Failed to build revised resume: \(error.localizedDescription)", category: .ai)
+        var message = "Could not apply the revised resume: \(error.localizedDescription)"
+        if let workspace = workspaceService.workspacePath {
+            if let preserved = preserveFailedSessionWorkspace(at: workspace) {
+                message += " The changes applied during this session were preserved at: \(preserved.path)"
+            } else {
+                message += " The changes applied during this session are still at: \(workspace.path) — salvage them before starting another revision session, which clears that directory."
+            }
+        }
+        messages.append(RevisionMessage(role: .assistant, content: message))
+        status = .failed(message)
+    }
+
+    /// Move a failed session's workspace to a sibling of the swept base
+    /// directory (`<base>-failed/<session-id>/`) so the next session's
+    /// stale-sibling sweep cannot destroy the only copy of the applied work.
+    /// The salvage destination is derived from the service-provided workspace
+    /// path, never constructed independently. Returns the preserved location,
+    /// or nil when the move failed (the workspace then remains at its
+    /// original, sweep-exposed path).
+    private func preserveFailedSessionWorkspace(at workspace: URL) -> URL? {
+        let fileManager = FileManager.default
+        let sweptBase = workspace.deletingLastPathComponent()
+        let salvageRoot = sweptBase
+            .deletingLastPathComponent()
+            .appendingPathComponent(sweptBase.lastPathComponent + "-failed", isDirectory: true)
+        let destination = salvageRoot.appendingPathComponent(workspace.lastPathComponent, isDirectory: true)
+        do {
+            try fileManager.createDirectory(at: salvageRoot, withIntermediateDirectories: true)
+            pruneOldSalvageDirectories(in: salvageRoot)
+            if fileManager.fileExists(atPath: destination.path) {
+                try fileManager.removeItem(at: destination)
+            }
+            try fileManager.moveItem(at: workspace, to: destination)
+            Logger.warning("RevisionAgent: Preserved failed-session workspace at \(destination.path)", category: .ai)
+            return destination
+        } catch {
+            Logger.error("RevisionAgent: Could not preserve failed-session workspace: \(error.localizedDescription)", category: .ai)
+            return nil
+        }
+    }
+
+    /// Remove salvage directories older than 30 days so failed sessions
+    /// cannot accumulate unbounded. Best-effort: failures are logged and
+    /// never block preservation of the current session.
+    private func pruneOldSalvageDirectories(in salvageRoot: URL) {
+        let fileManager = FileManager.default
+        let cutoff = Date().addingTimeInterval(-30 * 24 * 60 * 60)
+        let contents: [URL]
+        do {
+            contents = try fileManager.contentsOfDirectory(
+                at: salvageRoot,
+                includingPropertiesForKeys: [.contentModificationDateKey]
+            )
+        } catch {
+            Logger.warning("RevisionAgent: Could not enumerate salvage directory for pruning: \(error.localizedDescription)", category: .ai)
+            return
+        }
+        for item in contents {
+            guard let modified = (try? item.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate,
+                  modified < cutoff else { continue }
+            do {
+                try fileManager.removeItem(at: item)
+                Logger.info("RevisionAgent: Pruned expired salvage directory '\(item.lastPathComponent)'", category: .ai)
+            } catch {
+                Logger.warning("RevisionAgent: Could not prune salvage item '\(item.lastPathComponent)': \(error.localizedDescription)", category: .ai)
+            }
+        }
+    }
+
+    /// Delete the workspace, logging (never swallowing) failures.
+    private func cleanUpWorkspace() {
+        do {
+            try workspaceService.deleteWorkspace()
+        } catch {
+            Logger.error("RevisionAgent: Failed to delete workspace: \(error.localizedDescription)", category: .ai)
+        }
+    }
+
+    // MARK: - Stream Failure Classification
+
+    /// Classify a thrown stream failure, then back off (transient) or abort
+    /// the session (fatal / too many consecutive failures).
+    private func backOffOrAbort(after error: Error) async throws {
+        let classification = Self.classifyStreamFailure(error)
+        try await backOffOrAbort(message: classification.message, isFatal: classification.isFatal)
+    }
+
+    private func backOffOrAbort(message: String, isFatal: Bool) async throws {
+        if isFatal {
+            Logger.error("RevisionAgent: Fatal stream failure: \(message)", category: .ai)
+            throw RevisionAgentError.streamFailed(message)
+        }
+        consecutiveStreamFailures += 1
+        guard consecutiveStreamFailures < maxConsecutiveStreamFailures else {
+            Logger.error("RevisionAgent: Aborting after \(consecutiveStreamFailures) consecutive stream failures: \(message)", category: .ai)
+            throw RevisionAgentError.streamFailed("\(message) (failed \(consecutiveStreamFailures) times in a row)")
+        }
+        let delaySeconds = pow(2.0, Double(consecutiveStreamFailures)) // 2s, 4s
+        Logger.warning("RevisionAgent: Transient stream failure (\(message)) — retrying in \(Int(delaySeconds))s", category: .ai)
+        currentAction = "Connection issue — retrying in \(Int(delaySeconds))s..."
+        try await Task.sleep(for: .seconds(delaySeconds))
+    }
+
+    /// Fatal = configuration/auth/request problems that retrying cannot heal.
+    /// Transient = rate limits, overload, server errors, network drops.
+    private static func classifyStreamFailure(_ error: Error) -> (isFatal: Bool, message: String) {
+        if let apiError = error as? APIError {
+            if case .responseUnsuccessful(_, let statusCode, _) = apiError {
+                let transientCodes: Set<Int> = [408, 429, 500, 502, 503, 504, 529]
+                return (isFatal: !transientCodes.contains(statusCode), message: apiError.displayDescription)
+            }
+            return (isFatal: false, message: apiError.displayDescription)
+        }
+        if let llmError = error as? LLMError {
+            switch llmError {
+            case .clientError, .unauthorized, .invalidModelId:
+                return (isFatal: true, message: llmError.localizedDescription)
+            case .decodingFailed, .unexpectedResponseFormat, .rateLimited, .timeout, .insufficientCredits:
+                return (isFatal: false, message: llmError.localizedDescription)
+            }
+        }
+        return (isFatal: false, message: error.localizedDescription)
+    }
+
+    /// Classify an in-stream `error` event by its Anthropic error type.
+    private static func isFatalStreamErrorEvent(_ message: String) -> Bool {
+        let fatalTypes = [
+            "authentication_error",
+            "permission_error",
+            "invalid_request_error",
+            "not_found_error",
+            "request_too_large"
+        ]
+        return fatalTypes.contains { message.contains($0) }
+    }
+
+    /// True when `raw` parses as a complete JSON value — used to detect tool
+    /// inputs truncated by a max_tokens stop.
+    private static func isCompleteJSONObject(_ raw: String) -> Bool {
+        guard let data = raw.data(using: .utf8), !data.isEmpty else { return false }
+        return (try? JSONSerialization.jsonObject(with: data)) != nil
     }
 
     // MARK: - Tool Building
@@ -585,7 +1038,7 @@ class ResumeRevisionAgent {
 
     private func executeTool(name: String, arguments: String) async -> ToolExecutionResult {
         guard let workspacePath = workspaceService.workspacePath else {
-            return ToolExecutionResult(text: "Error: Workspace not initialized")
+            return ToolExecutionResult(text: "Error: Workspace not initialized", isError: true)
         }
 
         do {
@@ -615,6 +1068,7 @@ class ResumeRevisionAgent {
             case WriteJsonFileTool.name:
                 let params = try JSONDecoder().decode(WriteJsonFileTool.Parameters.self, from: argsData)
                 let result = try WriteJsonFileTool.execute(parameters: params, repoRoot: workspacePath)
+                successfulWriteCount += 1
                 // Auto-render for the live preview pane (no images for LLM yet —
                 // a single set of page images is appended after all tools complete)
                 let renderInfo = await pdfRenderer.autoRenderResume(from: resume)
@@ -639,6 +1093,55 @@ class ResumeRevisionAgent {
         }
     }
 
+    /// Execute (or explicitly answer) every sibling of a `complete_revision`
+    /// call so each tool_use id receives a tool_result. Workspace tools run
+    /// normally; interactive tools are answered with an explanatory error so
+    /// the model can re-issue them if the user continues the session.
+    /// Returns a slot array aligned with `pendingToolCalls`; the completion
+    /// slot is left nil for the caller to fill.
+    private func executeCompletionSiblings(
+        _ pendingToolCalls: [RevisionStreamProcessor.ToolCallInfo],
+        completionIndex: Int
+    ) async -> [AnthropicContentBlock?] {
+        var resultBlocks: [AnthropicContentBlock?] = Array(repeating: nil, count: pendingToolCalls.count)
+
+        for (index, call) in pendingToolCalls.enumerated() where index != completionIndex {
+            if call.name == CompleteRevisionTool.name {
+                resultBlocks[index] = .toolResult(AnthropicToolResultBlock(
+                    toolUseId: call.id,
+                    content: "{\"error\": \"Duplicate complete_revision call in the same turn was ignored\"}",
+                    isError: true
+                ))
+            } else if call.name == ProposeChangesTool.name || call.name == AskUserTool.name {
+                resultBlocks[index] = .toolResult(AnthropicToolResultBlock(
+                    toolUseId: call.id,
+                    content: "{\"error\": \"Not shown to the user: complete_revision was called in the same turn. If the user continues the session, call this tool again in its own turn.\"}",
+                    isError: true
+                ))
+            } else if shouldExitLoop() {
+                resultBlocks[index] = .toolResult(AnthropicToolResultBlock(
+                    toolUseId: call.id,
+                    content: "{\"error\": \"Session ended before this tool ran\"}",
+                    isError: true
+                ))
+            } else {
+                currentAction = "Turn \(turnCount): \(toolDisplayName(call.name))"
+                messages.append(RevisionMessage(
+                    role: .toolActivity(call.name),
+                    content: toolDisplayName(call.name)
+                ))
+                let result = await executeTool(name: call.name, arguments: call.arguments)
+                resultBlocks[index] = .toolResult(AnthropicToolResultBlock(
+                    toolUseId: call.id,
+                    content: result.text,
+                    isError: result.isError
+                ))
+            }
+        }
+
+        return resultBlocks
+    }
+
     // MARK: - Human-in-the-Loop Tools
 
     private func executeProposal(_ params: ProposeChangesTool.Parameters) async -> String {
@@ -653,10 +1156,8 @@ class ResumeRevisionAgent {
             content: "Proposed changes: \(params.summary)"
         ))
 
-        let response: ProposalResponse = await withCheckedContinuation { continuation in
-            proposalContinuation = continuation
-        }
-
+        let response = await awaitProposalDecision()
+        currentProposal = nil
         return response.toolResultJSON
     }
 
@@ -667,9 +1168,8 @@ class ResumeRevisionAgent {
             content: params.question
         ))
 
-        let answer: String = await withCheckedContinuation { continuation in
-            questionContinuation = continuation
-        }
+        let answer = await awaitQuestionAnswer()
+        currentQuestion = nil
 
         let payload = ["answer": answer]
         if let data = try? JSONSerialization.data(withJSONObject: payload),
@@ -679,53 +1179,91 @@ class ResumeRevisionAgent {
         return "{\"answer\": \"\"}"
     }
 
-    private func handleCompleteRevision(arguments: String) async throws -> Bool {
-        guard let data = arguments.data(using: .utf8) else {
-            throw RevisionAgentError.invalidToolCall("Could not parse arguments as UTF-8")
+    /// Present the completion card and wait for the user's decision.
+    /// Used by `complete_revision` and by every work-preserving exit offer.
+    private func handleCompleteRevision(arguments: String) async -> Bool {
+        let summary: String
+        do {
+            guard let data = arguments.data(using: .utf8) else {
+                throw RevisionAgentError.invalidToolCall("complete_revision arguments were not valid UTF-8")
+            }
+            summary = try JSONDecoder().decode(CompleteRevisionTool.Parameters.self, from: data).summary
+        } catch {
+            Logger.error("RevisionAgent: Malformed complete_revision arguments: \(error.localizedDescription)", category: .ai)
+            summary = "The assistant signaled that the revision is complete."
         }
 
-        let params = try JSONDecoder().decode(CompleteRevisionTool.Parameters.self, from: data)
-
-        currentCompletionSummary = params.summary
         messages.append(RevisionMessage(
             role: .assistant,
-            content: "Revision complete: \(params.summary)"
+            content: "Revision complete: \(summary)"
         ))
 
-        // Wait for user to accept or reject
-        let accepted: Bool = await withCheckedContinuation { continuation in
-            completionContinuation = continuation
+        return await presentCompletionCard(summary: summary)
+    }
+
+    // MARK: - Continuation Awaits
+
+    /// All three awaits short-circuit when the session is already exiting and
+    /// are wrapped in a cancellation handler that funnels into `cancel()`, so
+    /// window teardown can never leak a continuation even if the teardown hook
+    /// is missed.
+
+    /// The exit re-check inside each `withCheckedContinuation` body is load-
+    /// bearing: `cancel()`/`acceptCurrentState()` can interleave on the actor
+    /// at the awaits between the early check and the assignment. The body runs
+    /// synchronously on the MainActor, so a continuation is either resumed
+    /// immediately or assigned while the session is still live — it can never
+    /// be assigned after the teardown sweep already ran.
+
+    private func awaitProposalDecision() async -> ProposalResponse {
+        if shouldExitLoop() { return .rejected }
+        return await withTaskCancellationHandler {
+            await withCheckedContinuation { (continuation: CheckedContinuation<ProposalResponse, Never>) in
+                if self.shouldExitLoop() {
+                    continuation.resume(returning: .rejected)
+                } else {
+                    self.proposalContinuation = continuation
+                }
+            }
+        } onCancel: {
+            Task { @MainActor [weak self] in self?.cancel() }
+        }
+    }
+
+    private func awaitQuestionAnswer() async -> String {
+        if shouldExitLoop() { return "" }
+        return await withTaskCancellationHandler {
+            await withCheckedContinuation { (continuation: CheckedContinuation<String, Never>) in
+                if self.shouldExitLoop() {
+                    continuation.resume(returning: "")
+                } else {
+                    self.questionContinuation = continuation
+                }
+            }
+        } onCancel: {
+            Task { @MainActor [weak self] in self?.cancel() }
+        }
+    }
+
+    private func presentCompletionCard(summary: String) async -> Bool {
+        if shouldExitLoop() { return false }
+        currentCompletionSummary = summary
+        let accepted = await withTaskCancellationHandler {
+            await withCheckedContinuation { (continuation: CheckedContinuation<Bool, Never>) in
+                if self.shouldExitLoop() {
+                    continuation.resume(returning: false)
+                } else {
+                    self.completionContinuation = continuation
+                }
+            }
+        } onCancel: {
+            Task { @MainActor [weak self] in self?.cancel() }
         }
         currentCompletionSummary = nil
-
-        if accepted {
-            try await buildAndActivateResumeFromWorkspace()
-        }
-
         return accepted
     }
 
-    /// Handle cleanup when the agent loop exits early (cancellation or error).
-    /// Builds the resume if `shouldBuildResumeOnExit` is set, then deletes workspace.
-    /// Returns `true` if the resume was successfully built and activated.
-    @discardableResult
-    private func handleExitCleanup() async -> Bool {
-        var built = false
-        if shouldBuildResumeOnExit {
-            do {
-                try await buildAndActivateResumeFromWorkspace()
-                status = .completed
-                built = true
-            } catch {
-                Logger.error("RevisionAgent: Failed to build resume on exit: \(error)", category: .ai)
-                status = .failed(error.localizedDescription)
-            }
-        } else if !isCancelled {
-            status = .cancelled
-        }
-        try? workspaceService.deleteWorkspace()
-        return built
-    }
+    // MARK: - Build & Activate
 
     /// Build a new resume from the current workspace state and activate it.
     ///
@@ -737,7 +1275,7 @@ class ResumeRevisionAgent {
     private func buildAndActivateResumeFromWorkspace() async throws {
         let revisedNodes = try workspaceService.importRevisedTreeNodes()
         let revisedFontSizes = try workspaceService.importRevisedFontSizes()
-        let newResume = workspaceService.buildNewResume(
+        let newResume = try workspaceService.buildNewResume(
             from: resume,
             revisedNodes: revisedNodes,
             revisedFontSizes: revisedFontSizes,
@@ -750,6 +1288,16 @@ class ResumeRevisionAgent {
         resume.jobApp?.selectedRes = newResume
         try modelContext.save()
         Logger.info("RevisionAgent: Persisted revised resume and activated in editor", category: .ai)
+
+        // Surface import discrepancies (sections skipped, unmatched ids,
+        // blocked edits, pruned nodes, manual-edit conflicts) in the transcript.
+        if let report = workspaceService.lastImportReport, !report.isEmpty {
+            messages.append(RevisionMessage(
+                role: .assistant,
+                content: "Import notes:\n\(report.summaryText)"
+            ))
+            Logger.warning("RevisionAgent: Import report — \(report.summaryText)", category: .ai)
+        }
 
         // Best-effort PDF generation. If the window closes (task cancelled)
         // during this step the resume data is already saved. The main window
@@ -880,9 +1428,12 @@ class ResumeRevisionAgent {
             "\(call.name)(\(String(call.arguments.prefix(200))))"
         }
 
-        let status = interrupted ? " [INTERRUPTED]" : ""
+        var statusSuffix = interrupted ? " [INTERRUPTED]" : ""
+        if let stopReason = result.stopReason, stopReason != "end_turn", stopReason != "tool_use" {
+            statusSuffix += " [stop_reason: \(stopReason)]"
+        }
         LLMTranscriptLogger.logToolCall(
-            method: "ResumeRevisionAgent turn \(turn) RESPONSE\(status)",
+            method: "ResumeRevisionAgent turn \(turn) RESPONSE\(statusSuffix)",
             modelId: modelId,
             backend: "Anthropic",
             messageCount: messageCount,

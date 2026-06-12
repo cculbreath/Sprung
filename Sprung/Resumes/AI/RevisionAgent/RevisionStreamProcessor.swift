@@ -8,6 +8,12 @@ enum RevisionStreamEvent {
     case textDelta(String)
     case textFinalized(String)
     case toolCallReady(id: String, name: String, arguments: String)
+    /// Stop reason from `message_delta` (e.g. "end_turn", "tool_use",
+    /// "max_tokens"). Surfaced so the loop can detect truncated output.
+    case stopReason(String)
+    /// In-stream `error` event, formatted "type: message". Surfaced so the
+    /// loop can classify it and back off or abort instead of retrying blind.
+    case streamError(String)
 }
 
 // MARK: - Stream Processor
@@ -71,7 +77,12 @@ struct RevisionStreamProcessor {
             }
             return []
 
-        case .messageDelta:
+        case .messageDelta(let event):
+            // Usage fields are intentionally not surfaced here (telemetry is
+            // a separate workstream); only the stop reason matters to the loop.
+            if let stopReason = event.delta.stopReason {
+                return [.stopReason(stopReason)]
+            }
             return []
 
         case .messageStop:
@@ -96,8 +107,7 @@ struct RevisionStreamProcessor {
             return events
 
         case .error(let errorEvent):
-            Logger.error("Anthropic stream error: \(errorEvent.error.message)", category: .ai)
-            return []
+            return [.streamError("\(errorEvent.error.type): \(errorEvent.error.message)")]
 
         case .ping, .unknown:
             return []
