@@ -324,7 +324,9 @@ class StandaloneKCCoordinator {
             let batch = Array(cards[batchStart..<batchEnd])
 
             // Resolve source texts on MainActor before dispatching
-            let sourceTexts = batch.map { findSourceText(for: $0) }
+            let sourceTexts = batch.map {
+                CardEnrichmentService.resolveSourceText(for: $0, artifactStore: artifactRecordStore)
+            }
 
             status = .enriching(current: batchStart + 1, total: cards.count, cardTitle: "batch of \(batch.count)")
 
@@ -446,27 +448,6 @@ class StandaloneKCCoordinator {
         Logger.info("StandaloneKCCoordinator: Wrote back analysis results to \(artifacts.count) artifact records", category: .ai)
     }
 
-    /// Find source document text for a card by searching artifact records.
-    private func findSourceText(for card: KnowledgeCard) -> String {
-        guard let store = artifactRecordStore else { return card.narrative }
-
-        // Try matching by evidence anchor document IDs
-        for anchor in card.evidenceAnchors {
-            if let artifact = store.artifact(byIdString: anchor.documentId),
-               !artifact.extractedContent.isEmpty {
-                return artifact.extractedContent
-            }
-        }
-
-        // Fall back to searching all artifacts for content overlap
-        let allArtifacts = store.allArtifacts
-        if let match = allArtifacts.first(where: { !$0.extractedContent.isEmpty && $0.extractedContent.count > 500 }) {
-            return match.extractedContent
-        }
-
-        // Last resort: use the card's own narrative as source
-        return card.narrative
-    }
 }
 
 // MARK: - Errors

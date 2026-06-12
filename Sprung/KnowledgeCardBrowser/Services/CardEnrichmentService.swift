@@ -198,6 +198,48 @@ actor CardEnrichmentService {
         """
     }
 
+    // MARK: - Source Resolution
+
+    /// Resolve the source text a card should be enriched against.
+    ///
+    /// Resolution order:
+    /// 1. Evidence-anchor document ID → artifact UUID lookup (document cards)
+    /// 2. Evidence-anchor document ID → artifact filename match (git cards
+    ///    anchor with the repo name, chat cards with a non-UUID string id)
+    /// 3. The card's own narrative — self-grounded, never another document.
+    ///
+    /// There is deliberately NO "any artifact" fallback: enriching a card
+    /// against an unrelated document cross-contaminates its facts and
+    /// technologies with another card's content.
+    @MainActor
+    static func resolveSourceText(for card: KnowledgeCard, artifactStore: ArtifactRecordStore?) -> String {
+        guard let store = artifactStore else { return card.narrative }
+
+        for anchor in card.evidenceAnchors {
+            if let artifact = store.artifact(byIdString: anchor.documentId),
+               !artifact.extractedContent.isEmpty {
+                return artifact.extractedContent
+            }
+        }
+
+        // Git/chat anchors carry a repo name or string id instead of a UUID —
+        // match against artifact filenames before giving up.
+        let allArtifacts = store.allArtifacts
+        for anchor in card.evidenceAnchors {
+            if let artifact = allArtifacts.first(where: {
+                $0.filename == anchor.documentId && !$0.extractedContent.isEmpty
+            }) {
+                return artifact.extractedContent
+            }
+        }
+
+        Logger.info(
+            "✨ No source artifact resolved for \"\(card.title)\" — enriching from the card's own narrative",
+            category: .ai
+        )
+        return card.narrative
+    }
+
     // MARK: - JSON Schema for Structured Output
 
     static let factExtractionSchema: [String: Any] = [

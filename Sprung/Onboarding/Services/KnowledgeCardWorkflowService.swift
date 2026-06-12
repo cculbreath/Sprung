@@ -361,7 +361,7 @@ final class KnowledgeCardWorkflowService {
                 let batch = Array(cards[batchStart..<batchEnd])
 
                 let sourceTexts = batch.map { card -> String in
-                    Self.findSourceText(for: card, artifactStore: artifactStore)
+                    CardEnrichmentService.resolveSourceText(for: card, artifactStore: artifactStore)
                 }
 
                 tracker.appendTranscript(
@@ -408,20 +408,4 @@ final class KnowledgeCardWorkflowService {
         }
     }
 
-    /// Resolve source document text for a card from artifact records.
-    private static func findSourceText(for card: KnowledgeCard, artifactStore: ArtifactRecordStore) -> String {
-        for anchor in card.evidenceAnchors {
-            if let artifact = artifactStore.artifact(byIdString: anchor.documentId),
-               !artifact.extractedContent.isEmpty {
-                return artifact.extractedContent
-            }
-        }
-
-        let allArtifacts = artifactStore.allArtifacts
-        if let match = allArtifacts.first(where: { !$0.extractedContent.isEmpty && $0.extractedContent.count > 500 }) {
-            return match.extractedContent
-        }
-
-        return card.narrative
-    }
 }
