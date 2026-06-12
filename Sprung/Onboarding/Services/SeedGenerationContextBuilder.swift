@@ -39,6 +39,7 @@ enum SeedGenerationContextBuilder {
             knowledgeCards: knowledgeCards,
             skills: skillStore.skills,
             writersVoice: coverRefStore?.writersVoice ?? "",
+            voiceSummary: coverRefStore?.voiceSummary ?? "",
             dossier: nil,
             titleSets: titleSets
         )

@@ -18,6 +18,7 @@ struct GeneratorExecutionConfig {
     let preamble: String
     let anthropicSystemContent: [AnthropicSystemBlock]?
     let experienceDefaultsStore: ExperienceDefaultsStore?
+    let options: GenerationOptions
 
     init(
         llmFacade: LLMFacade,
@@ -25,7 +26,8 @@ struct GeneratorExecutionConfig {
         backend: LLMFacade.Backend,
         preamble: String,
         anthropicSystemContent: [AnthropicSystemBlock]? = nil,
-        experienceDefaultsStore: ExperienceDefaultsStore? = nil
+        experienceDefaultsStore: ExperienceDefaultsStore? = nil,
+        options: GenerationOptions = GenerationOptions()
     ) {
         self.llmFacade = llmFacade
         self.modelId = modelId
@@ -33,6 +35,7 @@ struct GeneratorExecutionConfig {
         self.preamble = preamble
         self.anthropicSystemContent = anthropicSystemContent
         self.experienceDefaultsStore = experienceDefaultsStore
+        self.options = options
     }
 
     var usesAnthropicCaching: Bool {
@@ -188,6 +191,21 @@ class BaseSectionGenerator: SectionGenerator {
     func buildSectionPrompt() -> String {
         // Subclasses can override for custom prompts
         return ""
+    }
+
+    /// Voice cue block for prose-producing prompts. Surfaces the analyzed
+    /// voice summary directly next to the task instructions so it isn't
+    /// lost in the long cached preamble. Empty when no profile exists.
+    func voiceCueBlock(_ context: SeedGenerationContext) -> String {
+        guard !context.voiceSummary.isEmpty else { return "" }
+        return """
+
+            ## Voice Cues
+
+            Write in the candidate's voice, characterized as follows:
+
+            \(context.voiceSummary)
+            """
     }
 
     /// Find a timeline entry by ID from the context

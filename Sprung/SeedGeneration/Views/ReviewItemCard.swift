@@ -7,20 +7,25 @@
 
 import SwiftUI
 
-/// Card displaying generated content with approve/reject/edit actions
+/// Card displaying generated content with approve/reject/delete/edit actions
 struct ReviewItemCard: View {
     let item: ReviewItem
+    /// Current target lines per bullet, shown in the rejection sheet
+    let targetBulletLines: Int
     let onApprove: () -> Void
-    let onReject: (String?) -> Void
+    /// Reject and regenerate with feedback and (possibly updated) line target
+    let onReject: (String?, Int) -> Void
     let onEdit: (String) -> Void
     let onEditArray: ([String]) -> Void
-    let onUseOriginal: () -> Void
+    /// Discard this generated content entirely (keeps the original value)
+    let onDelete: () -> Void
 
     @State private var isEditing = false
     @State private var editedText = ""
     @State private var editedItems: [String] = []
     @State private var showingRejectionSheet = false
     @State private var rejectionComment = ""
+    @State private var rejectionLineTarget = 2
 
     /// Whether this content type uses array editing
     private var isArrayContent: Bool {
@@ -74,7 +79,7 @@ struct ReviewItemCard: View {
                     .font(.system(size: 32))
                     .foregroundStyle(.orange)
 
-                Text("Request Regeneration")
+                Text("Reject & Regenerate")
                     .font(.title3)
                     .fontWeight(.semibold)
 
@@ -103,11 +108,36 @@ struct ReviewItemCard: View {
                     )
             }
 
+            // Length target — applies to this and all future regenerations
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    Text("Target lines per bullet")
+                        .font(.callout)
+                    Spacer()
+                    Stepper(value: $rejectionLineTarget, in: 1...4) {
+                        Text("\(rejectionLineTarget)")
+                            .font(.callout)
+                            .monospacedDigit()
+                            .frame(minWidth: 28, alignment: .trailing)
+                    }
+                }
+                Text("Guideline sent to the AI — about how many printed lines each bullet should fill.")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(10)
+            .background(Color(.textBackgroundColor))
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(.quaternary, lineWidth: 1)
+            )
+
             // Action buttons - stacked vertically for clarity
             VStack(spacing: 10) {
                 Button {
                     showingRejectionSheet = false
-                    onReject(rejectionComment.isEmpty ? nil : rejectionComment)
+                    onReject(rejectionComment.isEmpty ? nil : rejectionComment, rejectionLineTarget)
                     rejectionComment = ""
                 } label: {
                     Text(rejectionComment.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -341,20 +371,21 @@ struct ReviewItemCard: View {
                 .buttonStyle(.bordered)
 
                 Button {
-                    onUseOriginal()
-                } label: {
-                    Label("Use Original", systemImage: "arrow.uturn.backward")
-                }
-                .buttonStyle(.bordered)
-                .foregroundStyle(.secondary)
-
-                Button {
+                    rejectionLineTarget = targetBulletLines
                     showingRejectionSheet = true
                 } label: {
-                    Label("Regenerate", systemImage: "arrow.triangle.2.circlepath")
+                    Label("Reject with Feedback", systemImage: "arrow.triangle.2.circlepath")
                 }
                 .buttonStyle(.bordered)
                 .tint(.orange)
+
+                Button {
+                    onDelete()
+                } label: {
+                    Label("Delete", systemImage: "trash")
+                }
+                .buttonStyle(.bordered)
+                .tint(.red)
             }
         }
     }
@@ -404,8 +435,6 @@ struct ReviewItemCard: View {
         switch action {
         case .approved, .edited:
             return .green.opacity(0.5)
-        case .useOriginal:
-            return .gray.opacity(0.5)
         case .rejected, .rejectedWithComment:
             return .orange.opacity(0.5)
         }
@@ -416,7 +445,6 @@ struct ReviewItemCard: View {
             switch action {
             case .approved: return ("Approved", .green)
             case .edited: return ("Edited", .blue)
-            case .useOriginal: return ("Kept Original", .gray)
             case .rejected: return ("Regenerating", .orange)
             case .rejectedWithComment: return ("Regenerating", .orange)
             }

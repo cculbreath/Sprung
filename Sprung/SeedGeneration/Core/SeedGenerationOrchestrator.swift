@@ -20,11 +20,12 @@ final class SeedGenerationOrchestrator {
     private(set) var reviewQueue: ReviewQueue = ReviewQueue()
     private(set) var activityTracker: SeedGenerationActivityTracker = SeedGenerationActivityTracker()
 
-    private(set) var projectProposals: [ProjectProposal]?
-    private(set) var generatedSkillGroups: [SkillGroup]?
-    private(set) var generatedTitleSets: [TitleSet]?
-    private(set) var generatedObjective: String?
     private(set) var sectionProgress: [SectionProgress] = []
+
+    /// User-selected generation constraints; adjustable mid-session
+    /// (e.g. from the rejection-feedback form) so regenerations pick
+    /// up the latest caps.
+    private(set) var options: GenerationOptions = .load()
 
     private var isRunning = false
 
@@ -120,59 +121,32 @@ final class SeedGenerationOrchestrator {
 
     // MARK: - Generation Workflow
 
-    func startGeneration() async {
+    func startGeneration(options: GenerationOptions) async {
         guard !isRunning, let context else { return }
         isRunning = true
 
+        self.options = options
+        options.save()
+
         let preamble = promptCacheService.buildPreamble(context: context)
 
-        // Phase 1: Discover projects (special workflow) - use preamble for full KC context
-        await discoverProjects(context: context, preamble: preamble)
-
-        // Phase 2: Create tasks for all sections
         createAllTasks(context: context)
-
-        // Phase 3: Execute tasks in parallel
         await executeAllTasks(context: context, preamble: preamble)
 
         isRunning = false
     }
 
-    // MARK: - Project Discovery
-
-    private func discoverProjects(context: SeedGenerationContext, preamble: String) async {
-        guard let projectsGenerator = generators.first(where: { $0 is ProjectsGenerator }) as? ProjectsGenerator else {
-            return
-        }
-
-        updateSectionStatus(.projects, to: .running)
-
-        do {
-            let proposals = try await projectsGenerator.discoverProjects(
-                context: context,
-                llmFacade: llmFacade,
-                modelId: modelId,
-                backend: backend,
-                preamble: preamble,
-                experienceDefaultsStore: experienceDefaultsStore
-            )
-            projectProposals = proposals
-            Logger.info("Discovered \(proposals.count) project proposals", category: .ai)
-        } catch {
-            Logger.error("Project discovery failed: \(error)", category: .ai)
-            updateSectionStatus(.projects, to: .failed)
-        }
+    /// Update generation constraints mid-session (e.g. from the
+    /// rejection-feedback form). Subsequent regenerations use the new caps.
+    func updateOptions(_ newOptions: GenerationOptions) {
+        options = newOptions
+        newOptions.save()
     }
 
     // MARK: - Task Creation
 
     private func createAllTasks(context: SeedGenerationContext) {
         for generator in generators {
-            // Skip projects if we have proposals (handled separately)
-            if generator is ProjectsGenerator, projectProposals != nil {
-                continue
-            }
-
             let generatorTypeName = String(describing: type(of: generator))
             var sectionTasks = generator.createTasks(context: context)
 
@@ -206,7 +180,8 @@ final class SeedGenerationOrchestrator {
             modelId: modelId,
             backend: backend,
             preamble: preamble,
-            experienceDefaultsStore: experienceDefaultsStore
+            experienceDefaultsStore: experienceDefaultsStore,
+            options: options
         )
 
         for generator in generators {
@@ -228,18 +203,6 @@ final class SeedGenerationOrchestrator {
                         config: config
                     )
 
-                    // Handle special cases - capture for dedicated views
-                    switch content.type {
-                    case .skillGroups(let groups):
-                        generatedSkillGroups = groups
-                    case .titleSets(let sets):
-                        generatedTitleSets = sets
-                    case .objective(let summary):
-                        generatedObjective = summary
-                    default:
-                        break
-                    }
-
                     // Add to review queue
                     reviewQueue.add(task: task, content: content)
 
@@ -256,103 +219,9 @@ final class SeedGenerationOrchestrator {
         }
     }
 
-    // MARK: - Project Curation
-
-    func approveProject(_ proposal: ProjectProposal) {
-        guard var proposals = projectProposals,
-              let index = proposals.firstIndex(where: { $0.id == proposal.id }) else {
-            return
-        }
-
-        proposals[index].isApproved = true
-        projectProposals = proposals
-
-        // Save project shell to ExperienceDefaults immediately
-        // The proposal's UUID becomes the project's ID for later lookup
-        let projectEntry = ProjectExperienceDraft(
-            id: proposal.id,
-            name: proposal.name,
-            description: proposal.description,
-            startDate: "",
-            endDate: "",
-            url: "",
-            organization: "",
-            type: "",
-            highlights: [],
-            keywords: [],
-            roles: []
-        )
-
-        let defaults = experienceDefaultsStore.currentDefaults()
-        defaults.projects.append(projectEntry)
-        experienceDefaultsStore.save(defaults)
-        Logger.info("Saved approved project to ExperienceDefaults: \(proposal.name)", category: .ai)
-    }
-
-    func rejectProject(_ proposal: ProjectProposal) {
-        guard var proposals = projectProposals else { return }
-        proposals.removeAll { $0.id == proposal.id }
-        projectProposals = proposals
-    }
-
-    func generateApprovedProjects() async {
-        guard let context,
-              let proposals = projectProposals,
-              let projectsGenerator = generators.first(where: { $0 is ProjectsGenerator }) as? ProjectsGenerator else {
-            return
-        }
-
-        let approvedProposals = proposals.filter { $0.isApproved }
-        guard !approvedProposals.isEmpty else {
-            // No approved projects - mark as completed with 0 tasks
-            updateSectionStatus(.projects, to: .completed)
-            return
-        }
-
-        let projectTasks = projectsGenerator.createTasks(for: approvedProposals, context: context)
-        tasks.append(contentsOf: projectTasks)
-
-        // Update progress tracking for projects section
-        if let index = sectionProgress.firstIndex(where: { $0.section == .projects }) {
-            sectionProgress[index].totalTasks = projectTasks.count
-        }
-
-        let preamble = promptCacheService.buildPreamble(context: context)
-        let config = GeneratorExecutionConfig(
-            llmFacade: llmFacade,
-            modelId: modelId,
-            backend: backend,
-            preamble: preamble,
-            experienceDefaultsStore: experienceDefaultsStore
-        )
-
-        for task in projectTasks {
-            activityTracker.startTask(id: task.id, displayName: task.displayName)
-
-            do {
-                let content = try await projectsGenerator.execute(
-                    task: task,
-                    context: context,
-                    config: config
-                )
-
-                reviewQueue.add(task: task, content: content)
-                activityTracker.completeTask(id: task.id)
-                incrementCompletedCount(for: .projects)
-
-            } catch {
-                Logger.error("Project generation failed: \(task.displayName) - \(error)", category: .ai)
-                activityTracker.failTask(id: task.id, error: error.localizedDescription)
-            }
-        }
-
-        updateSectionStatus(.projects, to: .completed)
-    }
-
     // MARK: - Apply Approved Content
 
     func applyApprovedContent(to defaults: inout ExperienceDefaults) {
-        // Filter to only items that should apply content (excludes useOriginal)
         let itemsToApply = reviewQueue.approvedItems.filter { $0.shouldApplyContent }
 
         for item in itemsToApply {
@@ -374,8 +243,7 @@ final class SeedGenerationOrchestrator {
             generator?.apply(content: contentToApply, to: &defaults)
         }
 
-        let keptOriginalCount = reviewQueue.approvedItems.count - itemsToApply.count
-        Logger.info("Applied \(itemsToApply.count) items to defaults (\(keptOriginalCount) kept original)", category: .ai)
+        Logger.info("Applied \(itemsToApply.count) items to defaults", category: .ai)
     }
 
     /// Apply edited children array directly to the content (no parsing needed)
@@ -501,7 +369,8 @@ final class SeedGenerationOrchestrator {
             modelId: modelId,
             backend: backend,
             preamble: preamble,
-            experienceDefaultsStore: experienceDefaultsStore
+            experienceDefaultsStore: experienceDefaultsStore,
+            options: options
         )
 
         do {

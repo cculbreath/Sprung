@@ -74,12 +74,13 @@ final class VolunteerGenerator: BaseSectionGenerator {
             ## Context for This Entry
 
             \(taskContext)
+            \(voiceCueBlock(context))
 
             ## Requirements
 
             Generate:
             1. A summary (1-2 sentences) describing the volunteer role and its impact
-            2. 2-3 highlight bullets showcasing achievements and contributions
+            2. 2-\(config.options.maxHighlightsPerEntry) highlight bullets showcasing achievements and contributions
 
             ## CONSTRAINTS
 
@@ -87,6 +88,7 @@ final class VolunteerGenerator: BaseSectionGenerator {
             2. Do NOT invent metrics, percentages, or quantitative claims
             3. Match the candidate's writing voice from the samples
             4. Avoid generic resume phrases
+            \(config.options.bulletConstraintText)
 
             ## FORBIDDEN
 
@@ -155,6 +157,7 @@ final class VolunteerGenerator: BaseSectionGenerator {
             ## Context for This Entry
 
             \(taskContext)
+            \(voiceCueBlock(context))
 
             \(regenerationContext)
 
@@ -162,7 +165,7 @@ final class VolunteerGenerator: BaseSectionGenerator {
 
             Generate:
             1. A summary (1-2 sentences) describing the volunteer role and its impact
-            2. 2-3 highlight bullets showcasing achievements and contributions
+            2. 2-\(config.options.maxHighlightsPerEntry) highlight bullets showcasing achievements and contributions
 
             ## CONSTRAINTS
 
@@ -170,6 +173,7 @@ final class VolunteerGenerator: BaseSectionGenerator {
             2. Do NOT invent metrics, percentages, or quantitative claims
             3. Match the candidate's writing voice from the samples
             4. Avoid generic resume phrases
+            \(config.options.bulletConstraintText)
             """
 
         let response: VolunteerResponse = try await executeStructuredRequest(

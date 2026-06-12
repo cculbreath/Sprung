@@ -24,24 +24,8 @@ struct SeedGenerationView: View {
 
     @State private var selectedItem: SeedGenerationSelection?
     @State private var hasApplied = false
-    @State private var isGeneratingProjects = false
     @State private var hasStartedGeneration = false
-    @State private var hasAcknowledgedProjectProposals = false
-
-    /// Number of project proposals awaiting user decision
-    private var pendingProjectProposalCount: Int {
-        guard let proposals = orchestrator.projectProposals else { return 0 }
-        return proposals.filter { !$0.isApproved }.count
-    }
-
-    /// Whether there are approved projects that need content generated
-    private var hasApprovedProjectsNeedingContent: Bool {
-        guard let proposals = orchestrator.projectProposals else { return false }
-        let approvedCount = proposals.filter { $0.isApproved }.count
-        // Check if any approved projects are missing from the review queue
-        let projectTasksInQueue = orchestrator.reviewQueue.items.filter { $0.task.section == .projects }.count
-        return approvedCount > 0 && projectTasksInQueue < approvedCount
-    }
+    @State private var generationOptions = GenerationOptions.load()
 
     /// Whether title sets exist and generation can proceed
     private var hasTitleSets: Bool {
@@ -60,11 +44,7 @@ struct SeedGenerationView: View {
             if !hasTitleSets {
                 titleSetsRequiredBanner
             } else if !hasStartedGeneration {
-                titleSetsReadyBanner
-            } else if pendingProjectProposalCount > 0 && !hasAcknowledgedProjectProposals {
-                projectProposalsBanner
-            } else if pendingProjectProposalCount == 0 && hasApprovedProjectsNeedingContent {
-                generateProjectsBanner
+                generationSetupPanel
             }
             mainContent
             Divider()
@@ -76,14 +56,6 @@ struct SeedGenerationView: View {
             if !hasTitleSets {
                 selectedItem = .titleSets
             }
-        }
-        .onChange(of: hasTitleSets) { _, newValue in
-            // When title sets become available, keep showing the ready banner
-            // User needs to click Continue to start generation
-        }
-        .onChange(of: orchestrator.projectProposals?.count) { _, _ in
-            // Reset acknowledgment when new proposals arrive so banner shows
-            hasAcknowledgedProjectProposals = false
         }
     }
 
@@ -118,36 +90,85 @@ struct SeedGenerationView: View {
         .background(.orange.opacity(0.1))
     }
 
-    private var titleSetsReadyBanner: some View {
-        HStack(spacing: 12) {
-            Image(systemName: "checkmark.circle.fill")
-                .foregroundStyle(.green)
-                .font(.title3)
+    private var generationSetupPanel: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 12) {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundStyle(.green)
+                    .font(.title3)
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text("\(titleSetCount) title set\(titleSetCount == 1 ? "" : "s") ready")
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-                Text("Your professional identity is defined. Continue to generate experience content.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            Spacer()
-
-            Button {
-                Task {
-                    hasStartedGeneration = true
-                    await orchestrator.startGeneration()
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("\(titleSetCount) title set\(titleSetCount == 1 ? "" : "s") ready")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                    Text("Set generation limits, then continue to generate experience content.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
-            } label: {
-                Label("Continue to Generation", systemImage: "arrow.right.circle")
+
+                Spacer()
+
+                Button {
+                    Task {
+                        hasStartedGeneration = true
+                        await orchestrator.startGeneration(options: generationOptions)
+                    }
+                } label: {
+                    Label("Continue to Generation", systemImage: "arrow.right.circle")
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.green)
             }
-            .buttonStyle(.borderedProminent)
-            .tint(.green)
+
+            HStack(spacing: 24) {
+                optionStepper(
+                    label: "Bullets per entry",
+                    value: $generationOptions.maxHighlightsPerEntry,
+                    range: 2...6,
+                    step: 1
+                )
+                optionStepper(
+                    label: "Target lines per bullet",
+                    value: $generationOptions.targetBulletLines,
+                    range: 1...4,
+                    step: 1
+                )
+                optionStepper(
+                    label: "Skill categories",
+                    value: $generationOptions.skillCategoryCount,
+                    range: 2...8,
+                    step: 1
+                )
+                optionStepper(
+                    label: "Max skills per category",
+                    value: $generationOptions.maxSkillsPerCategory,
+                    range: 3...12,
+                    step: 1
+                )
+                Spacer()
+            }
         }
         .padding()
         .background(.green.opacity(0.1))
+    }
+
+    private func optionStepper(
+        label: String,
+        value: Binding<Int>,
+        range: ClosedRange<Int>,
+        step: Int
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(label)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Stepper(value: value, in: range, step: step) {
+                Text("\(value.wrappedValue)")
+                    .font(.callout)
+                    .monospacedDigit()
+                    .frame(minWidth: 24, alignment: .trailing)
+            }
+        }
     }
 
     // MARK: - Header Bar
@@ -180,75 +201,6 @@ struct SeedGenerationView: View {
         }
         .padding(.horizontal)
         .padding(.vertical, 12)
-    }
-
-    // MARK: - Project Banners
-
-    private var projectProposalsBanner: some View {
-        HStack(spacing: 12) {
-            Image(systemName: "lightbulb.fill")
-                .foregroundStyle(.yellow)
-                .font(.title3)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text("\(pendingProjectProposalCount) project proposal\(pendingProjectProposalCount == 1 ? "" : "s") to review")
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-                Text("AI discovered potential projects from your experience. Review and approve before generating content.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            Spacer()
-
-            Button {
-                selectedItem = .section(.projects)
-            } label: {
-                Label("Review Projects", systemImage: "arrow.right.circle")
-            }
-            .buttonStyle(.borderedProminent)
-            .tint(.yellow)
-        }
-        .padding()
-        .background(.yellow.opacity(0.1))
-    }
-
-    private var generateProjectsBanner: some View {
-        HStack(spacing: 12) {
-            Image(systemName: "sparkles")
-                .foregroundStyle(.blue)
-                .font(.title3)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Ready to generate project content")
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-                Text("Generate descriptions and highlights for your approved projects.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            Spacer()
-
-            Button {
-                Task {
-                    isGeneratingProjects = true
-                    await orchestrator.generateApprovedProjects()
-                    isGeneratingProjects = false
-                }
-            } label: {
-                if isGeneratingProjects {
-                    ProgressView()
-                        .controlSize(.small)
-                } else {
-                    Label("Generate Content", systemImage: "wand.and.stars")
-                }
-            }
-            .buttonStyle(.borderedProminent)
-            .disabled(isGeneratingProjects)
-        }
-        .padding()
-        .background(.blue.opacity(0.1))
     }
 
     // MARK: - Actions
@@ -348,7 +300,7 @@ struct SeedGenerationView: View {
                 skills: orchestrator.context?.skills ?? []
             )
         case .reviewQueue:
-            ReviewQueueView(queue: orchestrator.reviewQueue)
+            reviewQueueView(section: nil)
         case .section(let section):
             sectionDetailView(for: section)
         case nil:
@@ -360,44 +312,36 @@ struct SeedGenerationView: View {
                     skills: orchestrator.context?.skills ?? []
                 )
             } else if orchestrator.reviewQueue.hasPendingItems {
-                ReviewQueueView(queue: orchestrator.reviewQueue)
+                reviewQueueView(section: nil)
             } else {
                 welcomeView
             }
         }
     }
 
+    /// Shared review-list construction so section views and the global
+    /// queue stay behaviorally identical.
+    private func reviewQueueView(section: ExperienceSectionKey?) -> ReviewQueueView {
+        ReviewQueueView(
+            queue: orchestrator.reviewQueue,
+            section: section,
+            targetBulletLines: orchestrator.options.targetBulletLines,
+            onLineTargetChange: { newTarget in
+                var options = orchestrator.options
+                options.targetBulletLines = newTarget
+                orchestrator.updateOptions(options)
+                generationOptions = options
+            }
+        )
+    }
+
+    /// Section detail: every generated item for the section — pending and
+    /// reviewed — with the same actions as the global review queue.
     @ViewBuilder
     private func sectionDetailView(for section: ExperienceSectionKey) -> some View {
-        switch section {
-        case .projects:
-            if let proposals = orchestrator.projectProposals, !proposals.isEmpty {
-                ProjectCurationView(
-                    proposals: proposals,
-                    onApprove: { orchestrator.approveProject($0) },
-                    onReject: { orchestrator.rejectProject($0) }
-                )
-                .onAppear {
-                    hasAcknowledgedProjectProposals = true
-                }
-            } else {
-                sectionPlaceholder(for: section)
-            }
-
-        case .skills:
-            if let groups = orchestrator.generatedSkillGroups {
-                SkillsGroupingView(groups: groups)
-            } else {
-                sectionPlaceholder(for: section)
-            }
-
-        case .custom:
-            CustomSectionDetailView(
-                titleSets: orchestrator.generatedTitleSets,
-                objective: orchestrator.generatedObjective
-            )
-
-        default:
+        if orchestrator.reviewQueue.items.contains(where: { $0.task.section == section }) {
+            reviewQueueView(section: section)
+        } else {
             sectionPlaceholder(for: section)
         }
     }
@@ -478,82 +422,5 @@ struct SectionProgressRow: View {
                 .foregroundStyle(.secondary)
                 .monospacedDigit()
         }
-    }
-}
-
-// MARK: - Custom Section Detail View
-
-struct CustomSectionDetailView: View {
-    let titleSets: [TitleSet]?
-    let objective: String?
-
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
-                if let sets = titleSets, !sets.isEmpty {
-                    titleSetsSection(sets)
-                }
-
-                if let summary = objective, !summary.isEmpty {
-                    objectiveSection(summary)
-                }
-
-                if titleSets == nil && objective == nil {
-                    ContentUnavailableView {
-                        Label("Custom Content", systemImage: "doc.fill")
-                    } description: {
-                        Text("Title options and professional summary will appear here after generation.")
-                    }
-                }
-            }
-            .padding()
-        }
-    }
-
-    @ViewBuilder
-    private func titleSetsSection(_ sets: [TitleSet]) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Label("Professional Title Options", systemImage: "person.text.rectangle")
-                .font(.headline)
-
-            Text("Generated title combinations for your resume header. Select your favorites in the review queue.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
-            ForEach(sets) { set in
-                HStack(spacing: 8) {
-                    ForEach(set.titles, id: \.self) { title in
-                        Text(title)
-                            .font(.callout)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .background(.quaternary, in: RoundedRectangle(cornerRadius: 6))
-                    }
-                    Spacer()
-                    Text(set.emphasis.displayName)
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
-                .padding(.vertical, 4)
-            }
-        }
-        .padding()
-        .background(.background.secondary, in: RoundedRectangle(cornerRadius: 12))
-    }
-
-    @ViewBuilder
-    private func objectiveSection(_ summary: String) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Label("Professional Summary", systemImage: "text.alignleft")
-                .font(.headline)
-
-            Text(summary)
-                .font(.body)
-                .padding()
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(.background.secondary, in: RoundedRectangle(cornerRadius: 8))
-        }
-        .padding()
-        .background(.background.secondary, in: RoundedRectangle(cornerRadius: 12))
     }
 }

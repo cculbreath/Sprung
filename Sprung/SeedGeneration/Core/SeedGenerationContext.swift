@@ -28,6 +28,10 @@ struct SeedGenerationContext {
     /// Pre-built voice context string from CoverRefStore.writersVoice
     let writersVoice: String
 
+    /// Short stylist's portrait of the candidate's voice (VoiceProfile.voiceSummary).
+    /// Injected directly into prose-generation task prompts as a voice cue.
+    let voiceSummary: String
+
     /// Candidate dossier with strategic insights (if available)
     let dossier: JSON?
 
@@ -222,39 +226,6 @@ struct SeedGenerationContext {
 // MARK: - Context Builder
 
 extension SeedGenerationContext {
-    /// Build context from ArtifactRepository and related stores
-    static func build(
-        from artifacts: OnboardingArtifacts,
-        knowledgeCards: [KnowledgeCard],
-        skills: [Skill],
-        writersVoice: String,
-        dossier: JSON?,
-        titleSets: [TitleSetRecord]
-    ) -> SeedGenerationContext {
-        let profile: ApplicantProfileDraft
-        if let profileJSON = artifacts.applicantProfile {
-            profile = ApplicantProfileDraft(json: profileJSON)
-        } else {
-            profile = ApplicantProfileDraft()
-        }
-
-        let sectionConfig = SectionConfig(
-            enabledSections: artifacts.enabledSections,
-            customFields: artifacts.customFieldDefinitions
-        )
-
-        return SeedGenerationContext(
-            applicantProfile: profile,
-            skeletonTimeline: artifacts.skeletonTimeline ?? JSON(),
-            sectionConfig: sectionConfig,
-            knowledgeCards: knowledgeCards,
-            skills: skills,
-            writersVoice: writersVoice,
-            dossier: dossier,
-            titleSets: titleSets
-        )
-    }
-
     /// Build context from ExperienceDefaults - used when launching SGM from Experience Editor
     static func build(
         from defaults: ExperienceDefaults,
@@ -262,6 +233,7 @@ extension SeedGenerationContext {
         knowledgeCards: [KnowledgeCard],
         skills: [Skill],
         writersVoice: String,
+        voiceSummary: String,
         dossier: JSON?,
         titleSets: [TitleSetRecord]
     ) -> SeedGenerationContext {
@@ -295,6 +267,7 @@ extension SeedGenerationContext {
             knowledgeCards: knowledgeCards,
             skills: skills,
             writersVoice: writersVoice,
+            voiceSummary: voiceSummary,
             dossier: dossier,
             titleSets: titleSets
         )

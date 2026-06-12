@@ -2,10 +2,11 @@
 //  ProjectsGenerator.swift
 //  Sprung
 //
-//  Special generator for projects section with two-phase workflow:
-//  1. Discovery: Analyze KCs and timeline for project-worthy content
-//  2. Curation: User approves/rejects proposed projects
-//  3. Generation: Create descriptions for approved projects
+//  Generator for projects section content.
+//  Creates one task per timeline project entry, generating a description,
+//  highlights, and keywords from Knowledge Card evidence. Projects are
+//  curated during the onboarding interview; this generator only populates
+//  them — it never proposes new entries.
 //
 
 import Foundation
@@ -13,46 +14,13 @@ import SwiftyJSON
 
 // MARK: - Response Types
 
-private struct ProjectProposalsResponse: Codable {
-    let proposals: [Proposal]
-
-    struct Proposal: Codable {
-        let name: String
-        let description: String
-        let rationale: String
-    }
-}
-
 private struct ProjectResponse: Codable {
     let description: String
     let highlights: [String]
     let keywords: [String]
 }
 
-/// Proposal for a project discovered from evidence
-struct ProjectProposal: Identifiable, Equatable {
-    let id: UUID
-    let name: String
-    let description: String
-    let rationale: String
-    let sourceType: SourceType
-    let sourceId: String?
-    var isApproved: Bool = false
-
-    enum SourceType: String, Codable {
-        case timeline       // From existing timeline project entry
-        case knowledgeCard  // Extracted from a KC
-        case skillBank      // Inferred from skills
-        case llmProposed    // LLM identified from context
-    }
-}
-
-/// Generates projects section content with discovery workflow.
-/// Unlike standard generators, this has a multi-phase process:
-/// 1. discoverProjects() - Analyzes context and proposes projects
-/// 2. User curates the proposals (UI)
-/// 3. createTasks(for:) - Creates tasks for approved projects
-/// 4. execute() - Generates content for each project
+/// Generates content for the project entries curated during onboarding.
 @MainActor
 final class ProjectsGenerator: BaseSectionGenerator {
     override var displayName: String { "Projects" }
@@ -61,232 +29,8 @@ final class ProjectsGenerator: BaseSectionGenerator {
         super.init(sectionKey: .projects)
     }
 
-    // MARK: - Phase 1: Discovery
+    // MARK: - Task Creation
 
-    /// Discover potential projects from the generation context.
-    /// Returns proposals that the user can approve/reject.
-    /// Also saves pre-approved timeline projects to ExperienceDefaults for generation.
-    func discoverProjects(
-        context: SeedGenerationContext,
-        llmFacade: LLMFacade,
-        modelId: String,
-        backend: LLMFacade.Backend,
-        preamble: String,
-        experienceDefaultsStore: ExperienceDefaultsStore? = nil
-    ) async throws -> [ProjectProposal] {
-        var proposals: [ProjectProposal] = []
-
-        // 1. Add existing timeline project entries
-        // IMPORTANT: Use the timeline entry's original ID, not a new UUID.
-        // This ensures context.getTimelineEntry(id:) can find the entry during generation.
-        let timelineProjects = context.timelineEntries(for: .projects)
-        for entry in timelineProjects {
-            // Use original timeline ID if available, otherwise generate new UUID
-            let timelineId = entry["id"].string
-            let proposalId = timelineId.flatMap { UUID(uuidString: $0) } ?? UUID()
-
-            let proposal = ProjectProposal(
-                id: proposalId,
-                name: entry["name"].stringValue,
-                description: entry["description"].stringValue,
-                rationale: "Existing project from your timeline",
-                sourceType: .timeline,
-                sourceId: timelineId,
-                isApproved: true  // Pre-approve timeline entries
-            )
-            proposals.append(proposal)
-
-            // Save timeline projects to ExperienceDefaults immediately so generation can find them
-            // This mirrors what approveProject() does for user-approved projects
-            if let store = experienceDefaultsStore {
-                let projectEntry = ProjectExperienceDraft(
-                    id: proposalId,
-                    name: entry["name"].stringValue,
-                    description: entry["description"].stringValue,
-                    startDate: entry["startDate"].stringValue,
-                    endDate: entry["endDate"].stringValue,
-                    url: entry["url"].stringValue,
-                    organization: entry["organization"].stringValue,
-                    type: "",
-                    highlights: entry["highlights"].arrayValue.map { ProjectHighlightDraft(text: $0.stringValue) },
-                    keywords: entry["keywords"].arrayValue.map { KeywordDraft(keyword: $0.stringValue) },
-                    roles: []
-                )
-                let defaults = store.currentDefaults()
-                // Only add if not already present (avoid duplicates on re-run)
-                if !defaults.projects.contains(where: { $0.id == projectEntry.id }) {
-                    defaults.projects.append(projectEntry)
-                    defaults.isProjectsEnabled = true
-                    store.save(defaults)
-                    Logger.info("Saved timeline project to ExperienceDefaults: \(projectEntry.name)", category: .ai)
-                }
-            }
-        }
-
-        // 2. Extract project-worthy content from KCs typed as projects
-        let projectKCs = context.projectKnowledgeCards
-        for kc in projectKCs {
-            let proposal = ProjectProposal(
-                id: UUID(),
-                name: kc.title,
-                description: String(kc.narrative.prefix(200)) + "...",
-                rationale: "Project identified in your knowledge cards",
-                sourceType: .knowledgeCard,
-                sourceId: kc.id.uuidString,
-                isApproved: false
-            )
-            proposals.append(proposal)
-        }
-
-        // 3. Use LLM to discover additional projects from ALL evidence (uses cached preamble)
-        let llmProposals = try await discoverProjectsViaLLM(
-            context: context,
-            llmFacade: llmFacade,
-            modelId: modelId,
-            backend: backend,
-            preamble: preamble
-        )
-        proposals.append(contentsOf: llmProposals)
-
-        return proposals
-    }
-
-    private func discoverProjectsViaLLM(
-        context: SeedGenerationContext,
-        llmFacade: LLMFacade,
-        modelId: String,
-        backend: LLMFacade.Backend,
-        preamble: String
-    ) async throws -> [ProjectProposal] {
-        // Build list of existing timeline projects to avoid duplicates
-        let existingProjects = context.projectEntries
-        let existingProjectsList = existingProjects.isEmpty
-            ? "None currently in timeline"
-            : existingProjects.map { "- \($0["name"].stringValue)" }.joined(separator: "\n")
-
-        // Build list of project-typed KCs (these are already being proposed separately)
-        let projectKCs = context.projectKnowledgeCards
-        let projectKCsList = projectKCs.isEmpty
-            ? "None"
-            : projectKCs.map { "- \($0.title)" }.joined(separator: "\n")
-
-        // The preamble contains full KC content via prompt caching.
-        // This task prompt focuses specifically on discovering NEW projects.
-        let taskPrompt = """
-            ## Task: Discover Resume-Worthy Projects
-
-            Review ALL Knowledge Cards in the preamble above and identify projects that should be added to the resume.
-
-            ### Already Captured (DO NOT suggest these)
-
-            **Existing Timeline Projects:**
-            \(existingProjectsList)
-
-            **Project-typed Knowledge Cards (already being proposed):**
-            \(projectKCsList)
-
-            ### What to Look For
-
-            Search the Knowledge Cards for project-worthy work that is NOT yet captured:
-
-            1. **Technical initiatives** within employment KCs - systems built, tools created, infrastructure deployed
-            2. **Significant deliverables** - product launches, platform migrations, major features shipped
-            3. **Research outputs** - papers, prototypes, novel implementations
-            4. **Independent work** - open source contributions, side projects, hackathon builds
-            5. **Cross-functional efforts** - process improvements, team tools, documentation systems
-
-            ### Requirements for Each Proposal
-
-            - Must have clear evidence in a Knowledge Card (cite the specific KC)
-            - Must be distinct from existing timeline projects and project KCs
-            - Must be substantial enough to warrant a standalone resume entry
-            - Must demonstrate skills or impact relevant to job searching
-
-            ### Output
-
-            Propose 0-4 new projects. If no qualifying projects are found, return an empty array.
-
-            Return JSON:
-            {
-                "proposals": [
-                    {
-                        "name": "Concise project name",
-                        "description": "2-3 sentence description based on KC evidence",
-                        "rationale": "Why this deserves a project entry, citing which KC contains the evidence"
-                    }
-                ]
-            }
-            """
-
-        // Combine cached preamble (with full KC content) with task-specific prompt
-        let fullPrompt = """
-            \(preamble)
-
-            ---
-
-            \(taskPrompt)
-            """
-
-        let response: ProjectProposalsResponse = try await llmFacade.executeStructuredWithDictionarySchema(
-            prompt: fullPrompt,
-            modelId: modelId,
-            as: ProjectProposalsResponse.self,
-            schema: [
-                "type": "object",
-                "properties": [
-                    "proposals": [
-                        "type": "array",
-                        "items": [
-                            "type": "object",
-                            "properties": [
-                                "name": ["type": "string"],
-                                "description": ["type": "string"],
-                                "rationale": ["type": "string"]
-                            ],
-                            "required": ["name", "description", "rationale"],
-                            "additionalProperties": false
-                        ]
-                    ]
-                ],
-                "required": ["proposals"],
-                "additionalProperties": false
-            ],
-            schemaName: "project_proposals",
-            backend: backend
-        )
-
-        return response.proposals.map { item in
-            ProjectProposal(
-                id: UUID(),
-                name: item.name,
-                description: item.description,
-                rationale: item.rationale,
-                sourceType: .llmProposed,
-                sourceId: nil,
-                isApproved: false
-            )
-        }
-    }
-
-    // MARK: - Phase 2: Task Creation (for approved projects)
-
-    /// Create tasks for approved projects only.
-    /// Call this after user has curated the proposals.
-    func createTasks(for approvedProjects: [ProjectProposal], context: SeedGenerationContext) -> [GenerationTask] {
-        approvedProjects.map { proposal in
-            GenerationTask(
-                id: UUID(),
-                section: .projects,
-                targetId: proposal.id.uuidString,
-                displayName: "Project: \(proposal.name)",
-                generatorType: "ProjectsGenerator",
-                status: .pending
-            )
-        }
-    }
-
-    /// Standard createTasks uses timeline entries only.
-    /// For full discovery workflow, use discoverProjects() + createTasks(for:)
     override func createTasks(context: SeedGenerationContext) -> [GenerationTask] {
         let projectEntries = context.timelineEntries(for: .projects)
 
@@ -305,7 +49,7 @@ final class ProjectsGenerator: BaseSectionGenerator {
         }
     }
 
-    // MARK: - Phase 3: Execution
+    // MARK: - Execution
 
     override func execute(
         task: GenerationTask,
@@ -316,9 +60,8 @@ final class ProjectsGenerator: BaseSectionGenerator {
             throw GeneratorError.missingContext("No targetId for project task")
         }
 
-        // Try to find in timeline first, then check ExperienceDefaults store
-        let entry = context.getTimelineEntry(id: targetId)
-        let taskContext = buildTaskContext(entry: entry, targetId: targetId, context: context, store: config.experienceDefaultsStore)
+        let entry = try findTimelineEntry(id: targetId, in: context)
+        let taskContext = buildTaskContext(entry: entry, context: context)
 
         let systemPrompt = "You are a professional resume writer. Generate project content based strictly on documented evidence."
 
@@ -330,12 +73,13 @@ final class ProjectsGenerator: BaseSectionGenerator {
             ## Context
 
             \(taskContext)
+            \(voiceCueBlock(context))
 
             ## Requirements
 
             Generate:
             1. A description (2-3 sentences) explaining the project's purpose and your role
-            2. 2-4 highlights showing key achievements or contributions
+            2. 2-\(config.options.maxHighlightsPerEntry) highlights showing key achievements or contributions
             3. Relevant keywords/technologies
 
             ## CONSTRAINTS
@@ -344,6 +88,7 @@ final class ProjectsGenerator: BaseSectionGenerator {
             2. Do NOT invent metrics, percentages, or quantitative claims
             3. Match the candidate's writing voice from the samples
             4. Avoid generic resume phrases
+            \(config.options.bulletConstraintText)
 
             ## FORBIDDEN
 
@@ -400,8 +145,8 @@ final class ProjectsGenerator: BaseSectionGenerator {
             throw GeneratorError.missingContext("No targetId for project task")
         }
 
-        let entry = context.getTimelineEntry(id: targetId)
-        let taskContext = buildTaskContext(entry: entry, targetId: targetId, context: context, store: config.experienceDefaultsStore)
+        let entry = try findTimelineEntry(id: targetId, in: context)
+        let taskContext = buildTaskContext(entry: entry, context: context)
         let regenerationContext = buildRegenerationContext(originalContent: originalContent, feedback: feedback)
 
         let systemPrompt = "You are a professional resume writer. Generate project content based strictly on documented evidence."
@@ -414,6 +159,7 @@ final class ProjectsGenerator: BaseSectionGenerator {
             ## Context
 
             \(taskContext)
+            \(voiceCueBlock(context))
 
             \(regenerationContext)
 
@@ -421,7 +167,7 @@ final class ProjectsGenerator: BaseSectionGenerator {
 
             Generate:
             1. A description (2-3 sentences) explaining the project's purpose and your role
-            2. 2-4 highlights showing key achievements or contributions
+            2. 2-\(config.options.maxHighlightsPerEntry) highlights showing key achievements or contributions
             3. Relevant keywords/technologies
 
             ## CONSTRAINTS
@@ -430,6 +176,7 @@ final class ProjectsGenerator: BaseSectionGenerator {
             2. Do NOT invent metrics, percentages, or quantitative claims
             3. Match the candidate's writing voice from the samples
             4. Avoid generic resume phrases
+            \(config.options.bulletConstraintText)
             """
 
         let response: ProjectResponse = try await executeStructuredRequest(
@@ -480,47 +227,31 @@ final class ProjectsGenerator: BaseSectionGenerator {
 
     // MARK: - Context Building
 
-    private func buildTaskContext(
-        entry: JSON?,
-        targetId: String?,
-        context: SeedGenerationContext,
-        store: ExperienceDefaultsStore?
-    ) -> String {
+    private func buildTaskContext(entry: JSON, context: SeedGenerationContext) -> String {
         var lines: [String] = []
 
-        if let entry = entry {
-            // Timeline entry exists - use it
-            lines.append("### Project Details")
-            if let name = entry["name"].string { lines.append("**Name:** \(name)") }
-            if let description = entry["description"].string { lines.append("**Description:** \(description)") }
-            if let startDate = entry["startDate"].string { lines.append("**Start Date:** \(startDate)") }
-            if let endDate = entry["endDate"].string { lines.append("**End Date:** \(endDate)") }
-            if let url = entry["url"].string { lines.append("**URL:** \(url)") }
+        let projectName = entry["name"].stringValue
 
-            if let existingHighlights = entry["highlights"].array, !existingHighlights.isEmpty {
-                lines.append("\n### Existing Highlights")
-                for highlight in existingHighlights {
-                    lines.append("- \(highlight.stringValue)")
-                }
-            }
-        } else if let targetId = targetId,
-                  let store = store,
-                  let projectUUID = UUID(uuidString: targetId),
-                  let project = store.currentDefaults().projects.first(where: { $0.id == projectUUID }) {
-            // Found in ExperienceDefaults (single source of truth)
-            lines.append("### Project Details")
-            lines.append("**Name:** \(project.name)")
-            if !project.description.isEmpty {
-                lines.append("**Description:** \(project.description)")
-            }
-            if !project.startDate.isEmpty { lines.append("**Start Date:** \(project.startDate)") }
-            if !project.endDate.isEmpty { lines.append("**End Date:** \(project.endDate)") }
-            if !project.url.isEmpty { lines.append("**URL:** \(project.url)") }
+        lines.append("### Project Details")
+        if !projectName.isEmpty { lines.append("**Name:** \(projectName)") }
+        if let description = entry["description"].string, !description.isEmpty { lines.append("**Description:** \(description)") }
+        if let startDate = entry["startDate"].string, !startDate.isEmpty { lines.append("**Start Date:** \(startDate)") }
+        if let endDate = entry["endDate"].string, !endDate.isEmpty { lines.append("**End Date:** \(endDate)") }
+        if let url = entry["url"].string, !url.isEmpty { lines.append("**URL:** \(url)") }
 
-            // Search for relevant KCs by project name
+        if let existingHighlights = entry["highlights"].array, !existingHighlights.isEmpty {
+            lines.append("\n### Existing Highlights")
+            for highlight in existingHighlights {
+                lines.append("- \(highlight.stringValue)")
+            }
+        }
+
+        // Pull KC evidence matching the project by name so highlights are
+        // grounded in documented facts rather than the entry stub alone.
+        if !projectName.isEmpty {
             let relevantKCs = context.knowledgeCards.filter { kc in
-                kc.narrative.localizedCaseInsensitiveContains(project.name) ||
-                kc.title.localizedCaseInsensitiveContains(project.name)
+                kc.narrative.localizedCaseInsensitiveContains(projectName) ||
+                kc.title.localizedCaseInsensitiveContains(projectName)
             }
             if !relevantKCs.isEmpty {
                 lines.append("\n### Relevant Knowledge Cards")
@@ -529,9 +260,6 @@ final class ProjectsGenerator: BaseSectionGenerator {
                     lines.append(String(kc.narrative.prefix(500)) + (kc.narrative.count > 500 ? "..." : ""))
                 }
             }
-        } else {
-            lines.append("### Project Details")
-            lines.append("**WARNING:** No project details available for this task (targetId: \(targetId ?? "nil")).")
         }
 
         // Include relevant skills

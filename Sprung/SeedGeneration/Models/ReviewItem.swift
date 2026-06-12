@@ -59,7 +59,6 @@ struct ReviewItem: Identifiable, Equatable {
         case rejected
         case rejectedWithComment(String)
         case edited
-        case useOriginal  // Keep original value, do not regenerate
     }
 
     /// Whether this item has been acted upon
@@ -67,17 +66,17 @@ struct ReviewItem: Identifiable, Equatable {
         userAction != nil
     }
 
-    /// Whether this item was approved (including useOriginal which keeps the original value)
+    /// Whether this item was approved
     var isApproved: Bool {
         switch userAction {
-        case .approved, .edited, .useOriginal:
+        case .approved, .edited:
             return true
         default:
             return false
         }
     }
 
-    /// Whether the generated content should be applied (excludes useOriginal)
+    /// Whether the generated content should be applied
     var shouldApplyContent: Bool {
         switch userAction {
         case .approved, .edited:
@@ -196,7 +195,6 @@ final class ReviewQueue {
 
         // Request regeneration
         if let newContent = await onRegenerationRequested(item.id, item.generatedContent, feedback) {
-            // Add the regenerated content as a new item
             let newItem = ReviewItem(
                 task: item.task,
                 generatedContent: newContent,
@@ -204,13 +202,12 @@ final class ReviewQueue {
                 previousVersionId: item.id
             )
 
-            // Update original item to no longer be regenerating
+            // Replace the rejected item with its regeneration
             if let index = items.firstIndex(where: { $0.id == item.id }) {
-                items[index].isRegenerating = false
+                items[index] = newItem
+            } else {
+                items.append(newItem)
             }
-
-            // Add the new item
-            items.append(newItem)
             Logger.info("✅ Regeneration complete for: \(item.task.displayName)", category: .ai)
         } else {
             // Regeneration failed - mark as no longer regenerating
@@ -234,20 +231,6 @@ final class ReviewQueue {
         if let index = items.firstIndex(where: { $0.id == itemId }) {
             items[index].editedChildren = children
             items[index].userAction = .edited
-        }
-    }
-
-    /// Approve all pending items
-    func approveAll() {
-        for index in items.indices where items[index].userAction == nil {
-            items[index].userAction = .approved
-        }
-    }
-
-    /// Reject all pending items
-    func rejectAll() {
-        for index in items.indices where items[index].userAction == nil {
-            items[index].userAction = .rejected
         }
     }
 

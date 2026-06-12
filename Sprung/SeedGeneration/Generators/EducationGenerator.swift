@@ -75,6 +75,7 @@ final class EducationGenerator: BaseSectionGenerator {
             ## Context for This Entry
 
             \(taskContext)
+            \(voiceCueBlock(context))
 
             ## Requirements
 
@@ -156,6 +157,7 @@ final class EducationGenerator: BaseSectionGenerator {
             ## Context for This Entry
 
             \(taskContext)
+            \(voiceCueBlock(context))
 
             \(regenerationContext)
 

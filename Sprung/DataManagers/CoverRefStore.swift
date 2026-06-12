@@ -46,6 +46,15 @@ final class CoverRefStore: SwiftDataStore {
         )
     }
 
+    /// Short stylist's portrait of the candidate's voice from the analyzed
+    /// voice primer, suitable for inline "voice cue" prompt blocks.
+    var voiceSummary: String? {
+        storedCoverRefs
+            .first { $0.type == .voicePrimer }?
+            .voiceProfile?
+            .voiceSummary
+    }
+
     /// Canonical voice context string for all LLM prompts.
     /// Combines voice primer analysis (if available) and writing samples into a single
     /// prompt-ready block. Callers skip injection when this returns empty string.

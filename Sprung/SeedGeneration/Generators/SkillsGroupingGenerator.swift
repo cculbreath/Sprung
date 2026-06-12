@@ -3,7 +3,7 @@
 //  Sprung
 //
 //  Generator for organizing skills into themed groups.
-//  Creates 4-6 skill categories from the skill bank for resume display.
+//  Creates user-configured skill categories from the skill bank for resume display.
 //
 
 import Foundation
@@ -20,7 +20,8 @@ private struct SkillGroupsResponse: Codable {
 }
 
 /// Generates skill groupings for resume display.
-/// Takes the flat skill bank and organizes into 4-6 themed categories.
+/// Takes the flat skill bank and organizes it into themed categories
+/// sized by the user's generation options.
 @MainActor
 final class SkillsGroupingGenerator: BaseSectionGenerator {
     override var displayName: String { "Skills" }
@@ -64,7 +65,7 @@ final class SkillsGroupingGenerator: BaseSectionGenerator {
         let taskPrompt = """
             ## Task: Organize Skills into Categories
 
-            Create 4-6 skill categories that would look professional on a resume.
+            Create exactly \(config.options.skillCategoryCount) skill categories that would look professional on a resume.
 
             ## Available Skills
 
@@ -72,9 +73,9 @@ final class SkillsGroupingGenerator: BaseSectionGenerator {
 
             ## Instructions
 
-            1. Group related skills into 4-6 categories
+            1. Group related skills into exactly \(config.options.skillCategoryCount) categories
             2. Each category should have a clear, professional name
-            3. Each category should contain 4-8 skills
+            3. Each category should contain at most \(config.options.maxSkillsPerCategory) skills — pick the strongest, most resume-relevant ones
             4. Use only skills from the list above - do not invent new skills
             5. Order skills within each group by relevance/importance
             6. Categories should cover different aspects (e.g., Technical, Leadership, Tools, etc.)
@@ -146,6 +147,7 @@ final class SkillsGroupingGenerator: BaseSectionGenerator {
             ## Task: Revise Skill Categories
 
             Revise the skill categories based on user feedback.
+            Create exactly \(config.options.skillCategoryCount) categories.
 
             ## Available Skills
 
@@ -155,9 +157,9 @@ final class SkillsGroupingGenerator: BaseSectionGenerator {
 
             ## Instructions
 
-            1. Group related skills into 4-6 categories
+            1. Group related skills into exactly \(config.options.skillCategoryCount) categories
             2. Each category should have a clear, professional name
-            3. Each category should contain 4-8 skills
+            3. Each category should contain at most \(config.options.maxSkillsPerCategory) skills — pick the strongest, most resume-relevant ones
             4. Use only skills from the list above - do not invent new skills
             5. Order skills within each group by relevance/importance
             6. Categories should cover different aspects (e.g., Technical, Leadership, Tools, etc.)

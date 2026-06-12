@@ -63,6 +63,7 @@ final class ObjectiveGenerator: BaseSectionGenerator {
             ## Context
 
             \(taskContext)
+            \(voiceCueBlock(context))
 
             ## Requirements
 
@@ -136,6 +137,7 @@ final class ObjectiveGenerator: BaseSectionGenerator {
             ## Context
 
             \(taskContext)
+            \(voiceCueBlock(context))
 
             \(regenerationContext)
 

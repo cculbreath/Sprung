@@ -7,17 +7,44 @@
 
 import SwiftUI
 
-/// View for reviewing generated content items
+/// View for reviewing generated content items.
+/// When `section` is set, shows only that section's items (pending and
+/// reviewed) — used as the detail view for sidebar section navigation.
 struct ReviewQueueView: View {
     @Bindable var queue: ReviewQueue
+    var section: ExperienceSectionKey?
+    /// Current target lines per bullet (shown in the rejection sheet)
+    var targetBulletLines: Int
+    /// Called when the user changes the line target from the rejection sheet
+    var onLineTargetChange: (Int) -> Void
 
-    @State private var filterState: FilterState = .pending
+    @State private var filterState: FilterState
+
+    init(
+        queue: ReviewQueue,
+        section: ExperienceSectionKey? = nil,
+        targetBulletLines: Int,
+        onLineTargetChange: @escaping (Int) -> Void
+    ) {
+        self.queue = queue
+        self.section = section
+        self.targetBulletLines = targetBulletLines
+        self.onLineTargetChange = onLineTargetChange
+        // Section views show everything by default so approved content stays visible
+        _filterState = State(initialValue: section == nil ? .pending : .all)
+    }
 
     enum FilterState: String, CaseIterable {
         case pending = "Pending"
         case approved = "Approved"
         case rejected = "Rejected"
         case all = "All"
+    }
+
+    /// Items in scope for this view (all, or one section's)
+    private var scopedItems: [ReviewItem] {
+        guard let section else { return queue.items }
+        return queue.items.filter { $0.task.section == section }
     }
 
     var body: some View {
@@ -32,7 +59,7 @@ struct ReviewQueueView: View {
 
     private var headerView: some View {
         HStack {
-            Text("Review Queue")
+            Text(section.map { $0.rawValue.capitalized } ?? "Review Queue")
                 .font(.title2)
                 .fontWeight(.semibold)
 
@@ -40,7 +67,7 @@ struct ReviewQueueView: View {
 
             filterPicker
 
-            if queue.hasPendingItems {
+            if scopedItems.contains(where: { $0.userAction == nil }) {
                 batchActionButtons
             }
         }
@@ -60,7 +87,9 @@ struct ReviewQueueView: View {
     private var batchActionButtons: some View {
         HStack(spacing: 8) {
             Button {
-                queue.approveAll()
+                for item in scopedItems where item.userAction == nil {
+                    queue.setAction(for: item.id, action: .approved)
+                }
             } label: {
                 Label("Approve All", systemImage: "checkmark.circle")
             }
@@ -68,9 +97,11 @@ struct ReviewQueueView: View {
             .tint(.green)
 
             Button {
-                queue.rejectAll()
+                for item in scopedItems where item.userAction == nil {
+                    queue.remove(item.id)
+                }
             } label: {
-                Label("Reject All", systemImage: "xmark.circle")
+                Label("Delete All", systemImage: "trash")
             }
             .buttonStyle(.bordered)
             .tint(.red)
@@ -91,10 +122,12 @@ struct ReviewQueueView: View {
                     ForEach(filteredItems) { item in
                         ReviewItemCard(
                             item: item,
+                            targetBulletLines: targetBulletLines,
                             onApprove: {
                                 queue.setAction(for: item.id, action: .approved)
                             },
-                            onReject: { comment in
+                            onReject: { comment, lineTarget in
+                                onLineTargetChange(lineTarget)
                                 if let comment = comment {
                                     queue.setAction(for: item.id, action: .rejectedWithComment(comment))
                                 } else {
@@ -107,8 +140,8 @@ struct ReviewQueueView: View {
                             onEditArray: { editedChildren in
                                 queue.setEditedChildren(for: item.id, children: editedChildren)
                             },
-                            onUseOriginal: {
-                                queue.setAction(for: item.id, action: .useOriginal)
+                            onDelete: {
+                                queue.remove(item.id)
                             }
                         )
                     }
@@ -132,13 +165,13 @@ struct ReviewQueueView: View {
     private func filteredItems(for state: FilterState) -> [ReviewItem] {
         switch state {
         case .pending:
-            return queue.pendingItems
+            return scopedItems.filter { $0.userAction == nil }
         case .approved:
-            return queue.approvedItems
+            return scopedItems.filter { $0.isApproved }
         case .rejected:
-            return queue.rejectedItems
+            return scopedItems.filter { $0.isRejected }
         case .all:
-            return queue.items
+            return scopedItems
         }
     }
 

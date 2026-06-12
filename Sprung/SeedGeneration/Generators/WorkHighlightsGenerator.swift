@@ -75,10 +75,11 @@ final class WorkHighlightsGenerator: BaseSectionGenerator {
             ## Position Context
 
             \(taskContext)
+            \(voiceCueBlock(context))
 
             ## Requirements
 
-            Generate 3-4 bullet points that:
+            Generate up to \(config.options.maxHighlightsPerEntry) bullet points that:
 
             1. **Use ONLY facts from the Knowledge Cards** - Every claim must have evidence in the KCs provided above
 
@@ -87,6 +88,10 @@ final class WorkHighlightsGenerator: BaseSectionGenerator {
             3. **Describe work narratively** - Focus on what was built, created, discovered, or accomplished
 
             4. **Vary sentence structure** - Don't start every bullet the same way
+
+            ## LENGTH GUIDELINES
+
+            \(config.options.bulletConstraintText)
 
             ## FORBIDDEN
 
@@ -97,9 +102,9 @@ final class WorkHighlightsGenerator: BaseSectionGenerator {
 
             ## Output Format
 
-            Return JSON with 3-4 bullets:
+            Return JSON:
             {
-                "highlights": ["First bullet point", "Second bullet point", "Third bullet point", "Fourth bullet point (optional)"]
+                "highlights": ["First bullet point", "Second bullet point", "Third bullet point"]
             }
             """
 
@@ -152,12 +157,13 @@ final class WorkHighlightsGenerator: BaseSectionGenerator {
             ## Position Context
 
             \(taskContext)
+            \(voiceCueBlock(context))
 
             \(regenerationContext)
 
             ## Requirements
 
-            Generate 3-4 bullet points that:
+            Generate up to \(config.options.maxHighlightsPerEntry) bullet points that:
 
             1. **Use ONLY facts from the Knowledge Cards** - Every claim must have evidence in the KCs provided above
 
@@ -166,6 +172,10 @@ final class WorkHighlightsGenerator: BaseSectionGenerator {
             3. **Describe work narratively** - Focus on what was built, created, discovered, or accomplished
 
             4. **Vary sentence structure** - Don't start every bullet the same way
+
+            ## LENGTH GUIDELINES
+
+            \(config.options.bulletConstraintText)
 
             ## FORBIDDEN
 
