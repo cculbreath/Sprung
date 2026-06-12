@@ -1545,21 +1545,30 @@ final class ResumeRevisionWorkspaceService {
     /// Assemble the evidence corpus for the grounding verification pass from
     /// the SAME files the agent was shown: every exported knowledge card plus
     /// the skill bank. Capped so a pathological card library cannot blow up
-    /// the verification request; truncation is noted inline.
-    func readGroundingCorpus(maxCharacters: Int = 120_000) -> String {
-        guard let workspace = workspacePath, let cardsDir = knowledgeCardsPath else { return "" }
+    /// the verification request; truncation is noted inline for the model AND
+    /// returned to the caller, so the completion card can disclose that the
+    /// audit ran on partial evidence (which can produce false "unsupported"
+    /// flags).
+    func readGroundingCorpus(maxCharacters: Int = 120_000) -> (corpus: String, wasTruncated: Bool) {
+        guard let workspace = workspacePath, let cardsDir = knowledgeCardsPath else { return ("", false) }
 
         var sections: [String] = []
         var remaining = maxCharacters
+        var wasTruncated = false
 
         func append(_ text: String) {
-            guard remaining > 0, !text.isEmpty else { return }
+            guard !text.isEmpty else { return }
+            guard remaining > 0 else {
+                wasTruncated = true
+                return
+            }
             if text.count <= remaining {
                 sections.append(text)
                 remaining -= text.count
             } else {
                 sections.append(String(text.prefix(remaining)) + "\n[... truncated for length ...]")
                 remaining = 0
+                wasTruncated = true
             }
         }
 
@@ -1573,6 +1582,7 @@ final class ResumeRevisionWorkspaceService {
         for cardFile in cardFiles {
             guard remaining > 0 else {
                 sections.append("[... additional knowledge cards omitted for length ...]")
+                wasTruncated = true
                 break
             }
             if let card = try? String(contentsOf: cardFile, encoding: .utf8) {
@@ -1580,7 +1590,7 @@ final class ResumeRevisionWorkspaceService {
             }
         }
 
-        return sections.joined(separator: "\n\n---\n\n")
+        return (sections.joined(separator: "\n\n---\n\n"), wasTruncated)
     }
 
     // MARK: - Labels

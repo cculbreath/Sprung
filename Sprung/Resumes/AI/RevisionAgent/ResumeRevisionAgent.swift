@@ -42,6 +42,11 @@ class ResumeRevisionAgent {
     /// events). Reset on any successful turn.
     private var consecutiveStreamFailures = 0
     private var activeStreamTask: Task<RevisionAgentStreamResult, Error>?
+    /// In-flight completion-gate verification service. Registered so Cancel,
+    /// ESC, and window teardown interrupt verification passes just like a
+    /// turn's stream — without this, a cancel during "Verifying changes…"
+    /// would wait out the passes' stall watchdogs while burning tokens.
+    private var activeVerificationService: RevisionVerificationService?
     /// Timestamp of the most recent event received on the active stream.
     /// The per-turn watchdog cancels the stream only when this goes stale
     /// for `streamStallTimeoutSeconds` — total turn duration is unbounded.
@@ -502,8 +507,15 @@ class ResumeRevisionAgent {
                     durationMs: turnMs
                 )
 
-                if shouldExitLoop() {
-                    guard await confirmExitAfterCompletionGate() else { continue }
+                // Cancellation exits immediately (this turn's output is
+                // discarded, as before). A pending Save deliberately falls
+                // through instead of exiting here: the completed turn is
+                // persisted below — its tool calls answered with synthesized
+                // "interrupted" results by the execution loop's exit checks —
+                // and the TOP-of-loop boundary runs the save gate, so a user
+                // who declines the gate never loses a finished turn.
+                // shouldExitLoop() runs first for its Task-cancellation fold.
+                if shouldExitLoop() && isCancelled {
                     await handleExitCleanup(errorMessage: nil)
                     return
                 }
@@ -664,11 +676,13 @@ class ResumeRevisionAgent {
                     // If the session is exiting (cancel/Save), don't start more
                     // tools — especially interactive ones that would suspend
                     // with no one left to answer. Synthesize results so the
-                    // conversation stays well-formed.
+                    // conversation stays well-formed; the wording also holds
+                    // when a declined save gate continues the session (the
+                    // model simply re-issues the interrupted calls).
                     if shouldExitLoop() {
                         toolResultBlocks.append(.toolResult(AnthropicToolResultBlock(
                             toolUseId: toolCall.id,
-                            content: "{\"error\": \"Session ended before this tool ran\"}",
+                            content: "{\"error\": \"The session was interrupted before this tool ran. Call it again if it is still needed.\"}",
                             isError: true
                         )))
                         continue
@@ -840,8 +854,11 @@ class ResumeRevisionAgent {
 
     /// Cancel the active LLM stream without queuing a message.
     /// Mapped to ESC key — stops the current turn but keeps queued messages.
+    /// During the completion gate this interrupts the verification passes
+    /// instead (the remaining passes degrade to advisory notes).
     func cancelActiveStream() {
         activeStreamTask?.cancel()
+        activeVerificationService?.cancel()
     }
 
     /// Accept the current workspace state and create a new resume from it.
@@ -870,6 +887,7 @@ class ResumeRevisionAgent {
         guard !isCancelled else { return }
         isCancelled = true
         activeStreamTask?.cancel()
+        activeVerificationService?.cancel()
         resumePendingContinuationsForExit()
     }
 
@@ -1444,7 +1462,7 @@ class ResumeRevisionAgent {
             } else if shouldExitLoop() {
                 resultBlocks[index] = .toolResult(AnthropicToolResultBlock(
                     toolUseId: call.id,
-                    content: "{\"error\": \"Session ended before this tool ran\"}",
+                    content: "{\"error\": \"The session was interrupted before this tool ran. Call it again if it is still needed.\"}",
                     isError: true
                 ))
             } else {
@@ -1562,7 +1580,11 @@ class ResumeRevisionAgent {
             content: "Revision complete: \(summary)"
         ))
 
-        return await presentCompletionCard(summary: summary)
+        // The card consumes a pending Save: Accept builds (satisfying the
+        // Save) with the just-computed advisories in view, instead of
+        // silently rejecting the completion and re-running the entire gate
+        // at the loop's exit boundary.
+        return await presentCompletionCard(summary: summary, consumingSaveIntent: true)
     }
 
     // MARK: - Completion Gate (Ground Truth → Grounding → Coherence)
@@ -1602,28 +1624,47 @@ class ResumeRevisionAgent {
             return report
         }
         let service = RevisionVerificationService(llmFacade: facade, modelId: modelId)
+        // Register so Cancel/ESC/teardown can interrupt the in-flight pass.
+        activeVerificationService = service
+        defer { activeVerificationService = nil }
         let baseMessages = applyCacheBreakpoints(to: conversationMessages)
         let usageCallback: RevisionVerificationService.UsageCallback = { [weak self] input, cacheRead, cacheCreation, output in
             self?.accumulateVerificationUsage(input: input, cacheRead: cacheRead, cacheCreation: cacheCreation, output: output)
         }
 
+        let corpusResult = workspaceService.readGroundingCorpus()
         if let groundingFlags = await service.verifyGrounding(
             baseMessages: baseMessages,
             pendingToolResults: pendingToolResults,
             system: systemContent,
             tools: sessionTools,
             diff: diff,
-            corpus: workspaceService.readGroundingCorpus(),
+            corpus: corpusResult.corpus,
             askUserExchanges: askUserExchanges,
             onUsage: usageCallback
         ) {
             report.grounding = groundingFlags
+            if diff.entries.count > RevisionVerificationService.maxAuditedChanges {
+                report.notes.append(
+                    "Only the first \(RevisionVerificationService.maxAuditedChanges) of \(diff.entries.count) changes were fact-checked."
+                )
+            }
+            if corpusResult.wasTruncated {
+                report.notes.append(
+                    "The evidence corpus was truncated for length — the audit ran on partial evidence, so some \"unsupported\" flags may be false positives."
+                )
+            }
         } else {
             report.notes.append("The grounding check could not run — claims in the changes were not independently verified.")
         }
 
+        // Cancel/ESC during the grounding pass must not start the coherence
+        // call (and a torn-down session gets no card at all).
+        guard !isCancelled else { return report }
+
         if coherencePassEnabled {
-            if let resumeText = try? workspaceService.renderCurrentResumeText(), !resumeText.isEmpty {
+            let resumeText = (try? workspaceService.renderCurrentResumeText()) ?? ""
+            if !resumeText.isEmpty {
                 if let coherenceFlags = await service.verifyCoherence(
                     baseMessages: baseMessages,
                     pendingToolResults: pendingToolResults,
@@ -1636,6 +1677,8 @@ class ResumeRevisionAgent {
                 } else {
                     report.notes.append("The coherence check could not run for this completion.")
                 }
+            } else {
+                report.notes.append("The coherence check could not run for this completion.")
             }
         }
 
@@ -1653,10 +1696,9 @@ class ResumeRevisionAgent {
         // Notes alone never gate a save — a failed check must not block it.
         guard report.hasActionableFlags, !isCancelled else { return true }
 
-        // Present the completion card with the advisories. The save flag is
-        // cleared first so presentCompletionCard does not short-circuit;
-        // Cancel and a racing second Save are honored by the re-checks below.
-        shouldBuildResumeOnExit = false
+        // Present the completion card with the advisories. The card consumes
+        // the pending Save intent (it IS the save decision); Cancel and a
+        // racing second Save are honored by the re-checks below.
         currentAdvisoryReport = report
         let summary = "Save requested — the verification pass flagged the items below. "
             + "Accept to save the revised resume anyway, or choose \"Continue Editing\" to address them first."
@@ -1666,7 +1708,7 @@ class ResumeRevisionAgent {
             category: .ai
         )
 
-        let accepted = await presentCompletionCard(summary: summary)
+        let accepted = await presentCompletionCard(summary: summary, consumingSaveIntent: true)
         currentAdvisoryReport = nil
 
         if accepted || shouldBuildResumeOnExit || isCancelled {
@@ -1770,12 +1812,22 @@ class ResumeRevisionAgent {
         }
     }
 
-    private func presentCompletionCard(summary: String) async -> Bool {
-        if shouldExitLoop() { return false }
+    /// Present the completion card and wait for the user's decision.
+    ///
+    /// `consumingSaveIntent` is set by callers for whom the card itself IS
+    /// the save decision (the complete_revision path and the save gate):
+    /// there, a pending Save does not skip the card — the intent is consumed
+    /// and the user decides with the advisories in view; Accept builds, which
+    /// satisfies the Save. Without it (error exit, stalled session), a
+    /// pending Save short-circuits as before so the caller's own save
+    /// handling (handleExitCleanup's re-read, the loop boundary) stays in
+    /// charge. Cancellation short-circuits in every case.
+    private func presentCompletionCard(summary: String, consumingSaveIntent: Bool = false) async -> Bool {
+        if cardShortCircuits(consumingSaveIntent: consumingSaveIntent) { return false }
         currentCompletionSummary = summary
         let accepted = await withTaskCancellationHandler {
             await withCheckedContinuation { (continuation: CheckedContinuation<Bool, Never>) in
-                if self.shouldExitLoop() {
+                if self.cardShortCircuits(consumingSaveIntent: consumingSaveIntent) {
                     continuation.resume(returning: false)
                 } else {
                     self.completionContinuation = continuation
@@ -1786,6 +1838,19 @@ class ResumeRevisionAgent {
         }
         currentCompletionSummary = nil
         return accepted
+    }
+
+    /// Exit check for the completion card. Mirrors `shouldExitLoop()`'s
+    /// Task-cancellation folding; when the caller consumes save intents, a
+    /// pending Save is cleared (the card replaces it as the save decision)
+    /// instead of short-circuiting the card into a silent rejection.
+    private func cardShortCircuits(consumingSaveIntent: Bool) -> Bool {
+        if Task.isCancelled { isCancelled = true }
+        if isCancelled { return true }
+        guard shouldBuildResumeOnExit else { return false }
+        guard consumingSaveIntent else { return true }
+        shouldBuildResumeOnExit = false
+        return false
     }
 
     // MARK: - Build & Activate

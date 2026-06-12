@@ -96,9 +96,22 @@ final class RevisionVerificationService {
     private let modelId: String
     /// Verdicts are small; the budget only needs to cover the JSON reply.
     private let maxOutputTokens = 8192
-    /// Hard wall-clock cap per verification call — a hung stream must never
-    /// hold the completion card hostage.
-    private let timeoutSeconds: TimeInterval = 240
+    /// Inactivity threshold for the per-pass stream watchdog (mirrors the
+    /// main loop's pattern): it fires only when NO events arrive for this
+    /// long, so a healthy long reply — 80 verdicts with suggested revisions —
+    /// keeps streaming and is never cut off, while a genuinely hung stream
+    /// cannot hold the completion card hostage.
+    private let streamStallTimeoutSeconds: TimeInterval = 180
+
+    /// Timestamp of the most recent event on the active pass's stream.
+    private var lastStreamEventDate = Date()
+
+    /// The in-flight pass's stream task, so `cancel()` can interrupt it.
+    private var activeStreamTask: Task<String, Error>?
+
+    /// Latched by `cancel()`: the in-flight pass is torn down and any later
+    /// pass fails fast (returns nil → the caller notes the gap and proceeds).
+    private var isCancelled = false
 
     /// Per-call usage callback (input, cacheRead, cacheCreation, output) so
     /// the session's cumulative token telemetry stays honest.
@@ -107,6 +120,14 @@ final class RevisionVerificationService {
     init(llmFacade: LLMFacade, modelId: String) {
         self.llmFacade = llmFacade
         self.modelId = modelId
+    }
+
+    /// Interrupt verification: cancels the in-flight pass and makes any later
+    /// pass fail fast. Wired to the agent's Cancel/ESC paths — verification
+    /// must never hold a cancelled session hostage.
+    func cancel() {
+        isCancelled = true
+        activeStreamTask?.cancel()
     }
 
     // MARK: - Grounding Pass (GR-1)
@@ -233,6 +254,10 @@ final class RevisionVerificationService {
         passName: String,
         onUsage: @escaping UsageCallback
     ) async -> String? {
+        guard !isCancelled else {
+            Logger.info("RevisionVerification: \(passName) pass skipped — verification was cancelled", category: .ai)
+            return nil
+        }
         guard llmFacade != nil else {
             Logger.warning("RevisionVerification: LLM facade unavailable for \(passName) pass", category: .ai)
             return nil
@@ -256,6 +281,7 @@ final class RevisionVerificationService {
             toolChoice: .auto
         )
 
+        lastStreamEventDate = Date()
         let streamTask = Task { @MainActor [weak self] () -> String in
             guard let self, let facade = self.llmFacade else { return "" }
             let stream = try await facade.anthropicMessagesStream(parameters: parameters)
@@ -265,6 +291,8 @@ final class RevisionVerificationService {
 
             for try await event in stream {
                 try Task.checkCancellation()
+                // Any raw event counts as activity for the stall watchdog.
+                self.lastStreamEventDate = Date()
                 for domainEvent in processor.process(event) {
                     switch domainEvent {
                     case .textFinalized(let text):
@@ -288,15 +316,40 @@ final class RevisionVerificationService {
             return sawToolCall ? "" : collected
         }
 
-        // Wall-clock watchdog: cancel the stream rather than stall completion.
-        let watchdog = Task { [timeoutSeconds] in
-            try? await Task.sleep(for: .seconds(timeoutSeconds))
-            streamTask.cancel()
+        activeStreamTask = streamTask
+
+        // Inactivity watchdog (mirrors the main loop's): cancels the stream
+        // only when NO events have arrived for `streamStallTimeoutSeconds`.
+        // Not a total-duration cap — a long healthy reply is never cut off.
+        let watchdog = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(15))
+                if Task.isCancelled { return }
+                guard let self else { return }
+                if Date().timeIntervalSince(self.lastStreamEventDate) >= self.streamStallTimeoutSeconds {
+                    Logger.warning(
+                        "RevisionVerification: \(passName) stream stalled — no events for \(Int(self.streamStallTimeoutSeconds))s, cancelling",
+                        category: .ai
+                    )
+                    streamTask.cancel()
+                    return
+                }
+            }
         }
-        defer { watchdog.cancel() }
+        defer {
+            watchdog.cancel()
+            activeStreamTask = nil
+        }
 
         do {
-            let text = try await streamTask.value
+            // streamTask is unstructured, so cancellation of the caller's
+            // task (window teardown) does not propagate to it — forward it
+            // explicitly so a closed window never waits out the watchdog.
+            let text = try await withTaskCancellationHandler {
+                try await streamTask.value
+            } onCancel: {
+                streamTask.cancel()
+            }
             return text.isEmpty ? nil : text
         } catch {
             Logger.warning("RevisionVerification: \(passName) pass failed: \(error.localizedDescription)", category: .ai)
@@ -307,7 +360,8 @@ final class RevisionVerificationService {
     // MARK: - Prompts
 
     /// Cap on audited changes so a runaway diff cannot blow up the request.
-    private static let maxAuditedChanges = 80
+    /// When the diff exceeds this, the caller surfaces a partial-audit note.
+    static let maxAuditedChanges = 80
 
     private static func groundingPrompt(
         entries: [RevisionNodeDiff],
