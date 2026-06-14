@@ -376,6 +376,93 @@ actor AnthropicDocumentAnalysisService {
         )
     }
 
+    /// Transcribe a PDF ONCE into a high-fidelity `DocumentTranscription` (the
+    /// PDF intermediate representation). Each chunk is uploaded via the Files API,
+    /// transcribed in a single multimodal pass against the ACTUAL PDF, then deleted
+    /// best-effort. Per-chunk payloads are merged into one transcription with
+    /// ABSOLUTE page numbers preserved.
+    ///
+    /// This is the ONLY pass that re-reads the PDF; downstream extraction reads the
+    /// returned transcription (via `.transcript`) instead of re-uploading the file.
+    func transcribePDF(
+        documentId: String,
+        filename: String,
+        pdfData: Data,
+        statusCallback: (@Sendable (String) -> Void)? = nil
+    ) async throws -> DocumentTranscription {
+        let modelId = try Self.configuredModelId(operationName: "PDF Transcription")
+
+        statusCallback?("Preparing \(filename) for transcription...")
+        let chunks = try await preflightService.makeChunks(pdfData: pdfData, filename: filename, modelId: modelId)
+
+        // The document's true total page count: each chunk's page range is
+        // absolute, so the last chunk's upper bound is the total. Used in the
+        // per-chunk instructions and as the merged transcription's page count.
+        let totalPages = chunks.map { $0.pageRange.upperBound }.max() ?? 0
+        let maxTokens = 32_768
+
+        var payloads: [(pageRange: ClosedRange<Int>, payload: TranscriptionPayload)] = []
+
+        for chunk in chunks {
+            let chunkLabel = chunks.count > 1
+                ? "\(filename) (pages \(chunk.pageRange.lowerBound)–\(chunk.pageRange.upperBound))"
+                : filename
+
+            statusCallback?("Uploading \(chunkLabel) for transcription...")
+            let file = try await llmFacade.anthropicUploadFile(
+                data: chunk.data,
+                filename: chunkFilename(filename, chunk: chunk, totalChunks: chunks.count),
+                mimeType: "application/pdf"
+            )
+            Logger.info("📄 Uploaded \(chunkLabel) to Anthropic Files API for transcription: \(file.id)", category: .ai)
+
+            statusCallback?("Transcribing \(chunkLabel)...")
+            let payload: TranscriptionPayload
+            do {
+                payload = try await llmFacade.executeStructuredWithAnthropicBlocks(
+                    systemContent: DocumentAnalysisPrompts.systemBlocks,
+                    userBlocks: DocumentAnalysisPrompts.userBlocks(
+                        source: .pdfFile(id: file.id),
+                        instructions: DocumentTranscriptionPrompts.transcriptionInstructions(
+                            filename: filename,
+                            pageRange: chunk.pageRange,
+                            totalPages: totalPages
+                        )
+                    ),
+                    modelId: modelId,
+                    responseType: TranscriptionPayload.self,
+                    schema: DocumentTranscriptionPrompts.transcriptionJsonSchema,
+                    maxTokens: maxTokens
+                )
+            } catch {
+                deleteFileBestEffort(file.id)
+                throw error
+            }
+
+            deleteFileBestEffort(file.id)
+
+            // No silent caps: a transcription crowding the output ceiling was
+            // likely cut mid-document. Warn rather than pretend it is complete.
+            warnIfTruncated(payload: payload, chunkLabel: chunkLabel, maxTokens: maxTokens)
+
+            Logger.info(
+                "📝 Transcribed \(chunkLabel): \(payload.fullText.count) chars, \(payload.visualElements.count) visuals, \(payload.tables.count) tables",
+                category: .ai
+            )
+            payloads.append((chunk.pageRange, payload))
+        }
+
+        let provenance = IRProvenance(
+            sourceArtifactId: documentId,
+            sha256: nil,
+            modelId: modelId,
+            promptVersion: DocumentTranscriptionPrompts.promptVersion,
+            createdAt: Date()
+        )
+
+        return mergeTranscriptions(payloads, totalPages: totalPages, provenance: provenance)
+    }
+
     /// Wrap raw document text in a stable header so the cached source block is
     /// self-describing and byte-identical across passes. Text is capped at
     /// `textInputLimit` characters.
@@ -750,5 +837,87 @@ actor AnthropicDocumentAnalysisService {
     private func uniqued(_ values: [String]) -> [String] {
         var seen = Set<String>()
         return values.filter { seen.insert($0).inserted }
+    }
+
+    // MARK: - Transcription Merge
+
+    /// Merge per-chunk transcription payloads into one `DocumentTranscription`,
+    /// PRESERVING ABSOLUTE PAGE NUMBERS. `fullText` is concatenated in chunk order
+    /// with an explicit page-break marker between chunks (only when multi-chunk);
+    /// `visualElements` and `tables` are concatenated in chunk order (their `.page`
+    /// is already absolute via the prompt). `productionQuality`, `structure`,
+    /// `docMeta.language`, and `docMeta.docClassGuess` take the first chunk's
+    /// values; `docMeta.pageCount` is the document's true total page count. A
+    /// single-chunk document passes through unchanged (no marker, first == only).
+    private func mergeTranscriptions(
+        _ parts: [(pageRange: ClosedRange<Int>, payload: TranscriptionPayload)],
+        totalPages: Int,
+        provenance: IRProvenance
+    ) -> DocumentTranscription {
+        // makeChunks always yields ≥ 1 chunk; fall back to an empty transcription
+        // rather than crash if that invariant ever changes.
+        guard let first = parts.first else {
+            return DocumentTranscription(
+                fullText: "",
+                productionQuality: TranscriptionProductionQuality(typesettingSystemGuess: ""),
+                docMeta: DocMeta(pageCount: totalPages),
+                provenance: provenance
+            )
+        }
+
+        let multiChunk = parts.count > 1
+
+        var fullTextParts: [String] = []
+        var visualElements: [VisualElement] = []
+        var tables: [TranscribedTable] = []
+
+        for part in parts {
+            if multiChunk {
+                fullTextParts.append(
+                    "\n\n---\n\n## Pages \(part.pageRange.lowerBound)–\(part.pageRange.upperBound)\n\n"
+                    + part.payload.fullText
+                )
+            } else {
+                fullTextParts.append(part.payload.fullText)
+            }
+            visualElements.append(contentsOf: part.payload.visualElements)
+            tables.append(contentsOf: part.payload.tables)
+        }
+
+        let firstMeta = first.payload.docMeta
+        let docMeta = DocMeta(
+            pageCount: totalPages,
+            language: firstMeta.language,
+            docClassGuess: firstMeta.docClassGuess
+        )
+
+        return DocumentTranscription(
+            fullText: fullTextParts.joined(),
+            visualElements: visualElements,
+            tables: tables,
+            productionQuality: first.payload.productionQuality,
+            structure: first.payload.structure,
+            docMeta: docMeta,
+            provenance: provenance
+        )
+    }
+
+    /// Heuristic "no silent caps" guard. The structured call returns only the
+    /// decoded payload (no token usage), so we approximate the output token count
+    /// from the serialized payload size (~4 chars/token) and warn when it crowds
+    /// the `maxTokens` ceiling — a strong sign the transcription was cut
+    /// mid-document and is incomplete.
+    private func warnIfTruncated(payload: TranscriptionPayload, chunkLabel: String, maxTokens: Int) {
+        let approxChars = payload.fullText.count
+            + payload.visualElements.reduce(0) { $0 + $1.faithfulDescription.count }
+            + payload.tables.reduce(0) { $0 + $1.markdown.count }
+        let approxTokens = approxChars / 4
+        // 95% of the ceiling: close enough that a longer document would not have fit.
+        if approxTokens >= maxTokens * 95 / 100 {
+            Logger.warning(
+                "✂️ Transcription of \(chunkLabel) is near the \(maxTokens)-token output cap (~\(approxTokens) tokens) — it may be truncated; the transcription could be incomplete.",
+                category: .ai
+            )
+        }
     }
 }

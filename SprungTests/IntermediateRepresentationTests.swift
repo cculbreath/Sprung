@@ -141,13 +141,14 @@ final class IntermediateRepresentationTests: XCTestCase {
 
     private func assertRenderingSurvivesRoundTrip(_ ir: IntermediateRepresentation) throws {
         let before = ir.renderedForExtraction()
-        let data = try JSONEncoder().encode(ir)
-        let decoded = try JSONDecoder().decode(IntermediateRepresentation.self, from: data)
+        // Round-trip through the PRODUCTION codec (ISO-8601 dates) — the exact
+        // encode/decode pair every ingestion path and ArtifactRecord use.
+        let json = try ir.encodedJSONString()
+        let decoded = try XCTUnwrap(IntermediateRepresentation.decode(fromJSONString: json))
         XCTAssertEqual(before, decoded.renderedForExtraction(),
                        "renderedForExtraction must be byte-identical after a persistence round-trip")
         // And the encoded form itself must round-trip losslessly.
-        let reEncoded = try JSONEncoder().encode(decoded)
-        let reDecoded = try JSONDecoder().decode(IntermediateRepresentation.self, from: reEncoded)
+        let reDecoded = try XCTUnwrap(IntermediateRepresentation.decode(fromJSONString: decoded.encodedJSONString()))
         XCTAssertEqual(before, reDecoded.renderedForExtraction())
     }
 

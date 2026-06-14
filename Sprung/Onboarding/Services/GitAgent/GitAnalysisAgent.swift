@@ -2,8 +2,12 @@
 //  GitAnalysisAgent.swift
 //  Sprung
 //
-//  Multi-turn agent for analyzing git repositories.
-//  Uses filesystem tools to explore codebases and generate skill assessments.
+//  Multi-turn agent that explores a git repository and produces a faithful,
+//  verifiable code dossier — a `RepositoryDigest` intermediate representation.
+//  Uses filesystem tools to explore the codebase; the digest it returns is then
+//  persisted as the artifact's IR, and downstream skill/narrative extraction runs
+//  against `digest.renderedForExtraction()` (the SAME path a PDF transcription
+//  takes). The agent does NOT emit skills or cards directly.
 //
 //  Runs on the Anthropic Messages API (non-streaming) with conversation-prefix
 //  caching:
@@ -14,14 +18,18 @@
 //    conversation prefix is served from cache from turn 2 onward.
 //  HARD LIMIT: ≤4 breakpoints per request including system — we use 3.
 //
-//  Stage A (this agent's tool loop) produces a CANDIDATE inventory; Stage B
-//  (GitStageBVerifier) evidence-checks the candidate skills before the result
-//  is returned to callers.
+//  The model authors the analysis layers (architecture, capabilities, technical
+//  highlights, code excerpts, dependency usage, production quality, skill
+//  signals, entry points, verbatim manifests/docs, omissions) via the
+//  `complete_analysis` tool. The MECHANICAL layers (repo name, file tree,
+//  language stats, git history, authorship) are assembled here from the
+//  deterministic `GitEvidenceCollector` data — never re-emitted by the model.
 //
 
 import Foundation
 import Observation
 import SwiftOpenAI
+import SwiftyJSON
 
 // MARK: - Agent Status
 
@@ -60,34 +68,26 @@ enum GitAgentError: LocalizedError {
     }
 }
 
-// MARK: - Analysis Result
-
-/// Git repository analysis result containing skills and narrative cards.
-struct GitAnalysisResult: Codable {
-    let skills: [Skill]
-    let narrativeCards: [KnowledgeCard]
-    let repoName: String
-    let analyzedAt: Date
-
-    init(skills: [Skill] = [], narrativeCards: [KnowledgeCard] = [], repoName: String, analyzedAt: Date = Date()) {
-        self.skills = skills
-        self.narrativeCards = narrativeCards
-        self.repoName = repoName
-        self.analyzedAt = analyzedAt
-    }
-}
-
 // MARK: - Git Analysis Agent
 
 @Observable
 @MainActor
 class GitAnalysisAgent {
+    /// Version of the digest-production prompt + tool contract. Bumped on any
+    /// change that alters the digest's shape; recorded in `IRProvenance` so a
+    /// persisted digest is reproducible against the agent that wrote it.
+    static let promptVersion = "git-digest-v1"
+
     // Configuration
     private let repoPath: URL
     private let authorFilter: String?
     private let modelId: String
     /// Rendered deterministic git evidence (commit history aggregates) injected into the initial context
     private let gitEvidence: String
+    /// Structured deterministic git data (contributors, fileTypes, commits,
+    /// branches, stats, directoryStats) — the source of the digest's MECHANICAL
+    /// layers, assembled here rather than re-emitted by the model.
+    private let gitData: JSON
     private weak var facade: LLMFacade?
     private var eventBus: EventCoordinator?
 
@@ -107,7 +107,7 @@ class GitAnalysisAgent {
     // Limits
     private let maxTurns = 50
     private let timeoutSeconds: TimeInterval = 600  // 10 minutes
-    /// Output ceiling per turn. The final complete_analysis inventory is the
+    /// Output ceiling per turn. The final complete_analysis digest is the
     /// largest response; 16K keeps the non-streaming call under HTTP timeouts.
     private let maxResponseTokens = 16384
     /// Consecutive text-only turns tolerated (with a tool nudge) before aborting.
@@ -127,6 +127,7 @@ class GitAnalysisAgent {
         authorFilter: String? = nil,
         modelId: String,
         gitEvidence: String,
+        gitData: JSON,
         facade: LLMFacade,
         eventBus: EventCoordinator? = nil,
         agentId: String? = nil,
@@ -136,6 +137,7 @@ class GitAnalysisAgent {
         self.authorFilter = authorFilter
         self.modelId = modelId
         self.gitEvidence = gitEvidence
+        self.gitData = gitData
         self.facade = facade
         self.eventBus = eventBus
         self.agentId = agentId
@@ -145,8 +147,8 @@ class GitAnalysisAgent {
 
     // MARK: - Public API
 
-    /// Run the agent to analyze the repository
-    func run() async throws -> GitAnalysisResult {
+    /// Run the agent to explore the repository and produce a `RepositoryDigest`.
+    func run() async throws -> RepositoryDigest {
         guard let facade = facade else {
             throw GitAgentError.noLLMFacade
         }
@@ -217,14 +219,13 @@ class GitAnalysisAgent {
                 consecutiveNoToolTurns = 0
 
                 // Check for completion tool first (terminates the agent loop)
-                if let completionCall = toolUses.first(where: { $0.name == CompleteAnalysisTool.name }) {
+                if let completionCall = toolUses.first(where: { $0.name == RepositoryDigestTool.name }) {
                     do {
-                        let candidates = try parseCompleteAnalysis(input: completionCall.input.mapValues { $0.value })
-                        await emitEvent(.processing(.gitAgentProgressUpdated(message: "Candidate inventory complete", turn: turnCount)))
-                        await updateProgress("Candidate inventory complete")
-                        let verified = await runStageB(on: candidates, facade: facade)
+                        let digest = try buildDigest(input: completionCall.input.mapValues { $0.value })
+                        await emitEvent(.processing(.gitAgentProgressUpdated(message: "Repository digest complete", turn: turnCount)))
+                        await updateProgress("Repository digest complete")
                         status = .completed
-                        return verified
+                        return digest
                     } catch {
                         // Send detailed error back as a tool_result so the model can
                         // retry with corrected JSON. Every OTHER tool_use in this turn
@@ -319,10 +320,9 @@ class GitAnalysisAgent {
             Logger.warning("⚠️ GitAgent: Max turns (\(maxTurns)) reached, forcing completion...", category: .ai)
             await updateProgress("(Turn \(turnCount + 1)) Forcing completion...")
 
-            if let forcedCandidates = try await forceCompletion(facade: facade) {
-                let verified = await runStageB(on: forcedCandidates, facade: facade)
+            if let forcedDigest = try await forceCompletion(facade: facade) {
                 status = .completed
-                return verified
+                return forcedDigest
             }
 
             throw GitAgentError.maxTurnsExceeded
@@ -445,12 +445,14 @@ class GitAnalysisAgent {
     /// If parsing or validation fails, sends the validation error back once and
     /// re-requests completion; a second failure propagates as before
     /// (nil → maxTurnsExceeded).
-    private func forceCompletion(facade: LLMFacade) async throws -> GitAnalysisResult? {
+    private func forceCompletion(facade: LLMFacade) async throws -> RepositoryDigest? {
         appendUserText("""
             <coordinator>
-            CRITICAL: You have reached the maximum number of analysis turns.
-            You MUST call the complete_analysis tool NOW with your findings so far.
-            Summarize what you've discovered and output the card inventory.
+            CRITICAL: You have reached the maximum number of exploration turns.
+            You MUST call the complete_analysis tool NOW with the repository digest from your
+            findings so far. Provide the analysis layers (architecture, capabilities, technical
+            highlights, code excerpts, dependency usage, production quality, skill signals, entry
+            points, verbatim manifests/docs, omissions) — keep claims grounded in what you saw.
             Do NOT call any other tools - only call complete_analysis immediately.
             </coordinator>
             """)
@@ -458,7 +460,7 @@ class GitAnalysisAgent {
         // One forced call plus a single corrective round-trip on parse/validation failure
         for attempt in 1...2 {
             let response = try await facade.anthropicMessages(
-                parameters: buildParameters(toolChoice: .tool(name: CompleteAnalysisTool.name))
+                parameters: buildParameters(toolChoice: .tool(name: RepositoryDigestTool.name))
             )
 
             await recordUsage(response.usage, turnLabel: "forced completion (attempt \(attempt))")
@@ -468,17 +470,17 @@ class GitAnalysisAgent {
                 return nil
             }
 
-            guard let completionCall = toolUses.first(where: { $0.name == CompleteAnalysisTool.name }) else {
+            guard let completionCall = toolUses.first(where: { $0.name == RepositoryDigestTool.name }) else {
                 Logger.error("❌ GitAgent: Forced completion failed - no complete_analysis call received (attempt \(attempt))", category: .ai)
                 return nil
             }
 
             do {
-                let result = try parseCompleteAnalysis(input: completionCall.input.mapValues { $0.value })
-                await emitEvent(.processing(.gitAgentProgressUpdated(message: "Analysis complete (forced)!", turn: turnCount + 1)))
-                await updateProgress("Analysis complete (forced)!")
+                let digest = try buildDigest(input: completionCall.input.mapValues { $0.value })
+                await emitEvent(.processing(.gitAgentProgressUpdated(message: "Repository digest complete (forced)!", turn: turnCount + 1)))
+                await updateProgress("Repository digest complete (forced)!")
                 Logger.info("✅ GitAgent: Forced completion succeeded", category: .ai)
-                return result
+                return digest
             } catch where attempt == 1 {
                 // Send the validation error back so the model can correct its JSON once.
                 // Every tool_use in the response gets a tool_result (alternation +
@@ -504,41 +506,6 @@ class GitAnalysisAgent {
         }
 
         return nil
-    }
-
-    // MARK: - Stage B (Evidence Deep-Dive)
-
-    /// Stage A's complete_analysis output is a CANDIDATE inventory. Stage B
-    /// re-checks every candidate skill against the deterministic git evidence
-    /// and demands concrete citations before a skill survives. Stage B
-    /// failures degrade gracefully (candidates kept).
-    private func runStageB(on candidates: GitAnalysisResult, facade: LLMFacade) async -> GitAnalysisResult {
-        guard !candidates.skills.isEmpty else { return candidates }
-
-        await updateProgress("Stage B: evidence-checking \(candidates.skills.count) candidate skills...")
-        if let agentId = agentId {
-            tracker?.appendTranscript(
-                agentId: agentId,
-                entryType: .system,
-                content: "Stage B: verifying \(candidates.skills.count) candidate skills",
-                details: nil
-            )
-        }
-
-        let verifier = GitStageBVerifier(facade: facade, modelId: modelId, gitEvidence: gitEvidence)
-        let verifiedSkills = await verifier.verify(candidates: candidates.skills) { [weak self] message in
-            await self?.updateProgress(message)
-        }
-
-        await updateProgress("Analysis complete!")
-        await emitEvent(.processing(.gitAgentProgressUpdated(message: "Analysis complete!", turn: turnCount)))
-
-        return GitAnalysisResult(
-            skills: verifiedSkills,
-            narrativeCards: candidates.narrativeCards,
-            repoName: candidates.repoName,
-            analyzedAt: candidates.analyzedAt
-        )
     }
 
     // MARK: - Tool Execution
@@ -691,7 +658,7 @@ class GitAnalysisAgent {
             functionTool(ListDirectoryTool.self),
             functionTool(GlobSearchTool.self),
             functionTool(GrepSearchTool.self),
-            functionTool(CompleteAnalysisTool.self, cached: true)
+            functionTool(RepositoryDigestTool.self, cached: true)
         ]
     }
 
@@ -704,7 +671,7 @@ class GitAnalysisAgent {
         ))
     }
 
-    // MARK: - Result Parsing
+    // MARK: - Digest Building
 
     private func parsingErrorMessage(for error: Error) -> String {
         // Extract specific decoding error details if available
@@ -729,32 +696,45 @@ class GitAnalysisAgent {
 
         \(specificError)
 
-        Your input must match this EXACT structure:
+        Your input must match the repository-digest structure EXACTLY (all keys present;
+        objects inside arrays must include their required keys):
         {
-          "documentType": "git_analysis",
-          "cards": [
-            {
-              "cardType": "string (required) - one of: skill, project, achievement, employment, education",
-              "proposedTitle": "string (required) - specific, descriptive title",
-              "evidenceStrength": "string (required) - one of: primary, supporting, mention",
-              "evidenceLocations": ["string"],  // required - file paths with line numbers
-              "keyFacts": ["string"],  // required
-              "technologies": ["string"],  // required
-              "quantifiedOutcomes": ["string"],  // required (may be empty)
-              "crossReferences": ["string"],  // required (may be empty)
-              "dateRange": "string (optional) - e.g., '2023-2024'",
-              "extractionNotes": "string (optional)",
-              "category": "string (REQUIRED for skill cards) - skill-bank category",
-              "atsVariants": ["string"]  // skill cards - search-term variants of the skill's NAME
-            }
-          ]
+          "architecture": "string",
+          "capabilities": ["string"],
+          "technicalHighlights": [
+            { "title": "string", "description": "string", "verbatimExcerpt": "string",
+              "path": "string", "lineRange": "string (optional)", "whyNotable": "string" }
+          ],
+          "codeExcerpts": [
+            { "purpose": "string", "path": "string", "lineRange": "string (optional)",
+              "excerpt": "string", "tiedToClaim": "string (optional)" }
+          ],
+          "dependencyUsage": [
+            { "dependency": "string", "importCount": 0, "usageNotes": "string" }
+          ],
+          "productionQuality": {
+            "testing": "string", "cicd": "string", "infraAndDeploy": "string",
+            "observability": "string", "lintFormatTypeSafety": "string",
+            "docsQuality": "string", "accessibilityI18n": "string", "securityTooling": "string"
+          },
+          "skillSignals": [
+            { "skill": "string", "strength": "strong|moderate|weak", "anchors": ["string"] }
+          ],
+          "entryPoints": ["string"],
+          "manifests": [ { "path": "string", "content": "string" } ],
+          "readmeAndDocs": [ { "path": "string", "content": "string" } ],
+          "omissions": "string"
         }
 
+        Strings you cannot fill may be empty ("") but the KEY must still be present.
         Please retry with corrected JSON.
         """
     }
 
-    private func parseCompleteAnalysis(input: [String: Any]) throws -> GitAnalysisResult {
+    /// Build the full `RepositoryDigest`: decode the model-authored analysis
+    /// layers, then graft on the MECHANICAL layers assembled from the
+    /// deterministic git data, and attach provenance.
+    private func buildDigest(input: [String: Any]) throws -> RepositoryDigest {
         let data: Data
         do {
             data = try JSONSerialization.data(withJSONObject: input)
@@ -762,112 +742,150 @@ class GitAnalysisAgent {
             throw GitAgentError.invalidToolCall("Could not serialize complete_analysis input: \(error.localizedDescription)")
         }
 
+        let params: RepositoryDigestTool.Parameters
         do {
-            let params = try JSONDecoder().decode(CompleteAnalysisTool.Parameters.self, from: data)
-            let repoName = repoPath.lastPathComponent
-            let docId = repoName
-
-            var skills: [Skill] = []
-            var narrativeCards: [KnowledgeCard] = []
-
-            for card in params.cards {
-                if card.cardType == "skill" {
-                    // Convert skill cards to Skill objects, carrying the agent's judgments through
-                    guard let category = card.category, !category.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-                        throw GitAgentError.invalidToolCall(
-                            "Skill card '\(card.proposedTitle)' is missing a 'category'"
-                        )
-                    }
-                    guard let evidenceStrength = EvidenceStrength(rawValue: card.evidenceStrength) else {
-                        throw GitAgentError.invalidToolCall(
-                            "Skill card '\(card.proposedTitle)' has an invalid 'evidenceStrength' value '\(card.evidenceStrength)' (expected one of: primary, supporting, mention)"
-                        )
-                    }
-
-                    let evidence = card.evidenceLocations.map { location in
-                        SkillEvidence(
-                            documentId: docId,
-                            location: location,
-                            context: card.extractionNotes ?? "",
-                            strength: evidenceStrength
-                        )
-                    }
-
-                    let skill = Skill(
-                        canonical: card.proposedTitle,
-                        atsVariants: card.atsVariants ?? [],
-                        category: category,
-                        evidence: evidence
-                    )
-                    skills.append(skill)
-                } else {
-                    // Convert other card types to KnowledgeCard
-                    let cardType: CardType = {
-                        switch card.cardType {
-                        case "project": return .project
-                        case "achievement": return .achievement
-                        case "education": return .education
-                        case "employment": return .employment
-                        default: return .project
-                        }
-                    }()
-
-                    // Convert evidence locations to EvidenceAnchor
-                    let evidenceAnchors = card.evidenceLocations.map { location in
-                        EvidenceAnchor(
-                            documentId: docId,
-                            location: location,
-                            verbatimExcerpt: nil
-                        )
-                    }
-
-                    // Build narrative from key facts and outcomes
-                    var narrativeParts: [String] = []
-                    if let notes = card.extractionNotes, !notes.isEmpty {
-                        narrativeParts.append(notes)
-                    }
-                    if !card.keyFacts.isEmpty {
-                        narrativeParts.append("\n## Key Points\n" + card.keyFacts.joined(separator: "\n• "))
-                    }
-                    if !card.quantifiedOutcomes.isEmpty {
-                        narrativeParts.append("\n## Outcomes\n" + card.quantifiedOutcomes.joined(separator: "\n• "))
-                    }
-
-                    let narrativeCard = KnowledgeCard(
-                        title: card.proposedTitle,
-                        narrative: narrativeParts.joined(separator: "\n"),
-                        cardType: cardType,
-                        dateRange: card.dateRange,
-                        organization: repoName,
-                        evidenceAnchors: evidenceAnchors,
-                        extractable: ExtractableMetadata(
-                            domains: card.technologies.prefix(5).map { String($0) },
-                            scale: card.quantifiedOutcomes,
-                            keywords: card.keyFacts.prefix(3).map { String($0) }
-                        )
-                    )
-                    // Populate the technologies enrichment field so git-derived
-                    // cards show skills chips in the UI.
-                    if !card.technologies.isEmpty,
-                       let technologiesData = try? JSONEncoder().encode(Array(card.technologies)),
-                       let technologiesJSON = String(data: technologiesData, encoding: .utf8) {
-                        narrativeCard.technologiesJSON = technologiesJSON
-                    }
-                    narrativeCards.append(narrativeCard)
-                }
-            }
-
-            return GitAnalysisResult(
-                skills: skills,
-                narrativeCards: narrativeCards,
-                repoName: repoName,
-                analyzedAt: Date()
-            )
-        } catch let error as GitAgentError {
-            throw error
+            params = try JSONDecoder().decode(RepositoryDigestTool.Parameters.self, from: data)
         } catch {
-            throw GitAgentError.invalidToolCall("Failed to decode complete_analysis: \(error.localizedDescription)")
+            throw GitAgentError.invalidToolCall("Failed to decode repository digest: \(error.localizedDescription)")
         }
+
+        let repoName = repoPath.lastPathComponent
+        let mechanical = mechanicalLayers()
+        let provenance = IRProvenance(
+            sourceArtifactId: repoName,
+            modelId: modelId,
+            promptVersion: Self.promptVersion,
+            createdAt: Date(),
+            analyzedCommit: analyzedCommit(),
+            explorationTurnCount: turnCount,
+            toolVersions: nil
+        )
+
+        return RepositoryDigest(
+            repoName: repoName,
+            fileTree: mechanical.fileTree,
+            languageStats: mechanical.languageStats,
+            manifests: params.manifests,
+            readmeAndDocs: params.readmeAndDocs,
+            entryPoints: params.entryPoints,
+            gitHistory: mechanical.gitHistory,
+            authorship: mechanical.authorship,
+            dependencyUsage: params.dependencyUsage,
+            architecture: params.architecture,
+            capabilities: params.capabilities,
+            technicalHighlights: params.technicalHighlights,
+            codeExcerpts: params.codeExcerpts,
+            productionQuality: params.productionQuality,
+            skillSignals: params.skillSignals,
+            omissions: params.omissions,
+            provenance: provenance
+        )
+    }
+
+    // MARK: - Mechanical Layers (deterministic git evidence → IR types)
+
+    /// HEAD commit recorded in provenance (best-effort; nil when unavailable,
+    /// e.g. filesystem-fallback evidence).
+    private func analyzedCommit() -> String? {
+        let commit = gitData["lastCommit"].stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        return commit.isEmpty ? nil : commit
+    }
+
+    /// Map the deterministic `GitEvidenceCollector` JSON into the digest's
+    /// MECHANICAL layers. The model never re-emits these — they are lossless and
+    /// cheap, so we derive them here from ground truth.
+    private func mechanicalLayers() -> (fileTree: String, languageStats: [LanguageStat], gitHistory: GitHistory, authorship: [ContributorShare]) {
+        let languageStats = languageStatsFromFileTypes()
+        let gitHistory = gitHistoryFromEvidence()
+        let authorship = authorshipFromContributors()
+        // GitEvidenceCollector does not gather a full file tree; the agent's
+        // exploration covers structure, and `omissions` records what was skipped.
+        // The rendered evidence carries the directory/file activity table, which
+        // is the closest deterministic "tree" signal we have without re-walking.
+        let fileTree = directoryActivityTree()
+        return (fileTree, languageStats, gitHistory, authorship)
+    }
+
+    /// Per-language LOC/file/percent. GitEvidenceCollector aggregates by file
+    /// EXTENSION (not LOC), so `loc` is left 0 and the file count + percentage
+    /// (by file share) carry the signal; the extension stands in for language.
+    private func languageStatsFromFileTypes() -> [LanguageStat] {
+        let fileTypes = gitData["fileTypes"].arrayValue
+        let total = fileTypes.reduce(0) { $0 + $1["count"].intValue }
+        guard total > 0 else { return [] }
+        return fileTypes.map { entry in
+            let count = entry["count"].intValue
+            return LanguageStat(
+                language: entry["extension"].stringValue,
+                loc: 0,
+                fileCount: count,
+                percent: Double(count) / Double(total) * 100.0
+            )
+        }
+    }
+
+    private func gitHistoryFromEvidence() -> GitHistory {
+        let commitCount = gitData["totalCommits"].intValue
+        let first = gitData["firstCommit"].stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        let last = gitData["lastCommit"].stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        var dateRange = ""
+        if !first.isEmpty || !last.isEmpty {
+            dateRange = "\(first.isEmpty ? "?" : first) → \(last.isEmpty ? "?" : last)"
+        }
+        // Top-churn directories stand in for top-churn files (the evidence
+        // aggregates per top-level directory, not per file).
+        let topChurn = gitData["directoryStats"].arrayValue
+            .prefix(10)
+            .map { "\($0["directory"].stringValue) (+\($0["linesAdded"].intValue)/-\($0["linesDeleted"].intValue))" }
+        let branches = gitData["branches"].arrayValue
+            .map { $0.stringValue.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+        return GitHistory(
+            commitCount: commitCount,
+            dateRange: dateRange,
+            cadence: "",
+            topChurnFiles: Array(topChurn),
+            branches: branches,
+            tags: []
+        )
+    }
+
+    /// Contributor commit/LOC share from the deterministic contributor list.
+    /// The collector gathers commit counts (not LOC), so `locShare` mirrors the
+    /// commit share; blame on core files is not gathered and is left nil.
+    private func authorshipFromContributors() -> [ContributorShare] {
+        let contributors = gitData["contributors"].arrayValue
+        let totalCommits = contributors.reduce(0) { $0 + $1["commits"].intValue }
+        guard totalCommits > 0 else { return [] }
+        return contributors.map { entry in
+            let commits = entry["commits"].intValue
+            let share = Double(commits) / Double(totalCommits)
+            return ContributorShare(
+                name: entry["name"].stringValue,
+                commitShare: share,
+                locShare: share,
+                blameOnCoreFiles: nil
+            )
+        }
+    }
+
+    /// Deterministic "tree" rendering from the per-directory activity table
+    /// (git-backed) or the per-directory file counts (filesystem fallback).
+    private func directoryActivityTree() -> String {
+        let dirStats = gitData["directoryStats"].arrayValue
+        if !dirStats.isEmpty {
+            return dirStats.map { dir in
+                "\(dir["directory"].stringValue)/ — \(dir["commits"].intValue) commits, "
+                + "+\(dir["linesAdded"].intValue)/-\(dir["linesDeleted"].intValue) lines"
+            }.joined(separator: "\n")
+        }
+        let fileStats = gitData["directoryFileStats"].arrayValue
+        if !fileStats.isEmpty {
+            return fileStats.map { dir in
+                "\(dir["directory"].stringValue)/ — \(dir["files"].intValue) files"
+            }.joined(separator: "\n")
+        }
+        return ""
     }
 
     // MARK: - Progress Updates
@@ -914,8 +932,8 @@ class GitAnalysisAgent {
                 }
                 return "'\(pattern)'"
             }
-        case CompleteAnalysisTool.name:
-            return "submitting analysis"
+        case RepositoryDigestTool.name:
+            return "submitting digest"
         default:
             break
         }
@@ -930,7 +948,7 @@ class GitAnalysisAgent {
         case ListDirectoryTool.name: return "List directory"
         case GlobSearchTool.name: return "Glob search"
         case GrepSearchTool.name: return "Grep search"
-        case CompleteAnalysisTool.name: return "Complete analysis"
+        case RepositoryDigestTool.name: return "Submit digest"
         default: return name
         }
     }

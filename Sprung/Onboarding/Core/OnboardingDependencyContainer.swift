@@ -461,10 +461,15 @@ final class OnboardingDependencyContainer {
         // bounded cache churn). This also covers an upload that creates the
         // analysis service before the install Task above has run.
         let eventBusForVoice = core.eventBus
+        let gitKernelForVoice = self.gitIngestionKernel
         Task {
             for await event in await eventBusForVoice.stream(topic: .artifact) {
                 guard case .artifact(.voicePrimerExtractionCompleted) = event else { continue }
                 await documentProcessingForVoice.setVoiceAnchorProvider(voiceAnchorProvider)
+                // setVoiceAnchorProvider drops the memoized analysis service, so
+                // re-inject the fresh instance into the git kernel — otherwise it
+                // would keep deriving from the stale (nil-anchor) service.
+                await gitKernelForVoice.updateDocumentAnalysisService(documentProcessingForVoice.sharedAnalysisService())
                 Logger.info("🎤 Voice anchor provider refreshed after voice-primer extraction", category: .ai)
             }
         }
@@ -640,6 +645,11 @@ final class OnboardingDependencyContainer {
             await documentKernel.setIngestionCoordinator(coordinator)
             await gitKernel.setIngestionCoordinator(coordinator)
             if let facade = llmFacade { await gitKernel.updateLLMFacade(facade) }
+            // Git ingestion derives skills/cards from its digest via the SHARED
+            // document-analysis service — the same passes a PDF runs. The service
+            // is re-installed whenever the voice anchor provider changes (see the
+            // voicePrimerExtractionCompleted loop), so re-inject there too.
+            await gitKernel.updateDocumentAnalysisService(documentProcessingService.sharedAnalysisService())
         }
         return ArtifactIngestionComponents(
             documentIngestionKernel: documentKernel, gitIngestionKernel: gitKernel,

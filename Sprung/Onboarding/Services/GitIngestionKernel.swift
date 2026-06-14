@@ -2,8 +2,12 @@
 //  GitIngestionKernel.swift
 //  Sprung
 //
-//  Kernel for git repository analysis using a multi-turn LLM agent.
-//  Uses the GitAnalysisAgent to explore codebases and extract skills with evidence.
+//  Kernel for git repository ingestion. A multi-turn `GitAnalysisAgent` explores
+//  the codebase and produces a `RepositoryDigest` (the artifact's intermediate
+//  representation). Skills and narrative cards are then derived by running the
+//  SHARED text-extraction path (`AnthropicDocumentAnalysisService.analyzeText`)
+//  over `digest.renderedForExtraction()` — exactly like a transcribed document.
+//  Git and PDF share ONE extraction path.
 //  Runs on the Anthropic Messages API via LLMFacade.
 //
 import Foundation
@@ -14,6 +18,9 @@ actor GitIngestionKernel {
 
     private let eventBus: EventCoordinator
     private var llmFacade: LLMFacade?
+    /// Shared document-analysis service: derives skills/cards from the rendered
+    /// digest via the SAME path PDFs take. Injected at container wiring.
+    private var documentAnalysisService: AnthropicDocumentAnalysisService?
     private weak var ingestionCoordinator: ArtifactIngestionCoordinator?
 
     /// Agent activity tracker for UI visibility
@@ -37,6 +44,12 @@ actor GitIngestionKernel {
     /// Update the LLM facade (called when dependencies change)
     func updateLLMFacade(_ facade: LLMFacade?) {
         self.llmFacade = facade
+    }
+
+    /// Inject the shared document-analysis service used to derive skills/cards
+    /// from the rendered digest (the same path PDF extraction takes).
+    func updateDocumentAnalysisService(_ service: AnthropicDocumentAnalysisService?) {
+        self.documentAnalysisService = service
     }
 
     func setIngestionCoordinator(_ coordinator: ArtifactIngestionCoordinator) {
@@ -140,25 +153,42 @@ actor GitIngestionKernel {
             await appendTranscript(.system, "Starting multi-turn code analysis agent")
             Logger.info("🔬 [GitIngest] About to call runAnalysisAgent (requires @MainActor hop)", category: .ai)
 
-            // Step 2: Run multi-turn agent to analyze actual code
-            let analysis = try await runAnalysisAgent(gitData: gitData, repoName: repoName, repoURL: repoURL, agentId: agentId, tracker: tracker)
+            // Step 2: Run the multi-turn agent to produce the repository digest (IR)
+            let digest = try await runAnalysisAgent(gitData: gitData, repoName: repoName, repoURL: repoURL, agentId: agentId, tracker: tracker)
 
-            // Note: extractionStateChanged not emitted - agent tracker handles status
+            // Step 3: Derive skills + narrative cards via the SHARED text-extraction
+            // path over the rendered digest — the same passes a transcribed PDF runs.
+            await appendTranscript(.system, "Extracting skills and cards from digest")
+            let artifactId = UUID().uuidString
+            let analysis = try await deriveKnowledge(digest: digest, documentId: artifactId, repoName: repoName)
+            let skills = analysis.skills ?? []
+            let narrativeCards = analysis.narrativeCards ?? []
+            if !analysis.passFailures.isEmpty {
+                Logger.warning(
+                    "⚠️ Git digest extraction had \(analysis.passFailures.count) pass failure(s): \(analysis.passFailures.joined(separator: " | "))",
+                    category: .ai
+                )
+            }
 
-            // Step 3: Create artifact record
-            // Encode skills and narrative cards separately
+            // Step 4: Create artifact record
             // Note: Skill/KnowledgeCard models have explicit CodingKeys for snake_case - no conversion needed
             let encoder = JSONEncoder()
             encoder.dateEncodingStrategy = .iso8601
 
-            let skillsData = try encoder.encode(analysis.skills)
+            let skillsData = try encoder.encode(skills)
             let skillsString = String(data: skillsData, encoding: .utf8) ?? "[]"
 
-            let narrativeCardsData = try encoder.encode(analysis.narrativeCards)
+            let narrativeCardsData = try encoder.encode(narrativeCards)
             let narrativeCardsString = String(data: narrativeCardsData, encoding: .utf8) ?? "[]"
 
+            // Encode the digest as the artifact's intermediate representation so
+            // extraction can be re-run later without re-running the live agent.
+            // Routed through the IR codec (single source of truth for date strategy).
+            let ir = IntermediateRepresentation.git(digest)
+            let irString = try ir.encodedJSONString()
+
             var record = JSON()
-            record["id"].string = UUID().uuidString
+            record["id"].string = artifactId
             record["type"].string = "git_analysis"
             record["sourceType"].string = "git_repository"
             record["filename"].string = repoName
@@ -168,43 +198,35 @@ actor GitIngestionKernel {
                 record["planItemId"].string = planItemId
             }
 
-            // Store skills and narrative cards as JSON strings
+            // Store skills, narrative cards, and the intermediate representation
             record["skills"].string = skillsString
             record["narrativeCards"].string = narrativeCardsString
+            record["intermediateRepresentation"].string = irString
             record["rawData"] = gitData
+
+            // Surface the shared-path summary (the summary pass runs first to warm
+            // the cache; reuse its output rather than discarding it).
+            if let summary = analysis.summary {
+                record["summary"].string = summary.summary
+                record["briefDescription"].string = summary.briefDescription
+            }
 
             // Store git metadata for SwiftData persistence
             var metadata = JSON()
             metadata["gitMetadata"] = gitData
             record["metadata"] = metadata
 
-            // Build extractedText for display
+            // Build extractedText for display from the digest + derived skills.
             var extractedParts: [String] = []
-            extractedParts.append("## Repository: \(repoName)")
-
-            // Find project cards for description
-            let projectCards = analysis.narrativeCards.filter { $0.cardType == .project }
-            if let mainProject = projectCards.first {
-                if !mainProject.narrative.isEmpty {
-                    extractedParts.append(mainProject.narrative)
-                }
-            }
-
-            // Add key technologies from skills
-            if !analysis.skills.isEmpty {
-                let skillNames = analysis.skills.prefix(15).map { $0.canonical }
+            extractedParts.append(ir.fullText)
+            if !skills.isEmpty {
+                let skillNames = skills.prefix(15).map { $0.canonical }
                 extractedParts.append("\n## Key Technologies\n" + skillNames.joined(separator: ", "))
             }
-
-            // Add achievements
-            let achievementCards = analysis.narrativeCards.filter { $0.cardType == .achievement }
-            if !achievementCards.isEmpty {
-                let bullets = achievementCards.prefix(5).map { "• \($0.title)" }
-                extractedParts.append("\n## Notable Achievements\n" + bullets.joined(separator: "\n"))
-            }
-
-            record["extractedText"].string = extractedParts.joined(separator: "\n")
-            Logger.info("✅ Git knowledge extraction: \(analysis.skills.count) skills, \(analysis.narrativeCards.count) narrative cards", category: .ai)
+            record["extractedText"].string = extractedParts
+                .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+                .joined(separator: "\n")
+            Logger.info("✅ Git knowledge extraction: \(skills.count) skills, \(narrativeCards.count) narrative cards", category: .ai)
 
             let result = IngestionResult(artifactRecord: record)
 
@@ -239,7 +261,7 @@ actor GitIngestionKernel {
 
     // MARK: - LLM Analysis Agent
 
-    private func runAnalysisAgent(gitData: JSON, repoName _: String, repoURL: URL, agentId: String, tracker: AgentActivityTracker?) async throws -> GitAnalysisResult {
+    private func runAnalysisAgent(gitData: JSON, repoName _: String, repoURL: URL, agentId: String, tracker: AgentActivityTracker?) async throws -> RepositoryDigest {
         Logger.info("🔬 [GitIngest] runAnalysisAgent entered, checking llmFacade...", category: .ai)
         guard let facade = llmFacade else {
             Logger.error("🔬 [GitIngest] llmFacade is nil!", category: .ai)
@@ -261,26 +283,47 @@ actor GitIngestionKernel {
         // the entire codebase to extract the user's skills and contributions.
         let authorFilter: String? = nil
 
-        Logger.info("🤖 Starting multi-turn git analysis agent with model: \(modelId)", category: .ai)
+        Logger.info("🤖 Starting multi-turn git digest agent with model: \(modelId)", category: .ai)
 
         // Render the deterministic git evidence for the agent's initial context
         let gitEvidence = GitEvidenceCollector.render(gitData)
 
-        // Run the multi-turn analysis agent — returns GitAnalysisResult
-        // (Stage A candidates, evidence-verified by Stage B)
-        let analysisResult = try await runGitAnalysisAgent(
+        // Run the multi-turn agent — returns a RepositoryDigest (the IR). The
+        // model authors the analysis layers; the agent grafts on the mechanical
+        // layers (file tree, language stats, git history, authorship) from gitData.
+        let digest = try await runGitAnalysisAgent(
             facade: facade,
             repoPath: repoURL,
             authorFilter: authorFilter,
             modelId: modelId,
             gitEvidence: gitEvidence,
+            gitData: gitData,
             eventBus: eventBus,
             agentId: agentId,
             tracker: tracker
         )
 
-        Logger.info("✅ Multi-turn git analysis agent completed", category: .ai)
-        return analysisResult
+        Logger.info("✅ Multi-turn git digest agent completed", category: .ai)
+        return digest
+    }
+
+    /// Derive skills + narrative cards from the rendered digest using the SHARED
+    /// document-analysis path (the same passes a transcribed PDF runs). The
+    /// digest is a pre-rendered, path/line/commit-anchored transcript.
+    private func deriveKnowledge(
+        digest: RepositoryDigest,
+        documentId: String,
+        repoName: String
+    ) async throws -> AnthropicDocumentAnalysisService.AnalysisResult {
+        guard let analysisService = documentAnalysisService else {
+            Logger.error("🔬 [GitIngest] documentAnalysisService is nil — cannot derive knowledge", category: .ai)
+            throw GitIngestionError.noLLMFacade
+        }
+        return try await analysisService.analyzeText(
+            documentId: documentId,
+            filename: repoName,
+            text: digest.renderedForExtraction()
+        )
     }
 
     // MARK: - Multi-Turn Agent Execution
@@ -292,15 +335,17 @@ actor GitIngestionKernel {
         authorFilter: String?,
         modelId: String,
         gitEvidence: String,
+        gitData: JSON,
         eventBus: EventCoordinator,
         agentId: String,
         tracker: AgentActivityTracker?
-    ) async throws -> GitAnalysisResult {
+    ) async throws -> RepositoryDigest {
         let agent = GitAnalysisAgent(
             repoPath: repoPath,
             authorFilter: authorFilter,
             modelId: modelId,
             gitEvidence: gitEvidence,
+            gitData: gitData,
             facade: facade,
             eventBus: eventBus,
             agentId: agentId,

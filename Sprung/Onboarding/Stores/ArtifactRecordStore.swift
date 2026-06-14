@@ -120,6 +120,7 @@ final class ArtifactRecordStore {
         title: String? = nil,
         skillsJSON: String? = nil,
         narrativeCardsJSON: String? = nil,
+        intermediateRepresentationJSON: String? = nil,
         metadataJSON: String? = nil,
         rawFileRelativePath: String? = nil,
         planItemId: String? = nil
@@ -136,6 +137,7 @@ final class ArtifactRecordStore {
             title: title,
             skillsJSON: skillsJSON,
             narrativeCardsJSON: narrativeCardsJSON,
+            intermediateRepresentationJSON: intermediateRepresentationJSON,
             metadataJSON: metadataJSON,
             rawFileRelativePath: rawFileRelativePath,
             planItemId: planItemId
@@ -166,6 +168,7 @@ final class ArtifactRecordStore {
         title: String? = nil,
         skillsJSON: String? = nil,
         narrativeCardsJSON: String? = nil,
+        intermediateRepresentationJSON: String? = nil,
         metadataJSON: String? = nil,
         rawFileRelativePath: String? = nil,
         planItemId: String? = nil
@@ -182,6 +185,7 @@ final class ArtifactRecordStore {
             title: title,
             skillsJSON: skillsJSON,
             narrativeCardsJSON: narrativeCardsJSON,
+            intermediateRepresentationJSON: intermediateRepresentationJSON,
             metadataJSON: metadataJSON,
             rawFileRelativePath: rawFileRelativePath,
             planItemId: planItemId

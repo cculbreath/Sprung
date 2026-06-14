@@ -339,6 +339,13 @@ actor DocumentProcessingService {
         return service
     }
 
+    /// Vend the shared document-analysis service so other ingestion paths (the
+    /// git kernel) can derive skills/cards from a rendered IR through the SAME
+    /// passes a document runs. nil only when the facade is not yet configured.
+    func sharedAnalysisService() -> AnthropicDocumentAnalysisService? {
+        getOrCreateAnalysisService()
+    }
+
     /// Run the Anthropic document-analysis pass-set for a document.
     ///
     /// PDFs are analyzed as actual documents (Files API document blocks) so every

@@ -18,11 +18,13 @@ class StandaloneKCExtractor {
     private weak var llmFacade: LLMFacade?
     private weak var artifactRecordStore: ArtifactRecordStore?
 
-    // MARK: - Pre-analyzed Results (from GitAnalysisAgent)
+    // MARK: - Pre-analyzed Results (from the git digest extraction path)
 
-    /// Knowledge cards produced directly by GitAnalysisAgent, bypassing the analyzer step.
+    /// Knowledge cards derived from the repository digest via the shared
+    /// document-analysis path, bypassing the analyzer step.
     private(set) var gitAnalyzedCards: [KnowledgeCard] = []
-    /// Skills produced directly by GitAnalysisAgent.
+    /// Skills derived from the repository digest via the shared
+    /// document-analysis path.
     private(set) var gitAnalyzedSkills: [Skill] = []
 
     // MARK: - Initialization
@@ -281,18 +283,20 @@ class StandaloneKCExtractor {
             )
         }
 
-        Logger.info("StandaloneKCExtractor: Running GitAnalysisAgent on \(repoName) with model \(modelId)", category: .ai)
+        Logger.info("StandaloneKCExtractor: Running git digest agent on \(repoName) with model \(modelId)", category: .ai)
 
         // Gather deterministic longitudinal evidence (cheap git commands, no LLM)
-        // for the agent's initial <git_evidence> context block
+        // for the agent's initial <git_evidence> context block and the digest's
+        // mechanical layers.
         let gitData = try await GitEvidenceCollector.gather(repoPath: url.path)
         let gitEvidence = GitEvidenceCollector.render(gitData)
 
-        // Run the full GitAnalysisAgent with turn progress reporting
+        // Run the multi-turn agent to produce the repository digest (IR)
         let agent = GitAnalysisAgent(
             repoPath: url,
             modelId: modelId,
             gitEvidence: gitEvidence,
+            gitData: gitData,
             facade: facade
         )
         agent.onTurnUpdate = { @Sendable turn, maxTurns, action in
@@ -300,57 +304,68 @@ class StandaloneKCExtractor {
                 onGitProgress(turn, maxTurns, action)
             }
         }
-        let result = try await agent.run()
+        let digest = try await agent.run()
 
-        // Accumulate pre-analyzed cards and skills (these bypass the analyzer)
-        gitAnalyzedCards.append(contentsOf: result.narrativeCards)
-        gitAnalyzedSkills.append(contentsOf: result.skills)
+        // Derive skills + cards from the rendered digest via the SHARED
+        // document-analysis path (the same passes a transcribed PDF runs).
+        let artifactId = UUID().uuidString
+        let analysisService = AnthropicDocumentAnalysisService(
+            llmFacade: facade,
+            skillBankService: SkillBankService(llmFacade: facade),
+            kcExtractionService: KnowledgeCardExtractionService(llmFacade: facade)
+        )
+        let analysis = try await analysisService.analyzeText(
+            documentId: artifactId,
+            filename: repoName,
+            text: digest.renderedForExtraction()
+        )
+        let skills = analysis.skills ?? []
+        let narrativeCards = analysis.narrativeCards ?? []
+        if !analysis.passFailures.isEmpty {
+            Logger.warning(
+                "StandaloneKCExtractor: git digest extraction had \(analysis.passFailures.count) pass failure(s): \(analysis.passFailures.joined(separator: " | "))",
+                category: .ai
+            )
+        }
 
-        Logger.info("StandaloneKCExtractor: GitAnalysisAgent produced \(result.narrativeCards.count) cards, \(result.skills.count) skills from \(repoName)", category: .ai)
+        // Accumulate derived cards and skills (these bypass the analyzer)
+        gitAnalyzedCards.append(contentsOf: narrativeCards)
+        gitAnalyzedSkills.append(contentsOf: skills)
 
-        // Build a summary artifact JSON for persistence/archiving
-        let cardSummaries = result.narrativeCards.map { $0.title }.joined(separator: ", ")
-        let skillNames = result.skills.map { $0.canonical }.joined(separator: ", ")
+        Logger.info("StandaloneKCExtractor: git digest extraction produced \(narrativeCards.count) cards, \(skills.count) skills from \(repoName)", category: .ai)
 
-        let fullText = """
-        # Git Repository Analysis: \(repoName)
-
-        ## Knowledge Cards (\(result.narrativeCards.count))
-        \(cardSummaries)
-
-        ## Skills (\(result.skills.count))
-        \(skillNames)
-
-        Analyzed at: \(result.analyzedAt.formatted())
-        """
+        let ir = IntermediateRepresentation.git(digest)
 
         var artifactJSON = JSON()
-        artifactJSON["id"].string = UUID().uuidString
+        artifactJSON["id"].string = artifactId
         artifactJSON["filename"].string = repoName
         artifactJSON["content_type"].string = "application/x-git"
         artifactJSON["source_type"].string = "git_repository"
-        artifactJSON["extracted_text"].string = fullText
-        artifactJSON["summary"].string = "Git repository \(repoName): \(result.narrativeCards.count) knowledge cards, \(result.skills.count) skills"
+        artifactJSON["extracted_text"].string = ir.fullText
+        artifactJSON["summary"].string = "Git repository \(repoName): \(narrativeCards.count) knowledge cards, \(skills.count) skills"
         artifactJSON["brief_description"].string = "Git repository: \(repoName)"
         artifactJSON["summary_metadata"]["document_type"].string = "git_repository"
 
-        // Encode skills and narrative cards for artifact persistence
+        // Encode skills, narrative cards, and the intermediate representation
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
-        if !result.skills.isEmpty,
-           let skillsData = try? encoder.encode(result.skills),
+        if !skills.isEmpty,
+           let skillsData = try? encoder.encode(skills),
            let skillsString = String(data: skillsData, encoding: .utf8) {
             artifactJSON["skills"].string = skillsString
         }
-        if !result.narrativeCards.isEmpty,
-           let cardsData = try? encoder.encode(result.narrativeCards),
+        if !narrativeCards.isEmpty,
+           let cardsData = try? encoder.encode(narrativeCards),
            let cardsString = String(data: cardsData, encoding: .utf8) {
             artifactJSON["narrative_cards"].string = cardsString
         }
+        if let irString = try? ir.encodedJSONString() {
+            artifactJSON["intermediate_representation"].string = irString
+        }
 
         // Persist to SwiftData as standalone artifact
-        let artifactId = persistArtifactToSwiftData(artifactJSON)
-        artifactJSON["id"].string = artifactId
+        let persistedId = persistArtifactToSwiftData(artifactJSON)
+        artifactJSON["id"].string = persistedId
 
         return artifactJSON
     }
@@ -427,9 +442,10 @@ class StandaloneKCExtractor {
             metadataJSONString = nil
         }
 
-        // Extract skills and narrative cards JSON if present
+        // Extract skills, narrative cards, and intermediate representation if present
         let skillsJSON = artifactJSON["skills"].string
         let narrativeCardsJSON = artifactJSON["narrative_cards"].string
+        let intermediateRepresentationJSON = artifactJSON["intermediate_representation"].string
 
         // Persist as standalone artifact (session = nil, archived)
         let record = store.addStandaloneArtifact(
@@ -444,6 +460,7 @@ class StandaloneKCExtractor {
             title: title,
             skillsJSON: skillsJSON,
             narrativeCardsJSON: narrativeCardsJSON,
+            intermediateRepresentationJSON: intermediateRepresentationJSON,
             metadataJSON: metadataJSONString
         )
 

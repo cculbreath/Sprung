@@ -171,12 +171,10 @@ final class ArtifactRecord {
     }
 
     /// Parsed intermediate representation (lazily decoded from JSON string).
+    /// Routed through the IR's own codec so the ISO-8601 date strategy stays in
+    /// lockstep with every ingestion-path encoder.
     var intermediateRepresentation: IntermediateRepresentation? {
-        guard let intermediateRepresentationJSON,
-              let data = intermediateRepresentationJSON.data(using: .utf8) else {
-            return nil
-        }
-        return try? JSONDecoder().decode(IntermediateRepresentation.self, from: data)
+        IntermediateRepresentation.decode(fromJSONString: intermediateRepresentationJSON)
     }
 
     /// Get a metadata value as a string

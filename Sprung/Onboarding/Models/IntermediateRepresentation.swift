@@ -97,6 +97,37 @@ enum IntermediateRepresentation: Codable, Sendable {
             try container.encode(digest, forKey: .git)
         }
     }
+
+    // MARK: Persistence codec (single source of truth)
+
+    /// The IR is persisted as a JSON string in `ArtifactRecord.intermediateRepresentationJSON`.
+    /// `IRProvenance.createdAt` is a `Date`, so the encode/decode date strategy is
+    /// load-bearing: every ingestion path MUST encode through `encodedJSONString()`
+    /// and every read MUST decode through `decode(fromJSONString:)` so the strategies
+    /// stay in lockstep. ISO-8601 is chosen for human-readable, stable persistence.
+    static func makeEncoder() -> JSONEncoder {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        return encoder
+    }
+
+    static func makeDecoder() -> JSONDecoder {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return decoder
+    }
+
+    /// Encode this IR to the JSON string stored on the artifact.
+    func encodedJSONString() throws -> String {
+        let data = try Self.makeEncoder().encode(self)
+        return String(decoding: data, as: UTF8.self)
+    }
+
+    /// Decode an IR from a persisted JSON string (nil when absent or malformed).
+    static func decode(fromJSONString json: String?) -> IntermediateRepresentation? {
+        guard let json, let data = json.data(using: .utf8) else { return nil }
+        return try? makeDecoder().decode(IntermediateRepresentation.self, from: data)
+    }
 }
 
 // MARK: - Shared provenance

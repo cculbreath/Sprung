@@ -310,6 +310,9 @@ final class SwiftDataSessionPersistenceHandler {
         let title = record["title"].string ?? record["metadata"]["title"].string
         let skillsJSON = record["skills"].string
         let narrativeCardsJSON = record["narrativeCards"].string
+        // Intermediate representation (PDF transcription or git digest) — mapped
+        // generically so any source that produces one persists it identically.
+        let intermediateRepresentationJSON = record["intermediateRepresentation"].string
         // Persist the full record JSON for metadata
         let metadataJSON = record.rawString()
         let rawFileRelativePath = record["rawFilePath"].string
@@ -343,6 +346,7 @@ final class SwiftDataSessionPersistenceHandler {
             title: title,
             skillsJSON: skillsJSON,
             narrativeCardsJSON: narrativeCardsJSON,
+            intermediateRepresentationJSON: intermediateRepresentationJSON,
             metadataJSON: metadataJSON,
             rawFileRelativePath: rawFileRelativePath,
             planItemId: planItemId
