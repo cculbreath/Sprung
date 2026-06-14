@@ -28,8 +28,12 @@
 //  │ START (busy) before waiting for it to settle (idle), and subscribes BEFORE    │
 //  │ driving so no transition is missed; (d) recording is suppressed during        │
 //  │ replay so the lifecycle doesn't stack a recording decorator over the replay   │
-//  │ service. Residual risk: tool-result batching timing can differ under replay's │
-//  │ zero latency, which a desync-abort surfaces rather than hides.                │
+//  │ service. NOTE: the per-turn model-request COUNT is deterministic — the tool   │
+//  │ batcher waits for ALL slots (count-based, not timed) and emits exactly one     │
+//  │ follow-up per turn; late results tail-deliver with no extra request — so       │
+//  │ zero-latency replay issues the same request sequence as the real run and the   │
+//  │ turn counter cannot desync from batching. The error-abort (below) is           │
+//  │ defense-in-depth against the rare residual (e.g. a stream-retry edge case).    │
 //  └───────────────────────────────────────────────────────────────────────────┘
 //
 
