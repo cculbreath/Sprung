@@ -477,13 +477,15 @@ struct EventDumpView: View {
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
                         Spacer()
-                        Button("Restore →") {
-                            runRestore(sessionId: session.sessionId, throughTurnIndex: step.turnIndex)
+                        if let ordinal = step.userMessageOrdinal {
+                            Button("Restore →") {
+                                runRestore(sessionId: session.sessionId, throughUserMessageOrdinal: ordinal)
+                            }
+                            .buttonStyle(.borderless)
+                            .font(.caption2)
+                            .disabled(replayingSessionId != nil)
+                            .help("Restart the interview, replay through this message for $0, then go live")
                         }
-                        .buttonStyle(.borderless)
-                        .font(.caption2)
-                        .disabled(replayingSessionId != nil)
-                        .help("Restart the interview, replay to this step for $0, then go live")
                     }
                     .padding(.leading, 24)
                 }
@@ -526,12 +528,12 @@ struct EventDumpView: View {
     /// Restart the interview, replay the recorded session to `throughTurnIndex`
     /// for $0, then go live. Destructive to the current in-progress interview by
     /// design (it starts fresh) — the dev-iteration workflow.
-    private func runRestore(sessionId: String, throughTurnIndex: Int) {
+    private func runRestore(sessionId: String, throughUserMessageOrdinal: Int) {
         replayingSessionId = sessionId
         Task {
             await coordinator.restoreFromTape(
                 sessionId: sessionId,
-                throughTurnIndex: throughTurnIndex,
+                throughUserMessageOrdinal: throughUserMessageOrdinal,
                 goLive: true
             )
             replayingSessionId = nil

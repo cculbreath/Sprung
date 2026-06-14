@@ -9,23 +9,27 @@
 //    1. Install ReplayAnthropicService (serves recorded model streams by turn
 //       order) + ReplayToolGateway (serves recorded tool results by callId, so
 //       PDF ingestion / git agent / network tools never re-run).
-//    2. Start a fresh interview — the orchestrator auto-sends the initial
-//       "I'm ready to proceed" (turn 0), which the replay service serves.
-//    3. Inject the remaining recorded user messages in TAPE ORDER, awaiting
-//       quiescence between each, until the restore point (turn N).
-//    4. GO LIVE: quiesce, then swap the real Anthropic service back and clear the
-//       replay tool gateway. Steps after N hit the real API normally.
+//    2. Start a fresh interview. The orchestrator auto-sends the opener, and the
+//       recorded SYSTEM-GENERATED messages (phase transitions, etc.) re-fire on
+//       their own as the replayed tool calls drive them — so the controller
+//       injects ONLY the USER-TYPED messages, in order, and lets the pipeline
+//       regenerate everything else. (This is why we never double-send the opener.)
+//    3. Inject the first N user-typed messages, awaiting quiescence between each.
+//    4. GO LIVE: swap the real Anthropic service back and clear the replay gateway.
 //
 //  ┌─ RUNTIME-VALIDATION BOUNDARY ─────────────────────────────────────────────┐
 //  │ The DATA PATH below this controller (recorder → store → replay services →   │
-//  │ stream mirror) is unit-tested (RecordingReplayTests). The LIVE RE-DRIVE     │
-//  │ here — injecting messages into the real turn loop + detecting quiescence    │
-//  │ across the ~14 async transitions per turn — must be validated against an    │
-//  │ actually-recorded session at runtime. The quiescence wait is BOUNDED by a   │
-//  │ timeout so a mis-detection degrades to "continue/finish", never a hang.     │
-//  │ Residual shared risk: the go-live handoff shares exposure with the          │
-//  │ resumeSession restore path (re-subscribed streams, tool_choice, streaming   │
-//  │ flags) — validate against those symptoms.                                   │
+//  │ stream mirror) is unit-tested. The LIVE RE-DRIVE here must be validated      │
+//  │ against an actually-recorded session. Defenses against the known failure     │
+//  │ modes found in adversarial review are in place: (a) only user-typed messages │
+//  │ are injected; (b) a replay error (e.g. a turn-count desync surfacing as       │
+//  │ llm.status(.error)) ABORTS + rolls back instead of silently going live onto   │
+//  │ a corrupt session; (c) the quiescence gate waits for the turn to actually     │
+//  │ START (busy) before waiting for it to settle (idle), and subscribes BEFORE    │
+//  │ driving so no transition is missed; (d) recording is suppressed during        │
+//  │ replay so the lifecycle doesn't stack a recording decorator over the replay   │
+//  │ service. Residual risk: tool-result batching timing can differ under replay's │
+//  │ zero latency, which a desync-abort surfaces rather than hides.                │
 //  └───────────────────────────────────────────────────────────────────────────┘
 //
 
@@ -39,13 +43,16 @@ final class SessionReplayController {
     enum ReplayControllerError: Error, LocalizedError {
         case noUserMessages(sessionId: String)
         case alreadyReplaying
+        case replayDesync
 
         var errorDescription: String? {
             switch self {
             case .noUserMessages(let sessionId):
-                return "Recorded session \(sessionId) has no user messages to replay."
+                return "Recorded session \(sessionId) has no user-typed messages to replay."
             case .alreadyReplaying:
                 return "A replay is already in progress."
+            case .replayDesync:
+                return "Replay diverged from the recording (the pipeline issued a turn the tape did not contain) — aborted before going live."
             }
         }
     }
@@ -57,19 +64,18 @@ final class SessionReplayController {
     private let llmFacade: LLMFacade?
     private let toolExecutionCoordinator: ToolExecutionCoordinator
     private let tapeStore: TapeStore
-    /// Starts a fresh interview (the orchestrator sends the opening turn). Returns
-    /// success. Injected as a closure so the controller doesn't depend on the
-    /// lifecycle controller's private surface.
     private let startFreshInterview: () async -> Bool
 
     // MARK: - State
 
     private var isReplaying = false
     private var savedAnthropicService: AnthropicService?
-    /// Latest observed LLM status / processing flag, maintained by the monitor
-    /// tasks during a quiescence wait (MainActor-isolated, so reads are consistent).
     private var monitoredStatus: LLMStatus = .idle
     private var monitoredProcessing = false
+    /// Set by the monitor when the replay pipeline emits an error — meaning the
+    /// re-drive diverged from the tape. Aborts the restore before go-live.
+    private var replayDidError = false
+    private var monitorTasks: [Task<Void, Never>] = []
 
     init(
         state: StateCoordinator,
@@ -89,54 +95,60 @@ final class SessionReplayController {
 
     // MARK: - Public API
 
-    /// Restore the recorded session up to and including model turn `targetTurnIndex`,
-    /// then optionally go live. `goLive == false` is "replay/watch up to N" — the
-    /// replay services stay installed so the next steps would also serve recorded
-    /// data (used for inspection, not iteration).
-    func restore(sessionId: String, throughTurnIndex targetTurnIndex: Int, goLive: Bool) async throws {
+    /// Restore the recorded session by re-driving the first `throughUserMessageOrdinal`
+    /// USER-TYPED messages (their full turn-chains served from the tape), then
+    /// optionally go live. Aborts + rolls back if the re-drive diverges from the tape.
+    func restore(sessionId: String, throughUserMessageOrdinal ordinal: Int, goLive: Bool) async throws {
         guard !isReplaying else { throw ReplayControllerError.alreadyReplaying }
         isReplaying = true
         defer { isReplaying = false }
 
-        // 1. Load the tape.
+        // 1. Load the tape (model streams UNCAPPED — we stop by ceasing injection,
+        //    not by capping the server, so a turn is never refused mid-chain).
         let events = try await tapeStore.loadEvents(sessionId: sessionId)
         let modelStreams = try await tapeStore.loadModelStreams(sessionId: sessionId)
         let toolResults = try await tapeStore.loadToolResults(sessionId: sessionId)
 
-        let userMessages: [TapeUserMessage] = events.compactMap {
-            if case .userMessage(let message) = $0 { return message }
+        // Inject ONLY user-typed messages; system-generated ones (opener, phase
+        // transitions) re-fire on their own during replay.
+        let userTyped: [TapeUserMessage] = events.compactMap {
+            if case .userMessage(let message) = $0, !message.isSystemGenerated { return message }
             return nil
         }
-        guard !userMessages.isEmpty else {
+        guard !userTyped.isEmpty else {
             throw ReplayControllerError.noUserMessages(sessionId: sessionId)
         }
 
-        // 2. Install replay services. Cap model streams to 0...N so a request past
-        //    the restore point can't be served from the tape (it would mean we
-        //    should already have gone live).
-        let cappedStreams = modelStreams.filter { $0.key <= targetTurnIndex }
-        let replayService = ReplayAnthropicService(modelStreams: cappedStreams)
+        // 2. Install replay services BEFORE starting the interview so the opener
+        //    turn is served from the tape. Recording is suppressed by the caller.
+        let replayService = ReplayAnthropicService(modelStreams: modelStreams)
         let gateway = ReplayToolGateway(toolResults: toolResults)
         savedAnthropicService = llmFacade?.currentAnthropicService()
         llmFacade?.registerAnthropicService(replayService)
         await toolExecutionCoordinator.setReplayToolGateway(gateway)
-        Logger.info("⏪ Replay: restoring \(sessionId) through turn \(targetTurnIndex) (goLive: \(goLive))", category: .ai)
+        Logger.info("⏪ Replay: restoring \(sessionId) through user message \(ordinal) (goLive: \(goLive))", category: .ai)
 
-        // 3. Start a fresh interview — the orchestrator sends the opening turn,
-        //    served by the replay service.
+        // 3. Start the monitors BEFORE driving so no busy/idle/error transition is
+        //    missed (the event streams are future-only).
+        startMonitors()
+        defer { stopMonitors() }
+
+        // 4. Start a fresh interview — the orchestrator sends the opener, served
+        //    from the tape — then drive the user-typed messages in order.
         _ = await startFreshInterview()
-        await awaitQuiescence()
+        await awaitTurnQuiescence()
 
-        // 4. Inject the remaining recorded user messages in order. The first is the
-        //    system-generated opener the orchestrator already re-sent — skip it.
-        //    Stop once a message belongs to a turn beyond the restore point.
-        for message in userMessages.dropFirst() {
-            if message.turnIndex > targetTurnIndex { break }
+        for message in userTyped.prefix(max(0, ordinal)) {
+            if replayDidError { break }
             await injectUserMessage(message)
-            await awaitQuiescence()
+            await awaitTurnQuiescence()
         }
 
-        // 5. Hand off.
+        // 5. Hand off — or abort + roll back on divergence.
+        if replayDidError {
+            await swapToLiveService()   // restore the real service so the session is usable
+            throw ReplayControllerError.replayDesync
+        }
         if goLive {
             await swapToLiveService()
         } else {
@@ -160,52 +172,87 @@ final class SessionReplayController {
     private func injectUserMessage(_ message: TapeUserMessage) async {
         var payload = JSON()
         payload["text"].string = message.wireText
-        await eventBus.publish(.llm(.sendUserMessage(
-            payload: payload,
-            isSystemGenerated: message.isSystemGenerated
-        )))
+        await eventBus.publish(.llm(.sendUserMessage(payload: payload, isSystemGenerated: false)))
     }
 
-    /// Wait until the current turn's async cascade settles — LLM idle, not
-    /// processing, and no pending tool calls — held STABLE briefly so we don't
-    /// catch the gap between a stream ending and its tool batch firing the next
-    /// request. BOUNDED by `timeout`: on timeout we log and proceed (degrade to
-    /// "continue", never hang).
-    private func awaitQuiescence(timeout: Duration = .seconds(120)) async {
-        monitoredStatus = .busy
-        monitoredProcessing = true
+    // MARK: - Monitors
 
-        let statusTask = Task { @MainActor [weak self, eventBus] in
+    private func startMonitors() {
+        monitoredStatus = .idle
+        monitoredProcessing = false
+        replayDidError = false
+        let llmTask = Task { @MainActor [weak self, eventBus] in
             for await event in await eventBus.stream(topic: .llm) {
-                if case .llm(.status(let status)) = event { self?.monitoredStatus = status }
-            }
-        }
-        let processingTask = Task { @MainActor [weak self, eventBus] in
-            for await event in await eventBus.stream(topic: .processing) {
-                if case .processing(.stateChanged(let isProcessing, _)) = event {
-                    self?.monitoredProcessing = isProcessing
+                guard let self else { return }
+                if case .llm(.status(let status)) = event {
+                    self.monitoredStatus = status
+                    if status == .error { self.replayDidError = true }
                 }
             }
         }
-        defer { statusTask.cancel(); processingTask.cancel() }
+        let procTask = Task { @MainActor [weak self, eventBus] in
+            for await event in await eventBus.stream(topic: .processing) {
+                guard let self else { return }
+                switch event {
+                case .processing(.stateChanged(let isProcessing, _)):
+                    self.monitoredProcessing = isProcessing
+                case .processing(.errorOccurred):
+                    self.replayDidError = true
+                default:
+                    break
+                }
+            }
+        }
+        monitorTasks = [llmTask, procTask]
+    }
 
+    private func stopMonitors() {
+        for task in monitorTasks { task.cancel() }
+        monitorTasks = []
+    }
+
+    // MARK: - Quiescence
+
+    /// Two-phase wait for one turn's cascade. Phase 1: wait until the turn has
+    /// actually STARTED (busy / processing / pending tools) so we never mistake the
+    /// PREVIOUS turn's trailing idle for "settled". Phase 2: wait until it settles
+    /// (idle + not processing + no pending tools, held stable). Both bounded — on
+    /// timeout we proceed (degrade to "continue", never hang). Returns early if the
+    /// replay has diverged (the caller then aborts).
+    private func awaitTurnQuiescence(startTimeout: Duration = .seconds(10),
+                                     settleTimeout: Duration = .seconds(120)) async {
         let clock = ContinuousClock()
-        let deadline = clock.now.advanced(by: timeout)
-        var stableTicks = 0
-        // Require ~360ms of continuous settle (3 ticks) before declaring quiescent.
-        let requiredStableTicks = 3
 
-        while clock.now < deadline {
+        // Phase 1: turn start.
+        let startDeadline = clock.now.advanced(by: startTimeout)
+        while clock.now < startDeadline {
+            if replayDidError { return }
+            if monitoredStatus == .busy || monitoredProcessing { break }
+            let pending = await pendingToolCalls()
+            if pending { break }
+            try? await Task.sleep(for: .milliseconds(80))
+        }
+
+        // Phase 2: settle.
+        let settleDeadline = clock.now.advanced(by: settleTimeout)
+        var stableTicks = 0
+        let requiredStableTicks = 3   // ~360ms continuous settle
+        while clock.now < settleDeadline {
+            if replayDidError { return }
             try? await Task.sleep(for: .milliseconds(120))
-            let log = await state.getConversationLog()
-            let pendingTools = await log.hasPendingToolCalls
-            if monitoredStatus == .idle, !monitoredProcessing, !pendingTools {
+            let pending = await pendingToolCalls()
+            if monitoredStatus == .idle, !monitoredProcessing, !pending {
                 stableTicks += 1
                 if stableTicks >= requiredStableTicks { return }
             } else {
                 stableTicks = 0
             }
         }
-        Logger.warning("⏱️ Replay quiescence wait timed out after \(timeout) — proceeding", category: .ai)
+        Logger.warning("⏱️ Replay quiescence wait timed out — proceeding", category: .ai)
+    }
+
+    private func pendingToolCalls() async -> Bool {
+        let log = await state.getConversationLog()
+        return await log.hasPendingToolCalls
     }
 }

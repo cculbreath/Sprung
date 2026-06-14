@@ -152,6 +152,22 @@ final class RecordingReplayTests: XCTestCase {
         XCTAssertEqual(events.count, 2)
     }
 
+    // MARK: - Turn-index rollback on failed streams (C3a)
+
+    func testRecorderDiscardsFailedTailTurnForReuse() async {
+        let recorder = SessionTapeRecorder(recordingsRoot: FileManager.default.temporaryDirectory)
+        let t0 = await recorder.nextModelTurnIndex()       // 0
+        let t1 = await recorder.nextModelTurnIndex()       // 1
+        await recorder.discardClaimedModelTurn(t1)         // tail discard → roll back
+        let reused = await recorder.nextModelTurnIndex()   // 1 reused (contiguous)
+        XCTAssertEqual([t0, t1, reused], [0, 1, 1])
+
+        // A non-tail discard is a no-op (only the most-recent claim rolls back).
+        await recorder.discardClaimedModelTurn(t0)
+        let next = await recorder.nextModelTurnIndex()     // 2, unaffected
+        XCTAssertEqual(next, 2)
+    }
+
     // MARK: - Replay services
 
     func testReplayServiceServesByTurnOrder() async throws {

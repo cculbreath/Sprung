@@ -56,6 +56,19 @@ struct TapeStep: Identifiable, Sendable, Hashable {
     let kind: String
     /// Human-facing label for the step row.
     let label: String
+    /// For USER-TYPED messages only: the 1-based ordinal among user-typed
+    /// (non-system) messages. This is the restore key the controller drives by —
+    /// "replay through this many of my messages." Nil for system messages and
+    /// model turns (system messages re-fire on their own during replay, so they
+    /// are not restore points).
+    var userMessageOrdinal: Int?
+
+    init(turnIndex: Int, kind: String, label: String, userMessageOrdinal: Int? = nil) {
+        self.turnIndex = turnIndex
+        self.kind = kind
+        self.label = label
+        self.userMessageOrdinal = userMessageOrdinal
+    }
 }
 
 /// Errors surfaced by the tape read layer.
@@ -208,6 +221,7 @@ actor TapeStore {
     func steps(sessionId: String) throws -> [TapeStep] {
         let events = try loadEvents(sessionId: sessionId)
         var steps: [TapeStep] = []
+        var userTypedOrdinal = 0
 
         for event in events {
             switch event {
@@ -215,7 +229,13 @@ actor TapeStore {
                 let origin = message.isSystemGenerated ? "System message" : "You"
                 let preview = Self.previewText(message.wireText)
                 let label = preview.isEmpty ? origin : "\(origin): \(preview)"
-                steps.append(TapeStep(turnIndex: message.turnIndex, kind: "userMessage", label: label))
+                var ordinal: Int?
+                if !message.isSystemGenerated {
+                    userTypedOrdinal += 1
+                    ordinal = userTypedOrdinal
+                }
+                steps.append(TapeStep(turnIndex: message.turnIndex, kind: "userMessage",
+                                      label: label, userMessageOrdinal: ordinal))
 
             case .modelStream(let stream):
                 steps.append(TapeStep(

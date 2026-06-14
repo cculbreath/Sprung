@@ -78,9 +78,13 @@ final class RecordingAnthropicService: AnthropicService {
                     await recorder.recordModelStream(turnIndex: turnIndex, events: collected)
                     continuation.finish()
                 } catch {
-                    // Preserve the partial turn so a failed stream is still
-                    // inspectable, then propagate the error downstream verbatim.
-                    await recorder.recordModelStream(turnIndex: turnIndex, events: collected)
+                    // A FAILED stream must NOT consume a turn index: the live
+                    // pipeline retries with a fresh messagesStream call, and a
+                    // recorded failed/partial turn would shift every subsequent
+                    // index on replay (the retry re-issues only one request). Roll
+                    // the claimed index back so the retry reuses it, and do NOT
+                    // record the partial. The error still propagates downstream.
+                    await recorder.discardClaimedModelTurn(turnIndex)
                     continuation.finish(throwing: error)
                 }
             }

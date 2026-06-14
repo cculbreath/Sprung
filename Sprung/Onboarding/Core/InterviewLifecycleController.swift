@@ -38,6 +38,11 @@ final class InterviewLifecycleController {
     // Tape recording (dev-only; off by default)
     static let recordingEnabledKey = "onboardingTapeRecordingEnabled"
     private var tapeRecorder: SessionTapeRecorder?
+    /// Set by the replay controller so a fresh interview started FOR a restore does
+    /// not install the recording decorator over the replay service (which would
+    /// stack Recording-over-Replay and corrupt the go-live swap). The restored
+    /// session is not re-recorded.
+    var suppressTapeRecording = false
     /// The real, un-decorated Anthropic service, saved while a recording decorator
     /// is installed so it can be restored when recording stops.
     private var savedAnthropicService: AnthropicService?
@@ -409,6 +414,13 @@ final class InterviewLifecycleController {
     /// No-op (and zero overhead) otherwise. Best-effort: a recording-setup failure
     /// never blocks the interview.
     private func beginTapeRecordingIfEnabled(sessionId: String, modelId: String) async {
+        // Never record while replaying — the replay service is already installed,
+        // and wrapping it in a recording decorator stacks the two and breaks the
+        // go-live swap (see SessionReplayController).
+        guard !suppressTapeRecording else {
+            Logger.info("🎙️ Tape recording suppressed (replay in progress)", category: .ai)
+            return
+        }
         guard UserDefaults.standard.bool(forKey: Self.recordingEnabledKey) else { return }
         guard let facade = llmFacade, let realService = facade.currentAnthropicService() else {
             Logger.warning("🎙️ Tape recording enabled but no Anthropic service to wrap — skipping", category: .ai)

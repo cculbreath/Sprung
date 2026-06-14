@@ -705,7 +705,11 @@ final class OnboardingInterviewCoordinator {
     /// `throughTurnIndex` for $0, then optionally go live. Replays the recorded
     /// model streams + tool results through the real pipeline; with `goLive`,
     /// swaps the live Anthropic service back so subsequent turns hit the real API.
-    func restoreFromTape(sessionId: String, throughTurnIndex: Int, goLive: Bool) async {
+    func restoreFromTape(sessionId: String, throughUserMessageOrdinal: Int, goLive: Bool) async {
+        // Suppress recording for the restored session so the lifecycle doesn't wrap
+        // the replay service in a recording decorator (which corrupts go-live).
+        lifecycleController.suppressTapeRecording = true
+        defer { lifecycleController.suppressTapeRecording = false }
         let controller = SessionReplayController(
             state: state,
             eventBus: eventBus,
@@ -716,7 +720,7 @@ final class OnboardingInterviewCoordinator {
             }
         )
         do {
-            try await controller.restore(sessionId: sessionId, throughTurnIndex: throughTurnIndex, goLive: goLive)
+            try await controller.restore(sessionId: sessionId, throughUserMessageOrdinal: throughUserMessageOrdinal, goLive: goLive)
         } catch {
             Logger.error("Replay restore failed: \(error.localizedDescription)", category: .ai)
             ToastManager.shared.show(.error("Replay failed: \(error.localizedDescription)"))

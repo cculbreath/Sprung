@@ -178,6 +178,17 @@ actor SessionTapeRecorder {
         return index
     }
 
+    /// Roll back a claimed-but-unused turn index (the stream failed before it
+    /// produced a recordable turn). Only rolls back when no later turn has been
+    /// claimed (onboarding model requests are sequential), so a retry reuses the
+    /// same contiguous index and the recorded turn space matches the SUCCESSFUL
+    /// requests the live pipeline issued.
+    func discardClaimedModelTurn(_ index: Int) {
+        guard nextTurnIndex == index + 1 else { return }
+        nextTurnIndex = index
+        currentTurnIndex = index - 1
+    }
+
     // MARK: - Append methods
 
     /// Record a user (or system-generated) message advancing the conversation.
