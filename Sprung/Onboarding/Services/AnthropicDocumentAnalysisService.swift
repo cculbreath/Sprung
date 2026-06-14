@@ -19,15 +19,24 @@ import SwiftOpenAI
 /// Source content for an Anthropic document-analysis pass.
 enum DocumentAnalysisSource {
     /// Uploaded PDF referenced by its Files API id; passes see the actual PDF.
+    /// Used ONLY by the one-time transcription pass — downstream extraction
+    /// reads the transcription via `.transcript`, never the PDF again.
     case pdfFile(id: String)
     /// Plain text (txt/docx/rtf/html native extraction, or stored artifact text).
     case text(String)
+    /// Pre-rendered intermediate representation (PDF transcription or git
+    /// digest) consumed by extraction passes. Carries its own paged-ness: a PDF
+    /// transcription preserves page anchors, a git digest uses path/line/commit.
+    case transcript(text: String, isPaged: Bool)
 
     /// True when locations in the source are page-addressable (evidence anchors
     /// must then be page-anchored, e.g. "p. 14" or "p. 3, Fig. 2").
     var isPaged: Bool {
-        if case .pdfFile = self { return true }
-        return false
+        switch self {
+        case .pdfFile: return true
+        case .text: return false
+        case .transcript(_, let isPaged): return isPaged
+        }
     }
 
     /// The cached source block. Placed FIRST in every pass's user content so all
@@ -41,6 +50,8 @@ enum DocumentAnalysisSource {
                 cacheControl: .ephemeral
             ))
         case .text(let text):
+            return .text(AnthropicTextBlock(text: text, cacheControl: .ephemeral))
+        case .transcript(let text, _):
             return .text(AnthropicTextBlock(text: text, cacheControl: .ephemeral))
         }
     }

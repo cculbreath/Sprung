@@ -66,6 +66,13 @@ final class ArtifactRecord {
     /// Set for writing samples and resume uploads - helps with voice matching
     var interviewContext: Bool = false
 
+    // MARK: - Intermediate Representation
+    /// Raw JSON of the high-fidelity intermediate representation (IR) produced
+    /// once at ingestion — a PDF transcription or a git digest. Downstream
+    /// extraction (skills/narrative/enrichment) reads from this instead of
+    /// re-parsing the source (no Files-API re-upload, no live git agent).
+    var intermediateRepresentationJSON: String?
+
     // MARK: - Metadata
     /// Additional metadata as JSON (git analysis, page count, graphics content, etc.)
     var metadataJSON: String?
@@ -163,6 +170,15 @@ final class ArtifactRecord {
         ArtifactRecordService.extractNarrativeCards(from: self)
     }
 
+    /// Parsed intermediate representation (lazily decoded from JSON string).
+    var intermediateRepresentation: IntermediateRepresentation? {
+        guard let intermediateRepresentationJSON,
+              let data = intermediateRepresentationJSON.data(using: .utf8) else {
+            return nil
+        }
+        return try? JSONDecoder().decode(IntermediateRepresentation.self, from: data)
+    }
+
     /// Get a metadata value as a string
     func metadataString(_ key: String) -> String? {
         guard let metadataJSON,
@@ -209,6 +225,7 @@ final class ArtifactRecord {
         skillsJSON: String? = nil,
         narrativeCardsJSON: String? = nil,
         interviewContext: Bool = false,
+        intermediateRepresentationJSON: String? = nil,
         metadataJSON: String? = nil,
         rawFileRelativePath: String? = nil,
         ingestedAt: Date = Date(),
@@ -227,6 +244,7 @@ final class ArtifactRecord {
         self.skillsJSON = skillsJSON
         self.narrativeCardsJSON = narrativeCardsJSON
         self.interviewContext = interviewContext
+        self.intermediateRepresentationJSON = intermediateRepresentationJSON
         self.metadataJSON = metadataJSON
         self.rawFileRelativePath = rawFileRelativePath
         self.ingestedAt = ingestedAt
