@@ -233,6 +233,14 @@ class StandaloneKCExtractor {
                         passes: .summaryOnly
                     )
                 }
+                // Persist the PDF transcription IR (nil for text) so extraction can
+                // be re-run later for $0; its faithful full text replaces native
+                // extraction. Routed through the IR codec (single source of truth).
+                if let ir = analysis.intermediateRepresentation,
+                   let irString = try? ir.encodedJSONString() {
+                    artifactJSON["intermediate_representation"].string = irString
+                    artifactJSON["extracted_text"].string = ir.fullText
+                }
                 if let docSummary = analysis.summary {
                     summaryText = docSummary.summary
                     briefDescription = docSummary.briefDescription

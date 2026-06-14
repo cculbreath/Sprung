@@ -107,6 +107,8 @@ actor DocumentProcessingService {
         let skills: [Skill]?
         let narrativeCards: [KnowledgeCard]?
         let passFailures: [String]
+        // The PDF transcription IR (nil for writing samples and text sources).
+        let intermediateRepresentation: IntermediateRepresentation?
 
         // For writing samples, generate a descriptive name
         var writingSampleName: String?
@@ -133,6 +135,7 @@ actor DocumentProcessingService {
             skills = nil
             narrativeCards = nil
             passFailures = []
+            intermediateRepresentation = nil
         } else if isResume {
             // Resumes skip summary (full text sent to LLM via interviewContext)
             // but still generate skills and narrative cards
@@ -151,6 +154,7 @@ actor DocumentProcessingService {
             skills = analysis?.skills
             narrativeCards = analysis?.narrativeCards
             passFailures = analysis?.passFailures ?? []
+            intermediateRepresentation = analysis?.intermediateRepresentation
             let skillCount = skills?.count ?? 0
             let kcCount = narrativeCards?.count ?? 0
             if passFailures.isEmpty {
@@ -176,6 +180,7 @@ actor DocumentProcessingService {
             skills = analysis?.skills
             narrativeCards = analysis?.narrativeCards
             passFailures = analysis?.passFailures ?? []
+            intermediateRepresentation = analysis?.intermediateRepresentation
 
             let summaryChars = documentSummary?.summary.count ?? 0
             let skillCount = skills?.count ?? 0
@@ -279,6 +284,17 @@ actor DocumentProcessingService {
             }
             kcStats["byType"].dictionaryObject = byType as [String: Any]
             artifactRecord["narrativeCards_stats"] = kcStats
+        }
+
+        // Persist the intermediate representation (PDF transcription) so extraction
+        // can be re-run later for $0 without re-reading the source. The faithful
+        // transcription also REPLACES native PDF text extraction as the artifact's
+        // full text (the interview-context full-text path), capturing tables and
+        // visuals that native extraction loses. Routed through the IR codec.
+        if let intermediateRepresentation,
+           let irString = try? intermediateRepresentation.encodedJSONString() {
+            artifactRecord["intermediateRepresentation"].string = irString
+            artifactRecord["extractedText"].string = intermediateRepresentation.fullText
         }
 
         // Record analysis passes that failed after exhausting retries so the

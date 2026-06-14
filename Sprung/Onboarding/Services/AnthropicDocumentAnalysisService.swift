@@ -232,6 +232,11 @@ actor AnthropicDocumentAnalysisService {
         var summary: DocumentSummary?
         var skills: [Skill]?
         var narrativeCards: [KnowledgeCard]?
+        /// The high-fidelity intermediate representation the extraction passes ran
+        /// against, when one was produced (PDF transcription). Persisted on the
+        /// artifact so extraction can be re-run later without re-reading the source.
+        /// Nil for plain-text sources (they are already text — no transcription).
+        var intermediateRepresentation: IntermediateRepresentation?
         /// Human-readable descriptions of analysis passes that failed after
         /// exhausting retries (e.g. "skills (pages 1–50): Status 400 …").
         /// Empty when every requested pass succeeded. Callers surface these to
@@ -297,9 +302,12 @@ actor AnthropicDocumentAnalysisService {
 
     // MARK: - Public API
 
-    /// Analyze a PDF. Each chunk is uploaded once via the Files API, all passes run
-    /// against the same cached document prefix, and the file is deleted best-effort
-    /// when the chunk's passes finish.
+    /// Analyze a PDF. The PDF is read EXACTLY ONCE — transcribed into a
+    /// high-fidelity `DocumentTranscription` (handles its own chunking / Files-API
+    /// upload) — and then every extraction pass runs against that transcription via
+    /// a single cached `.transcript` source block. The PDF is never re-uploaded for
+    /// extraction; the returned `AnalysisResult` carries the IR for persistence so
+    /// extraction can be re-run later for $0.
     func analyzePDF(
         documentId: String,
         filename: String,
@@ -309,50 +317,27 @@ actor AnthropicDocumentAnalysisService {
     ) async throws -> AnalysisResult {
         let modelId = try Self.configuredModelId()
 
-        statusCallback?("Preparing \(filename) for analysis...")
-        let chunks = try await preflightService.makeChunks(pdfData: pdfData, filename: filename, modelId: modelId)
+        // Stage 1: transcribe the actual PDF once (the only PDF re-read).
+        let transcription = try await transcribePDF(
+            documentId: documentId,
+            filename: filename,
+            pdfData: pdfData,
+            statusCallback: statusCallback
+        )
+        let ir = IntermediateRepresentation.pdf(transcription)
 
-        var merged = AnalysisResult()
-        var summaryParts: [(pageRange: ClosedRange<Int>, summary: DocumentSummary)] = []
-
-        for chunk in chunks {
-            let chunkLabel = chunks.count > 1
-                ? "\(filename) (pages \(chunk.pageRange.lowerBound)–\(chunk.pageRange.upperBound))"
-                : filename
-
-            statusCallback?("Uploading \(chunkLabel)...")
-            let file = try await llmFacade.anthropicUploadFile(
-                data: chunk.data,
-                filename: chunkFilename(filename, chunk: chunk, totalChunks: chunks.count),
-                mimeType: "application/pdf"
-            )
-            Logger.info("📄 Uploaded \(chunkLabel) to Anthropic Files API: \(file.id)", category: .ai)
-
-            let result = await runPasses(
-                documentId: documentId,
-                filename: chunkLabel,
-                source: .pdfFile(id: file.id),
-                passes: passes,
-                modelId: modelId,
-                statusCallback: statusCallback
-            )
-
-            deleteFileBestEffort(file.id)
-
-            if let summary = result.summary {
-                summaryParts.append((chunk.pageRange, summary))
-            }
-            if let skills = result.skills {
-                merged.skills = (merged.skills ?? []) + skills
-            }
-            if let cards = result.narrativeCards {
-                merged.narrativeCards = (merged.narrativeCards ?? []) + cards
-            }
-            merged.passFailures += result.passFailures
-        }
-
-        merged.summary = mergeSummaries(summaryParts, totalChunks: chunks.count)
-        return merged
+        // Stage 2: run the extraction pass set ONCE over the rendered transcription.
+        // Page anchors survive (isPaged: true) so evidence still resolves to pages.
+        var result = await runPasses(
+            documentId: documentId,
+            filename: filename,
+            source: .transcript(text: ir.renderedForExtraction(), isPaged: true),
+            passes: passes,
+            modelId: modelId,
+            statusCallback: statusCallback
+        )
+        result.intermediateRepresentation = ir
+        return result
     }
 
     /// Analyze a text-based source (txt/docx/rtf/html native extraction, or stored
@@ -803,40 +788,6 @@ actor AnthropicDocumentAnalysisService {
                 Logger.warning("⚠️ Failed to delete Anthropic file \(fileId): \(error.localizedDescription)", category: .ai)
             }
         }
-    }
-
-    /// Merge per-chunk summaries. Single-chunk documents pass through unchanged;
-    /// multi-chunk summaries are joined with "Part N (pages X–Y):" labels.
-    private func mergeSummaries(
-        _ parts: [(pageRange: ClosedRange<Int>, summary: DocumentSummary)],
-        totalChunks: Int
-    ) -> DocumentSummary? {
-        guard !parts.isEmpty else { return nil }
-        if parts.count == 1 && totalChunks == 1 {
-            return parts[0].summary
-        }
-
-        let joinedSummary = parts.enumerated().map { index, part in
-            "Part \(index + 1) (pages \(part.pageRange.lowerBound)–\(part.pageRange.upperBound)): \(part.summary.summary)"
-        }.joined(separator: "\n\n")
-
-        let first = parts[0].summary
-        return DocumentSummary(
-            documentType: first.documentType,
-            briefDescription: first.briefDescription,
-            summary: joinedSummary,
-            timePeriod: parts.compactMap { $0.summary.timePeriod }.first,
-            companies: uniqued(parts.flatMap { $0.summary.companies }),
-            roles: uniqued(parts.flatMap { $0.summary.roles }),
-            skills: uniqued(parts.flatMap { $0.summary.skills }),
-            achievements: uniqued(parts.flatMap { $0.summary.achievements }),
-            relevanceHints: uniqued(parts.map { $0.summary.relevanceHints }).joined(separator: " ")
-        )
-    }
-
-    private func uniqued(_ values: [String]) -> [String] {
-        var seen = Set<String>()
-        return values.filter { seen.insert($0).inserted }
     }
 
     // MARK: - Transcription Merge
