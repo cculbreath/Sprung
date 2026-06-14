@@ -26,6 +26,7 @@ struct EventDumpView: View {
     @State private var expandedSessionId: String?
     @State private var sessionSteps: [TapeStep] = []
     @State private var recordingEnabled = UserDefaults.standard.bool(forKey: InterviewLifecycleController.recordingEnabledKey)
+    @State private var replayingSessionId: String?
 
     var body: some View {
         NavigationStack {
@@ -476,6 +477,13 @@ struct EventDumpView: View {
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
                         Spacer()
+                        Button("Restore →") {
+                            runRestore(sessionId: session.sessionId, throughTurnIndex: step.turnIndex)
+                        }
+                        .buttonStyle(.borderless)
+                        .font(.caption2)
+                        .disabled(replayingSessionId != nil)
+                        .help("Restart the interview, replay to this step for $0, then go live")
                     }
                     .padding(.leading, 24)
                 }
@@ -513,6 +521,21 @@ struct EventDumpView: View {
             sessionSteps = []
         }
         await loadRecordings()
+    }
+
+    /// Restart the interview, replay the recorded session to `throughTurnIndex`
+    /// for $0, then go live. Destructive to the current in-progress interview by
+    /// design (it starts fresh) — the dev-iteration workflow.
+    private func runRestore(sessionId: String, throughTurnIndex: Int) {
+        replayingSessionId = sessionId
+        Task {
+            await coordinator.restoreFromTape(
+                sessionId: sessionId,
+                throughTurnIndex: throughTurnIndex,
+                goLive: true
+            )
+            replayingSessionId = nil
+        }
     }
 
     private func conversationEntryRow(_ entry: ConversationLogEntry) -> some View {

@@ -32,6 +32,14 @@ actor ToolExecutionCoordinator: OnboardingEventEmitter {
         self.ui = ui
         Logger.info("🔧 ToolExecutionCoordinator initialized", category: .ai)
     }
+
+    /// Install (or clear) the replay tool gateway on the underlying executor.
+    /// During session replay, recorded tool results are served by callId and the
+    /// real tools never execute.
+    func setReplayToolGateway(_ gateway: ReplayToolGateway?) async {
+        await toolExecutor.setReplayGateway(gateway)
+    }
+
     // MARK: - Event Subscriptions
     /// Start listening to tool call events
     func startEventSubscriptions() async {

@@ -701,6 +701,28 @@ final class OnboardingInterviewCoordinator {
         await uiResponseCoordinator.sendChatMessage(text)
     }
 
+    /// Dev-only (Recordings tab): restore a recorded session up to model turn
+    /// `throughTurnIndex` for $0, then optionally go live. Replays the recorded
+    /// model streams + tool results through the real pipeline; with `goLive`,
+    /// swaps the live Anthropic service back so subsequent turns hit the real API.
+    func restoreFromTape(sessionId: String, throughTurnIndex: Int, goLive: Bool) async {
+        let controller = SessionReplayController(
+            state: state,
+            eventBus: eventBus,
+            llmFacade: llmFacade,
+            toolExecutionCoordinator: container.toolExecutionCoordinator,
+            startFreshInterview: { [lifecycleController] in
+                await lifecycleController.startInterview(resumeExisting: false)
+            }
+        )
+        do {
+            try await controller.restore(sessionId: sessionId, throughTurnIndex: throughTurnIndex, goLive: goLive)
+        } catch {
+            Logger.error("Replay restore failed: \(error.localizedDescription)", category: .ai)
+            ToastManager.shared.show(.error("Replay failed: \(error.localizedDescription)"))
+        }
+    }
+
     /// Stop all processing, clear queue, and silence incoming until next user action.
     /// Cleans up orphan tool calls and cancels active agents.
     func stopProcessing() async {
