@@ -93,10 +93,11 @@ struct IngestWritingSampleTool: InterviewTool {
             }
         }
 
-        // Create artifact record for the writing sample
-        let artifactId = UUID()
+        // Create artifact record for the writing sample. Determinism seam: replay
+        // reproduces the recorded id so the rebuilt artifact matches; plain UUID otherwise.
+        let artifactId = DeterminismIDProvider.nextUUID()
         var artifactRecord = JSON()
-        artifactRecord["id"].string = artifactId.uuidString
+        artifactRecord["id"].string = artifactId
         artifactRecord["sourceType"].string = "writingSample"
         artifactRecord["filename"].string = "\(sampleName).txt"
         artifactRecord["extractedText"].string = content
@@ -124,7 +125,7 @@ struct IngestWritingSampleTool: InterviewTool {
         // Build response
         var response = JSON()
         response["status"].string = "ingested"
-        response["artifactId"].string = artifactId.uuidString
+        response["artifactId"].string = artifactId
         response["name"].string = sampleName
         response["writingType"].string = writingType
         response["characterCount"].int = content.count

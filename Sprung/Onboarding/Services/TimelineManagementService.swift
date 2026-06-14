@@ -24,9 +24,11 @@ actor TimelineManagementService: OnboardingEventEmitter {
     // MARK: - Timeline Card Operations
     func createTimelineCard(fields: JSON) async -> JSON {
         var card = fields
-        // Add ID if not present
+        // Add ID if not present. Minted through the determinism seam so replay can
+        // reproduce the exact recorded id (later "update/delete card X" turns
+        // reference it); plain UUID outside any record/replay scope.
         if card["id"].string == nil {
-            card["id"].string = UUID().uuidString
+            card["id"].string = DeterminismIDProvider.nextUUID()
         }
         // Emit event to create timeline card
         await eventBus.publish(.timeline(.cardCreated(card: card)))

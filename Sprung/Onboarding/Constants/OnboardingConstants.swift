@@ -291,6 +291,31 @@ extension OnboardingToolName {
         OnboardingToolName.deletePublicationCard,
         OnboardingToolName.displaySectionCardsForReview
     ].map(\.rawValue))
+
+    /// Tools RE-EXECUTED (rather than served verbatim) during session replay so
+    /// their local domain-state side effects rebuild WorkingMemoryBuilder's context
+    /// surface — skeleton timeline, artifact summaries, dossier notes, todo list —
+    /// and any ids that later recorded turns reference. Every tool here is a pure,
+    /// deterministic, args-derived state mutation (no network / no LLM / no file
+    /// IO), so re-running it under the determinism seam reproduces the recorded
+    /// state exactly. Adding a tool whose execute() has such a side effect is a
+    /// one-line change here; verify it is pure-local first.
+    static let replayReExecutableTools: Set<String> = Set([
+        OnboardingToolName.createTimelineCard,
+        OnboardingToolName.updateTimelineCard,
+        OnboardingToolName.deleteTimelineCard,
+        OnboardingToolName.reorderTimelineCards,
+        OnboardingToolName.createSectionCard,
+        OnboardingToolName.updateSectionCard,
+        OnboardingToolName.deleteSectionCard,
+        OnboardingToolName.createPublicationCard,
+        OnboardingToolName.updatePublicationCard,
+        OnboardingToolName.deletePublicationCard,
+        OnboardingToolName.createWebArtifact,
+        OnboardingToolName.ingestWritingSample,
+        OnboardingToolName.updateDossierNotes,
+        OnboardingToolName.updateTodoList
+    ].map(\.rawValue))
 }
 
 // MARK: - Convenience Extensions

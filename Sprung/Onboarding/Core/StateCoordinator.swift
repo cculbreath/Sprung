@@ -645,14 +645,15 @@ actor StateCoordinator: OnboardingEventEmitter {
     /// Store a completed tool result - ConversationLog is the sole source of truth
     /// Returns true if the slot was found and filled, false if slot not found (orphaned/already filled)
     @discardableResult
-    func addCompletedToolResult(callId: String, toolName: String, output: String) async -> Bool {
+    func addCompletedToolResult(callId: String, toolName: String, output: String, mintedIds: [String] = []) async -> Bool {
         let success = await conversationLog.setToolResult(callId: callId, output: output, status: .completed)
         if success {
             Logger.debug("✅ Tool result stored: \(toolName) (\(callId.prefix(8)))", category: .ai)
-            // Tee to the tape (served verbatim by callId on replay) so the tool
-            // never re-runs during replay.
+            // Tee to the tape so the tool's result is served on replay; `mintedIds`
+            // lets re-executable tools reproduce their exact recorded ids on replay.
             await tapeRecorder?.recordToolResult(
-                callId: callId, name: toolName, argumentsJSON: nil, output: output, status: "completed"
+                callId: callId, name: toolName, argumentsJSON: nil, output: output, status: "completed",
+                mintedIds: mintedIds
             )
         } else {
             Logger.warning("⚠️ Tool result not stored (slot not found or already resolved): \(toolName) (\(callId.prefix(8)))", category: .ai)

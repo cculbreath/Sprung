@@ -7,12 +7,22 @@
 import Foundation
 import SwiftOpenAI
 import SwiftyJSON
+/// A tool execution's result plus the ids it minted through the determinism seam.
+/// `mintedIds` is teed to the tape (recording) so a re-executable tool can
+/// reproduce those exact ids on replay; it is empty for replayed and no-mint calls.
+struct ExecutedToolCall {
+    let result: ToolResult
+    let mintedIds: [String]
+}
+
 actor ToolExecutor {
     private let registry: ToolRegistry
 
-    /// When set (session replay), recorded tool results are served verbatim by
-    /// callId and the real tool NEVER executes — so PDF ingestion / git agent /
-    /// network tools don't re-run during replay. Cleared on go-live.
+    /// When set (session replay), recorded tool results drive the outcome by
+    /// callId. External / IO / LLM tools are served verbatim and NEVER re-run;
+    /// pure-local state-building tools (see `ReplayToolGateway.shouldReExecute`)
+    /// are RE-EXECUTED for their side effects so domain state rebuilds for real.
+    /// Cleared on go-live.
     private var replayGateway: ReplayToolGateway?
 
     init(registry: ToolRegistry) {
@@ -24,24 +34,56 @@ actor ToolExecutor {
         self.replayGateway = gateway
     }
 
-    func handleToolCall(_ call: ToolCall) async throws -> ToolResult {
-        // Replay short-circuit: serve the recorded result for this callId without
-        // executing the real tool. The exact bytes here don't affect replay
-        // ordering (recorded model streams are served by turn order, not by tool
-        // output), so parsing the recorded output as JSON is safe.
-        if let recorded = await replayGateway?.recordedResult(callId: call.callId) {
-            Logger.info("⏪ Replay: serving recorded result for \(call.name) (\(call.callId.prefix(8)))", category: .ai)
+    func handleToolCall(_ call: ToolCall) async throws -> ExecutedToolCall {
+        // Replay path: the recorded result for this callId decides the outcome.
+        if let gateway = replayGateway, let recorded = await gateway.recordedResult(callId: call.callId) {
+            if ReplayToolGateway.shouldReExecute(toolName: call.name) {
+                // Re-run for side effects (rebuild domain state) with the recorded
+                // id sequence, then return the recorded output verbatim below so
+                // the replayed conversation history stays byte-faithful.
+                await reExecuteForSideEffects(call, recorded: recorded)
+            } else {
+                Logger.info("⏪ Replay: serving recorded result for \(call.name) (\(call.callId.prefix(8)))", category: .ai)
+            }
             let parsed = JSON(parseJSON: recorded.output)
-            return .immediate(parsed.type != .null ? parsed : JSON(["output": recorded.output]))
+            let result: ToolResult = .immediate(parsed.type != .null ? parsed : JSON(["output": recorded.output]))
+            return ExecutedToolCall(result: result, mintedIds: [])
         }
         guard let tool = registry.tool(named: call.name) else {
             throw ToolError.invalidParameters("Unknown tool: \(call.name)")
         }
+        // Normal (live / recording) path: capture minted ids through the seam so a
+        // later replay can serve them back to re-executable tools.
+        let context = DeterminismContext(mode: .recording)
         do {
-            let result = try await tool.execute(call.arguments)
-            return normalize(result, toolName: call.name)
+            let result = try await DeterminismScope.$current.withValue(context) {
+                try await tool.execute(call.arguments)
+            }
+            return ExecutedToolCall(result: normalize(result, toolName: call.name), mintedIds: context.mintedIds)
         } catch {
-            return errorResult(for: call.name, error: error)
+            return ExecutedToolCall(result: errorResult(for: call.name, error: error), mintedIds: context.mintedIds)
+        }
+    }
+
+    /// Re-execute a whitelisted, pure-local, deterministic state-building tool
+    /// during replay so its domain side effects (timeline / dossier / todo /
+    /// artifact mutations) are rebuilt for real. The determinism seam is seeded
+    /// with the recorded id sequence so re-created entities keep the exact ids that
+    /// later recorded turns reference. The tool's own result is discarded — the
+    /// caller returns the recorded output verbatim for history fidelity.
+    private func reExecuteForSideEffects(_ call: ToolCall, recorded: TapeToolResult) async {
+        guard let tool = registry.tool(named: call.name) else { return }
+        Logger.info("⏪ Replay: re-executing \(call.name) (\(call.callId.prefix(8))) to rebuild domain state", category: .ai)
+        let context = DeterminismContext(mode: .replaying(recorded.mintedIds ?? []))
+        do {
+            _ = try await DeterminismScope.$current.withValue(context) {
+                try await tool.execute(call.arguments)
+            }
+        } catch {
+            Logger.warning("⏪ Replay re-exec of \(call.name) threw (domain state may be incomplete): \(error.localizedDescription)", category: .ai)
+        }
+        if context.didExhaust {
+            Logger.warning("📉 Replay seam exhausted re-executing \(call.name) (\(call.callId.prefix(8))) — re-exec minted more ids than recorded; domain state may diverge", category: .ai)
         }
     }
     // MARK: - Helpers

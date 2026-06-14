@@ -22,9 +22,10 @@ actor SectionCardManagementService: OnboardingEventEmitter {
 
     func createSectionCard(sectionType: String, fields: JSON) async -> JSON {
         var card = fields
-        // Add ID if not present
+        // Add ID if not present. Determinism seam: replay reproduces the recorded
+        // id so later update/delete-by-id turns hit; plain UUID otherwise.
         if card["id"].string == nil {
-            card["id"].string = UUID().uuidString
+            card["id"].string = DeterminismIDProvider.nextUUID()
         }
         card["sectionType"].string = sectionType
 
@@ -65,9 +66,10 @@ actor SectionCardManagementService: OnboardingEventEmitter {
 
     func createPublicationCard(fields: JSON, sourceType: String = "interview") async -> JSON {
         var card = fields
-        // Add ID if not present
+        // Add ID if not present. Determinism seam: replay reproduces the recorded
+        // id so later update/delete-by-id turns hit; plain UUID otherwise.
         if card["id"].string == nil {
-            card["id"].string = UUID().uuidString
+            card["id"].string = DeterminismIDProvider.nextUUID()
         }
         card["sourceType"].string = sourceType
 

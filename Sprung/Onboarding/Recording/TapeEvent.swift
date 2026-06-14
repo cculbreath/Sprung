@@ -126,6 +126,11 @@ struct TapeToolResult: Codable, Sendable {
     var output: String
     /// `ToolCallStatus` raw value (e.g. "completed", "error").
     var status: String
+    /// Ids the tool minted through the determinism seam, in mint order. Replayed
+    /// back (via `DeterminismContext`) when a re-executable tool is re-run during
+    /// replay so re-created entities keep the exact recorded ids that later turns
+    /// reference. Optional: absent on no-mint tools and on pre-seam (v1) tapes.
+    var mintedIds: [String]?
 }
 
 struct TapeCoordinatorTurn: Codable, Sendable {

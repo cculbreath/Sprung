@@ -95,8 +95,8 @@ actor ToolExecutionCoordinator: OnboardingEventEmitter {
             await tracker.register(operation)
 
             do {
-                let result = try await toolExecutor.handleToolCall(call)
-                await handleToolResult(result, callId: call.callId, toolName: call.name, operation: operation)
+                let executed = try await toolExecutor.handleToolCall(call)
+                await handleToolResult(executed.result, callId: call.callId, toolName: call.name, operation: operation, mintedIds: executed.mintedIds)
             } catch {
                 Logger.error("Tool execution failed: \(error)", category: .ai)
                 await operation.fail(error: error)
@@ -121,8 +121,9 @@ actor ToolExecutionCoordinator: OnboardingEventEmitter {
             await emitToolFailure(callId: call.callId, toolName: call.name, code: "tool_not_available", reason: reason)
         }
     }
-    /// Handle tool execution result
-    private func handleToolResult(_ result: ToolResult, callId: String, toolName: String, operation: ToolOperation) async {
+    /// Handle tool execution result. `mintedIds` are the determinism-seam ids the
+    /// tool produced (teed to the tape so re-executable tools reproduce them on replay).
+    private func handleToolResult(_ result: ToolResult, callId: String, toolName: String, operation: ToolOperation, mintedIds: [String]) async {
         switch result {
         case .immediate(let output):
             let outputString = output.rawString() ?? "{}"
@@ -130,7 +131,7 @@ actor ToolExecutionCoordinator: OnboardingEventEmitter {
             await operation.complete(output: outputString)
 
             // Fill ConversationLog slot immediately (enables batch send when all slots filled)
-            await stateCoordinator.addCompletedToolResult(callId: callId, toolName: toolName, output: outputString)
+            await stateCoordinator.addCompletedToolResult(callId: callId, toolName: toolName, output: outputString, mintedIds: mintedIds)
 
             // Special handling for extract_document tool - emit artifact record produced event
             // DocumentArtifactMessenger will batch and send the extracted content to the LLM

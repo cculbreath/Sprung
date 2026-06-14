@@ -96,7 +96,7 @@ final class RecordingReplayTests: XCTestCase {
                                          attachmentBase64: nil, attachmentMediaType: nil,
                                          isSystemGenerated: false)
         await recorder.recordToolResult(callId: "toolu_42", name: "glob", argumentsJSON: nil,
-                                        output: "a.swift\nb.swift", status: "completed")
+                                        output: "a.swift\nb.swift", status: "completed", mintedIds: [])
         await recorder.stop()
 
         let store = TapeStore(recordingsRoot: tempRoot)
@@ -216,7 +216,7 @@ final class RecordingReplayTests: XCTestCase {
     @MainActor
     func testReplayToolGatewayServesByCallId() {
         let result = TapeToolResult(turnIndex: 0, callId: "toolu_42", name: "glob",
-                                    argumentsJSON: nil, output: "a.swift", status: "completed")
+                                    argumentsJSON: nil, output: "a.swift", status: "completed", mintedIds: nil)
         let gateway = ReplayToolGateway(toolResults: ["toolu_42": result])
         XCTAssertEqual(gateway.recordedResult(callId: "toolu_42")?.output, "a.swift")
         XCTAssertTrue(gateway.hasRecordedResult(callId: "toolu_42"))

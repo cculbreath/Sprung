@@ -40,8 +40,9 @@ struct CreateWebArtifactTool: InterviewTool {
 
         let summary = params["summary"].string ?? ""
 
-        // Generate unique artifact ID
-        let artifactId = UUID().uuidString
+        // Generate unique artifact ID. Determinism seam: replay reproduces the
+        // recorded id so the rebuilt artifact matches; plain UUID otherwise.
+        let artifactId = DeterminismIDProvider.nextUUID()
 
         // Build artifact record JSON
         var artifactRecord = JSON()

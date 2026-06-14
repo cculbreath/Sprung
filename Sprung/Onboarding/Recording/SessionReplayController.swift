@@ -7,8 +7,13 @@
 //  Strategy (record-replay, not snapshot): re-drive the REAL forward pipeline from
 //  the tape so every stream-derived side effect is reproduced by construction.
 //    1. Install ReplayAnthropicService (serves recorded model streams by turn
-//       order) + ReplayToolGateway (serves recorded tool results by callId, so
-//       PDF ingestion / git agent / network tools never re-run).
+//       order) + ReplayToolGateway. The gateway serves external / IO / LLM tools
+//       verbatim by callId (PDF ingestion / git agent / network never re-run) and
+//       RE-EXECUTES the pure-local state-building tools so the domain state
+//       WorkingMemoryBuilder injects into the model's context (timeline, artifact
+//       summaries, dossier, todo) is rebuilt for real — not left empty at go-live.
+//       Re-executed tools mint through the determinism seam seeded with the recorded
+//       ids (DeterminismContext), so a later "update card X" still hits card X.
 //    2. Start a fresh interview. The orchestrator auto-sends the opener, and the
 //       recorded SYSTEM-GENERATED messages (phase transitions, etc.) re-fire on
 //       their own as the replayed tool calls drive them — so the controller
@@ -35,6 +40,15 @@
 //  │ turn counter cannot desync from batching. The error-abort (below) is           │
 //  │ defense-in-depth against the rare residual (e.g. a stream-retry edge case).    │
 //  └───────────────────────────────────────────────────────────────────────────┘
+//
+//  DOMAIN-STATE SETTLE: re-executed state-building tools rebuild domain state by
+//  emitting events (cardCreated, …) that subscribers apply asynchronously. A single
+//  AsyncStream delivers in yield order, so a create is always applied before the
+//  update that references it (no intra-cascade id miss). The two-phase quiescence
+//  gate (idle + no pending tools, held stable ~360ms) drains that fast in-memory
+//  buffer before go-live; this is the same settle mechanism the rest of replay
+//  relies on. If runtime validation surfaces a residual race, strengthen the gate
+//  with an explicit domain-event fence rather than a longer fixed sleep.
 //
 
 import Foundation

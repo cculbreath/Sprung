@@ -229,13 +229,17 @@ actor SessionTapeRecorder {
         )))
     }
 
-    /// Record a tool result, served verbatim by callId on replay.
+    /// Record a tool result, served verbatim by callId on replay. `mintedIds` are
+    /// the determinism-seam ids captured during execution (replayed back when a
+    /// re-executable tool is re-run during replay); empty is normalized to nil so
+    /// no-mint tools keep a clean tape line.
     func recordToolResult(
         callId: String,
         name: String,
         argumentsJSON: String?,
         output: String,
-        status: String
+        status: String,
+        mintedIds: [String]
     ) {
         guard isRecording else { return }
         append(.toolResult(TapeToolResult(
@@ -244,7 +248,8 @@ actor SessionTapeRecorder {
             name: name,
             argumentsJSON: argumentsJSON,
             output: output,
-            status: status
+            status: status,
+            mintedIds: mintedIds.isEmpty ? nil : mintedIds
         )))
     }
 
