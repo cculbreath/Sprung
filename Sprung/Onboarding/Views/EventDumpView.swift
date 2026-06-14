@@ -20,6 +20,13 @@ struct EventDumpView: View {
     @State private var isDedupingSkills = false
     @State private var isExpandingATS = false
 
+    // Recordings (session tape recorder)
+    @State private var tapeStore = TapeStore()
+    @State private var tapeSessions: [TapeSessionSummary] = []
+    @State private var expandedSessionId: String?
+    @State private var sessionSteps: [TapeStep] = []
+    @State private var recordingEnabled = UserDefaults.standard.bool(forKey: InterviewLifecycleController.recordingEnabledKey)
+
     var body: some View {
         NavigationStack {
             TabView(selection: $selectedTab) {
@@ -38,6 +45,10 @@ struct EventDumpView: View {
                 contextPreviewTabContent
                     .tabItem { Label("Context", systemImage: "doc.text.magnifyingglass") }
                     .tag(3)
+
+                recordingsTabContent
+                    .tabItem { Label("Recordings", systemImage: "recordingtape") }
+                    .tag(4)
             }
             .navigationTitle("Debug Logs")
             .toolbar { toolbarContent }
@@ -46,6 +57,7 @@ struct EventDumpView: View {
                 loadConversationLog()
                 await loadTodoItems()
                 await loadContextPreview()
+                await loadRecordings()
             }
             .task {
                 // Live update todo list when events fire
@@ -364,6 +376,143 @@ struct EventDumpView: View {
             todoStore: coordinator.todoStore
         )
         contextPreview = await service.buildPreview()
+    }
+
+    // MARK: - Recordings Tab
+
+    @ViewBuilder
+    private var recordingsTabContent: some View {
+        VStack(spacing: 0) {
+            recordingsHeader
+            if tapeSessions.isEmpty {
+                ContentUnavailableView {
+                    Label("No Recordings", systemImage: "recordingtape")
+                } description: {
+                    Text(recordingEnabled
+                         ? "Recording is on. Start a fresh interview to capture a session tape."
+                         : "Turn on recording, then start a fresh interview to capture a session tape.")
+                }
+            } else {
+                recordingsList
+            }
+        }
+    }
+
+    private var recordingsHeader: some View {
+        HStack(spacing: 12) {
+            Toggle(isOn: $recordingEnabled) {
+                Text("Record sessions").font(.caption)
+            }
+            .toggleStyle(.switch)
+            .onChange(of: recordingEnabled) { _, newValue in
+                UserDefaults.standard.set(newValue, forKey: InterviewLifecycleController.recordingEnabledKey)
+            }
+            .help("Tee the next fresh interview to a session tape (~/Library/Application Support/Sprung/Recordings)")
+            Spacer()
+            Text("\(tapeSessions.count) of \(RecordingPaths.maxSessions)")
+                .font(.caption).foregroundStyle(.secondary)
+            Button("Refresh") { Task { await loadRecordings() } }
+                .buttonStyle(.borderless).font(.caption)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(Color(nsColor: .controlBackgroundColor))
+    }
+
+    private var recordingsList: some View {
+        List {
+            ForEach(tapeSessions) { session in
+                recordingRow(session)
+                    .listRowSeparator(.visible)
+            }
+        }
+        .listStyle(.plain)
+    }
+
+    @ViewBuilder
+    private func recordingRow(_ session: TapeSessionSummary) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 6) {
+                Button {
+                    Task { await toggleExpanded(session) }
+                } label: {
+                    Image(systemName: expandedSessionId == session.sessionId ? "chevron.down" : "chevron.right")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.borderless)
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(session.recordedAt ?? String(session.sessionId.prefix(8)))
+                        .font(.caption)
+                        .fontWeight(.medium)
+                    Text(recordingSummaryLine(session))
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                Button(role: .destructive) {
+                    Task { await deleteSession(session) }
+                } label: {
+                    Image(systemName: "trash").font(.caption2)
+                }
+                .buttonStyle(.borderless)
+                .help("Delete this recording")
+            }
+
+            if expandedSessionId == session.sessionId {
+                ForEach(sessionSteps) { step in
+                    HStack(spacing: 6) {
+                        Text("#\(step.turnIndex)")
+                            .font(.caption2.monospacedDigit())
+                            .foregroundStyle(.tertiary)
+                        Text(step.kind)
+                            .font(.caption2)
+                            .foregroundStyle(step.kind == "modelTurn" ? Color.green : Color.blue)
+                        Text(step.label)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                        Spacer()
+                    }
+                    .padding(.leading, 24)
+                }
+            }
+        }
+        .padding(.vertical, 2)
+    }
+
+    private func recordingSummaryLine(_ session: TapeSessionSummary) -> String {
+        var parts = ["\(session.turnCount) turns",
+                     "\(session.userMessageCount) msgs",
+                     "\(session.toolResultCount) tools"]
+        if let model = session.modelId, !model.isEmpty { parts.append(model) }
+        return parts.joined(separator: " · ")
+    }
+
+    private func loadRecordings() async {
+        tapeSessions = await tapeStore.listSessions()
+    }
+
+    private func toggleExpanded(_ session: TapeSessionSummary) async {
+        if expandedSessionId == session.sessionId {
+            expandedSessionId = nil
+            sessionSteps = []
+        } else {
+            expandedSessionId = session.sessionId
+            sessionSteps = (try? await tapeStore.steps(sessionId: session.sessionId)) ?? []
+        }
+    }
+
+    private func deleteSession(_ session: TapeSessionSummary) async {
+        await tapeStore.delete(sessionId: session.sessionId)
+        if expandedSessionId == session.sessionId {
+            expandedSessionId = nil
+            sessionSteps = []
+        }
+        await loadRecordings()
     }
 
     private func conversationEntryRow(_ entry: ConversationLogEntry) -> some View {
