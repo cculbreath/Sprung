@@ -361,6 +361,31 @@ actor AnthropicDocumentAnalysisService {
         )
     }
 
+    /// Re-run the extraction pass set against a STORED intermediate representation
+    /// (PDF transcription or git digest) — no source re-read, no Files-API upload,
+    /// no live git agent. The IR's own paged-ness is preserved so evidence anchors
+    /// resolve the same way they did at ingestion. This is the cheap-iteration entry
+    /// point: tweak an extraction prompt and re-run for $0 in source parsing.
+    func analyzeIntermediateRepresentation(
+        documentId: String,
+        filename: String,
+        ir: IntermediateRepresentation,
+        passes: PassSelection = .all,
+        statusCallback: (@Sendable (String) -> Void)? = nil
+    ) async throws -> AnalysisResult {
+        let modelId = try Self.configuredModelId()
+        var result = await runPasses(
+            documentId: documentId,
+            filename: filename,
+            source: .transcript(text: ir.renderedForExtraction(), isPaged: ir.isPaged),
+            passes: passes,
+            modelId: modelId,
+            statusCallback: statusCallback
+        )
+        result.intermediateRepresentation = ir
+        return result
+    }
+
     /// Transcribe a PDF ONCE into a high-fidelity `DocumentTranscription` (the
     /// PDF intermediate representation). Each chunk is uploaded via the Files API,
     /// transcribed in a single multimodal pass against the ACTUAL PDF, then deleted

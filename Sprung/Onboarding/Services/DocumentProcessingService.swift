@@ -415,15 +415,31 @@ actor DocumentProcessingService {
 
     // MARK: - Regeneration Methods
 
-    /// Run the analysis pass-set for an existing artifact's stored text.
-    /// Regeneration operates on the stored extracted content (the raw file may
-    /// no longer be available), so it always uses the text path.
+    /// Run the analysis pass-set for an existing artifact WITHOUT re-ingesting.
+    /// When the artifact has a stored intermediate representation (PDF
+    /// transcription or git digest), re-extraction runs against the rendered IR —
+    /// the whole point of the IR: it preserves visuals/tables/production-quality
+    /// and the source's paged-ness, and costs $0 in parsing (no Files-API upload,
+    /// no live git agent). Artifacts without an IR (plain text, or ingested before
+    /// IRs existed) fall back to their stored extracted text.
     private func regenerate(
         _ artifact: ArtifactRecord,
         passes: AnthropicDocumentAnalysisService.PassSelection
     ) async -> AnthropicDocumentAnalysisService.AnalysisResult? {
         let filename = artifact.filename
         do {
+            if let ir = artifact.intermediateRepresentation {
+                guard let analysisService = getOrCreateAnalysisService() else {
+                    Logger.warning("⚠️ LLMFacade not configured, skipping IR re-extraction for \(filename)", category: .ai)
+                    return nil
+                }
+                return try await analysisService.analyzeIntermediateRepresentation(
+                    documentId: artifact.idString,
+                    filename: filename,
+                    ir: ir,
+                    passes: passes
+                )
+            }
             return try await runAnalysis(
                 documentId: artifact.idString,
                 filename: filename,
