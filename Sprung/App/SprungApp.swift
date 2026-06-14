@@ -14,6 +14,25 @@ struct SprungApp: App {
     private let appDependencies: AppDependencies
     private let appEnvironment: AppEnvironment
     init() {
+        // Test-host guard: when the XCTest bundle launches this app as its host, run the
+        // entire app against an ephemeral in-memory store and skip every real-store side
+        // effect (pending reset, preflight backup, on-disk migration). Without this, every
+        // `xcodebuild test` run would read, back up, and potentially reset the developer's
+        // real `default.store`. Tests build their own containers; the host's is throwaway.
+        if Self.isRunningUnitTests {
+            guard let container = try? ModelContainer(
+                for: SprungSchema.schema,
+                configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+            ) else {
+                preconditionFailure("Unable to create in-memory ModelContainer for the test host")
+            }
+            self.modelContainer = container
+            let dependencies = AppDependencies(modelContext: container.mainContext)
+            self.appDependencies = dependencies
+            self.appEnvironment = dependencies.appEnvironment
+            return
+        }
+
         // Perform any pending store reset from previous session (must happen before opening)
         SwiftDataBackupManager.performPendingResetIfNeeded()
 
@@ -337,6 +356,13 @@ struct SprungApp: App {
     }
 }
 private extension SprungApp {
+    /// True when the process is hosting the XCTest bundle (set by Xcode/xcodebuild at
+    /// launch). Used to keep the test host off the developer's real data store.
+    static var isRunningUnitTests: Bool {
+        ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+            || NSClassFromString("XCTestCase") != nil
+    }
+
     static func makeDirectModelContainer(configuration: ModelConfiguration? = nil) throws -> ModelContainer {
         let config: ModelConfiguration
         if let configuration {
