@@ -59,28 +59,6 @@
                ReferencedContainer = "container:Sprung.xcodeproj">
             </BuildableReference>
          </TestableReference>
-         <TestableReference
-            skipped = "NO"
-            parallelizable = "YES">
-            <BuildableReference
-               BuildableIdentifier = "primary"
-               BlueprintIdentifier = "57306ADF2DDE56A80053246D"
-               BuildableName = "SprungUITests.xctest"
-               BlueprintName = "SprungUITests"
-               ReferencedContainer = "container:Sprung.xcodeproj">
-            </BuildableReference>
-         </TestableReference>
-         <TestableReference
-            skipped = "NO"
-            parallelizable = "YES">
-            <BuildableReference
-               BuildableIdentifier = "primary"
-               BlueprintIdentifier = "57306BD92DDE834C0053246D"
-               BuildableName = "JobRecTests.xctest"
-               BlueprintName = "JobRecTests"
-               ReferencedContainer = "container:Sprung.xcodeproj">
-            </BuildableReference>
-         </TestableReference>
       </Testables>
    </TestAction>
    <LaunchAction
