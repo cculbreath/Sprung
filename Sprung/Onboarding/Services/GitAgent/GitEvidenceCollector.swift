@@ -464,7 +464,12 @@ enum GitEvidenceCollector {
                 extensionCounts[ext, default: 0] += 1
             }
         }
-        let sorted = extensionCounts.sorted { $0.value > $1.value }.prefix(20)
+        // Sort by count desc, then by extension asc as a stable tiebreak, so
+        // repeated ingestions of the same repo yield an identical digest
+        // (Dictionary iteration order is otherwise nondeterministic).
+        let sorted = extensionCounts
+            .sorted { $0.value != $1.value ? $0.value > $1.value : $0.key < $1.key }
+            .prefix(20)
         return JSON(sorted.map { ["extension": $0.key, "count": $0.value] })
     }
 

@@ -313,8 +313,12 @@ final class SwiftDataSessionPersistenceHandler {
         // Intermediate representation (PDF transcription or git digest) — mapped
         // generically so any source that produces one persists it identically.
         let intermediateRepresentationJSON = record["intermediateRepresentation"].string
-        // Persist the full record JSON for metadata
-        let metadataJSON = record.rawString()
+        // Persist the record JSON for metadata, but DROP the intermediate
+        // representation: it has its own column, and a transcription/digest can be
+        // large — keeping it here too would double its storage.
+        var metadataRecord = record
+        metadataRecord.dictionaryObject?.removeValue(forKey: "intermediateRepresentation")
+        let metadataJSON = metadataRecord.rawString()
         let rawFileRelativePath = record["rawFilePath"].string
         let planItemId = record["planItemId"].string
 
