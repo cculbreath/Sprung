@@ -631,6 +631,17 @@ actor StateCoordinator: OnboardingEventEmitter {
         await conversationLog.drainPendingWireUpdates()
     }
 
+    // MARK: - Tape Recording (optional; nil when not recording)
+
+    /// When set (recording enabled), conversation-advancing events are teed to the
+    /// session tape so the session can later be replayed. Every hook below is a
+    /// no-op when this is nil, so recording-off has zero behavioral impact.
+    private(set) var tapeRecorder: SessionTapeRecorder?
+
+    func setTapeRecorder(_ recorder: SessionTapeRecorder?) {
+        self.tapeRecorder = recorder
+    }
+
     /// Store a completed tool result - ConversationLog is the sole source of truth
     /// Returns true if the slot was found and filled, false if slot not found (orphaned/already filled)
     @discardableResult
@@ -638,6 +649,11 @@ actor StateCoordinator: OnboardingEventEmitter {
         let success = await conversationLog.setToolResult(callId: callId, output: output, status: .completed)
         if success {
             Logger.debug("✅ Tool result stored: \(toolName) (\(callId.prefix(8)))", category: .ai)
+            // Tee to the tape (served verbatim by callId on replay) so the tool
+            // never re-runs during replay.
+            await tapeRecorder?.recordToolResult(
+                callId: callId, name: toolName, argumentsJSON: nil, output: output, status: "completed"
+            )
         } else {
             Logger.warning("⚠️ Tool result not stored (slot not found or already resolved): \(toolName) (\(callId.prefix(8)))", category: .ai)
             // Even if slot not found (orphaned/superseded call) or already resolved (race with auto-fill),
@@ -833,7 +849,15 @@ actor StateCoordinator: OnboardingEventEmitter {
     @discardableResult
     func appendUserMessage(_ text: String, id: UUID = UUID(), isSystemGenerated: Bool = false) async -> UUID {
         // ConversationLog is the sole source of truth - handles gating for pending tool calls
-        await conversationLog.appendUser(id: id, text: text, isSystemGenerated: isSystemGenerated)
+        let entryId = await conversationLog.appendUser(id: id, text: text, isSystemGenerated: isSystemGenerated)
+        // Tee to the tape: re-injecting these in order is how replay re-drives the
+        // conversation (text is the message that advances the turn; the live
+        // pipeline rebuilds the exact wire form).
+        await tapeRecorder?.recordUserMessage(
+            entryId: entryId.uuidString, wireText: text, attachmentBase64: nil,
+            attachmentMediaType: nil, isSystemGenerated: isSystemGenerated
+        )
+        return entryId
     }
 
     /// Remove a user entry whose request failed to send (chatbox failure path:
@@ -882,6 +906,7 @@ actor StateCoordinator: OnboardingEventEmitter {
     /// (these never appear in the UI transcript but must replay in history).
     func recordCoordinatorWireTurn(_ wireText: String) async {
         await conversationLog.recordCoordinatorWireTurn(text: wireText)
+        await tapeRecorder?.recordCoordinatorTurn(text: wireText, anchorEntryId: nil)
     }
 
     /// Snapshot of the conversation in exact wire form for history replay.

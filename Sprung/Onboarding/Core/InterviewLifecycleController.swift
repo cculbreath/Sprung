@@ -35,6 +35,13 @@ final class InterviewLifecycleController {
     private var eventSubscriptionTask: Task<Void, Never>?
     private var stateUpdateTasks: [Task<Void, Never>] = []
 
+    // Tape recording (dev-only; off by default)
+    static let recordingEnabledKey = "onboardingTapeRecordingEnabled"
+    private var tapeRecorder: SessionTapeRecorder?
+    /// The real, un-decorated Anthropic service, saved while a recording decorator
+    /// is installed so it can be restored when recording stops.
+    private var savedAnthropicService: AnthropicService?
+
     // Callbacks
     private var subscribeToStateUpdates: (() -> Void)?
 
@@ -101,7 +108,7 @@ final class InterviewLifecycleController {
         // Start fresh interview
         Logger.info("🚀 Starting fresh interview", category: .ai)
         await resetForFreshStart()
-        _ = sessionPersistenceHandler.startSession(resumeExisting: false)
+        let session = sessionPersistenceHandler.startSession(resumeExisting: false)
         await state.setPhase(.phase1VoiceContext)
         await phaseTransitionController.registerObjectivesForCurrentPhase()
         // Note: Todo list for Phase 1 is populated by AgentReadyTool.execute()
@@ -119,6 +126,10 @@ final class InterviewLifecycleController {
         }
         Logger.info("🎯 Setting interview model from settings: \(modelId)", category: .ai)
         await state.setModelId(modelId)
+
+        // Install tape recording (if enabled) AFTER the model is set and BEFORE the
+        // first LLM turn, so the very first model stream is captured.
+        await beginTapeRecordingIfEnabled(sessionId: "\(session.id)", modelId: modelId)
 
         let success = await startLLM(isResuming: false)
         if success {
@@ -386,9 +397,43 @@ final class InterviewLifecycleController {
     }
 
     private func resetForFreshStart() async {
+        await endTapeRecording()
         await state.reset()
         clearArtifacts()
         await resetStore()
+    }
+
+    // MARK: - Tape Recording
+
+    /// Install the recording decorator + session recorder when the dev toggle is on.
+    /// No-op (and zero overhead) otherwise. Best-effort: a recording-setup failure
+    /// never blocks the interview.
+    private func beginTapeRecordingIfEnabled(sessionId: String, modelId: String) async {
+        guard UserDefaults.standard.bool(forKey: Self.recordingEnabledKey) else { return }
+        guard let facade = llmFacade, let realService = facade.currentAnthropicService() else {
+            Logger.warning("🎙️ Tape recording enabled but no Anthropic service to wrap — skipping", category: .ai)
+            return
+        }
+        let recorder = SessionTapeRecorder()
+        await recorder.start(sessionId: sessionId, modelId: modelId)
+        savedAnthropicService = realService
+        facade.registerAnthropicService(RecordingAnthropicService(wrapping: realService, recorder: recorder))
+        await state.setTapeRecorder(recorder)
+        tapeRecorder = recorder
+        Logger.info("🎙️ Tape recording started for session \(sessionId)", category: .ai)
+    }
+
+    /// Stop recording (if active) and restore the real, un-decorated service.
+    private func endTapeRecording() async {
+        guard let recorder = tapeRecorder else { return }
+        await recorder.stop()
+        if let real = savedAnthropicService {
+            llmFacade?.registerAnthropicService(real)
+        }
+        savedAnthropicService = nil
+        await state.setTapeRecorder(nil)
+        tapeRecorder = nil
+        Logger.info("🎙️ Tape recording stopped", category: .ai)
     }
 
     // MARK: - Data Persistence

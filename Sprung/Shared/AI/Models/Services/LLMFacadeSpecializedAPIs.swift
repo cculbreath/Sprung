@@ -25,6 +25,13 @@ final class LLMFacadeSpecializedAPIs {
         self.anthropicService = service
     }
 
+    /// The currently-registered Anthropic service, if any. Used by the tape
+    /// recorder/replay to wrap the live service in a decorator and to restore it
+    /// afterwards.
+    func currentAnthropicService() -> AnthropicService? {
+        anthropicService
+    }
+
     // MARK: - OpenAI Responses API
 
     func responseCreateStream(

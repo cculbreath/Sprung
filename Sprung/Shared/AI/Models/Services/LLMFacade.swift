@@ -112,6 +112,11 @@ final class LLMFacade {
         specializedAPIs.registerAnthropicService(service)
     }
 
+    /// The currently-registered Anthropic service (for the recording/replay swap).
+    func currentAnthropicService() -> AnthropicService? {
+        specializedAPIs.currentAnthropicService()
+    }
+
     private func resolveClient(for backend: Backend) throws -> LLMClient {
         guard let resolved = backendClients[backend] else {
             throw LLMError.clientError("Backend \(backend.displayName) is not configured")
