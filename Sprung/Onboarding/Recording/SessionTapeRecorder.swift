@@ -59,6 +59,15 @@ actor SessionTapeRecorder {
         return encoder
     }()
 
+    /// Root directory recordings are written under. Defaults to the shared
+    /// `RecordingPaths.recordingsRoot`; injected to a temp dir in tests so a test
+    /// run never prunes the user's real recordings.
+    private let recordingsRoot: URL
+
+    init(recordingsRoot: URL = RecordingPaths.recordingsRoot) {
+        self.recordingsRoot = recordingsRoot
+    }
+
     // MARK: - Lifecycle
 
     /// Begin recording a new session.
@@ -77,13 +86,13 @@ actor SessionTapeRecorder {
         }
 
         let fileManager = FileManager.default
-        let sessionDirectory = RecordingPaths.sessionDirectory(sessionId)
-        let tapeFile = RecordingPaths.tapeFile(sessionId)
+        let sessionDirectory = RecordingPaths.sessionDirectory(sessionId, in: recordingsRoot)
+        let tapeFile = RecordingPaths.tapeFile(sessionId, in: recordingsRoot)
 
         do {
             // Ensure the recordings root exists before pruning enumerates it.
             try fileManager.createDirectory(
-                at: RecordingPaths.recordingsRoot,
+                at: recordingsRoot,
                 withIntermediateDirectories: true
             )
 
@@ -276,7 +285,7 @@ actor SessionTapeRecorder {
         excluding excludedSessionId: String,
         fileManager: FileManager
     ) {
-        let root = RecordingPaths.recordingsRoot
+        let root = recordingsRoot
         let resourceKeys: Set<URLResourceKey> = [
             .isDirectoryKey,
             .contentModificationDateKey,

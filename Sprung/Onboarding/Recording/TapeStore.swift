@@ -78,11 +78,16 @@ actor TapeStore {
 
     private let fileManager: FileManager
     private let decoder: JSONDecoder
+    private let recordingsRoot: URL
 
-    /// - Parameter fileManager: injected for testability; defaults to `.default`.
-    init(fileManager: FileManager = .default) {
+    /// - Parameters:
+    ///   - fileManager: injected for testability; defaults to `.default`.
+    ///   - recordingsRoot: root directory to enumerate; defaults to the shared
+    ///     `RecordingPaths.recordingsRoot`. Injected to a temp dir in tests.
+    init(fileManager: FileManager = .default, recordingsRoot: URL = RecordingPaths.recordingsRoot) {
         self.fileManager = fileManager
         self.decoder = JSONDecoder()
+        self.recordingsRoot = recordingsRoot
     }
 
     // MARK: - Enumeration
@@ -95,7 +100,7 @@ actor TapeStore {
     /// Header-dated sessions always sort ahead of fallback-dated ones at equal
     /// timestamps, so a freshly written, fully-headered tape is never buried.
     func listSessions() -> [TapeSessionSummary] {
-        let root = RecordingPaths.recordingsRoot
+        let root = recordingsRoot
         guard let entries = try? fileManager.contentsOfDirectory(
             at: root,
             includingPropertiesForKeys: [.isDirectoryKey, .contentModificationDateKey],
@@ -114,7 +119,7 @@ actor TapeStore {
             guard isDirectory else { continue }
 
             let sessionId = directory.lastPathComponent
-            let tapeURL = RecordingPaths.tapeFile(sessionId)
+            let tapeURL = RecordingPaths.tapeFile(sessionId, in: recordingsRoot)
             guard fileManager.fileExists(atPath: tapeURL.path) else { continue }
 
             let summary = summarize(sessionId: sessionId)
@@ -142,7 +147,7 @@ actor TapeStore {
     /// partially-flushed line never discards the events that decoded cleanly.
     /// Throws only when the tape file itself cannot be located or read.
     func loadEvents(sessionId: String) throws -> [TapeEvent] {
-        let tapeURL = RecordingPaths.tapeFile(sessionId)
+        let tapeURL = RecordingPaths.tapeFile(sessionId, in: recordingsRoot)
         guard fileManager.fileExists(atPath: tapeURL.path) else {
             throw TapeStoreError.tapeMissing(sessionId: sessionId)
         }
@@ -235,7 +240,7 @@ actor TapeStore {
     /// explicit UI delete action — the recorder owns scheduled ring-buffer
     /// pruning. Logs (never throws) on failure so a UI delete is best-effort.
     func delete(sessionId: String) {
-        let directory = RecordingPaths.sessionDirectory(sessionId)
+        let directory = RecordingPaths.sessionDirectory(sessionId, in: recordingsRoot)
         guard fileManager.fileExists(atPath: directory.path) else {
             Logger.warning(
                 "Requested delete of nonexistent session directory",
