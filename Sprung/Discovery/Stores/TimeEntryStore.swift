@@ -10,31 +10,20 @@ import Foundation
 
 @Observable
 @MainActor
-final class TimeEntryStore: SwiftDataStore {
+final class TimeEntryStore: EntityStore {
+    typealias Entity = TimeEntry
+
     unowned let modelContext: ModelContext
+
+    /// `@Observable` refresh counter bumped by EntityStore mutations.
+    var changeVersion: Int = 0
 
     init(context: ModelContext) {
         modelContext = context
     }
 
     var allEntries: [TimeEntry] {
-        (try? modelContext.fetch(
-            FetchDescriptor<TimeEntry>(sortBy: [SortDescriptor(\.startTime, order: .reverse)])
-        )) ?? []
-    }
-
-    func add(_ entry: TimeEntry) {
-        modelContext.insert(entry)
-        saveContext()
-    }
-
-    func delete(_ entry: TimeEntry) {
-        modelContext.delete(entry)
-        saveContext()
-    }
-
-    func update(_ entry: TimeEntry) {
-        saveContext()
+        fetchAll(sortBy: [SortDescriptor(\.startTime, order: .reverse)])
     }
 
     // MARK: - Date-based Queries

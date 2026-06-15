@@ -77,7 +77,7 @@ final class DiscoveryPipelineCoordinator {
 
         // Convert and add new tasks
         let tasks = result.tasks.map { $0.toDailyTask() }
-        dailyTaskStore.addMultiple(tasks)
+        dailyTaskStore.addAll(tasks)
 
         Logger.info("✅ Generated \(tasks.count) daily tasks", category: .ai)
     }

@@ -10,22 +10,20 @@ import Foundation
 
 @Observable
 @MainActor
-final class JobSourceStore: SwiftDataStore {
+final class JobSourceStore: EntityStore {
+    typealias Entity = JobSource
+
     unowned let modelContext: ModelContext
 
-    /// Version counter to trigger SwiftUI updates when sources change
-    private(set) var version: Int = 0
+    /// `@Observable` refresh counter; the EntityStore extension bumps it on every mutation.
+    var changeVersion: Int = 0
 
     init(context: ModelContext) {
         modelContext = context
     }
 
     var sources: [JobSource] {
-        // Access version to establish dependency for SwiftUI
-        _ = version
-        return (try? modelContext.fetch(
-            FetchDescriptor<JobSource>(sortBy: [SortDescriptor(\.name)])
-        )) ?? []
+        fetchAll(sortBy: [SortDescriptor(\.name)])
     }
 
     var activeSources: [JobSource] {
@@ -36,37 +34,19 @@ final class JobSourceStore: SwiftDataStore {
         activeSources.filter { $0.isDue }
     }
 
-    func add(_ source: JobSource) {
-        modelContext.insert(source)
-        saveContext()
-        version += 1
-    }
-
     func addMultiple(_ sources: [JobSource]) {
-        for source in sources {
-            modelContext.insert(source)
-        }
-        saveContext()
-        version += 1
+        addAll(sources)
     }
 
     func markVisited(_ source: JobSource) {
         source.lastVisitedAt = Date()
         source.totalVisits += 1
-        saveContext()
-        version += 1
-    }
-
-    func delete(_ source: JobSource) {
-        modelContext.delete(source)
-        saveContext()
-        version += 1
+        update(source)
     }
 
     func updateCadence(_ source: JobSource, days: Int) {
         source.recommendedCadenceDays = days
-        saveContext()
-        version += 1
+        update(source)
     }
 
     func source(byId id: UUID) -> JobSource? {
@@ -102,8 +82,7 @@ final class JobSourceStore: SwiftDataStore {
             source.consecutiveFailures += 1
         }
 
-        saveContext()
-        version += 1
+        update(source)
     }
 
     /// Get top sources by effectiveness

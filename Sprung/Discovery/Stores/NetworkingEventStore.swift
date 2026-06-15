@@ -10,17 +10,20 @@ import Foundation
 
 @Observable
 @MainActor
-final class NetworkingEventStore: SwiftDataStore {
+final class NetworkingEventStore: EntityStore {
+    typealias Entity = NetworkingEventOpportunity
+
     unowned let modelContext: ModelContext
+
+    /// `@Observable` refresh counter bumped on every mutation (see EntityStore).
+    var changeVersion: Int = 0
 
     init(context: ModelContext) {
         modelContext = context
     }
 
     var allEvents: [NetworkingEventOpportunity] {
-        (try? modelContext.fetch(
-            FetchDescriptor<NetworkingEventOpportunity>(sortBy: [SortDescriptor(\.date)])
-        )) ?? []
+        fetchAll(sortBy: [SortDescriptor(\.date)])
     }
 
     var upcomingEvents: [NetworkingEventOpportunity] {
@@ -40,19 +43,7 @@ final class NetworkingEventStore: SwiftDataStore {
     }
 
     func addMultiple(_ events: [NetworkingEventOpportunity]) {
-        for event in events {
-            modelContext.insert(event)
-        }
-        saveContext()
-    }
-
-    func update(_: NetworkingEventOpportunity) {
-        saveContext()
-    }
-
-    func delete(_ event: NetworkingEventOpportunity) {
-        modelContext.delete(event)
-        saveContext()
+        addAll(events)
     }
 
     func event(byId id: UUID) -> NetworkingEventOpportunity? {
@@ -70,30 +61,30 @@ final class NetworkingEventStore: SwiftDataStore {
     func markAsPlanned(_ event: NetworkingEventOpportunity, calendarEventId: String? = nil) {
         event.status = .planned
         event.calendarEventId = calendarEventId
-        saveContext()
+        persistChanges()
     }
 
     func markAsAttended(_ event: NetworkingEventOpportunity) {
         event.attended = true
         event.attendedAt = Date()
         event.status = .attended
-        saveContext()
+        persistChanges()
     }
 
     func markAsDebriefed(_ event: NetworkingEventOpportunity) {
         event.status = .debriefed
-        saveContext()
+        persistChanges()
     }
 
     func markAsSkipped(_ event: NetworkingEventOpportunity) {
         event.status = .skipped
-        saveContext()
+        persistChanges()
     }
 
     func setDiscoveryFeedback(_ event: NetworkingEventOpportunity, feedback: String, note: String? = nil) {
         event.discoveryFeedback = feedback
         event.discoveryFeedbackNote = note
-        saveContext()
+        persistChanges()
     }
 
 }

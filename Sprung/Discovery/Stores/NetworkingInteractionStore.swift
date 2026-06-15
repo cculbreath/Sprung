@@ -10,22 +10,20 @@ import Foundation
 
 @Observable
 @MainActor
-final class NetworkingInteractionStore: SwiftDataStore {
+final class NetworkingInteractionStore: EntityStore {
+    typealias Entity = NetworkingInteraction
+
     unowned let modelContext: ModelContext
+
+    /// `@Observable` refresh counter bumped by EntityStore mutations.
+    var changeVersion: Int = 0
 
     init(context: ModelContext) {
         modelContext = context
     }
 
     var allInteractions: [NetworkingInteraction] {
-        (try? modelContext.fetch(
-            FetchDescriptor<NetworkingInteraction>(sortBy: [SortDescriptor(\.date, order: .reverse)])
-        )) ?? []
-    }
-
-    func add(_ interaction: NetworkingInteraction) {
-        modelContext.insert(interaction)
-        saveContext()
+        fetchAll(sortBy: [SortDescriptor(\.date, order: .reverse)])
     }
 
     // MARK: - Contact-based Queries

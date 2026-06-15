@@ -43,7 +43,7 @@ struct DailyTaskGenerator {
         }
 
         // Add new tasks
-        dailyTaskStore.addMultiple(tasks)
+        dailyTaskStore.addAll(tasks)
 
         Logger.info("Coaching: Saved \(tasks.count) daily tasks", category: .ai)
     }

@@ -10,8 +10,13 @@ import Foundation
 
 @Observable
 @MainActor
-final class CoachingSessionStore: SwiftDataStore {
+final class CoachingSessionStore: EntityStore {
+    typealias Entity = CoachingSession
+
     unowned let modelContext: ModelContext
+
+    /// `@Observable` refresh counter bumped on every mutation via the EntityStore extension.
+    var changeVersion: Int = 0
 
     init(context: ModelContext) {
         modelContext = context
@@ -20,9 +25,7 @@ final class CoachingSessionStore: SwiftDataStore {
     // MARK: - Queries
 
     var allSessions: [CoachingSession] {
-        (try? modelContext.fetch(
-            FetchDescriptor<CoachingSession>(sortBy: [SortDescriptor(\.sessionDate, order: .reverse)])
-        )) ?? []
+        fetchAll(sortBy: [SortDescriptor(\.sessionDate, order: .reverse)])
     }
 
     /// Get today's coaching session if one exists
@@ -71,23 +74,6 @@ final class CoachingSessionStore: SwiftDataStore {
             return completed.first(where: { $0.sessionDate < cutoff })?.sessionDate
         }
         return completed.first?.sessionDate
-    }
-
-    // MARK: - Mutations
-
-    func add(_ session: CoachingSession) {
-        modelContext.insert(session)
-        saveContext()
-    }
-
-    func update(_ session: CoachingSession) {
-        _ = session // Silence unused warning - parameter needed for API consistency
-        saveContext()
-    }
-
-    func delete(_ session: CoachingSession) {
-        modelContext.delete(session)
-        saveContext()
     }
 
     // MARK: - Summary Helpers

@@ -10,17 +10,21 @@ import Foundation
 
 @Observable
 @MainActor
-final class NetworkingContactStore: SwiftDataStore {
+final class NetworkingContactStore: EntityStore {
+    typealias Entity = NetworkingContact
+
     unowned let modelContext: ModelContext
+
+    /// `@Observable` refresh counter; bumped by EntityStore mutations so SwiftUI
+    /// views reading the fetched collections re-render on insert/delete/update.
+    var changeVersion: Int = 0
 
     init(context: ModelContext) {
         modelContext = context
     }
 
     var allContacts: [NetworkingContact] {
-        (try? modelContext.fetch(
-            FetchDescriptor<NetworkingContact>(sortBy: [SortDescriptor(\.name)])
-        )) ?? []
+        fetchAll(sortBy: [SortDescriptor(\.name)])
     }
 
     var needsAttention: [NetworkingContact] {
@@ -31,11 +35,6 @@ final class NetworkingContactStore: SwiftDataStore {
 
     var hotContacts: [NetworkingContact] {
         allContacts.filter { $0.warmth == .hot }
-    }
-
-    func add(_ contact: NetworkingContact) {
-        modelContext.insert(contact)
-        saveContext()
     }
 
     func contact(byId id: UUID) -> NetworkingContact? {
@@ -49,7 +48,7 @@ final class NetworkingContactStore: SwiftDataStore {
         contact.lastContactType = type
         contact.totalInteractions += 1
         contact.updatedAt = Date()
-        saveContext()
+        update(contact)
     }
 
     // MARK: - Warmth Management
@@ -57,7 +56,7 @@ final class NetworkingContactStore: SwiftDataStore {
     func updateWarmth(_ contact: NetworkingContact, to warmth: ContactWarmth) {
         contact.warmth = warmth
         contact.updatedAt = Date()
-        saveContext()
+        update(contact)
     }
 
     /// Auto-decay warmth based on time since last contact
@@ -81,7 +80,7 @@ final class NetworkingContactStore: SwiftDataStore {
 
         contact.warmth = newWarmth
         contact.updatedAt = Date()
-        saveContext()
+        update(contact)
     }
 
     /// Update warmth for all contacts based on decay rules

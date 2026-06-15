@@ -10,25 +10,20 @@ import Foundation
 
 @Observable
 @MainActor
-final class DailyTaskStore: SwiftDataStore {
+final class DailyTaskStore: EntityStore {
+    typealias Entity = DailyTask
+
     unowned let modelContext: ModelContext
 
-    /// Incremented on mutations to trigger SwiftUI observation
-    private(set) var changeCounter: Int = 0
+    /// `@Observable`-tracked refresh counter; the EntityStore extension bumps it on mutation.
+    var changeVersion: Int = 0
 
     init(context: ModelContext) {
         modelContext = context
     }
 
-    private func notifyChanged() {
-        changeCounter += 1
-    }
-
     var allTasks: [DailyTask] {
-        _ = changeCounter  // Establish observation dependency
-        return (try? modelContext.fetch(
-            FetchDescriptor<DailyTask>(sortBy: [SortDescriptor(\.priority, order: .reverse)])
-        )) ?? []
+        fetchAll(sortBy: [SortDescriptor(\.priority, order: .reverse)])
     }
 
     var todaysTasks: [DailyTask] {
@@ -42,42 +37,17 @@ final class DailyTaskStore: SwiftDataStore {
         todaysTasks.filter { $0.taskType == type }
     }
 
-    func add(_ task: DailyTask) {
-        modelContext.insert(task)
-        saveContext()
-        notifyChanged()
-    }
-
-    func addMultiple(_ tasks: [DailyTask]) {
-        for task in tasks {
-            modelContext.insert(task)
-        }
-        saveContext()
-        notifyChanged()
-    }
-
     func complete(_ task: DailyTask) {
         task.isCompleted = true
         task.completedAt = Date()
-        saveContext()
-        notifyChanged()
-    }
-
-    func delete(_ task: DailyTask) {
-        modelContext.delete(task)
-        saveContext()
-        notifyChanged()
+        update(task)
     }
 
     /// Clear old tasks (older than specified days)
     func clearOldTasks(olderThan days: Int = 7) {
         let cutoff = Calendar.current.date(byAdding: .day, value: -days, to: Date()) ?? Date()
         let oldTasks = allTasks.filter { $0.createdAt < cutoff }
-        for task in oldTasks {
-            modelContext.delete(task)
-        }
-        saveContext()
-        notifyChanged()
+        deleteAll(oldTasks)
     }
 
     /// Get completed tasks this week

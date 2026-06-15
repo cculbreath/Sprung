@@ -9,10 +9,13 @@ import SwiftyJSON
 
 @Observable
 @MainActor
-final class CoverRefStore: SwiftDataStore {
+final class CoverRefStore: EntityStore {
+    typealias Entity = CoverRef
     unowned let modelContext: ModelContext
+    /// `@Observable` refresh counter; bumped by the `EntityStore` extension on every mutation.
+    var changeVersion: Int = 0
     var storedCoverRefs: [CoverRef] {
-        (try? modelContext.fetch(FetchDescriptor<CoverRef>())) ?? []
+        fetchAll()
     }
     var defaultSources: [CoverRef] {
         storedCoverRefs.filter { $0.enabledByDefault }
@@ -23,13 +26,11 @@ final class CoverRefStore: SwiftDataStore {
     }
     @discardableResult
     func addCoverRef(_ coverRef: CoverRef) -> CoverRef {
-        modelContext.insert(coverRef)
-        saveContext()
+        add(coverRef)
         return coverRef
     }
     func deleteCoverRef(_ coverRef: CoverRef) {
-        modelContext.delete(coverRef)
-        saveContext()
+        delete(coverRef)
     }
 
     // MARK: - Writer's Voice (Single Source of Truth)

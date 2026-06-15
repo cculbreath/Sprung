@@ -10,17 +10,20 @@ import Foundation
 
 @Observable
 @MainActor
-final class EventFeedbackStore: SwiftDataStore {
+final class EventFeedbackStore: EntityStore {
+    typealias Entity = EventFeedback
+
     unowned let modelContext: ModelContext
+
+    /// `@Observable` refresh counter bumped by EntityStore mutations.
+    var changeVersion: Int = 0
 
     init(context: ModelContext) {
         modelContext = context
     }
 
     var allFeedback: [EventFeedback] {
-        (try? modelContext.fetch(
-            FetchDescriptor<EventFeedback>(sortBy: [SortDescriptor(\.createdAt, order: .reverse)])
-        )) ?? []
+        fetchAll(sortBy: [SortDescriptor(\.createdAt, order: .reverse)])
     }
 
 }
