@@ -69,7 +69,7 @@ struct CardMergeResult {
 
 @Observable
 @MainActor
-class CardMergeAgent {
+class CardMergeAgent: AnthropicToolLoopDelegate {
     // Configuration
     private let workspacePath: URL
     private let modelId: String
@@ -86,9 +86,9 @@ class CardMergeAgent {
     private(set) var progress: [String] = []
     private(set) var turnCount: Int = 0
 
-    // Limits
-    private let maxTurns = 100  // More turns allowed for thorough merging
-    private let timeoutSeconds: TimeInterval = 900  // 15 minutes
+    // Limits (maxTurns/timeoutSeconds internal so they witness AnthropicToolLoopDelegate)
+    let maxTurns = 100  // More turns allowed for thorough merging
+    let timeoutSeconds: TimeInterval = 900  // 15 minutes
     private let maxResponseTokens = 8192
 
     // Context pruning (0 = disabled, uses full context).
@@ -99,12 +99,14 @@ class CardMergeAgent {
         UserDefaults.standard.integer(forKey: "onboardingEphemeralTurns")
     }
 
-    // Conversation state (no cache_control markers stored here; the moving
-    // breakpoint is applied to a per-request copy in cachedRequestMessages()).
-    private var messages: [AnthropicMessage] = []
+    // Conversation history is owned by AnthropicToolLoopRunner; the moving cache
+    // breakpoint is applied to a per-request copy in cachedRequestMessages(_:).
 
     // Track ephemeral tool-result blocks: (messageIndex, blockIndex, addedAtTurn, toolUseId)
     private var ephemeralBlocks: [(messageIndex: Int, blockIndex: Int, addedAtTurn: Int, toolUseId: String)] = []
+    /// Tool-use ids whose card-read results were marked ephemeral this turn,
+    /// resolved to block indices in didAppendToolResults.
+    private var turnEphemeralIds: [String] = []
 
     // Track file reads to detect excessive re-reading
     private var fileReadCounts: [String: Int] = [:]
@@ -147,201 +149,173 @@ class CardMergeAgent {
 
     /// Run the agent to merge duplicate cards
     func run() async throws -> CardMergeResult {
-        guard let facade = facade else {
+        guard facade != nil else {
             throw CardMergeAgentError.noLLMFacade
         }
 
         status = .running
         turnCount = 0
-        messages = []
         progress = []
         ephemeralBlocks = []
 
         // Count original cards
         originalCardCount = try countCards()
 
-        // Initialize conversation
-        messages.append(initialUserMessage())
-
-        let startTime = Date()
-
         do {
-            while turnCount < maxTurns {
-                // Check timeout
-                if Date().timeIntervalSince(startTime) > timeoutSeconds {
-                    throw CardMergeAgentError.timeout
-                }
-
-                turnCount += 1
-                await updateProgress("Turn \(turnCount): Calling LLM...")
-
-                // Add turn marker to transcript
-                if let agentId = agentId {
-                    tracker?.appendTranscript(
-                        agentId: agentId,
-                        entryType: .turn,
-                        content: "Turn \(turnCount) of \(maxTurns)",
-                        details: nil
-                    )
-                }
-
-                let parameters = AnthropicMessageParameter(
-                    model: modelId,
-                    messages: cachedRequestMessages(),
-                    system: systemContent(),
-                    maxTokens: maxResponseTokens,
-                    stream: false,
-                    tools: tools,
-                    toolChoice: .auto
-                )
-
-                let response = try await facade.anthropicMessages(parameters: parameters)
-
-                // Track token + cache usage
-                let usage = response.usage
-                Logger.info(
-                    "🔀 CardMergeAgent usage (\(modelId)): input=\(usage.inputTokens) cache_read=\(usage.cacheReadInputTokens ?? 0) cache_create=\(usage.cacheCreationInputTokens ?? 0) output=\(usage.outputTokens)",
-                    category: .ai
-                )
-                if let agentId = agentId {
-                    tracker?.addTokenUsage(
-                        agentId: agentId,
-                        input: usage.inputTokens,
-                        output: usage.outputTokens,
-                        cached: usage.cacheReadInputTokens ?? 0
-                    )
-                }
-
-                // Split response content into text and tool-use blocks
-                var textParts: [String] = []
-                var toolUses: [AnthropicToolUseResponseBlock] = []
-                for block in response.content {
-                    switch block {
-                    case .text(let textBlock):
-                        textParts.append(textBlock.text)
-                    case .toolUse(let toolUse):
-                        toolUses.append(toolUse)
-                    }
-                }
-
-                // Echo the assistant turn into history
-                messages.append(assistantMessage(textParts: textParts, toolUses: toolUses))
-
-                // If the model returned text without tool calls, it might be confused
-                if toolUses.isEmpty {
-                    messages.append(.user("Please continue merging cards or call complete_merge if you're done."))
-                    continue
-                }
-
-                // Prune old ephemeral tool-result blocks before adding new ones (if enabled)
-                if ephemeralTurns > 0 {
-                    pruneEphemeralBlocks()
-                }
-
-                // Execute non-completion tool calls first so every tool_use in the
-                // assistant turn gets a tool_result in the next user message.
-                var resultBlocks: [AnthropicContentBlock] = []
-                var ephemeralCandidates: [(blockIndex: Int, toolUseId: String)] = []
-
-                for toolUse in toolUses where toolUse.name != CompleteMergeTool.name {
-                    let arguments = argumentsJSON(from: toolUse.input)
-
-                    await updateProgress("Turn \(turnCount): \(toolDisplayName(toolUse.name))")
-
-                    let result = await executeTool(name: toolUse.name, arguments: arguments)
-                    let blockIndex = resultBlocks.count
-                    resultBlocks.append(.toolResult(AnthropicToolResultBlock(
-                        toolUseId: toolUse.id,
-                        content: result
-                    )))
-
-                    // Mark card file reads as ephemeral (they can be pruned after a few turns)
-                    // Only files in cards/ folder are ephemeral; index.json and other files persist
-                    if toolUse.name == ReadFileTool.name {
-                        let path = extractToolDetail(name: toolUse.name, arguments: arguments) ?? ""
-                        if path.contains("cards/") {
-                            ephemeralCandidates.append((blockIndex: blockIndex, toolUseId: toolUse.id))
-                        }
-                        // Track duplicate reads
-                        trackFileRead(path: path)
-                    }
-
-                    // Log to transcript
-                    if let agentId = agentId {
-                        tracker?.appendTranscript(
-                            agentId: agentId,
-                            entryType: .tool,
-                            content: toolDisplayName(toolUse.name),
-                            details: extractToolDetail(name: toolUse.name, arguments: arguments)
-                        )
-                    }
-                }
-
-                // Handle the completion tool (if called this turn)
-                if let completionCall = toolUses.first(where: { $0.name == CompleteMergeTool.name }) {
-                    do {
-                        let mergeLog = try parseCompleteMerge(arguments: argumentsJSON(from: completionCall.input))
-
-                        // Wait for any background merge tasks to complete before finalizing
-                        if !backgroundMergeTasks.isEmpty {
-                            await updateProgress("Waiting for \(backgroundMergeTasks.count) background merges...")
-                            let bgResults = await waitForBackgroundMerges()
-                            Logger.info("🔀 Background merges finished: \(bgResults.filter { $0.success }.count) successful", category: .ai)
-                        }
-
-                        status = .completed
-                        await updateProgress("Merge complete!")
-
-                        let finalCount = try countCards()
-                        return CardMergeResult(
-                            originalCount: originalCardCount,
-                            finalCount: finalCount,
-                            mergeCount: originalCardCount - finalCount,
-                            mergeLog: mergeLog
-                        )
-                    } catch {
-                        // Send error back so agent can retry
-                        resultBlocks.append(.toolResult(AnthropicToolResultBlock(
-                            toolUseId: completionCall.id,
-                            content: "Error parsing complete_merge: \(error.localizedDescription). Please retry.",
-                            isError: true
-                        )))
-                        // Every tool_use must be answered: a duplicate
-                        // complete_merge in the same turn would otherwise orphan
-                        // its id and 400 the next request.
-                        for duplicate in toolUses.filter({ $0.name == CompleteMergeTool.name && $0.id != completionCall.id }) {
-                            resultBlocks.append(.toolResult(AnthropicToolResultBlock(
-                                toolUseId: duplicate.id,
-                                content: "Duplicate complete_merge call — answered by the first call's result.",
-                                isError: true
-                            )))
-                        }
-                    }
-                }
-
-                guard !resultBlocks.isEmpty else { continue }
-
-                let messageIndex = messages.count
-                messages.append(AnthropicMessage(role: "user", content: .blocks(resultBlocks)))
-
-                for candidate in ephemeralCandidates {
-                    ephemeralBlocks.append((
-                        messageIndex: messageIndex,
-                        blockIndex: candidate.blockIndex,
-                        addedAtTurn: turnCount,
-                        toolUseId: candidate.toolUseId
-                    ))
-                }
-            }
-
-            // Max turns reached
-            Logger.warning("CardMergeAgent: Max turns reached, forcing completion", category: .ai)
-            throw CardMergeAgentError.maxTurnsExceeded
-
+            return try await AnthropicToolLoopRunner(delegate: self).run()
         } catch {
             status = .failed(error.localizedDescription)
             throw error
         }
+    }
+
+    // MARK: - Tool Loop Delegate
+
+    var completionToolName: String { CompleteMergeTool.name }
+    /// A complete_merge co-called with mutating tools still runs those tools for
+    /// their side effects before completing (preserves pre-runner behavior).
+    var executesPendingToolsOnCompletion: Bool { true }
+
+    func timeoutError() -> Error { CardMergeAgentError.timeout }
+    func maxTurnsError() -> Error { CardMergeAgentError.maxTurnsExceeded }
+
+    func initialMessages() -> [AnthropicMessage] {
+        [initialUserMessage()]
+    }
+
+    func willStartTurn(_ turn: Int) async {
+        turnCount = turn
+        await updateProgress("Turn \(turn): Calling LLM...")
+        if let agentId = agentId {
+            tracker?.appendTranscript(
+                agentId: agentId,
+                entryType: .turn,
+                content: "Turn \(turn) of \(maxTurns)",
+                details: nil
+            )
+        }
+    }
+
+    func runModelTurn(messages: [AnthropicMessage]) async throws -> AnthropicTurnResult {
+        guard let facade = facade else { throw CardMergeAgentError.noLLMFacade }
+        let parameters = AnthropicMessageParameter(
+            model: modelId,
+            messages: cachedRequestMessages(messages),
+            system: systemContent(),
+            maxTokens: maxResponseTokens,
+            stream: false,
+            tools: tools,
+            toolChoice: .auto
+        )
+        let response = try await facade.anthropicMessages(parameters: parameters)
+
+        // Track token + cache usage
+        let usage = response.usage
+        Logger.info(
+            "🔀 CardMergeAgent usage (\(modelId)): input=\(usage.inputTokens) cache_read=\(usage.cacheReadInputTokens ?? 0) cache_create=\(usage.cacheCreationInputTokens ?? 0) output=\(usage.outputTokens)",
+            category: .ai
+        )
+        if let agentId = agentId {
+            tracker?.addTokenUsage(
+                agentId: agentId,
+                input: usage.inputTokens,
+                output: usage.outputTokens,
+                cached: usage.cacheReadInputTokens ?? 0
+            )
+        }
+        return AnthropicTurnResult(response: response)
+    }
+
+    func handleNoTool(turnCount: Int, consecutiveNoToolTurns: Int) -> AnthropicNoToolDecision {
+        // A text-only turn is recoverable — nudge the model back onto tools or
+        // completion. No abort: CardMerge runs until complete_merge or max turns.
+        .nudge("Please continue merging cards or call complete_merge if you're done.")
+    }
+
+    func pruneBeforeResults(_ messages: inout [AnthropicMessage], turnCount: Int) {
+        // Prune old ephemeral tool-result blocks before adding new ones (if enabled).
+        if ephemeralTurns > 0 {
+            pruneEphemeralBlocks(&messages)
+        }
+    }
+
+    /// Execute non-completion tools sequentially, recording per-tool transcript,
+    /// card-read ephemerality, and duplicate-read tracking.
+    func executeTools(_ toolCalls: [AnthropicToolUseResponseBlock]) async -> [String: AnthropicToolOutput] {
+        turnEphemeralIds = []
+        var outputs: [String: AnthropicToolOutput] = [:]
+        for toolUse in toolCalls {
+            let arguments = argumentsJSON(from: toolUse.input)
+            await updateProgress("Turn \(turnCount): \(toolDisplayName(toolUse.name))")
+            let result = await executeTool(name: toolUse.name, arguments: arguments)
+            outputs[toolUse.id] = AnthropicToolOutput(content: result)
+
+            // Mark card file reads as ephemeral (prunable after a few turns). Only
+            // files in cards/ are ephemeral; index.json and other files persist.
+            if toolUse.name == ReadFileTool.name {
+                let path = extractToolDetail(name: toolUse.name, arguments: arguments) ?? ""
+                if path.contains("cards/") {
+                    turnEphemeralIds.append(toolUse.id)
+                }
+                trackFileRead(path: path)
+            }
+
+            if let agentId = agentId {
+                tracker?.appendTranscript(
+                    agentId: agentId,
+                    entryType: .tool,
+                    content: toolDisplayName(toolUse.name),
+                    details: extractToolDetail(name: toolUse.name, arguments: arguments)
+                )
+            }
+        }
+        return outputs
+    }
+
+    func didAppendToolResults(messageIndex: Int, orderedToolCallIds: [String], turnCount: Int) {
+        // Register card-read results marked ephemeral this turn, mapping each to
+        // its block index (== position in tool_use order, the assembly order).
+        for id in turnEphemeralIds {
+            guard let blockIndex = orderedToolCallIds.firstIndex(of: id) else { continue }
+            ephemeralBlocks.append((
+                messageIndex: messageIndex,
+                blockIndex: blockIndex,
+                addedAtTurn: turnCount,
+                toolUseId: id
+            ))
+        }
+        turnEphemeralIds = []
+    }
+
+    func parseCompletion(_ call: AnthropicToolUseResponseBlock) async throws -> CardMergeResult {
+        let mergeLog = try parseCompleteMerge(arguments: argumentsJSON(from: call.input))
+
+        // Wait for any background merge tasks to complete before finalizing.
+        if !backgroundMergeTasks.isEmpty {
+            await updateProgress("Waiting for \(backgroundMergeTasks.count) background merges...")
+            let bgResults = await waitForBackgroundMerges()
+            Logger.info("🔀 Background merges finished: \(bgResults.filter { $0.success }.count) successful", category: .ai)
+        }
+
+        status = .completed
+        await updateProgress("Merge complete!")
+
+        let finalCount = try countCards()
+        return CardMergeResult(
+            originalCount: originalCardCount,
+            finalCount: finalCount,
+            mergeCount: originalCardCount - finalCount,
+            mergeLog: mergeLog
+        )
+    }
+
+    func completionRetryContent(for error: Error) -> String {
+        "Error parsing complete_merge: \(error.localizedDescription). Please retry."
+    }
+
+    func onMaxTurnsReached(messages: [AnthropicMessage]) async throws -> CardMergeResult? {
+        Logger.warning("CardMergeAgent: Max turns reached, forcing completion", category: .ai)
+        return nil  // → runner throws maxTurnsError()
     }
 
     // MARK: - Tool Execution
@@ -567,35 +541,11 @@ class CardMergeAgent {
         return .user(prompt)
     }
 
-    private func assistantMessage(
-        textParts: [String],
-        toolUses: [AnthropicToolUseResponseBlock]
-    ) -> AnthropicMessage {
-        var blocks: [AnthropicContentBlock] = []
-        let text = textParts.joined(separator: "\n")
-        if !text.isEmpty {
-            blocks.append(.text(AnthropicTextBlock(text: text)))
-        }
-        for toolUse in toolUses {
-            blocks.append(.toolUse(AnthropicToolUseBlock(
-                id: toolUse.id,
-                name: toolUse.name,
-                input: toolUse.input.mapValues { $0.value }
-            )))
-        }
-        if blocks.isEmpty {
-            // The API rejects empty text blocks (400) — use a visible placeholder
-            // so a rare empty-content response stays recoverable.
-            blocks.append(.text(AnthropicTextBlock(text: "(no content)")))
-        }
-        return AnthropicMessage(role: "assistant", content: .blocks(blocks))
-    }
-
     /// Returns a per-request copy of the conversation with the moving cache
     /// breakpoint applied to the last content block of the final message.
     /// History itself stays marker-free so each request carries exactly one
     /// message-tier breakpoint (3 total with tools + system).
-    private func cachedRequestMessages() -> [AnthropicMessage] {
+    private func cachedRequestMessages(_ messages: [AnthropicMessage]) -> [AnthropicMessage] {
         guard let last = messages.last else { return messages }
 
         var result = messages
@@ -685,7 +635,7 @@ class CardMergeAgent {
     /// Prune old ephemeral tool-result blocks to keep context size manageable.
     /// Replaces pruned blocks with a placeholder so tool_use IDs remain answered.
     /// Only called when ephemeralTurns > 0.
-    private func pruneEphemeralBlocks() {
+    private func pruneEphemeralBlocks(_ messages: inout [AnthropicMessage]) {
         let expiredTurn = turnCount - ephemeralTurns
         let toRemove = ephemeralBlocks.filter { $0.addedAtTurn <= expiredTurn }
 

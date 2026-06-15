@@ -218,25 +218,33 @@ final class AnthropicToolLoopRunner<Delegate: AnthropicToolLoopDelegate> {
 
             // Completion tool present?
             if let completion = result.toolCalls.first(where: { $0.name == delegate.completionToolName }) {
+                let pending = result.toolCalls.filter { $0.name != delegate.completionToolName }
+
+                // Agents that want co-called tools' side effects regardless of the
+                // completion outcome run them BEFORE parsing (so e.g. a final-count
+                // read sees post-mutation state). Their results are discarded on
+                // success and reused on parse failure.
+                var pendingResults: [String: AnthropicToolOutput] = [:]
+                if delegate.executesPendingToolsOnCompletion, !pending.isEmpty {
+                    delegate.pruneBeforeResults(&messages, turnCount: turnCount)
+                    pendingResults = await delegate.executeTools(pending)
+                }
+
                 do {
-                    let output = try await delegate.parseCompletion(completion)
-                    if delegate.executesPendingToolsOnCompletion {
-                        // Run any co-called non-completion tools for their side
-                        // effects; their results are discarded (the loop ends).
-                        let pending = result.toolCalls.filter { $0.name != delegate.completionToolName }
-                        if !pending.isEmpty { _ = await delegate.executeTools(pending) }
-                    }
-                    return output
+                    return try await delegate.parseCompletion(completion)
                 } catch {
-                    // Parse failed: answer the completion call with a corrective
-                    // error, execute + answer the rest, and continue. Every
-                    // tool_use is still answered.
+                    // Parse failed: answer the completion call (and any duplicate
+                    // completion calls) with a corrective error, answer every other
+                    // tool_use, and continue. Run the pending tools now if they were
+                    // not already run, so no tool_use is orphaned.
                     let errorContent = delegate.completionRetryContent(for: error)
-                    let pending = result.toolCalls.filter { $0.name != delegate.completionToolName }
-                    let executed = await delegate.executeTools(pending)
+                    if !delegate.executesPendingToolsOnCompletion, !pending.isEmpty {
+                        delegate.pruneBeforeResults(&messages, turnCount: turnCount)
+                        pendingResults = await delegate.executeTools(pending)
+                    }
                     let blocks = Self.assembleResults(
                         toolCalls: result.toolCalls,
-                        executed: executed,
+                        executed: pendingResults,
                         completionToolName: delegate.completionToolName,
                         completionFailure: (id: completion.id, content: errorContent)
                     )

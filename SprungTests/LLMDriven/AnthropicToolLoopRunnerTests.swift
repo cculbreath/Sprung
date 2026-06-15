@@ -75,6 +75,8 @@ private final class FakeLoopDelegate: AnthropicToolLoopDelegate {
     private(set) var prunedTurns: [Int] = []
     private(set) var appendedResults: [(messageIndex: Int, ids: [String])] = []
     private(set) var parseCompletionCalls = 0
+    /// Ordered log of "exec" / "parse" to assert relative ordering.
+    private(set) var eventLog: [String] = []
 
     init(turns: [AnthropicTurnResult]) { self.turns = turns }
 
@@ -96,6 +98,7 @@ private final class FakeLoopDelegate: AnthropicToolLoopDelegate {
 
     func executeTools(_ toolCalls: [AnthropicToolUseResponseBlock]) async -> [String: AnthropicToolOutput] {
         executeToolsCalls.append(toolCalls.map(\.id))
+        eventLog.append("exec")
         var out: [String: AnthropicToolOutput] = [:]
         for call in toolCalls {
             out[call.id] = toolOutputs[call.id] ?? AnthropicToolOutput(content: "result:\(call.id)")
@@ -105,6 +108,7 @@ private final class FakeLoopDelegate: AnthropicToolLoopDelegate {
 
     func parseCompletion(_ call: AnthropicToolUseResponseBlock) async throws -> String {
         parseCompletionCalls += 1
+        eventLog.append("parse")
         if let error = completionParseError { throw error }
         return "completed:\(call.id)"
     }
@@ -236,6 +240,8 @@ final class AnthropicToolLoopRunnerTests: XCTestCase {
         XCTAssertEqual(output, "completed:c")
         XCTAssertEqual(delegate.executeToolsCalls, [["w"]],
                        "co-called non-completion tools run for side effects when executesPendingToolsOnCompletion is true")
+        XCTAssertEqual(delegate.eventLog, ["exec", "parse"],
+                       "pending tools run BEFORE parseCompletion so side effects precede the final read")
     }
 
     func testCompletionParseErrorAnswersAndContinues() async throws {
