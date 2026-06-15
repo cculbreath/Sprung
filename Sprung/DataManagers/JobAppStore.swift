@@ -8,16 +8,21 @@ import Foundation
 // Shared helper for SwiftData persistence.
 @Observable
 @MainActor
-final class JobAppStore: SwiftDataStore {
+final class JobAppStore: EntityStore {
+    typealias Entity = JobApp
     // MARK: - Properties
     unowned let modelContext: ModelContext
+
+    /// `@Observable` refresh counter (see EntityStore). `fetchAll()` reads it and
+    /// every mutation persists via `persistChanges()`, so the pipeline columns
+    /// re-render when a job is added, deleted, or changes status (this store
+    /// previously had no such counter — its fetched lists could go stale).
+    var changeVersion: Int = 0
+
     // Computed collection that always reflects the latest state stored in
-    // `modelContext`.  Because this is *computed*, any view access will fetch
-    // directly from SwiftData and therefore stay in sync with persistent
-    // storage without additional bookkeeping.
-    var jobApps: [JobApp] {
-        (try? modelContext.fetch(FetchDescriptor<JobApp>())) ?? []
-    }
+    // `modelContext`. Routed through EntityStore.fetchAll so a view access
+    // establishes a changeVersion dependency that mutations invalidate.
+    var jobApps: [JobApp] { fetchAll() }
     var selectedApp: JobApp?
     var form = JobAppForm()
     var resStore: ResStore
@@ -52,7 +57,7 @@ final class JobAppStore: SwiftDataStore {
         // Clear existing preprocessing data
         jobApp.extractedRequirements = nil
         jobApp.relevantCardIds = nil
-        saveContext()
+        persistChanges()
 
         preprocessor.preprocessInBackground(
             for: jobApp,
@@ -130,19 +135,19 @@ final class JobAppStore: SwiftDataStore {
             )
         }
 
-        saveContext()
+        persistChanges()
         Logger.info("🔄 [JobAppStore] Queued \(activeJobs.count) active jobs for reprocessing", category: .ai)
         return activeJobs.count
     }
     // MARK: - Methods
     func updateJobAppStatus(_ jobApp: JobApp, to newStatus: Statuses) {
         jobApp.status = newStatus
-        saveContext()
+        persistChanges()
         // Handle additional logic like notifying listeners as needed
     }
     func addJobApp(_ jobApp: JobApp) -> JobApp? {
         modelContext.insert(jobApp)
-        saveContext()
+        persistChanges()
         selectedApp = jobApp
 
         // Trigger background preprocessing (requirements + relevant cards)
@@ -168,7 +173,7 @@ final class JobAppStore: SwiftDataStore {
         jobApp.identifiedDate = Date()
         jobApp.source = "Manual Entry"
         modelContext.insert(jobApp)
-        saveContext()
+        persistChanges()
         selectedApp = jobApp
         // Enable edit mode via form
         editWithForm()
@@ -191,7 +196,7 @@ final class JobAppStore: SwiftDataStore {
             resStore.deleteRes(resume)
         }
         modelContext.delete(jobApp)
-        saveContext()
+        persistChanges()
         if selectedApp == jobApp {
             selectedApp = nil
         }
@@ -238,7 +243,7 @@ final class JobAppStore: SwiftDataStore {
         jobAppToSave.industries = form.industries
         jobAppToSave.jobApplyLink = form.jobApplyLink
         jobAppToSave.postingURL = form.postingURL
-        saveContext()
+        persistChanges()
 
         // Preprocessing results are derived from the job description — they
         // must never silently outlive an edit to it. Clear them first (even if
@@ -246,7 +251,7 @@ final class JobAppStore: SwiftDataStore {
         if jobDescriptionChanged {
             jobAppToSave.extractedRequirements = nil
             jobAppToSave.relevantCardIds = nil
-            saveContext()
+            persistChanges()
             Logger.info("🧹 [JobAppStore] Job description changed — cleared stale preprocessing for: \(jobAppToSave.jobPosition)", category: .ai)
             if !jobAppToSave.jobDescription.isEmpty {
                 rerunPreprocessing(for: jobAppToSave)
@@ -256,17 +261,14 @@ final class JobAppStore: SwiftDataStore {
     func updateJobApp(_: JobApp) {
         // Persist the changes that should already be reflected on the entity
         // instance.
-        _ = saveContext()
+        persistChanges()
     }
 
     // MARK: - Pipeline Queries
 
     /// All job apps sorted by creation date (newest first)
     var allJobAppsSorted: [JobApp] {
-        let descriptor = FetchDescriptor<JobApp>(
-            sortBy: [SortDescriptor(\.createdAt, order: .reverse)]
-        )
-        return (try? modelContext.fetch(descriptor)) ?? []
+        fetchAll(sortBy: [SortDescriptor(\.createdAt, order: .reverse)])
     }
 
     /// Job apps filtered by status
@@ -283,8 +285,7 @@ final class JobAppStore: SwiftDataStore {
 
     /// Add a new job app to the pipeline
     func addToPipeline(_ jobApp: JobApp) {
-        modelContext.insert(jobApp)
-        saveContext()
+        add(jobApp)
     }
 
     // MARK: - Status Management
@@ -313,7 +314,7 @@ final class JobAppStore: SwiftDataStore {
             break
         }
 
-        saveContext()
+        persistChanges()
     }
 
     /// Set a job app to a specific status
@@ -324,7 +325,7 @@ final class JobAppStore: SwiftDataStore {
             jobApp.closedDate = Date()
         }
 
-        saveContext()
+        persistChanges()
     }
 
     /// Mark a job app as rejected
@@ -332,6 +333,6 @@ final class JobAppStore: SwiftDataStore {
         jobApp.status = .rejected
         jobApp.rejectionReason = reason
         jobApp.closedDate = Date()
-        saveContext()
+        persistChanges()
     }
 }
