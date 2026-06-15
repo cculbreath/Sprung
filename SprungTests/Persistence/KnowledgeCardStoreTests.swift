@@ -147,6 +147,37 @@ final class KnowledgeCardStoreTests: InMemoryStoreCase {
         XCTAssertEqual(store.knowledgeCards.count, 1)
         XCTAssertEqual(store.knowledgeCards.first?.title, "NoEvidence")
     }
+
+    // MARK: - Observation (the EntityStore stale-UI fix)
+
+    /// Reading the fetched collection must register a `changeVersion` dependency
+    /// (via EntityStore.fetchAll) that an insert invalidates — otherwise a SwiftUI
+    /// view listing cards would not re-render when one is added/deleted.
+    /// KnowledgeCardStore previously had no such counter; this guards the fix.
+    func testReadingCollectionRegistersObservationDependencyOnInsert() {
+        let store = KnowledgeCardStore(context: context)
+        var changed = false
+        withObservationTracking {
+            _ = store.knowledgeCards
+        } onChange: {
+            changed = true
+        }
+        store.add(makeCard())
+        XCTAssertTrue(changed, "fetchAll() must touch changeVersion so a mutation re-renders the view")
+    }
+
+    func testDomainBulkDeleteAlsoTriggersObservation() {
+        let store = KnowledgeCardStore(context: context)
+        store.addAll([makeCard(title: "P", fromOnboarding: true, pending: true)])
+        var changed = false
+        withObservationTracking {
+            _ = store.knowledgeCards
+        } onChange: {
+            changed = true
+        }
+        store.deletePendingCards()  // routes through EntityStore.deleteAll → bumps
+        XCTAssertTrue(changed, "domain bulk-deletes must also invalidate the collection dependency")
+    }
 }
 
 // MARK: - SkillStore CRUD

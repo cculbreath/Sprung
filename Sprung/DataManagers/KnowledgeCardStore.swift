@@ -12,15 +12,19 @@ import SwiftData
 
 @Observable
 @MainActor
-final class KnowledgeCardStore: SwiftDataStore {
+final class KnowledgeCardStore: EntityStore {
+    typealias Entity = KnowledgeCard
     unowned let modelContext: ModelContext
+
+    /// @Observable refresh counter (see EntityStore). Touched by `fetchAll()` and
+    /// bumped by every mutation so views reading the fetched collections re-render
+    /// on insert/delete (this store previously had no such counter).
+    var changeVersion: Int = 0
 
     // MARK: - Computed Collections
 
     /// All knowledge cards - SwiftData is the single source of truth
-    var knowledgeCards: [KnowledgeCard] {
-        (try? modelContext.fetch(FetchDescriptor<KnowledgeCard>())) ?? []
-    }
+    var knowledgeCards: [KnowledgeCard] { fetchAll() }
 
     /// Cards enabled by default for new resumes
     var defaultCards: [KnowledgeCard] {
@@ -49,57 +53,19 @@ final class KnowledgeCardStore: SwiftDataStore {
     }
 
     // MARK: - CRUD Operations
-
-    /// Adds a new KnowledgeCard to the store
-    func add(_ card: KnowledgeCard) {
-        modelContext.insert(card)
-        saveContext()
-    }
-
-    /// Adds multiple KnowledgeCards to the store
-    func addAll(_ cards: [KnowledgeCard]) {
-        for card in cards {
-            modelContext.insert(card)
-        }
-        saveContext()
-    }
-
-    /// Persists updates (entity already mutated)
-    func update(_ card: KnowledgeCard) {
-        _ = saveContext()
-    }
-
-    /// Deletes a KnowledgeCard from the store
-    func delete(_ card: KnowledgeCard) {
-        modelContext.delete(card)
-        saveContext()
-    }
-
-    /// Deletes multiple KnowledgeCards from the store
-    func deleteAll(_ cards: [KnowledgeCard]) {
-        for card in cards {
-            modelContext.delete(card)
-        }
-        saveContext()
-    }
+    // add / addAll / update / delete / deleteAll are provided by EntityStore.
 
     /// Deletes all KnowledgeCards created during onboarding
     func deleteOnboardingCards() {
         let cards = onboardingCards
-        for card in cards {
-            modelContext.delete(card)
-        }
-        saveContext()
+        deleteAll(cards)
         Logger.info("🗑️ Deleted \(cards.count) onboarding KnowledgeCards", category: .ai)
     }
 
     /// Deletes all pending cards
     func deletePendingCards() {
         let cards = pendingCards
-        for card in cards {
-            modelContext.delete(card)
-        }
-        saveContext()
+        deleteAll(cards)
         Logger.info("🗑️ Deleted \(cards.count) pending KnowledgeCards", category: .ai)
     }
 
@@ -116,7 +82,7 @@ final class KnowledgeCardStore: SwiftDataStore {
         for card in cardsToApprove {
             card.isPending = false
         }
-        saveContext()
+        persistChanges()
         Logger.info("✅ Approved \(cardsToApprove.count) KnowledgeCards", category: .ai)
     }
 
@@ -126,10 +92,7 @@ final class KnowledgeCardStore: SwiftDataStore {
         let cardsToDelete = knowledgeCards.filter { card in
             card.evidenceAnchors.contains { $0.documentId == artifactId }
         }
-        for card in cardsToDelete {
-            modelContext.delete(card)
-        }
-        saveContext()
+        deleteAll(cardsToDelete)
         Logger.info("🗑️ Deleted \(cardsToDelete.count) cards from artifact \(artifactId)", category: .ai)
     }
 
@@ -140,10 +103,7 @@ final class KnowledgeCardStore: SwiftDataStore {
         let cardsToDelete = knowledgeCards.filter { card in
             !card.isPending && card.evidenceAnchors.contains { $0.documentId == artifactId }
         }
-        for card in cardsToDelete {
-            modelContext.delete(card)
-        }
-        saveContext()
+        deleteAll(cardsToDelete)
         if !cardsToDelete.isEmpty {
             Logger.info("🗑️ Deleted \(cardsToDelete.count) approved cards from artifact \(artifactId)", category: .ai)
         }
@@ -155,10 +115,7 @@ final class KnowledgeCardStore: SwiftDataStore {
         let cardsToDelete = knowledgeCards.filter { card in
             !card.isPending && card.evidenceAnchors.contains { artifactIds.contains($0.documentId) }
         }
-        for card in cardsToDelete {
-            modelContext.delete(card)
-        }
-        saveContext()
+        deleteAll(cardsToDelete)
         if !cardsToDelete.isEmpty {
             Logger.info("🗑️ Deleted \(cardsToDelete.count) approved cards from \(artifactIds.count) artifacts", category: .ai)
         }

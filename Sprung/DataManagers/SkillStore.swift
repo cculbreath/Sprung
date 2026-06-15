@@ -11,21 +11,18 @@ import SwiftData
 
 @Observable
 @MainActor
-final class SkillStore: SwiftDataStore {
+final class SkillStore: EntityStore {
+    typealias Entity = Skill
     unowned let modelContext: ModelContext
 
-    /// Change counter to trigger SwiftUI view updates when skills are mutated.
-    /// @Observable only tracks stored properties, not computed SwiftData fetches.
-    /// Views reading skills will observe this, ensuring re-render after mutations.
-    private(set) var changeVersion: Int = 0
+    /// @Observable refresh counter (see EntityStore). Touched by `fetchAll()` and
+    /// bumped by every mutation so views reading the fetched collections re-render.
+    var changeVersion: Int = 0
 
     // MARK: - Computed Collections
 
     /// All skills - SwiftData is the single source of truth
-    var skills: [Skill] {
-        _ = changeVersion  // Touch to establish observation dependency
-        return (try? modelContext.fetch(FetchDescriptor<Skill>())) ?? []
-    }
+    var skills: [Skill] { fetchAll() }
 
     /// Skills created during onboarding
     var onboardingSkills: [Skill] {
@@ -54,64 +51,19 @@ final class SkillStore: SwiftDataStore {
     }
 
     // MARK: - CRUD Operations
-
-    /// Adds a new Skill to the store
-    func add(_ skill: Skill) {
-        modelContext.insert(skill)
-        saveContext()
-        changeVersion += 1
-    }
-
-    /// Adds multiple Skills to the store
-    func addAll(_ skills: [Skill]) {
-        for skill in skills {
-            modelContext.insert(skill)
-        }
-        saveContext()
-        changeVersion += 1
-    }
-
-    /// Persists updates (entity already mutated)
-    func update(_ skill: Skill) {
-        _ = saveContext()
-        changeVersion += 1
-    }
-
-    /// Deletes a Skill from the store
-    func delete(_ skill: Skill) {
-        modelContext.delete(skill)
-        saveContext()
-        changeVersion += 1
-    }
-
-    /// Deletes multiple Skills from the store
-    func deleteAll(_ skills: [Skill]) {
-        for skill in skills {
-            modelContext.delete(skill)
-        }
-        saveContext()
-        changeVersion += 1
-    }
+    // add / addAll / update / delete / deleteAll are provided by EntityStore.
 
     /// Deletes all Skills created during onboarding
     func deleteOnboardingSkills() {
         let skills = onboardingSkills
-        for skill in skills {
-            modelContext.delete(skill)
-        }
-        saveContext()
-        changeVersion += 1
+        deleteAll(skills)
         Logger.info("🗑️ Deleted \(skills.count) onboarding Skills", category: .ai)
     }
 
     /// Deletes all pending skills
     func deletePendingSkills() {
         let skillsToDelete = pendingSkills
-        for skill in skillsToDelete {
-            modelContext.delete(skill)
-        }
-        saveContext()
-        changeVersion += 1
+        deleteAll(skillsToDelete)
         Logger.info("🗑️ Deleted \(skillsToDelete.count) pending Skills", category: .ai)
     }
 
@@ -128,8 +80,7 @@ final class SkillStore: SwiftDataStore {
         for skill in skillsToApprove {
             skill.isPending = false
         }
-        saveContext()
-        changeVersion += 1
+        persistChanges()
         Logger.info("✅ Approved \(skillsToApprove.count) Skills", category: .ai)
     }
 
@@ -139,11 +90,7 @@ final class SkillStore: SwiftDataStore {
         let skillsToDelete = skills.filter { skill in
             skill.evidence.contains { $0.documentId == artifactId }
         }
-        for skill in skillsToDelete {
-            modelContext.delete(skill)
-        }
-        saveContext()
-        changeVersion += 1
+        deleteAll(skillsToDelete)
         Logger.info("🗑️ Deleted \(skillsToDelete.count) skills from artifact \(artifactId)", category: .ai)
     }
 
