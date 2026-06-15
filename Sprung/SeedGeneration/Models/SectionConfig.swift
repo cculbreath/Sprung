@@ -88,27 +88,3 @@ enum SectionConfigError: Error, LocalizedError {
         }
     }
 }
-
-// MARK: - Migration Support
-
-extension SectionConfig {
-    /// Create SectionConfig from legacy enabledSectionsCSV and customFieldDefinitions
-    static func from(
-        enabledSectionsCSV: String?,
-        customFieldDefinitions: [CustomFieldDefinition]
-    ) -> SectionConfig {
-        var enabledSections = Set<String>()
-
-        if let csv = enabledSectionsCSV, !csv.isEmpty {
-            enabledSections = Set(
-                csv.split(separator: ",")
-                    .map { String($0).trimmingCharacters(in: .whitespaces) }
-            )
-        }
-
-        return SectionConfig(
-            enabledSections: enabledSections,
-            customFields: customFieldDefinitions
-        )
-    }
-}

@@ -28,11 +28,6 @@ final class CandidateDossierStore: SwiftDataStore {
         return (try? modelContext.fetch(descriptor))?.first
     }
 
-    /// All dossiers (for debugging/migration)
-    var allDossiers: [CandidateDossier] {
-        (try? modelContext.fetch(FetchDescriptor<CandidateDossier>())) ?? []
-    }
-
     /// Whether a dossier exists
     var hasDossier: Bool {
         dossier != nil
@@ -80,28 +75,6 @@ final class CandidateDossierStore: SwiftDataStore {
             Logger.info("Created candidate dossier (\(newDossier.wordCount) words)", category: .storage)
             return newDossier
         }
-    }
-
-    /// Update a specific field on the dossier
-    func updateField(_ keyPath: WritableKeyPath<CandidateDossier, String>, value: String) {
-        guard var existing = dossier else {
-            Logger.warning("Cannot update field - no dossier exists", category: .storage)
-            return
-        }
-        existing[keyPath: keyPath] = value
-        existing.updatedAt = Date()
-        saveContext()
-    }
-
-    /// Update an optional string field
-    func updateOptionalField(_ keyPath: WritableKeyPath<CandidateDossier, String?>, value: String?) {
-        guard var existing = dossier else {
-            Logger.warning("Cannot update field - no dossier exists", category: .storage)
-            return
-        }
-        existing[keyPath: keyPath] = value
-        existing.updatedAt = Date()
-        saveContext()
     }
 
     // MARK: - Section-Based Updates
@@ -225,15 +198,6 @@ final class CandidateDossierStore: SwiftDataStore {
         modelContext.delete(existing)
         saveContext()
         Logger.info("Deleted candidate dossier", category: .storage)
-    }
-
-    /// Delete all dossiers (for reset)
-    func deleteAllDossiers() {
-        for d in allDossiers {
-            modelContext.delete(d)
-        }
-        saveContext()
-        Logger.info("Deleted all candidate dossiers", category: .storage)
     }
 
     // MARK: - Export

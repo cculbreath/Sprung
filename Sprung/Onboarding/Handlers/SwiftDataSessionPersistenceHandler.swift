@@ -447,7 +447,7 @@ final class SwiftDataSessionPersistenceHandler {
         sessionStore.restoreObjectiveStatuses(session)
     }
 
-    /// Get restored artifacts as JSON for restoring to ArtifactRepository (legacy support)
+    /// Get restored artifacts as JSON for restoring to ArtifactRepository
     func getRestoredArtifacts(_ session: OnboardingSession) -> [JSON] {
         artifactRecordStore.artifacts(for: session).map { artifactRecordToJSON($0) }
     }

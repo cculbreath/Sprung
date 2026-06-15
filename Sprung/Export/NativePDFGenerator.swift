@@ -277,8 +277,8 @@ class NativePDFGenerator {
 #endif
         return context
     }
-    /// Legacy helper retained for text exports. Text generation duties moved to
-    /// `TextResumeGenerator`, but PDF rendering still relies on this pipeline.
+    /// Renders a stored HTML template through the GRMustache pipeline backing PDF export.
+    /// (Plain-text generation lives in `TextResumeGenerator`.)
     @MainActor
     private func renderTemplate(for resume: Resume, template: String, format: String) throws -> String {
         let normalizedTemplate = template.lowercased()
@@ -315,9 +315,10 @@ class NativePDFGenerator {
     }
     private func preprocessTemplateForGRMustache(_ template: String) -> String {
         var processed = template
-        // Convert simple cases that don't need complex helpers
+        // Drop the inter-item separator section GRMustache can't evaluate.
         processed = processed.replacingOccurrences(of: "{{^@last}}&nbsp;&middot;&nbsp;{{/@last}}", with: "")
-        // For now, remove complex helper calls and use simpler alternatives
+        // Strip Handlebars helpers GRMustache lacks in imported themes; yearOnly
+        // degrades to the raw date until a real filter is added (Phase 5 PDF work).
         processed = processed.replacingOccurrences(of: "{{yearOnly this.start}}", with: "{{this.start}}")
         processed = processed.replacingOccurrences(of: "{{yearOnly end}}", with: "{{this.end}}")
         return processed

@@ -135,7 +135,7 @@ struct ResumeEntryCardView: View {
         .background(Color(.windowBackgroundColor).opacity(0.5))
         .contextMenu {
             Button {
-                print("[ResumeEntryCardView] Rename triggered for: '\(node.computedTitle)'")
+                Logger.debug("[ResumeEntryCardView] Rename triggered for: '\(node.computedTitle)'")
                 renameTitleText = node.computedTitle
                 isRenamingTitle = true
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
@@ -158,25 +158,25 @@ struct ResumeEntryCardView: View {
 
     private func commitTitleRename() {
         let trimmed = renameTitleText.trimmingCharacters(in: .whitespacesAndNewlines)
-        print("[ResumeEntryCardView] commitTitleRename: '\(trimmed)' for node '\(node.computedTitle)'")
+        Logger.debug("[ResumeEntryCardView] commitTitleRename: '\(trimmed)' for node '\(node.computedTitle)'")
         guard !trimmed.isEmpty else {
-            print("[ResumeEntryCardView] commitTitleRename: empty, cancelling")
+            Logger.debug("[ResumeEntryCardView] commitTitleRename: empty, cancelling")
             cancelTitleRename()
             return
         }
         // Update the title child node's value
         if let titleNode = titleNode {
-            print("[ResumeEntryCardView] Updating titleNode.value from '\(titleNode.value)' to '\(trimmed)'")
+            Logger.debug("[ResumeEntryCardView] Updating titleNode.value from '\(titleNode.value)' to '\(trimmed)'")
             titleNode.value = trimmed
         } else {
             // No dedicated title child — update the node's own name
-            print("[ResumeEntryCardView] No titleNode found, updating node.name from '\(node.name)' to '\(trimmed)'")
+            Logger.debug("[ResumeEntryCardView] No titleNode found, updating node.name from '\(node.name)' to '\(trimmed)'")
             node.name = trimmed
         }
         do {
             try modelContext.save()
             vm.refreshPDF()
-            print("[ResumeEntryCardView] Save succeeded")
+            Logger.debug("[ResumeEntryCardView] Save succeeded")
         } catch {
             Logger.error("Failed to save title rename: \(error)")
         }

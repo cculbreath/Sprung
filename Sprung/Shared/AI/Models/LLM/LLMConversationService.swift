@@ -34,33 +34,3 @@ protocol LLMStreamingConversationService: LLMConversationService {
         images: [Data]
     ) async throws -> AsyncThrowingStream<LLMStreamChunkDTO, Error>
 }
-final class OpenRouterConversationService: LLMConversationService {
-    private let service: OpenRouterServiceBackend
-    init(service: OpenRouterServiceBackend) {
-        self.service = service
-    }
-    func startConversation(
-        systemPrompt: String?,
-        userMessage: String,
-        modelId: String
-    ) async throws -> (UUID, String) {
-        try await service.startConversation(
-            systemPrompt: systemPrompt,
-            userMessage: userMessage,
-            modelId: modelId
-        )
-    }
-    func continueConversation(
-        userMessage: String,
-        modelId: String,
-        conversationId: UUID,
-        images: [Data]
-    ) async throws -> String {
-        try await service.continueConversation(
-            userMessage: userMessage,
-            modelId: modelId,
-            conversationId: conversationId,
-            images: images
-        )
-    }
-}

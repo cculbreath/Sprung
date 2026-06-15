@@ -16,19 +16,7 @@ class EnabledLLMStore: SwiftDataStore {
 
     init(modelContext: ModelContext) {
         self.modelContext = modelContext
-        loadEnabledModels()
-    }
-    private func loadEnabledModels() {
-        do {
-            let descriptor = FetchDescriptor<EnabledLLM>(
-                predicate: #Predicate<EnabledLLM> { $0.isEnabled },
-                sortBy: [SortDescriptor(\.lastUsed, order: .reverse)]
-            )
-            enabledModels = try modelContext.fetch(descriptor)
-        } catch {
-            Logger.error("Failed to load enabled models: \(error)")
-            enabledModels = []
-        }
+        refreshEnabledModels()
     }
     /// Get or create an EnabledLLM for the given model ID
     func getOrCreateModel(id: String, displayName: String, provider: String = "") -> EnabledLLM {
@@ -38,7 +26,7 @@ class EnabledLLMStore: SwiftDataStore {
         let newModel = EnabledLLM(modelId: id, displayName: displayName, provider: provider)
         enabledModels.append(newModel)
         modelContext.insert(newModel)
-        try? modelContext.save()
+        saveContext()
         return newModel
     }
     /// Update model capabilities from OpenRouter model info
@@ -59,7 +47,7 @@ class EnabledLLMStore: SwiftDataStore {
         enabledModel.supportsJSONSchema = openRouterModel.supportsStructuredOutput
         // Ensure model is enabled when capabilities are updated
         enabledModel.isEnabled = true
-        try? modelContext.save()
+        saveContext()
         // Refresh in-memory state to reflect database changes
         refreshEnabledModels()
     }
@@ -67,14 +55,14 @@ class EnabledLLMStore: SwiftDataStore {
     func recordJSONSchemaFailure(modelId: String, reason: String) {
         if let model = enabledModels.first(where: { $0.modelId == modelId }) {
             model.recordJSONSchemaFailure(reason: reason)
-            try? modelContext.save()
+            saveContext()
         }
     }
     /// Record that a model succeeded with JSON schema
     func recordJSONSchemaSuccess(modelId: String) {
         if let model = enabledModels.first(where: { $0.modelId == modelId }) {
             model.recordJSONSchemaSuccess()
-            try? modelContext.save()
+            saveContext()
         }
     }
     /// Check if model should avoid JSON schema
@@ -106,7 +94,7 @@ class EnabledLLMStore: SwiftDataStore {
             model.isTextToText = isTextToText
         }
         model.lastUsed = Date()
-        try? modelContext.save()
+        saveContext()
         refreshEnabledModels()
         let schemaDescription = supportsJSONSchema.map { "\($0)" } ?? "<unchanged>"
         let imagesDescription = supportsImages.map { "\($0)" } ?? "<unchanged>"
@@ -117,7 +105,7 @@ class EnabledLLMStore: SwiftDataStore {
         // Update database record
         let enabledModel = getOrCreateModel(id: id, displayName: id)
         enabledModel.isEnabled = false
-        try? modelContext.save()
+        saveContext()
         // Refresh in-memory state to reflect database changes
         refreshEnabledModels()
     }
@@ -131,7 +119,7 @@ class EnabledLLMStore: SwiftDataStore {
             enabledModels = try modelContext.fetch(descriptor)
             Logger.debug("🔄 Refreshed EnabledLLMStore: \(enabledModels.count) enabled models")
         } catch {
-            Logger.error("❌ Failed to refresh enabled models: \\(error)")
+            Logger.error("❌ Failed to refresh enabled models: \(error)")
         }
     }
     /// Get all enabled model IDs

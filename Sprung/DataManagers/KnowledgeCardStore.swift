@@ -166,40 +166,6 @@ final class KnowledgeCardStore: SwiftDataStore {
 
     // MARK: - Import/Export
 
-    /// Imports KnowledgeCards from a JSON file URL
-    /// - Parameter url: File URL pointing to a JSON array of KnowledgeCard objects
-    /// - Returns: Number of cards imported
-    @discardableResult
-    func importFromJSON(url: URL) throws -> Int {
-        let data = try Data(contentsOf: url)
-        let decoder = JSONDecoder()
-        let importedCards = try decoder.decode([KnowledgeCard].self, from: data)
-
-        // Check for existing IDs to avoid duplicates
-        let existingIDs = Set(knowledgeCards.map { $0.id })
-        var importedCount = 0
-
-        for card in importedCards {
-            if existingIDs.contains(card.id) {
-                Logger.info("⏭️ Skipping duplicate KnowledgeCard: \(card.title)", category: .data)
-                continue
-            }
-            modelContext.insert(card)
-            importedCount += 1
-        }
-
-        saveContext()
-        Logger.info("📥 Imported \(importedCount) KnowledgeCards from JSON", category: .data)
-        return importedCount
-    }
-
-    /// Exports all knowledge cards to JSON data
-    func exportToJSON() throws -> Data {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        return try encoder.encode(knowledgeCards)
-    }
-
     // MARK: - Query Helpers
 
     /// Find a card by ID

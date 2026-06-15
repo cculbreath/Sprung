@@ -4,7 +4,6 @@ struct DescriptorInterpreter {
     let fontScaler: FontSizeScaler
     let valueNormalizer: SectionValueNormalizer
     let titleRenderer: TitleTemplateRenderer
-    let validator: DescriptorValueValidator
     let sectionNodeProvider: (String) -> TreeNode?
     let nodeValueProvider: (TreeNode) -> Any?
     let fontSizesFallback: () -> [String: String]?
@@ -246,11 +245,7 @@ struct DescriptorInterpreter {
         descriptor: TemplateManifest.Section.FieldDescriptor?,
         key: String
     ) {
-        guard key.isEmpty == false else { return }
-        if entry["__key"] == nil {
-            entry["__key"] = key
-        }
-        guard let descriptor else { return }
+        guard key.isEmpty == false, let descriptor else { return }
         if let template = descriptor.titleTemplate {
             for placeholder in titleRenderer.placeholders(in: template) {
                 guard entry[placeholder] == nil else { continue }
@@ -258,26 +253,6 @@ struct DescriptorInterpreter {
                     entry[placeholder] = key
                 }
             }
-        }
-        var titleContext = entry
-        if titleContext["__key"] == nil {
-            titleContext["__key"] = key
-        }
-        var meta: [String: Any] = [:]
-        if let template = descriptor.titleTemplate,
-           let computed = titleRenderer.render(template, context: titleContext) {
-            meta["title"] = computed
-        }
-        let validation = validator.validate(entry, descriptor: descriptor)
-        if descriptor.required || descriptor.validation != nil || validation.isValid == false {
-            meta["isValid"] = validation.isValid
-            if let message = validation.messages.first, message.isEmpty == false {
-                meta["message"] = message
-            }
-        }
-        if meta.isEmpty == false {
-            meta["key"] = key
-            entry["__meta"] = meta
         }
     }
 }

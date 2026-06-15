@@ -225,32 +225,4 @@ final class TitleSetStore: SwiftDataStore {
         refreshCache()
     }
 
-    /// Build conversation context for LLM from history
-    func buildConversationContext(for titleSet: TitleSetRecord) -> String {
-        guard !titleSet.history.isEmpty else { return "" }
-
-        var context = "## Previous Generation History\n\n"
-
-        for (index, turn) in titleSet.history.enumerated() {
-            context += "### Turn \(index + 1)\n"
-
-            if !turn.lockedWordTexts.isEmpty {
-                context += "Locked words: \(turn.lockedWordTexts.joined(separator: ", "))\n"
-            }
-
-            if let instructions = turn.userInstructions, !instructions.isEmpty {
-                context += "User instructions: \(instructions)\n"
-            }
-
-            context += "Generated: \(turn.generatedWords.joined(separator: ", "))\n"
-
-            if let comment = turn.aiComment, !comment.isEmpty {
-                context += "AI comment: \(comment)\n"
-            }
-
-            context += "\n"
-        }
-
-        return context
-    }
 }

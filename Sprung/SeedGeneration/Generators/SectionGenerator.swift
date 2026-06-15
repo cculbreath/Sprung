@@ -113,26 +113,14 @@ extension SectionGenerator {
 /// Errors that can occur during generation
 enum GeneratorError: LocalizedError {
     case missingContext(String)
-    case invalidTaskType(expected: String, got: String)
-    case llmResponseParsingFailed(String)
     case timelineEntryNotFound(id: String)
-    case contentTypeMismatch
-    case generationFailed(String)
 
     var errorDescription: String? {
         switch self {
         case .missingContext(let detail):
             return "Missing required context: \(detail)"
-        case .invalidTaskType(let expected, let got):
-            return "Invalid task type: expected \(expected), got \(got)"
-        case .llmResponseParsingFailed(let detail):
-            return "Failed to parse LLM response: \(detail)"
         case .timelineEntryNotFound(let id):
             return "Timeline entry not found: \(id)"
-        case .contentTypeMismatch:
-            return "Generated content type does not match expected type"
-        case .generationFailed(let detail):
-            return "Generation failed: \(detail)"
         }
     }
 }

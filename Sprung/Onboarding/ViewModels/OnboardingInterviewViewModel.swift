@@ -9,19 +9,10 @@ final class OnboardingInterviewViewModel {
     var webSearchAllowed: Bool
     var showImportError = false
     var importErrorText: String?
-    private let fallbackModelId: String
     private var hasInitialized = false
 
-    init(
-        fallbackModelId: String,
-        defaultWebSearchAllowed: Bool = true
-    ) {
-        self.fallbackModelId = fallbackModelId
+    init(defaultWebSearchAllowed: Bool = true) {
         self.webSearchAllowed = defaultWebSearchAllowed
-    }
-
-    var currentModelId: String {
-        selectedModelId.isEmpty ? fallbackModelId : selectedModelId
     }
 
     func configureIfNeeded(

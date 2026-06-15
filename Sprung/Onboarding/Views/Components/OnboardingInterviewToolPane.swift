@@ -357,7 +357,7 @@ struct OnboardingInterviewToolPane: View {
                     },
                     onAdvanceToNextPhase: {
                         Task {
-                            await coordinator.requestPhaseAdvanceFromUI()
+                            await coordinator.advanceToNextPhaseFromUI()
                         }
                     }
                 )
@@ -407,7 +407,7 @@ struct OnboardingInterviewToolPane: View {
                     },
                     onAdvanceToNextPhase: {
                         Task {
-                            await coordinator.requestPhaseAdvanceFromUI()
+                            await coordinator.advanceToNextPhaseFromUI()
                         }
                     }
                 )

@@ -112,7 +112,7 @@ final class CoordinatorEventRouter {
             await knowledgeCardWorkflow.handleDoneWithUploadsClicked()
 
         case .artifact(.generateCardsButtonClicked):
-            await knowledgeCardWorkflow.handleGenerateCardsButtonClicked()
+            await knowledgeCardWorkflow.handleApproveCardsButtonClicked()
 
         case .artifact(.mergeComplete):
             // Event handled by UI; user clicks Approve & Create to generate

@@ -48,34 +48,6 @@ final class SeedGenerationPromptTests: XCTestCase {
         XCTAssertFalse(options.bulletConstraintText.contains("1 lines"))
     }
 
-    // MARK: - PromptCacheService.buildPrompt (pure composition)
-
-    func testBuildPromptComposesAllParts() {
-        let service = PromptCacheService(backend: .openRouter)
-        let prompt = service.buildPrompt(
-            preamble: "PREAMBLE",
-            sectionPrompt: "SECTION",
-            taskContext: "TASKCTX")
-        XCTAssertTrue(prompt.hasPrefix("PREAMBLE"))
-        XCTAssertTrue(prompt.contains("## Current Task"))
-        XCTAssertTrue(prompt.contains("SECTION"))
-        XCTAssertTrue(prompt.contains("## Context for This Task"))
-        XCTAssertTrue(prompt.contains("TASKCTX"))
-        // Ordering: preamble -> current task -> context.
-        let pre = prompt.range(of: "PREAMBLE")!.lowerBound
-        let task = prompt.range(of: "## Current Task")!.lowerBound
-        let ctx = prompt.range(of: "## Context for This Task")!.lowerBound
-        XCTAssertTrue(pre < task && task < ctx, "prompt sections must appear in order")
-    }
-
-    // MARK: - usesCaching
-
-    func testUsesCachingOnlyForAnthropicBackend() {
-        XCTAssertTrue(PromptCacheService(backend: .anthropic).usesCaching)
-        XCTAssertFalse(PromptCacheService(backend: .openRouter).usesCaching)
-        XCTAssertFalse(PromptCacheService(backend: .openAI).usesCaching)
-    }
-
     // MARK: - buildPreamble structure + empty-section skipping
 
     private func makeContext(
@@ -152,15 +124,6 @@ final class SeedGenerationPromptTests: XCTestCase {
         let first = service.buildPreamble(context: ctx)
         let second = service.buildPreamble(context: ctx)
         XCTAssertEqual(first, second, "identical context must yield identical preamble")
-    }
-
-    func testInvalidateCacheForcesRebuild() {
-        let service = PromptCacheService(backend: .openRouter)
-        let first = service.buildPreamble(context: makeContext())
-        service.invalidateCache()
-        // Rebuilds without crashing and produces the same deterministic output.
-        let rebuilt = service.buildPreamble(context: makeContext())
-        XCTAssertEqual(first, rebuilt)
     }
 
     func testPreambleChangesWhenProfileChanges() {

@@ -35,7 +35,6 @@ final class SeedGenerationOrchestrator {
     private let modelId: String
     private let backend: LLMFacade.Backend
     private let promptCacheService: PromptCacheService
-    private let parallelExecutor: ParallelLLMExecutor
     private let experienceDefaultsStore: ExperienceDefaultsStore
 
     // MARK: - Generators
@@ -64,7 +63,6 @@ final class SeedGenerationOrchestrator {
         self.modelId = modelId
         self.backend = backend
         self.promptCacheService = PromptCacheService(backend: backend)
-        self.parallelExecutor = ParallelLLMExecutor()
         self.experienceDefaultsStore = experienceDefaultsStore
 
         initializeSectionProgress()

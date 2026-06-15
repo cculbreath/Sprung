@@ -479,10 +479,7 @@ private extension SetupWizardView {
     /// Filtered Anthropic models for document analysis.
     private var filteredAnthropicModels: [AnthropicModel] {
         anthropicModels
-            .filter { model in
-                let id = model.id.lowercased()
-                return id.hasPrefix("claude-") && !id.contains("instant")
-            }
+            .filter(\.isSelectable)
             .sorted { $0.displayName < $1.displayName }
     }
 

@@ -7,9 +7,7 @@ struct OnboardingInterviewView: View {
     @Environment(EnabledLLMStore.self) private var enabledLLMStore
     @Environment(DebugSettingsStore.self) private var debugSettings
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var viewModel = OnboardingInterviewViewModel(
-        fallbackModelId: UserDefaults.standard.string(forKey: OnboardingModelConfig.anthropicModelKey) ?? ""
-    )
+    @State private var viewModel = OnboardingInterviewViewModel()
     @State private var showResumePrompt = false
     @State private var showSetupWizard = false
     @State private var showBudgetSheet = false
@@ -384,7 +382,8 @@ private extension OnboardingInterviewView {
         NSApp.sendAction(#selector(AppDelegate.showSettingsWindow), to: nil, from: nil)
     }
     func modelStatusDescription(coordinator: OnboardingInterviewCoordinator) -> String {
-        let rawId = viewModel.currentModelId
+        let rawId = viewModel.selectedModelId
+        guard !rawId.isEmpty else { return "No interview model selected." }
         let display = rawId.split(separator: "/").last.map(String.init) ?? rawId
         let webText = coordinator.ui.preferences.allowWebSearch ? "on" : "off"
         return "Using \(display) with web search \(webText)."

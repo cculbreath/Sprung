@@ -371,7 +371,7 @@ final class UIResponseCoordinator {
         // Emit event for session persistence
         await eventBus.publish(.state(.timelineEditorActiveChanged(false)))
 
-        // Clear the validation/editor prompt (legacy, may not be set)
+        // Clear the validation/editor prompt (may not be set)
         toolRouter.clearValidationPrompt()
         await eventBus.publish(.toolpane(.validationPromptCleared))
 

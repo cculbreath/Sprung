@@ -51,7 +51,7 @@ enum LLMError: LocalizedError {
 ///   public entry point for LLM operations. Do not instantiate directly outside
 ///   of `LLMFacadeFactory`.
 @Observable
-final class OpenRouterServiceBackend {
+final class OpenRouterServiceBackend: LLMConversationService {
     // Dependencies
     private var appState: AppState?
     private var enabledLLMStore: EnabledLLMStore?
@@ -289,7 +289,7 @@ final class OpenRouterServiceBackend {
         systemPrompt: String? = nil,
         userMessage: String,
         modelId: String
-    ) async throws -> (conversationId: UUID, response: String) {
+    ) async throws -> (UUID, String) {
         try await ensureInitialized()
         var messages: [LLMMessageDTO] = []
         if let systemPrompt {
@@ -307,7 +307,7 @@ final class OpenRouterServiceBackend {
         let conversationId = UUID()
         await persistConversation(conversationId: conversationId, messages: messages)
         Logger.info("✅ Conversation started successfully: \(conversationId)")
-        return (conversationId: conversationId, response: responseText)
+        return (conversationId, responseText)
     }
     func continueConversation(
         userMessage: String,

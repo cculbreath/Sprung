@@ -32,7 +32,6 @@ private final class Implementation {
         fontScaler: fontScaler
     )
     private lazy var titleRenderer = TitleTemplateRenderer()
-    private lazy var descriptorValidator = DescriptorValueValidator()
     private lazy var sectionBuilder: SectionBuilder = {
         SectionBuilder(
             resume: resume,
@@ -46,7 +45,6 @@ private final class Implementation {
             fontScaler: fontScaler,
             valueNormalizer: valueNormalizer,
             titleRenderer: titleRenderer,
-            validator: descriptorValidator,
             sectionNodeProvider: { self.sectionNode(named: $0) },
             nodeValueProvider: { self.buildNodeValue($0) },
             fontSizesFallback: { self.buildFontSizesSection() },

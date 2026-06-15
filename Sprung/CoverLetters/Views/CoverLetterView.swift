@@ -45,11 +45,9 @@ struct CoverLetterView: View {
 
                 Spacer()
 
-                PanelToggleButton(
+                PanelChevronToggle(
                     edge: .trailing,
-                    isExpanded: $showCoverLetterInspector,
-                    collapsedIcon: "sidebar.right",
-                    expandedIcon: "sidebar.right"
+                    isExpanded: $showCoverLetterInspector
                 )
             }
             .padding(.horizontal, 12)

@@ -609,11 +609,6 @@ final class OnboardingInterviewCoordinator {
         await queueDrainCoordinator.checkAndDrain()
     }
 
-    /// Legacy: Request phase advance by asking LLM (use advanceToNextPhaseFromUI instead)
-    func requestPhaseAdvanceFromUI() async {
-        // Now just calls the direct method
-        await advanceToNextPhaseFromUI()
-    }
     // MARK: - UI Response Handling (Send User Messages)
     func submitChoiceSelection(_ selectionIds: [String]) async {
         await uiResponseCoordinator.submitChoiceSelection(selectionIds)

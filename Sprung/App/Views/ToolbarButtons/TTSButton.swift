@@ -10,13 +10,16 @@ struct TTSButton: View {
     @Environment(AppState.self) private var appState
     @Environment(LLMFacade.self) private var llmFacade
     @AppStorage("ttsEnabled") private var ttsEnabled: Bool = false
-    @AppStorage("ttsModel") private var ttsModel: String = "gpt-4o-mini-tts"
+    @AppStorage("ttsModel") private var ttsModel: String = ""
     @AppStorage("ttsVoice") private var ttsVoice: String = "nova"
     @AppStorage("ttsInstructions") private var ttsInstructions: String = ""
     @State private var ttsViewModel: TTSViewModel?
     @State private var ttsProvider: OpenAITTSProvider?
     private var isDisabled: Bool {
-        !ttsEnabled || coverLetterStore.cL?.generated != true || coverLetterStore.cL?.content.isEmpty == true
+        !ttsEnabled
+            || OpenAITTSProvider.TTSModel(rawValue: ttsModel) == nil
+            || coverLetterStore.cL?.generated != true
+            || coverLetterStore.cL?.content.isEmpty == true
     }
     private var buttonColor: Color {
         if isDisabled {
@@ -50,6 +53,8 @@ struct TTSButton: View {
     private var helpText: String {
         if !ttsEnabled {
             return "TTS is disabled in settings"
+        } else if OpenAITTSProvider.TTSModel(rawValue: ttsModel) == nil {
+            return "Select a TTS model in Settings"
         } else if coverLetterStore.cL?.generated != true {
             return "No generated cover letter to read"
         } else if let viewModel = ttsViewModel {
@@ -136,8 +141,8 @@ struct TTSButton: View {
         guard let viewModel = ttsViewModel,
               let coverLetter = coverLetterStore.cL,
               coverLetter.generated,
-              !coverLetter.content.isEmpty else { return }
-        let model = OpenAITTSProvider.TTSModel(rawValue: ttsModel) ?? .gpt4oMiniTTS
+              !coverLetter.content.isEmpty,
+              let model = OpenAITTSProvider.TTSModel(rawValue: ttsModel) else { return }
         let voice = OpenAITTSProvider.Voice(rawValue: ttsVoice) ?? .nova
         let instructions = ttsInstructions.isEmpty ? nil : ttsInstructions
         viewModel.speakContent(coverLetter.content, model: model, voice: voice, instructions: instructions)

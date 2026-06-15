@@ -43,21 +43,6 @@ final class LLMFacade {
             case .anthropic: return "Anthropic"
             }
         }
-
-        /// Infer the backend from a model ID prefix.
-        /// Models prefixed with "anthropic/" or "claude-" route to `.anthropic`.
-        /// All other models default to `.openRouter`.
-        static func infer(from modelId: String) -> Backend {
-            let lower = modelId.lowercased()
-            if lower.hasPrefix("anthropic/") || lower.hasPrefix("claude-") {
-                return .anthropic
-            }
-            if lower.hasPrefix("openai/") || lower.hasPrefix("google/") || lower.hasPrefix("meta-llama/") || lower.hasPrefix("mistralai/") || lower.hasPrefix("deepseek/") {
-                return .openRouter
-            }
-            Logger.warning("Unknown model prefix for '\(modelId)', routing to OpenRouter", category: .ai)
-            return .openRouter
-        }
     }
 
     private let client: LLMClient
@@ -93,7 +78,7 @@ final class LLMFacade {
         )
         self.openAIToolsAdapter = LLMFacadeOpenAIToolsAdapter(specializedAPIs: specializedAPIs)
         backendClients[.openRouter] = client
-        conversationServices[.openRouter] = OpenRouterConversationService(service: llmService)
+        conversationServices[.openRouter] = llmService
     }
 
     func registerClient(_ client: LLMClient, for backend: Backend) {

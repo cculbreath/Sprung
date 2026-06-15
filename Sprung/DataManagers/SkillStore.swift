@@ -147,43 +147,6 @@ final class SkillStore: SwiftDataStore {
         Logger.info("🗑️ Deleted \(skillsToDelete.count) skills from artifact \(artifactId)", category: .ai)
     }
 
-    // MARK: - Import/Export
-
-    /// Imports Skills from a JSON file URL
-    /// - Parameter url: File URL pointing to a JSON array of Skill objects
-    /// - Returns: Number of skills imported
-    @discardableResult
-    func importFromJSON(url: URL) throws -> Int {
-        let data = try Data(contentsOf: url)
-        let decoder = JSONDecoder()
-        let importedSkills = try decoder.decode([Skill].self, from: data)
-
-        // Check for existing IDs to avoid duplicates
-        let existingIDs = Set(skills.map { $0.id })
-        var importedCount = 0
-
-        for skill in importedSkills {
-            if existingIDs.contains(skill.id) {
-                Logger.info("⏭️ Skipping duplicate Skill: \(skill.canonical)", category: .data)
-                continue
-            }
-            modelContext.insert(skill)
-            importedCount += 1
-        }
-
-        saveContext()
-        changeVersion += 1
-        Logger.info("📥 Imported \(importedCount) Skills from JSON", category: .data)
-        return importedCount
-    }
-
-    /// Exports all skills to JSON data
-    func exportToJSON() throws -> Data {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        return try encoder.encode(skills)
-    }
-
     // MARK: - Query Helpers
 
     /// Find a skill by ID

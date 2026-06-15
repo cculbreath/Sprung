@@ -9,7 +9,7 @@ struct TextToSpeechSettingsView: View {
     @Environment(AppState.self) private var appState
     @Environment(LLMFacade.self) private var llmFacade
     @AppStorage("ttsEnabled") private var ttsEnabled: Bool = false
-    @AppStorage("ttsModel") private var ttsModel: String = "gpt-4o-mini-tts"
+    @AppStorage("ttsModel") private var ttsModel: String = ""
     @AppStorage("ttsVoice") private var ttsVoice: String = "nova"
     @AppStorage("ttsInstructions") private var ttsInstructions: String = ""
     @State private var ttsProvider: OpenAITTSProvider?
@@ -24,8 +24,10 @@ struct TextToSpeechSettingsView: View {
     Pronunciation: Clear and precise, emphasizing understanding and fluency with technical concepts, and a deft handling of even the most stubborn aspects of the English language.
     Pauses: Brief pauses for emphasis and gravitas, but with an overall cadence of efficiency and forward momentum.
     """
-    private var selectedModel: OpenAITTSProvider.TTSModel {
-        OpenAITTSProvider.TTSModel(rawValue: ttsModel) ?? .gpt4oMiniTTS
+    /// The configured TTS model, or `nil` when none has been selected yet.
+    /// No fallback: an unconfigured model surfaces the picker instead of substituting one.
+    private var selectedModel: OpenAITTSProvider.TTSModel? {
+        OpenAITTSProvider.TTSModel(rawValue: ttsModel)
     }
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -46,6 +48,7 @@ struct TextToSpeechSettingsView: View {
             }
             if ttsEnabled && appState.hasValidOpenAiKey {
                 Picker("Model", selection: $ttsModel) {
+                    Text("Select a model…").tag("")
                     ForEach(OpenAITTSProvider.TTSModel.allCases, id: \.rawValue) { model in
                         Text(model.displayName).tag(model.rawValue)
                     }
@@ -53,53 +56,60 @@ struct TextToSpeechSettingsView: View {
                 .pickerStyle(.menu)
                 .onChange(of: ttsModel) { _, _ in
                     // Reset voice if not supported by new model
-                    if !selectedModel.supportedVoices.contains(where: { $0.rawValue == ttsVoice }) {
+                    if let selectedModel,
+                       !selectedModel.supportedVoices.contains(where: { $0.rawValue == ttsVoice }) {
                         ttsVoice = "nova"
                     }
                 }
-                Picker("Voice", selection: $ttsVoice) {
-                    ForEach(selectedModel.supportedVoices, id: \.rawValue) { voice in
-                        Text(voice.displayName).tag(voice.rawValue)
-                    }
-                }
-                .pickerStyle(.menu)
-                HStack {
-                    Spacer()
-                    Button(action: previewVoice) {
-                        Label(
-                            isPreviewingVoice ? "Stop Preview" : "Preview Voice",
-                            systemImage: isPreviewingVoice ? "stop.circle.fill" : "play.circle.fill"
-                        )
-                    }
-                    .disabled(isPreviewingVoice && ttsProvider == nil)
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                    Spacer()
-                }
-                if selectedModel.supportsInstructions {
-                    VStack(alignment: .leading, spacing: 6) {
-                        HStack {
-                            Text("Voice Instructions")
-                                .font(.headline)
-                                .fontWeight(.semibold)
-                            Spacer()
-                            Button("Reset") {
-                                ttsInstructions = defaultInstructions
-                            }
-                            .buttonStyle(.link)
-                            .controlSize(.small)
+                if let selectedModel {
+                    Picker("Voice", selection: $ttsVoice) {
+                        ForEach(selectedModel.supportedVoices, id: \.rawValue) { voice in
+                            Text(voice.displayName).tag(voice.rawValue)
                         }
-                        TextEditor(text: $ttsInstructions)
-                            .font(.system(.callout, design: .monospaced))
-                            .frame(minHeight: 120, maxHeight: 220)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 8)
-                                    .stroke(Color.primary.opacity(0.1), lineWidth: 1)
-                            )
-                        Text("Instructions guide the AI narrator's tone, pacing, and emphasis when generating audio.")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
                     }
+                    .pickerStyle(.menu)
+                    HStack {
+                        Spacer()
+                        Button(action: previewVoice) {
+                            Label(
+                                isPreviewingVoice ? "Stop Preview" : "Preview Voice",
+                                systemImage: isPreviewingVoice ? "stop.circle.fill" : "play.circle.fill"
+                            )
+                        }
+                        .disabled(isPreviewingVoice && ttsProvider == nil)
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                        Spacer()
+                    }
+                    if selectedModel.supportsInstructions {
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack {
+                                Text("Voice Instructions")
+                                    .font(.headline)
+                                    .fontWeight(.semibold)
+                                Spacer()
+                                Button("Reset") {
+                                    ttsInstructions = defaultInstructions
+                                }
+                                .buttonStyle(.link)
+                                .controlSize(.small)
+                            }
+                            TextEditor(text: $ttsInstructions)
+                                .font(.system(.callout, design: .monospaced))
+                                .frame(minHeight: 120, maxHeight: 220)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .stroke(Color.primary.opacity(0.1), lineWidth: 1)
+                                )
+                            Text("Instructions guide the AI narrator's tone, pacing, and emphasis when generating audio.")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                } else {
+                    Text("Select a text-to-speech model to configure voice and narration.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
                 }
             }
         }
@@ -141,10 +151,14 @@ struct TextToSpeechSettingsView: View {
             showTTSErrorAlert = true
             return
         }
+        guard let model = selectedModel else {
+            ttsError = "Select a text-to-speech model first."
+            showTTSErrorAlert = true
+            return
+        }
         let sampleText = "This is a preview of the \(ttsVoice) voice."
         isPreviewingVoice = true
         ttsError = nil
-        let model = selectedModel
         let voiceEnum = OpenAITTSProvider.Voice(rawValue: ttsVoice) ?? .nova
         let instructions = model.supportsInstructions && !ttsInstructions.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             ? ttsInstructions : nil

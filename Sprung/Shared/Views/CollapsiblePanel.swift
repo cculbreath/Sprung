@@ -152,18 +152,6 @@ struct CollapsedPanelHandle: View {
     }
 }
 
-/// Legacy toggle button (keeping for backwards compatibility)
-struct PanelToggleButton: View {
-    let edge: PanelEdge
-    @Binding var isExpanded: Bool
-    var collapsedIcon: String = "sidebar.right"
-    var expandedIcon: String = "sidebar.left"
-
-    var body: some View {
-        PanelChevronToggle(edge: edge, isExpanded: $isExpanded)
-    }
-}
-
 // MARK: - Resize Handles
 
 /// Vertical resize handle for adjusting panel width (drag left/right)

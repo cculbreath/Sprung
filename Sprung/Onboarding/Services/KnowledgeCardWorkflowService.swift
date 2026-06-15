@@ -303,11 +303,6 @@ final class KnowledgeCardWorkflowService {
         await sendChatMessage("Knowledge cards approved: \(cardCount) cards\(skillSummary) are now available. Moving to Phase 4: Strategic Synthesis.")
     }
 
-    /// Legacy alias for handleApproveCardsButtonClicked
-    func handleGenerateCardsButtonClicked() async {
-        await handleApproveCardsButtonClicked()
-    }
-
     // MARK: - Private Helpers
 
     private func sendChatMessage(_ text: String) async {
