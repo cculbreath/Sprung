@@ -72,7 +72,7 @@ enum GitAgentError: LocalizedError {
 
 @Observable
 @MainActor
-class GitAnalysisAgent {
+class GitAnalysisAgent: AnthropicToolLoopDelegate {
     /// Version of the digest-production prompt + tool contract. Bumped on any
     /// change that alters the digest's shape; recorded in `IRProvenance` so a
     /// persisted digest is reproducible against the agent that wrote it.
@@ -104,19 +104,17 @@ class GitAnalysisAgent {
     /// External callback for turn-by-turn progress updates (turn, maxTurns, action)
     var onTurnUpdate: (@Sendable (Int, Int, String) async -> Void)?
 
-    // Limits
-    private let maxTurns = 50
-    private let timeoutSeconds: TimeInterval = 600  // 10 minutes
+    // Limits (internal so they witness AnthropicToolLoopDelegate)
+    let maxTurns = 50
+    let timeoutSeconds: TimeInterval = 600  // 10 minutes
     /// Output ceiling per turn. The final complete_analysis digest is the
     /// largest response; 16K keeps the non-streaming call under HTTP timeouts.
     private let maxResponseTokens = 16384
     /// Consecutive text-only turns tolerated (with a tool nudge) before aborting.
     private static let maxConsecutiveNoToolTurns = 2
-    private var consecutiveNoToolTurns = 0
 
-    // Conversation state (clean history — cache breakpoints are applied at
-    // request-build time only, never persisted)
-    private var messages: [AnthropicMessage] = []
+    // Conversation history is owned by AnthropicToolLoopRunner; cache breakpoints
+    // are applied at request-build time only, never persisted.
 
     // Tools (built once at init; LAST tool carries the cache breakpoint that
     // caches the entire tool block — deterministic order is load-bearing)
@@ -149,188 +147,153 @@ class GitAnalysisAgent {
 
     /// Run the agent to explore the repository and produce a `RepositoryDigest`.
     func run() async throws -> RepositoryDigest {
-        guard let facade = facade else {
+        guard facade != nil else {
             throw GitAgentError.noLLMFacade
         }
 
         status = .running
         turnCount = 0
-        messages = []
         progress = []
-        consecutiveNoToolTurns = 0
-
-        // Anthropic conversations start with a user message; the system prompt
-        // rides in the request's `system` field.
-        messages.append(initialUserMessage())
-
-        let startTime = Date()
 
         do {
-            while turnCount < maxTurns {
-                // Check timeout
-                if Date().timeIntervalSince(startTime) > timeoutSeconds {
-                    throw GitAgentError.timeout
-                }
-
-                turnCount += 1
-                await emitEvent(.processing(.gitAgentTurnStarted(turn: turnCount, maxTurns: maxTurns)))
-                await updateProgress("(Turn \(turnCount)) Calling LLM...")
-
-                // Add turn marker to transcript
-                if let agentId = agentId {
-                    tracker?.appendTranscript(
-                        agentId: agentId,
-                        entryType: .turn,
-                        content: "Turn \(turnCount) of \(maxTurns)",
-                        details: nil
-                    )
-                }
-
-                // Call the Anthropic Messages API with tools (non-streaming)
-                let response = try await facade.anthropicMessages(
-                    parameters: buildParameters(toolChoice: .auto)
-                )
-
-                await recordUsage(response.usage, turnLabel: "turn \(turnCount)")
-
-                // Split response content into text and tool_use blocks
-                let toolUses = response.content.compactMap { block -> AnthropicToolUseResponseBlock? in
-                    if case .toolUse(let toolUse) = block { return toolUse }
-                    return nil
-                }
-
-                // Add assistant message to history (echoes text + tool_use blocks
-                // so every tool_use has its tool_result in the next user message)
-                messages.append(assistantEchoMessage(from: response))
-
-                // A pure-text turn (no tool calls) is recoverable — the paid
-                // conversation state is intact. Nudge the model back onto tools
-                // (alternation holds: history ends with the assistant echo), and
-                // only abort after repeated consecutive text-only turns.
-                guard !toolUses.isEmpty else {
-                    consecutiveNoToolTurns += 1
-                    if consecutiveNoToolTurns > Self.maxConsecutiveNoToolTurns {
-                        throw GitAgentError.agentDidNotComplete
-                    }
-                    Logger.warning("Git agent turn \(turnCount) had no tool calls — nudging (\(consecutiveNoToolTurns)/\(Self.maxConsecutiveNoToolTurns))", category: .ai)
-                    appendUserText("<coordinator>Continue exploring with tools, or call complete_analysis with your findings.</coordinator>")
-                    continue
-                }
-                consecutiveNoToolTurns = 0
-
-                // Check for completion tool first (terminates the agent loop)
-                if let completionCall = toolUses.first(where: { $0.name == RepositoryDigestTool.name }) {
-                    do {
-                        let digest = try buildDigest(input: completionCall.input.mapValues { $0.value })
-                        await emitEvent(.processing(.gitAgentProgressUpdated(message: "Repository digest complete", turn: turnCount)))
-                        await updateProgress("Repository digest complete")
-                        status = .completed
-                        return digest
-                    } catch {
-                        // Send detailed error back as a tool_result so the model can
-                        // retry with corrected JSON. Every OTHER tool_use in this turn
-                        // still gets a real result (Anthropic requires one per tool_use).
-                        Logger.warning("⚠️ GitAgent: complete_analysis parsing failed, asking LLM to retry: \(error.localizedDescription)", category: .ai)
-                        var resultBlocks: [AnthropicContentBlock] = []
-                        for toolUse in toolUses {
-                            if toolUse.id == completionCall.id {
-                                resultBlocks.append(.toolResult(AnthropicToolResultBlock(
-                                    toolUseId: toolUse.id,
-                                    content: parsingErrorMessage(for: error),
-                                    isError: true
-                                )))
-                            } else {
-                                let result = await executeTool(name: toolUse.name, argumentsData: Self.serializeInput(toolUse.input))
-                                resultBlocks.append(.toolResult(AnthropicToolResultBlock(
-                                    toolUseId: toolUse.id,
-                                    content: result
-                                )))
-                            }
-                        }
-                        messages.append(AnthropicMessage(role: "user", content: .blocks(resultBlocks)))
-                        continue
-                    }
-                }
-
-                // Log parallel execution
-                let toolNames = toolUses.map { $0.name }
-                await updateProgress("(Turn \(turnCount)) Running: \(toolNames.joined(separator: ", "))")
-                if toolUses.count > 1 {
-                    Logger.info("🚀 GitAgent: Executing \(toolUses.count) tools in parallel", category: .ai)
-                }
-
-                // Execute tool calls concurrently (arguments serialized up front
-                // so only Sendable values cross into child tasks). executeTool is
-                // nonisolated, so child tasks run on the global executor — the
-                // blocking file/ripgrep I/O never touches the main thread.
-                let argumentsById: [String: Data] = Dictionary(
-                    toolUses.map { ($0.id, Self.serializeInput($0.input)) },
-                    uniquingKeysWith: { first, _ in first }
-                )
-                let results = await withTaskGroup(of: (String, String, String).self, returning: [String: (String, String)].self) { group in
-                    for toolUse in toolUses {
-                        let toolId = toolUse.id
-                        let toolName = toolUse.name
-                        let argumentsData = argumentsById[toolId] ?? Data("{}".utf8)
-
-                        // Emit from the main actor up front so the child task does
-                        // pure off-actor work (no per-tool main-actor hop).
-                        await emitEvent(.processing(.gitAgentToolExecuting(toolName: toolName, turn: turnCount)))
-
-                        group.addTask { [self] in
-                            let result = await self.executeTool(name: toolName, argumentsData: argumentsData)
-                            return (toolId, toolName, result)
-                        }
-                    }
-
-                    var collected: [String: (String, String)] = [:]
-                    for await (toolId, toolName, result) in group {
-                        collected[toolId] = (toolName, result)
-                    }
-                    return collected
-                }
-
-                // Send all tool results back in ONE user message, in tool_use order
-                await updateProgress("(Turn \(turnCount)) Processing results...")
-                var resultBlocks: [AnthropicContentBlock] = []
-                for toolUse in toolUses {
-                    guard let (toolName, result) = results[toolUse.id] else { continue }
-                    resultBlocks.append(.toolResult(AnthropicToolResultBlock(
-                        toolUseId: toolUse.id,
-                        content: result
-                    )))
-
-                    // Add tool call to transcript
-                    if let agentId = agentId {
-                        let toolDetail = extractToolDetail(name: toolName, input: toolUse.input.mapValues { $0.value })
-                        let displayName = toolDisplayName(toolName)
-                        let content = toolDetail.isEmpty ? displayName : "\(displayName): \(toolDetail)"
-                        tracker?.appendTranscript(
-                            agentId: agentId,
-                            entryType: .tool,
-                            content: content,
-                            details: nil
-                        )
-                    }
-                }
-                messages.append(AnthropicMessage(role: "user", content: .blocks(resultBlocks)))
-            }
-
-            // Max turns reached - force completion
-            Logger.warning("⚠️ GitAgent: Max turns (\(maxTurns)) reached, forcing completion...", category: .ai)
-            await updateProgress("(Turn \(turnCount + 1)) Forcing completion...")
-
-            if let forcedDigest = try await forceCompletion(facade: facade) {
-                status = .completed
-                return forcedDigest
-            }
-
-            throw GitAgentError.maxTurnsExceeded
-
+            return try await AnthropicToolLoopRunner(delegate: self).run()
         } catch {
             status = .failed(error.localizedDescription)
             throw error
         }
+    }
+
+    // MARK: - Tool Loop Delegate
+
+    var completionToolName: String { RepositoryDigestTool.name }
+
+    func timeoutError() -> Error { GitAgentError.timeout }
+    func maxTurnsError() -> Error { GitAgentError.maxTurnsExceeded }
+
+    func initialMessages() -> [AnthropicMessage] {
+        // Anthropic conversations start with a user message; the system prompt
+        // rides in the request's `system` field.
+        [initialUserMessage()]
+    }
+
+    func willStartTurn(_ turn: Int) async {
+        turnCount = turn
+        await emitEvent(.processing(.gitAgentTurnStarted(turn: turn, maxTurns: maxTurns)))
+        await updateProgress("(Turn \(turn)) Calling LLM...")
+        if let agentId = agentId {
+            tracker?.appendTranscript(
+                agentId: agentId,
+                entryType: .turn,
+                content: "Turn \(turn) of \(maxTurns)",
+                details: nil
+            )
+        }
+    }
+
+    func runModelTurn(messages: [AnthropicMessage]) async throws -> AnthropicTurnResult {
+        guard let facade = facade else { throw GitAgentError.noLLMFacade }
+        let response = try await facade.anthropicMessages(
+            parameters: buildParameters(messages: messages, toolChoice: .auto)
+        )
+        await recordUsage(response.usage, turnLabel: "turn \(turnCount)")
+        return AnthropicTurnResult(response: response)
+    }
+
+    func handleNoTool(turnCount: Int, consecutiveNoToolTurns: Int) -> AnthropicNoToolDecision {
+        // A pure-text turn (no tool calls) is recoverable — the paid conversation
+        // state is intact. Nudge the model back onto tools (alternation holds:
+        // history ends with the assistant echo), and only abort after repeated
+        // consecutive text-only turns.
+        if consecutiveNoToolTurns > Self.maxConsecutiveNoToolTurns {
+            return .abort(GitAgentError.agentDidNotComplete)
+        }
+        Logger.warning("Git agent turn \(turnCount) had no tool calls — nudging (\(consecutiveNoToolTurns)/\(Self.maxConsecutiveNoToolTurns))", category: .ai)
+        return .nudge("<coordinator>Continue exploring with tools, or call complete_analysis with your findings.</coordinator>")
+    }
+
+    func parseCompletion(_ call: AnthropicToolUseResponseBlock) async throws -> RepositoryDigest {
+        let digest = try buildDigest(input: call.input.mapValues { $0.value })
+        await emitEvent(.processing(.gitAgentProgressUpdated(message: "Repository digest complete", turn: turnCount)))
+        await updateProgress("Repository digest complete")
+        status = .completed
+        return digest
+    }
+
+    func completionRetryContent(for error: Error) -> String {
+        // Send detailed decoding error back so the model can retry with corrected JSON.
+        Logger.warning("⚠️ GitAgent: complete_analysis parsing failed, asking LLM to retry: \(error.localizedDescription)", category: .ai)
+        return parsingErrorMessage(for: error)
+    }
+
+    /// Execute tool calls concurrently (arguments serialized up front so only
+    /// Sendable values cross into child tasks). executeTool is nonisolated, so
+    /// child tasks run on the global executor — the blocking file/ripgrep I/O
+    /// never touches the main thread.
+    func executeTools(_ toolCalls: [AnthropicToolUseResponseBlock]) async -> [String: AnthropicToolOutput] {
+        let toolNames = toolCalls.map { $0.name }
+        await updateProgress("(Turn \(turnCount)) Running: \(toolNames.joined(separator: ", "))")
+        if toolCalls.count > 1 {
+            Logger.info("🚀 GitAgent: Executing \(toolCalls.count) tools in parallel", category: .ai)
+        }
+
+        let argumentsById: [String: Data] = Dictionary(
+            toolCalls.map { ($0.id, Self.serializeInput($0.input)) },
+            uniquingKeysWith: { first, _ in first }
+        )
+        let results = await withTaskGroup(of: (String, String, String).self, returning: [String: (String, String)].self) { group in
+            for toolUse in toolCalls {
+                let toolId = toolUse.id
+                let toolName = toolUse.name
+                let argumentsData = argumentsById[toolId] ?? Data("{}".utf8)
+
+                // Emit from the main actor up front so the child task does pure
+                // off-actor work (no per-tool main-actor hop).
+                await emitEvent(.processing(.gitAgentToolExecuting(toolName: toolName, turn: turnCount)))
+
+                group.addTask { [self] in
+                    let result = await self.executeTool(name: toolName, argumentsData: argumentsData)
+                    return (toolId, toolName, result)
+                }
+            }
+
+            var collected: [String: (String, String)] = [:]
+            for await (toolId, toolName, result) in group {
+                collected[toolId] = (toolName, result)
+            }
+            return collected
+        }
+
+        await updateProgress("(Turn \(turnCount)) Processing results...")
+
+        // Map to outputs and append per-tool transcript in tool_use order.
+        var outputs: [String: AnthropicToolOutput] = [:]
+        for toolUse in toolCalls {
+            guard let (toolName, result) = results[toolUse.id] else { continue }
+            outputs[toolUse.id] = AnthropicToolOutput(content: result)
+            if let agentId = agentId {
+                let toolDetail = extractToolDetail(name: toolName, input: toolUse.input.mapValues { $0.value })
+                let displayName = toolDisplayName(toolName)
+                let content = toolDetail.isEmpty ? displayName : "\(displayName): \(toolDetail)"
+                tracker?.appendTranscript(
+                    agentId: agentId,
+                    entryType: .tool,
+                    content: content,
+                    details: nil
+                )
+            }
+        }
+        return outputs
+    }
+
+    func onMaxTurnsReached(messages: [AnthropicMessage]) async throws -> RepositoryDigest? {
+        Logger.warning("⚠️ GitAgent: Max turns (\(maxTurns)) reached, forcing completion...", category: .ai)
+        await updateProgress("(Turn \(turnCount + 1)) Forcing completion...")
+        guard let facade = facade else { throw GitAgentError.noLLMFacade }
+        guard let forcedDigest = try await forceCompletion(facade: facade, messages: messages) else {
+            return nil
+        }
+        status = .completed
+        return forcedDigest
     }
 
     // MARK: - Request Building
@@ -342,7 +305,7 @@ class GitAnalysisAgent {
         return .blocks([AnthropicSystemBlock(text: prompt, cacheControl: .ephemeral)])
     }
 
-    private func buildParameters(toolChoice: AnthropicToolChoice) -> AnthropicMessageParameter {
+    private func buildParameters(messages: [AnthropicMessage], toolChoice: AnthropicToolChoice) -> AnthropicMessageParameter {
         AnthropicMessageParameter(
             model: modelId,
             messages: applyMovingCacheBreakpoint(to: messages),
@@ -416,7 +379,8 @@ class GitAnalysisAgent {
     /// If parsing or validation fails, sends the validation error back once and
     /// re-requests completion; a second failure propagates as before
     /// (nil → maxTurnsExceeded).
-    private func forceCompletion(facade: LLMFacade) async throws -> RepositoryDigest? {
+    private func forceCompletion(facade: LLMFacade, messages incomingMessages: [AnthropicMessage]) async throws -> RepositoryDigest? {
+        var messages = incomingMessages
         appendUserText("""
             <coordinator>
             CRITICAL: You have reached the maximum number of exploration turns.
@@ -426,12 +390,12 @@ class GitAnalysisAgent {
             points, verbatim manifests/docs, omissions) — keep claims grounded in what you saw.
             Do NOT call any other tools - only call complete_analysis immediately.
             </coordinator>
-            """)
+            """, to: &messages)
 
         // One forced call plus a single corrective round-trip on parse/validation failure
         for attempt in 1...2 {
             let response = try await facade.anthropicMessages(
-                parameters: buildParameters(toolChoice: .tool(name: RepositoryDigestTool.name))
+                parameters: buildParameters(messages: messages, toolChoice: .tool(name: RepositoryDigestTool.name))
             )
 
             await recordUsage(response.usage, turnLabel: "forced completion (attempt \(attempt))")
@@ -606,7 +570,7 @@ class GitAnalysisAgent {
     /// Append a text block to the trailing user message (or start a new one if
     /// the conversation ends with an assistant turn) — preserves strict
     /// user/assistant alternation.
-    private func appendUserText(_ text: String) {
+    private func appendUserText(_ text: String, to messages: inout [AnthropicMessage]) {
         let block = AnthropicContentBlock.text(AnthropicTextBlock(text: text))
         if let last = messages.last, last.role == "user" {
             var blocks = AnthropicCacheBreakpointPlanner.contentBlocks(of: last)
