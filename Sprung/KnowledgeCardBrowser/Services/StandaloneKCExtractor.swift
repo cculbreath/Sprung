@@ -283,13 +283,7 @@ class StandaloneKCExtractor {
         let repoName = url.lastPathComponent
 
         // Validate model is configured
-        guard let modelId = UserDefaults.standard.string(forKey: "onboardingGitIngestModelId"),
-              !modelId.isEmpty else {
-            throw ModelConfigurationError.modelNotConfigured(
-                settingKey: "onboardingGitIngestModelId",
-                operationName: "Git Repository Analysis"
-            )
-        }
+        let modelId = try ModelConfigResolver.resolve(key: "onboardingGitIngestModelId", operation: "Git Repository Analysis")
 
         Logger.info("StandaloneKCExtractor: Running git digest agent on \(repoName) with model \(modelId)", category: .ai)
 

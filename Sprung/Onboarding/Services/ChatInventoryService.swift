@@ -52,12 +52,7 @@ actor ChatInventoryService {
 
         Logger.info("💬 Extracting chat knowledge from \(userMessages.count) user messages", category: .ai)
 
-        guard let modelId = UserDefaults.standard.string(forKey: "onboardingCardMergeModelId"), !modelId.isEmpty else {
-            throw ModelConfigurationError.modelNotConfigured(
-                settingKey: "onboardingCardMergeModelId",
-                operationName: "Chat Inventory Processing"
-            )
-        }
+        let modelId = try ModelConfigResolver.resolve(key: "onboardingCardMergeModelId", operation: "Chat Inventory Processing")
 
         // Shared cached prefix for both extraction calls: system block +
         // transcript block each carry a breakpoint (2 of 4 max). The skills

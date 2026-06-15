@@ -566,12 +566,7 @@ actor DocumentProcessingService {
         """
 
         // Use KC agent model (fast haiku) for this simple task
-        guard let modelId = UserDefaults.standard.string(forKey: "onboardingKCAgentModelId"), !modelId.isEmpty else {
-            throw ModelConfigurationError.modelNotConfigured(
-                settingKey: "onboardingKCAgentModelId",
-                operationName: "Document Name Generation"
-            )
-        }
+        let modelId = try ModelConfigResolver.resolve(key: "onboardingKCAgentModelId", operation: "Document Name Generation")
 
         do {
             let response = try await facade.executeText(

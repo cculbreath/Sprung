@@ -179,12 +179,7 @@ actor SkillBankService {
             return SkillCurationOutcome(skills: skills, inputCount: skills.count, collapsedCount: 0, droppedImpliedCount: 0)
         }
 
-        guard let modelId = UserDefaults.standard.string(forKey: "onboardingCardMergeModelId"), !modelId.isEmpty else {
-            throw ModelConfigurationError.modelNotConfigured(
-                settingKey: "onboardingCardMergeModelId",
-                operationName: "Skill Curation"
-            )
-        }
+        let modelId = try ModelConfigResolver.resolve(key: "onboardingCardMergeModelId", operation: "Skill Curation")
 
         let prompt = SkillBankPrompts.curationPrompt(skillsJSON: curationInputJSON(for: skills))
 

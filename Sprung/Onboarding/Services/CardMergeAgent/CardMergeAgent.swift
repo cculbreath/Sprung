@@ -633,13 +633,7 @@ class CardMergeAgent {
     /// Serialize a tool-use input dictionary back to a JSON string for the
     /// existing Codable tool parameter decoders.
     private func argumentsJSON(from input: [String: AnthropicDynamicValue]) -> String {
-        let dict = input.mapValues { $0.value }
-        guard JSONSerialization.isValidJSONObject(dict),
-              let data = try? JSONSerialization.data(withJSONObject: dict),
-              let json = String(data: data, encoding: .utf8) else {
-            return "{}"
-        }
-        return json
+        input.jsonString
     }
 
     // MARK: - Tool Definitions

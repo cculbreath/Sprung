@@ -16,13 +16,7 @@ enum OnboardingModelConfig {
     /// Returns the currently configured model ID from settings
     /// Throws ModelConfigurationError if no model is configured
     static func currentModelId() throws -> String {
-        guard let modelId = UserDefaults.standard.string(forKey: anthropicModelKey), !modelId.isEmpty else {
-            throw ModelConfigurationError.modelNotConfigured(
-                settingKey: anthropicModelKey,
-                operationName: "Onboarding Interview"
-            )
-        }
-        return modelId
+        try ModelConfigResolver.resolve(key: anthropicModelKey, operation: "Onboarding Interview")
     }
 }
 

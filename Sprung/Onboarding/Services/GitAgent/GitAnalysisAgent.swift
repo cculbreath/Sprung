@@ -512,8 +512,7 @@ class GitAnalysisAgent {
 
     /// Serialize a tool_use input dictionary to JSON Data for parameter decoding.
     private static func serializeInput(_ input: [String: AnthropicDynamicValue]) -> Data {
-        let plain = input.mapValues { $0.value }
-        return (try? JSONSerialization.data(withJSONObject: plain)) ?? Data("{}".utf8)
+        input.jsonData
     }
 
     /// nonisolated (class is @MainActor): tool bodies are synchronous blocking

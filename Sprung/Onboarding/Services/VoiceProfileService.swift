@@ -17,13 +17,7 @@ final class VoiceProfileService {
     private var activeStreamingHandle: LLMStreamingHandle?
 
     private func getModelId() throws -> String {
-        guard let modelId = UserDefaults.standard.string(forKey: "voiceProfileModelId"), !modelId.isEmpty else {
-            throw ModelConfigurationError.modelNotConfigured(
-                settingKey: "voiceProfileModelId",
-                operationName: "Voice Profile Generation"
-            )
-        }
-        return modelId
+        try ModelConfigResolver.resolve(key: "voiceProfileModelId", operation: "Voice Profile Generation")
     }
 
     init(llmFacade: LLMFacade?, reasoningStreamManager: ReasoningStreamManager) {

@@ -111,13 +111,7 @@ final class SkillBankCurationService {
     private let llmFacade: LLMFacade
 
     private func getModelId() throws -> String {
-        guard let modelId = UserDefaults.standard.string(forKey: "skillCurationModelId"), !modelId.isEmpty else {
-            throw ModelConfigurationError.modelNotConfigured(
-                settingKey: "skillCurationModelId",
-                operationName: "Skill Bank Curation"
-            )
-        }
-        return modelId
+        try ModelConfigResolver.resolve(key: "skillCurationModelId", operation: "Skill Bank Curation")
     }
 
     init(skillStore: SkillStore, llmFacade: LLMFacade) {

@@ -17,13 +17,7 @@ final class NarrativeDeduplicationService {
     private weak var agentActivityTracker: AgentActivityTracker?
 
     private func getModelId() throws -> String {
-        guard let modelId = UserDefaults.standard.string(forKey: "onboardingCardMergeModelId"), !modelId.isEmpty else {
-            throw ModelConfigurationError.modelNotConfigured(
-                settingKey: "onboardingCardMergeModelId",
-                operationName: "Narrative Deduplication"
-            )
-        }
-        return modelId
+        try ModelConfigResolver.resolve(key: "onboardingCardMergeModelId", operation: "Narrative Deduplication")
     }
 
     private let workspaceService = CardMergeWorkspaceService()

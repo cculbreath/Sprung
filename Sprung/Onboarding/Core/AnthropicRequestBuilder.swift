@@ -656,12 +656,6 @@ extension StateCoordinator {
     /// Get the Anthropic model ID from settings
     /// Throws ModelConfigurationError if no model is configured
     func getAnthropicModelId() async throws -> String {
-        guard let modelId = UserDefaults.standard.string(forKey: "onboardingAnthropicModelId"), !modelId.isEmpty else {
-            throw ModelConfigurationError.modelNotConfigured(
-                settingKey: "onboardingAnthropicModelId",
-                operationName: "Anthropic Request Building"
-            )
-        }
-        return modelId
+        try ModelConfigResolver.resolve(key: "onboardingAnthropicModelId", operation: "Anthropic Request Building")
     }
 }

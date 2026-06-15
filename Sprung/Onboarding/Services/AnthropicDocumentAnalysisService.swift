@@ -291,13 +291,7 @@ actor AnthropicDocumentAnalysisService {
     /// Resolve the configured document-analysis model or throw so the UI layer
     /// can surface the model settings picker.
     static func configuredModelId(operationName: String = "Document Analysis") throws -> String {
-        guard let modelId = UserDefaults.standard.string(forKey: modelSettingKey), !modelId.isEmpty else {
-            throw ModelConfigurationError.modelNotConfigured(
-                settingKey: modelSettingKey,
-                operationName: operationName
-            )
-        }
-        return modelId
+        try ModelConfigResolver.resolve(key: modelSettingKey, operation: operationName)
     }
 
     // MARK: - Public API

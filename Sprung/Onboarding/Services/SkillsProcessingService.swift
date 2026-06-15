@@ -27,13 +27,7 @@ final class SkillsProcessingService {
 
     // Configuration - UserDefaults backed
     private func getModelId() throws -> String {
-        guard let modelId = UserDefaults.standard.string(forKey: "skillsProcessingModelId"), !modelId.isEmpty else {
-            throw ModelConfigurationError.modelNotConfigured(
-                settingKey: "skillsProcessingModelId",
-                operationName: "Skills Processing"
-            )
-        }
-        return modelId
+        try ModelConfigResolver.resolve(key: "skillsProcessingModelId", operation: "Skills Processing")
     }
 
     private var parallelAgentCount: Int {
