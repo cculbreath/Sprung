@@ -362,9 +362,10 @@ class GitAnalysisAgent {
         guard !messages.isEmpty else { return messages }
         var result = messages
         for messageIndex in result.indices.reversed() {
-            let blocks = Self.contentBlocks(of: result[messageIndex])
+            let blocks = AnthropicCacheBreakpointPlanner.contentBlocks(of: result[messageIndex])
             for blockIndex in blocks.indices.reversed() {
-                guard let marked = Self.addingEphemeralCacheControl(to: blocks[blockIndex]) else { continue }
+                guard let marked = AnthropicCacheBreakpointPlanner.addingCacheControl(
+                    to: blocks[blockIndex], cacheControl: .ephemeral) else { continue }
                 var newBlocks = blocks
                 newBlocks[blockIndex] = marked
                 result[messageIndex] = AnthropicMessage(role: result[messageIndex].role, content: .blocks(newBlocks))
@@ -372,36 +373,6 @@ class GitAnalysisAgent {
             }
         }
         return result
-    }
-
-    private static func contentBlocks(of message: AnthropicMessage) -> [AnthropicContentBlock] {
-        switch message.content {
-        case .text(let text):
-            return [.text(AnthropicTextBlock(text: text))]
-        case .blocks(let blocks):
-            return blocks
-        }
-    }
-
-    /// tool_use blocks cannot carry cache_control; everything else can.
-    private static func addingEphemeralCacheControl(to block: AnthropicContentBlock) -> AnthropicContentBlock? {
-        switch block {
-        case .text(let textBlock):
-            return .text(AnthropicTextBlock(text: textBlock.text, cacheControl: .ephemeral))
-        case .toolResult(let resultBlock):
-            return .toolResult(AnthropicToolResultBlock(
-                toolUseId: resultBlock.toolUseId,
-                content: resultBlock.content,
-                isError: resultBlock.isError ?? false,
-                cacheControl: .ephemeral
-            ))
-        case .image(let imageBlock):
-            return .image(AnthropicImageBlock(source: imageBlock.source, cacheControl: .ephemeral))
-        case .document(let documentBlock):
-            return .document(AnthropicDocumentBlock(source: documentBlock.source, cacheControl: .ephemeral))
-        case .toolUse:
-            return nil
-        }
     }
 
     // MARK: - Usage Tracking
@@ -638,7 +609,7 @@ class GitAnalysisAgent {
     private func appendUserText(_ text: String) {
         let block = AnthropicContentBlock.text(AnthropicTextBlock(text: text))
         if let last = messages.last, last.role == "user" {
-            var blocks = Self.contentBlocks(of: last)
+            var blocks = AnthropicCacheBreakpointPlanner.contentBlocks(of: last)
             blocks.append(block)
             messages[messages.count - 1] = AnthropicMessage(role: "user", content: .blocks(blocks))
         } else {

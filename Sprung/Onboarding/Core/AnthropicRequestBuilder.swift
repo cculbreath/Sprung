@@ -23,7 +23,7 @@
 //  cache_control placement, which the API ignores for prefix matching).
 //
 //  CACHE BREAKPOINTS (applied at request-build time only, never persisted, so
-//  they "move" naturally each turn — see applyMessageCacheBreakpoints):
+//  they "move" naturally each turn — placed by AnthropicCacheBreakpointPlanner):
 //  1. System block (always, when a system prompt exists).
 //  2. Last cacheable content block of the final message — incremental
 //     conversation caching: turn N+1 reads the prefix turn N wrote.
@@ -33,7 +33,7 @@
 //     before the end — keeps a boundary inside Anthropic's 20-block lookback
 //     window after tool-heavy turns.
 //  HARD CLAMP: max 4 cache_control blocks per request INCLUDING system; drop
-//  breakpoint 4 first, then 3 (see clampBreakpointCandidates).
+//  breakpoint 4 first, then 3 (see AnthropicCacheBreakpointPlanner.clampBreakpointCandidates).
 //
 
 import Foundation
@@ -51,6 +51,10 @@ struct AnthropicRequestBuilder {
     /// Per-request prefix fingerprinting — logs the first divergent block when
     /// the byte-stability invariant breaks (see CachePrefixAuditor).
     private let cacheAuditor = CachePrefixAuditor()
+    /// Shared message-tier breakpoint placement: tail + last-document + >20-block
+    /// lookback, .ephemeral TTL, reserving the system block (0 or 1). The full
+    /// onboarding policy — see AnthropicCacheBreakpointPlanner.
+    private let breakpointPlanner: AnthropicCacheBreakpointPlanner
 
     init(
         baseSystemPrompt: String,
@@ -64,6 +68,11 @@ struct AnthropicRequestBuilder {
         self.historyBuilder = AnthropicHistoryBuilder(contextAssembler: contextAssembler)
         self.toolConverter = AnthropicToolConverter(toolRegistry: toolRegistry, stateCoordinator: stateCoordinator)
         self.workingMemoryBuilder = WorkingMemoryBuilder(stateCoordinator: stateCoordinator, todoStore: todoStore)
+        self.breakpointPlanner = AnthropicCacheBreakpointPlanner(
+            cacheControl: .ephemeral,
+            includeDocumentBreakpoint: true,
+            reservedBreakpointCount: baseSystemPrompt.isEmpty ? 0 : 1
+        )
     }
 
     // MARK: - User Message Request
@@ -169,7 +178,7 @@ struct AnthropicRequestBuilder {
         }
 
         // Message-block cache breakpoints (post-processing, build-time only)
-        messages = applyMessageCacheBreakpoints(to: messages)
+        messages = breakpointPlanner.plan(messages: messages)
 
         // Determine tool choice - prefer auto, only use .none for the first greeting
         let toolChoice: AnthropicToolChoice
@@ -245,7 +254,7 @@ struct AnthropicRequestBuilder {
 
         // Build history — it now ends with the coordinator wire turn
         // (message-block cache breakpoints applied as build-time post-processing)
-        let messages = applyMessageCacheBreakpoints(to: await historyBuilder.buildAnthropicHistory())
+        let messages = breakpointPlanner.plan(messages: await historyBuilder.buildAnthropicHistory())
 
         let tools = await toolConverter.getAnthropicTools()
 
@@ -323,7 +332,7 @@ struct AnthropicRequestBuilder {
         // Build conversation history — tool_result(s) and the context text are
         // emitted by the history builder in wire order.
         // (message-block cache breakpoints applied as build-time post-processing)
-        let messages = applyMessageCacheBreakpoints(to: await historyBuilder.buildAnthropicHistory())
+        let messages = breakpointPlanner.plan(messages: await historyBuilder.buildAnthropicHistory())
 
         let tools = await toolConverter.getAnthropicTools()
 
@@ -424,7 +433,7 @@ struct AnthropicRequestBuilder {
 
         // Build conversation history — all tool_results plus context text in wire order
         // (message-block cache breakpoints applied as build-time post-processing)
-        let messages = applyMessageCacheBreakpoints(to: await historyBuilder.buildAnthropicHistory())
+        let messages = breakpointPlanner.plan(messages: await historyBuilder.buildAnthropicHistory())
 
         let tools = await toolConverter.getAnthropicTools()
 
@@ -471,169 +480,6 @@ struct AnthropicRequestBuilder {
             category: .ai
         )
         return rendered.joined(separator: "\n")
-    }
-
-    // MARK: - Message Cache Breakpoints
-
-    /// Position of a content block in the assembled message array.
-    struct BlockPosition: Equatable {
-        let messageIndex: Int
-        let blockIndex: Int
-    }
-
-    /// HARD CLAMP — Anthropic allows at most 4 cache_control blocks per request,
-    /// INCLUDING the system block. With the system breakpoint counted, at most
-    /// (4 - systemBreakpointCount) message breakpoints may survive. Candidates are
-    /// supplied in priority order (tail, document, lookback), so on overflow the
-    /// lookback breakpoint (4) is dropped first, then the document breakpoint (3);
-    /// the tail breakpoint (2) always survives. Duplicate positions collapse.
-    /// Pure function so the invariant is inspectable in isolation.
-    static func clampBreakpointCandidates(
-        tail: BlockPosition?,
-        document: BlockPosition?,
-        lookback: BlockPosition?,
-        systemBreakpointCount: Int
-    ) -> [BlockPosition] {
-        let budget = max(0, 4 - systemBreakpointCount)
-        var kept: [BlockPosition] = []
-        for candidate in [tail, document, lookback] {
-            guard let candidate, !kept.contains(candidate) else { continue }
-            guard kept.count < budget else { break }
-            kept.append(candidate)
-        }
-        return kept
-    }
-
-    /// Rebuild a content block with an ephemeral cache_control attached.
-    /// Returns nil for block kinds that cannot carry cache_control (tool_use in
-    /// the fork's types) — placement skips those.
-    static func addingEphemeralCacheControl(to block: AnthropicContentBlock) -> AnthropicContentBlock? {
-        switch block {
-        case .text(let textBlock):
-            return .text(AnthropicTextBlock(text: textBlock.text, cacheControl: .ephemeral))
-        case .image(let imageBlock):
-            return .image(AnthropicImageBlock(source: imageBlock.source, cacheControl: .ephemeral))
-        case .document(let documentBlock):
-            return .document(AnthropicDocumentBlock(source: documentBlock.source, cacheControl: .ephemeral))
-        case .toolResult(let resultBlock):
-            return .toolResult(AnthropicToolResultBlock(
-                toolUseId: resultBlock.toolUseId,
-                content: resultBlock.content,
-                isError: resultBlock.isError ?? false,
-                cacheControl: .ephemeral
-            ))
-        case .toolUse:
-            return nil
-        }
-    }
-
-    /// Add message-block cache breakpoints so conversation history is served from
-    /// cache from turn 2 onward.
-    ///
-    /// Applied at request-build time only — placements are NEVER persisted, so they
-    /// move naturally as the conversation grows. The API matches cache prefixes on
-    /// prompt content and ignores cache_control placement for prefix matching, so
-    /// moving breakpoints between turns does not invalidate earlier cache entries.
-    ///
-    /// Placement is a pure function of the assembled message array (same history ⇒
-    /// same placement), preserving the ACCEPTANCE INVARIANT in the file header.
-    private func applyMessageCacheBreakpoints(to messages: [AnthropicMessage]) -> [AnthropicMessage] {
-        guard !messages.isEmpty else { return messages }
-
-        // Flatten block geometry (string content counts as one text block).
-        let blocksByMessage: [[AnthropicContentBlock]] = messages.map { historyBuilder.extractContentBlocks($0) }
-        var flatStartIndex: [Int] = []
-        var totalBlocks = 0
-        for blocks in blocksByMessage {
-            flatStartIndex.append(totalBlocks)
-            totalBlocks += blocks.count
-        }
-
-        func isMarkable(_ block: AnthropicContentBlock) -> Bool {
-            if case .toolUse = block { return false }
-            return true
-        }
-
-        func lastMarkableBlock(inMessage messageIndex: Int) -> BlockPosition? {
-            for blockIndex in blocksByMessage[messageIndex].indices.reversed()
-            where isMarkable(blocksByMessage[messageIndex][blockIndex]) {
-                return BlockPosition(messageIndex: messageIndex, blockIndex: blockIndex)
-            }
-            return nil
-        }
-
-        // Breakpoint 2 — incremental conversation caching: the last markable block
-        // of the final message (walking back if the final message has none).
-        var tail: BlockPosition?
-        for messageIndex in blocksByMessage.indices.reversed() {
-            if let position = lastMarkableBlock(inMessage: messageIndex) {
-                tail = position
-                break
-            }
-        }
-
-        // Breakpoint 3 (conditional) — the LAST document block in the array:
-        // caching through it covers all earlier blocks, including the document
-        // payloads themselves. Collapses into the tail when they coincide.
-        var document: BlockPosition?
-        outer: for messageIndex in blocksByMessage.indices.reversed() {
-            for blockIndex in blocksByMessage[messageIndex].indices.reversed() {
-                if case .document = blocksByMessage[messageIndex][blockIndex] {
-                    document = BlockPosition(messageIndex: messageIndex, blockIndex: blockIndex)
-                    break outer
-                }
-            }
-        }
-
-        // Breakpoint 4 (conditional) — Anthropic's cache lookback walks at most 20
-        // content blocks back from a breakpoint. After tool-heavy turns a single
-        // turn can add >20 blocks, so plant one boundary on the last markable block
-        // of the latest message that ends at least 20 blocks before the end of the
-        // array. Deterministic rule: same history ⇒ same placement.
-        var lookback: BlockPosition?
-        if totalBlocks > 20 {
-            for messageIndex in blocksByMessage.indices.reversed() {
-                let lastFlatIndex = flatStartIndex[messageIndex] + blocksByMessage[messageIndex].count - 1
-                guard totalBlocks - 1 - lastFlatIndex >= 20 else { continue }
-                if let position = lastMarkableBlock(inMessage: messageIndex) {
-                    lookback = position
-                    break
-                }
-            }
-        }
-
-        let kept = Self.clampBreakpointCandidates(
-            tail: tail,
-            document: document,
-            lookback: lookback,
-            systemBreakpointCount: baseSystemPrompt.isEmpty ? 0 : 1
-        )
-        guard !kept.isEmpty else { return messages }
-
-        // Apply marks, grouping by message so multiple marks in one message stack.
-        var marksByMessage: [Int: [Int]] = [:]
-        for position in kept {
-            marksByMessage[position.messageIndex, default: []].append(position.blockIndex)
-        }
-
-        var result = messages
-        for (messageIndex, blockIndexes) in marksByMessage {
-            var blocks = blocksByMessage[messageIndex]
-            for blockIndex in blockIndexes {
-                guard let marked = Self.addingEphemeralCacheControl(to: blocks[blockIndex]) else { continue }
-                blocks[blockIndex] = marked
-            }
-            result[messageIndex] = AnthropicMessage(role: messages[messageIndex].role, content: .blocks(blocks))
-        }
-
-        Logger.debug(
-            "📍 Cache breakpoints: system=\(baseSystemPrompt.isEmpty ? 0 : 1), message=\(kept.count) " +
-            "(tail=\(tail != nil), document=\(document != nil), lookback=\(lookback != nil)), " +
-            "blocks=\(totalBlocks)",
-            category: .ai
-        )
-
-        return result
     }
 
     // MARK: - System Prompt

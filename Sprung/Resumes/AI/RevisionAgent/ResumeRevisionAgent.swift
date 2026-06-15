@@ -136,6 +136,17 @@ class ResumeRevisionAgent {
     /// over by 0.1x reads across a multi-turn session).
     private static let oneHourCacheControl = AnthropicCacheControl(type: "ephemeral", ttl: "1h")
 
+    /// Shared message-tier breakpoint placement for this agent: 1-hour TTL, no
+    /// document breakpoint (the single PDF stays in the front-loaded prefix), and
+    /// a reserved budget of 2 (the last-tool breakpoint + the system block). Only
+    /// the tail and >20-block lookback candidates remain in the message tier — see
+    /// AnthropicCacheBreakpointPlanner.
+    private static let breakpointPlanner = AnthropicCacheBreakpointPlanner(
+        cacheControl: oneHourCacheControl,
+        includeDocumentBreakpoint: false,
+        reservedBreakpointCount: 2
+    )
+
     // MARK: - Init
 
     private let titleSets: [TitleSetRecord]
@@ -347,7 +358,7 @@ class ResumeRevisionAgent {
                 // turn and turn N+1 reads the prefix turn N wrote.
                 let parameters = AnthropicMessageParameter(
                     model: modelId,
-                    messages: applyCacheBreakpoints(to: conversationMessages),
+                    messages: Self.breakpointPlanner.plan(messages: conversationMessages),
                     system: systemContent,
                     maxTokens: maxOutputTokensPerTurn,
                     stream: true,
@@ -1206,140 +1217,6 @@ class ResumeRevisionAgent {
         return tools
     }
 
-    // MARK: - Prompt-Cache Breakpoints
-
-    /// Position of a content block in the assembled message array.
-    private struct BlockPosition: Equatable {
-        let messageIndex: Int
-        let blockIndex: Int
-    }
-
-    /// Apply the message-tier cache breakpoints to a per-request copy of the
-    /// conversation. Applied at request-build time ONLY — the stored history
-    /// is never mutated (byte-stability invariant), so the breakpoints move
-    /// naturally each turn and turn N+1 reads the prefix turn N wrote.
-    ///
-    /// Breakpoint budget (HARD LIMIT 4 per request, all 1h TTL):
-    /// 1. Last tool (buildAnthropicTools) — caches the whole tool block.
-    /// 2. System block — caches tools + system.
-    /// 3. Moving tail: last markable block of the final message — incremental
-    ///    conversation caching. The initial PDF document block sits at the
-    ///    front of the conversation, inside this cached prefix from turn 1.
-    /// 4. Lookback anchor (conditional): Anthropic matches cache prefixes by
-    ///    walking at most ~20 content blocks back from a breakpoint, and a
-    ///    write_json_file turn appends several tool_result + page-image
-    ///    blocks at once. When the array exceeds 20 blocks, plant a boundary
-    ///    on the last markable block of the latest message that ends at
-    ///    least 20 blocks before the end, so the next turn's tail breakpoint
-    ///    always finds a prior cache entry inside the lookback window.
-    private func applyCacheBreakpoints(to messages: [AnthropicMessage]) -> [AnthropicMessage] {
-        guard !messages.isEmpty else { return messages }
-
-        // Flatten block geometry (string content counts as one text block).
-        let blocksByMessage: [[AnthropicContentBlock]] = messages.map { Self.contentBlocks(of: $0) }
-        var flatStartIndex: [Int] = []
-        var totalBlocks = 0
-        for blocks in blocksByMessage {
-            flatStartIndex.append(totalBlocks)
-            totalBlocks += blocks.count
-        }
-
-        func isMarkable(_ block: AnthropicContentBlock) -> Bool {
-            if case .toolUse = block { return false }
-            return true
-        }
-
-        func lastMarkableBlock(inMessage messageIndex: Int) -> BlockPosition? {
-            for blockIndex in blocksByMessage[messageIndex].indices.reversed()
-            where isMarkable(blocksByMessage[messageIndex][blockIndex]) {
-                return BlockPosition(messageIndex: messageIndex, blockIndex: blockIndex)
-            }
-            return nil
-        }
-
-        // Moving tail breakpoint — last markable block of the final message
-        // (walking back if the final message has none: tool_use blocks cannot
-        // carry cache_control).
-        var tail: BlockPosition?
-        for messageIndex in blocksByMessage.indices.reversed() {
-            if let position = lastMarkableBlock(inMessage: messageIndex) {
-                tail = position
-                break
-            }
-        }
-
-        // Lookback anchor — only when a breakpoint could fall out of range of
-        // the previous turn's prefix.
-        var lookback: BlockPosition?
-        if totalBlocks > 20 {
-            for messageIndex in blocksByMessage.indices.reversed() {
-                let lastFlatIndex = flatStartIndex[messageIndex] + blocksByMessage[messageIndex].count - 1
-                guard totalBlocks - 1 - lastFlatIndex >= 20 else { continue }
-                if let position = lastMarkableBlock(inMessage: messageIndex) {
-                    lookback = position
-                    break
-                }
-            }
-        }
-
-        // Tools (1) + system (1) leave a budget of exactly 2 message-tier
-        // breakpoints — tail and lookback. Collapse duplicates.
-        var kept: [BlockPosition] = []
-        for candidate in [tail, lookback] {
-            guard let candidate, !kept.contains(candidate) else { continue }
-            kept.append(candidate)
-        }
-        guard !kept.isEmpty else { return messages }
-
-        // Apply marks, grouping by message so multiple marks in one message stack.
-        var marksByMessage: [Int: [Int]] = [:]
-        for position in kept {
-            marksByMessage[position.messageIndex, default: []].append(position.blockIndex)
-        }
-
-        var result = messages
-        for (messageIndex, blockIndexes) in marksByMessage {
-            var blocks = blocksByMessage[messageIndex]
-            for blockIndex in blockIndexes {
-                guard let marked = Self.addingCacheControl(to: blocks[blockIndex]) else { continue }
-                blocks[blockIndex] = marked
-            }
-            result[messageIndex] = AnthropicMessage(role: messages[messageIndex].role, content: .blocks(blocks))
-        }
-
-        return result
-    }
-
-    private static func contentBlocks(of message: AnthropicMessage) -> [AnthropicContentBlock] {
-        switch message.content {
-        case .text(let text):
-            return [.text(AnthropicTextBlock(text: text))]
-        case .blocks(let blocks):
-            return blocks
-        }
-    }
-
-    /// tool_use blocks cannot carry cache_control; everything else can.
-    private static func addingCacheControl(to block: AnthropicContentBlock) -> AnthropicContentBlock? {
-        switch block {
-        case .text(let textBlock):
-            return .text(AnthropicTextBlock(text: textBlock.text, cacheControl: oneHourCacheControl))
-        case .toolResult(let resultBlock):
-            return .toolResult(AnthropicToolResultBlock(
-                toolUseId: resultBlock.toolUseId,
-                content: resultBlock.content,
-                isError: resultBlock.isError ?? false,
-                cacheControl: oneHourCacheControl
-            ))
-        case .image(let imageBlock):
-            return .image(AnthropicImageBlock(source: imageBlock.source, cacheControl: oneHourCacheControl))
-        case .document(let documentBlock):
-            return .document(AnthropicDocumentBlock(source: documentBlock.source, cacheControl: oneHourCacheControl))
-        case .toolUse:
-            return nil
-        }
-    }
-
     // MARK: - Usage Tracking
 
     /// Log per-turn token usage and accumulate session totals. From turn 2
@@ -1627,7 +1504,7 @@ class ResumeRevisionAgent {
         // Register so Cancel/ESC/teardown can interrupt the in-flight pass.
         activeVerificationService = service
         defer { activeVerificationService = nil }
-        let baseMessages = applyCacheBreakpoints(to: conversationMessages)
+        let baseMessages = Self.breakpointPlanner.plan(messages: conversationMessages)
         let usageCallback: RevisionVerificationService.UsageCallback = { [weak self] input, cacheRead, cacheCreation, output in
             self?.accumulateVerificationUsage(input: input, cacheRead: cacheRead, cacheCreation: cacheCreation, output: output)
         }
