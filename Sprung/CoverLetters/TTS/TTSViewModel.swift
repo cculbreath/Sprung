@@ -192,11 +192,7 @@ class TTSViewModel {
             // Set timeout for the entire speak operation (30 seconds max)
             self.setStateTimeout(for: "speaking", duration: 30.0)
         }
-        let cleanContent = content
-            .replacingOccurrences(of: "#", with: "")
-            .replacingOccurrences(of: "**", with: "")
-            .replacingOccurrences(of: "*", with: "")
-            .trimmingCharacters(in: .whitespacesAndNewlines) // Trim extra whitespace
+        let cleanContent = TTSChunkSplitter.cleanMarkup(content)
         Logger.info("🌊 [TTSViewModel] Initiating audio stream for TTS content")
         // No artificial delay needed here if state updates are correctly managed.
         // The provider's callbacks will handle transitions out of buffering.

@@ -172,16 +172,13 @@ class OpenAITTSProvider {
     func speakText(_ text: String, model: TTSModel = .tts1, voice: Voice = .nova, instructions: String? = nil, onComplete: @escaping (Error?) -> Void) {
         // OpenAI TTS has a 4096 character limit
         let maxLength = 4096
-        var textToSpeak = text
+        let textToSpeak: String
         if text.count > maxLength {
             Logger.warning("Text length (\(text.count)) exceeds TTS limit (\(maxLength)). Truncating...")
-            let truncated = String(text.prefix(maxLength))
-            if let lastSpace = truncated.lastIndex(of: " ") {
-                textToSpeak = String(truncated[..<lastSpace]) + "..."
-            } else {
-                textToSpeak = truncated + "..."
-            }
+            textToSpeak = TTSChunkSplitter.truncate(text, maxLength: maxLength)
             Logger.debug("Truncated text to \(textToSpeak.count) characters")
+        } else {
+            textToSpeak = text
         }
         let effectiveInstructions = model.supportsInstructions ? instructions : nil
         ttsClient.sendTTSRequest(
@@ -265,35 +262,6 @@ class OpenAITTSProvider {
         }
     }
     // MARK: – Streaming playback (incremental)
-    /// Splits text into chunks at sentence boundaries
-    /// - Parameters:
-    ///   - text: The text to split
-    ///   - maxLength: Maximum length per chunk (default 4000 to leave buffer)
-    /// - Returns: Array of text chunks
-    private func splitTextIntoChunks(_ text: String, maxLength: Int = 4000) -> [String] {
-        var chunks: [String] = []
-        var currentChunk = ""
-        // Split by sentences (basic approach - could be improved with NLP)
-        let sentences = text.components(separatedBy: CharacterSet(charactersIn: ".!?"))
-        for sentence in sentences {
-            let trimmedSentence = sentence.trimmingCharacters(in: .whitespacesAndNewlines)
-            if trimmedSentence.isEmpty { continue }
-            // Add back the punctuation if it was removed
-            let fullSentence = trimmedSentence + ". "
-            // If adding this sentence would exceed the limit, save current chunk and start new one
-            if !currentChunk.isEmpty && currentChunk.count + fullSentence.count > maxLength {
-                chunks.append(currentChunk.trimmingCharacters(in: .whitespaces))
-                currentChunk = fullSentence
-            } else {
-                currentChunk += fullSentence
-            }
-        }
-        if !currentChunk.isEmpty {
-            chunks.append(currentChunk.trimmingCharacters(in: .whitespaces))
-        }
-        Logger.debug("Split text into \(chunks.count) chunks. Lengths: \(chunks.map { $0.count })")
-        return chunks
-    }
     /// Streams TTS audio and plays it as chunks arrive using ChunkedAudioPlayer
     /// - Parameters:
     ///   - text: The text to speak.
@@ -311,7 +279,8 @@ class OpenAITTSProvider {
     ) {
         let effectiveInstructions = model.supportsInstructions ? instructions : nil
         // Split text into chunks if needed
-        let textChunks = splitTextIntoChunks(text)
+        let textChunks = TTSChunkSplitter.splitIntoChunks(text)
+        Logger.debug("Split text into \(textChunks.count) chunks. Lengths: \(textChunks.map { $0.count })")
         if textChunks.count == 1 {
             streamSingleChunk(textChunks[0], model: model, voice: voice, instructions: effectiveInstructions,
                              onStart: onStart, onComplete: onComplete)
