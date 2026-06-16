@@ -9,6 +9,21 @@ import Cocoa
 import SwiftData
 import SwiftUI
 
+// MARK: - Window Spec
+
+/// Declarative chrome for a standard secondary window. The content view is
+/// supplied separately so `makeWindow(_:content:observeClose:)` can stay generic
+/// — it owns the NSWindow boilerplate every `show*` method used to repeat
+/// (contentRect / styleMask / backing, title, tabbing, release policy, center).
+private struct WindowSpec {
+    var title: String
+    var width: CGFloat
+    var height: CGFloat
+    var styleMask: NSWindow.StyleMask = [.titled, .closable, .miniaturizable, .resizable]
+    var minSize: NSSize?
+    var disallowTabbing: Bool = false
+}
+
 @Observable
 @MainActor
 final class SecondaryWindowManager {
@@ -34,92 +49,84 @@ final class SecondaryWindowManager {
     /// Customize is invoked for a different resume than the open window serves.
     private weak var activeRevisionResume: Resume?
 
-    // MARK: - Dependencies (assigned from SprungApp.onAppear)
+    // MARK: - Dependencies
 
-    var appEnvironment: AppEnvironment?
-    var modelContainer: ModelContainer?
-    var enabledLLMStore: EnabledLLMStore?
-    var applicantProfileStore: ApplicantProfileStore?
-    var onboardingCoordinator: OnboardingInterviewCoordinator?
-    var experienceDefaultsStore: ExperienceDefaultsStore?
-    var careerKeywordStore: CareerKeywordStore?
-    var guidanceStore: InferenceGuidanceStore?
-    var searchOpsCoordinator: DiscoveryCoordinator?
-    var coverRefStore: CoverRefStore?
-    var knowledgeCardStore: KnowledgeCardStore?
-    var skillStore: SkillStore?
-    var templateStore: TemplateStore?
-    var titleSetStore: TitleSetStore?
-    var candidateDossierStore: CandidateDossierStore?
-    var jobAppStore: JobAppStore?
-    var backgroundActivityTracker: BackgroundActivityTracker?
+    /// The single composition root, configured once from `SprungApp.onAppear`
+    /// (`configure(deps:)`). The manager is constructed in `AppDelegate` before
+    /// dependencies exist, so this is nil until that one-shot hand-off — every
+    /// `show*` method guards it and logs+returns if a window is somehow requested
+    /// before the app finished wiring (rather than presenting a degraded window).
+    private(set) var deps: AppDependencies?
+
+    /// One-shot dependency hand-off from the SwiftUI scene once the composition
+    /// root exists.
+    func configure(deps: AppDependencies) {
+        self.deps = deps
+    }
+
+    // MARK: - Generic Window Construction
+
+    /// Build a standard secondary NSWindow from a spec + content view, applying
+    /// the shared lifecycle policy (centered, not released on close, optional
+    /// close observation). Special windows (the borderless onboarding overlay)
+    /// build their own NSWindow and do not route through here.
+    private func makeWindow(_ spec: WindowSpec, content: NSView, observeClose: Bool = false) -> NSWindow {
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: spec.width, height: spec.height),
+            styleMask: spec.styleMask,
+            backing: .buffered,
+            defer: false
+        )
+        window.title = spec.title
+        if spec.disallowTabbing { window.tabbingMode = .disallowed }
+        window.contentView = content
+        window.isReleasedWhenClosed = false
+        window.center()
+        if let minSize = spec.minSize { window.minSize = minSize }
+        if observeClose {
+            NotificationCenter.default.addObserver(
+                self,
+                selector: #selector(windowWillClose(_:)),
+                name: NSWindow.willCloseNotification,
+                object: window
+            )
+        }
+        return window
+    }
 
     // MARK: - Settings Window
 
     func showSettings() {
+        guard let deps else {
+            Logger.warning("Settings window requested before app services were configured", category: .appLifecycle)
+            return
+        }
         if settingsWindow == nil {
-            let settingsView = SettingsView()
-            let hostingView: NSHostingView<AnyView>
-            if let appEnvironment = self.appEnvironment,
-               let container = self.modelContainer,
-               let enabledLLMStore = self.enabledLLMStore,
-               let applicantProfileStore = self.applicantProfileStore,
-               let experienceDefaultsStore = self.experienceDefaultsStore,
-               let careerKeywordStore = self.careerKeywordStore,
-               let guidanceStore = self.guidanceStore,
-               let searchOpsCoordinator = self.searchOpsCoordinator,
-               let skillStore = self.skillStore,
-               let jobAppStore = self.jobAppStore,
-               let titleSetStore = self.titleSetStore {
-                let appState = appEnvironment.appState
-                let debugSettingsStore = appState.debugSettingsStore ?? appEnvironment.debugSettingsStore
-                let root = settingsView
-                    .environment(appEnvironment)
-                    .environment(appState)
-                    .environment(appEnvironment.navigationState)
-                    .environment(appEnvironment.onboardingCoordinator)
-                    .environment(appEnvironment.llmFacade)
-                    .environment(enabledLLMStore)
-                    .environment(applicantProfileStore)
-                    .environment(experienceDefaultsStore)
-                    .environment(careerKeywordStore)
-                    .environment(guidanceStore)
-                    .environment(appEnvironment.openRouterService)
-                    .environment(debugSettingsStore)
-                    .environment(searchOpsCoordinator)
-                    .environment(skillStore)
-                    .environment(jobAppStore)
-                    .environment(titleSetStore)
-                    .modelContainer(container)
-                hostingView = NSHostingView(rootView: AnyView(root))
-            } else {
-                Logger.warning(
-                    "Settings window requested before environment is fully configured; dependencies missing",
-                    category: .appLifecycle
-                )
-                hostingView = NSHostingView(
-                    rootView: AnyView(
-                        VStack(spacing: 16) {
-                            Text("Settings Unavailable")
-                                .font(.headline)
-                            Text("App services are still loading. Please try opening Settings again in a moment.")
-                                .multilineTextAlignment(.center)
-                                .foregroundStyle(.secondary)
-                        }
-                        .frame(minWidth: 320, minHeight: 160)
-                        .padding()
-                    )
-                )
-            }
-            settingsWindow = NSWindow(
-                contentRect: NSRect(x: 0, y: 0, width: 400, height: 200),
-                styleMask: [.titled, .closable],
-                backing: .buffered, defer: false
+            let appEnvironment = deps.appEnvironment
+            let appState = appEnvironment.appState
+            let debugSettingsStore = appState.debugSettingsStore ?? appEnvironment.debugSettingsStore
+            let root = SettingsView()
+                .environment(appEnvironment)
+                .environment(appState)
+                .environment(appEnvironment.navigationState)
+                .environment(appEnvironment.onboardingCoordinator)
+                .environment(appEnvironment.llmFacade)
+                .environment(deps.enabledLLMStore)
+                .environment(deps.applicantProfileStore)
+                .environment(deps.experienceDefaultsStore)
+                .environment(deps.careerKeywordStore)
+                .environment(deps.guidanceStore)
+                .environment(appEnvironment.openRouterService)
+                .environment(debugSettingsStore)
+                .environment(deps.searchOpsCoordinator)
+                .environment(deps.skillStore)
+                .environment(deps.jobAppStore)
+                .environment(deps.titleSetStore)
+                .modelContainer(deps.modelContainer)
+            settingsWindow = makeWindow(
+                WindowSpec(title: "Settings", width: 400, height: 200, styleMask: [.titled, .closable]),
+                content: NSHostingView(rootView: AnyView(root))
             )
-            settingsWindow?.title = "Settings"
-            settingsWindow?.contentView = hostingView
-            settingsWindow?.isReleasedWhenClosed = false
-            settingsWindow?.center()
         }
         settingsWindow?.makeKeyAndOrderFront(nil)
     }
@@ -127,46 +134,30 @@ final class SecondaryWindowManager {
     // MARK: - Applicant Profile Window
 
     func showApplicantProfile() {
+        guard let deps else {
+            Logger.warning("Applicant Profile window requested before app services were configured", category: .appLifecycle)
+            return
+        }
         if let window = applicantProfileWindow, !window.isVisible {
             applicantProfileWindow = nil
         }
         if applicantProfileWindow == nil {
-            let profileView = ApplicantProfileView()
-            let hostingView: NSHostingView<AnyView>
-            if let appEnvironment,
-               let container = modelContainer,
-               let applicantProfileStore,
-               let guidanceStore {
-                let root = profileView
-                    .environment(appEnvironment)
-                    .environment(appEnvironment.appState)
-                    .environment(applicantProfileStore)
-                    .environment(appEnvironment.experienceDefaultsStore)
-                    .environment(appEnvironment.careerKeywordStore)
-                    .environment(guidanceStore)
-                    .modelContainer(container)
-                hostingView = NSHostingView(rootView: AnyView(root))
-            } else if let container = modelContainer {
-                let root = profileView.modelContainer(container)
-                hostingView = NSHostingView(rootView: AnyView(root))
-            } else {
-                hostingView = NSHostingView(rootView: AnyView(profileView))
-            }
-            applicantProfileWindow = NSWindow(
-                contentRect: NSRect(x: 0, y: 0, width: 600, height: 650),
-                styleMask: [.titled, .closable, .miniaturizable, .resizable],
-                backing: .buffered, defer: false
-            )
-            applicantProfileWindow?.title = "Applicant Profile"
-            applicantProfileWindow?.contentView = hostingView
-            applicantProfileWindow?.isReleasedWhenClosed = false
-            applicantProfileWindow?.center()
-            applicantProfileWindow?.minSize = NSSize(width: 500, height: 520)
-            NotificationCenter.default.addObserver(
-                self,
-                selector: #selector(windowWillClose(_:)),
-                name: NSWindow.willCloseNotification,
-                object: applicantProfileWindow
+            let appEnvironment = deps.appEnvironment
+            let root = ApplicantProfileView()
+                .environment(appEnvironment)
+                .environment(appEnvironment.appState)
+                .environment(deps.applicantProfileStore)
+                .environment(appEnvironment.experienceDefaultsStore)
+                .environment(appEnvironment.careerKeywordStore)
+                .environment(deps.guidanceStore)
+                .modelContainer(deps.modelContainer)
+            applicantProfileWindow = makeWindow(
+                WindowSpec(
+                    title: "Applicant Profile", width: 600, height: 650,
+                    minSize: NSSize(width: 500, height: 520)
+                ),
+                content: NSHostingView(rootView: AnyView(root)),
+                observeClose: true
             )
         }
         applicantProfileWindow?.makeKeyAndOrderFront(nil)
@@ -197,42 +188,31 @@ final class SecondaryWindowManager {
     // MARK: - Template Editor Window
 
     func showTemplateEditor() {
+        guard let deps else {
+            Logger.warning("Template Editor window requested before app services were configured", category: .appLifecycle)
+            return
+        }
         if let window = templateEditorWindow, !window.isVisible {
             templateEditorWindow = nil
         }
         if templateEditorWindow == nil {
-            let editorView = TemplateEditorView()
-            let hostingView: NSHostingView<AnyView>
-            if let modelContainer = self.modelContainer,
-               let appEnvironment = self.appEnvironment,
-               let guidanceStore = self.guidanceStore {
-                hostingView = NSHostingView(rootView: AnyView(
-                    editorView
-                        .modelContainer(modelContainer)
-                        .environment(appEnvironment)
-                        .environment(appEnvironment.appState)
-                        .environment(appEnvironment.navigationState)
-                        .environment(appEnvironment.experienceDefaultsStore)
-                        .environment(appEnvironment.careerKeywordStore)
-                        .environment(appEnvironment.applicantProfileStore)
-                        .environment(guidanceStore)
-                ))
-            } else if let modelContainer = self.modelContainer {
-                hostingView = NSHostingView(rootView: AnyView(editorView.modelContainer(modelContainer)))
-            } else {
-                hostingView = NSHostingView(rootView: AnyView(editorView))
-            }
-            templateEditorWindow = NSWindow(
-                contentRect: NSRect(x: 0, y: 0, width: 1200, height: 760),
-                styleMask: [.titled, .closable, .miniaturizable, .resizable],
-                backing: .buffered, defer: false
+            let appEnvironment = deps.appEnvironment
+            let root = TemplateEditorView()
+                .modelContainer(deps.modelContainer)
+                .environment(appEnvironment)
+                .environment(appEnvironment.appState)
+                .environment(appEnvironment.navigationState)
+                .environment(appEnvironment.experienceDefaultsStore)
+                .environment(appEnvironment.careerKeywordStore)
+                .environment(appEnvironment.applicantProfileStore)
+                .environment(deps.guidanceStore)
+            templateEditorWindow = makeWindow(
+                WindowSpec(
+                    title: "Template Editor", width: 1200, height: 760,
+                    minSize: NSSize(width: 960, height: 640), disallowTabbing: true
+                ),
+                content: NSHostingView(rootView: AnyView(root))
             )
-            templateEditorWindow?.title = "Template Editor"
-            templateEditorWindow?.tabbingMode = .disallowed
-            templateEditorWindow?.contentView = hostingView
-            templateEditorWindow?.isReleasedWhenClosed = false
-            templateEditorWindow?.center()
-            templateEditorWindow?.minSize = NSSize(width: 960, height: 640)
         }
         templateEditorWindow?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
@@ -245,44 +225,37 @@ final class SecondaryWindowManager {
             "showOnboardingInterviewWindow invoked (existing window: \(onboardingInterviewWindow != nil))",
             category: .ui
         )
+        guard let deps else {
+            Logger.error("Onboarding interview window requested before app services were configured", category: .ui)
+            return
+        }
         var shouldAnimatePresentation = false
         if let window = onboardingInterviewWindow, !window.isVisible {
             onboardingInterviewWindow = nil
             shouldAnimatePresentation = true
         }
         if onboardingInterviewWindow == nil {
-            let interviewView = OnboardingInterviewView()
-            let hostingView: NSHostingView<AnyView>
-            if let modelContainer,
-               let appEnvironment,
-               let enabledLLMStore,
-               let coverRefStore,
-               let guidanceStore {
-                let onboardingService = onboardingCoordinator ?? appEnvironment.onboardingCoordinator
-                let debugSettingsStore = appEnvironment.appState.debugSettingsStore ?? appEnvironment.debugSettingsStore
-                let root = interviewView
-                    .modelContainer(modelContainer)
-                    .environment(appEnvironment)
-                    .environment(appEnvironment.appState)
-                    .environment(appEnvironment.navigationState)
-                    .environment(enabledLLMStore)
-                    .environment(coverRefStore)
-                    .environment(appEnvironment.applicantProfileStore)
-                    .environment(appEnvironment.experienceDefaultsStore)
-                    .environment(guidanceStore)
-                    .environment(onboardingService)
-                    .environment(onboardingService.toolRouter)
-                    .environment(debugSettingsStore)
-                hostingView = NSHostingView(rootView: AnyView(root))
-            } else if let modelContainer {
-                hostingView = NSHostingView(rootView: AnyView(interviewView.modelContainer(modelContainer)))
-            } else {
-                hostingView = NSHostingView(rootView: AnyView(interviewView))
-            }
+            let appEnvironment = deps.appEnvironment
+            let onboardingService = deps.onboardingCoordinator
+            let debugSettingsStore = appEnvironment.appState.debugSettingsStore ?? appEnvironment.debugSettingsStore
+            let root = OnboardingInterviewView()
+                .modelContainer(deps.modelContainer)
+                .environment(appEnvironment)
+                .environment(appEnvironment.appState)
+                .environment(appEnvironment.navigationState)
+                .environment(deps.enabledLLMStore)
+                .environment(deps.coverRefStore)
+                .environment(appEnvironment.applicantProfileStore)
+                .environment(appEnvironment.experienceDefaultsStore)
+                .environment(deps.guidanceStore)
+                .environment(onboardingService)
+                .environment(onboardingService.toolRouter)
+                .environment(debugSettingsStore)
+            let hostingView = NSHostingView(rootView: AnyView(root))
             let innerXPadding: CGFloat = 32 * 2        // = 64
             let minCardWidth = 1040 + innerXPadding    // = 1104
             let outerPad: CGFloat = 30                 // same as shadowR (left/right)
-            let windowW = minCardWidth + outerPad*2    // = 1164
+            let windowW = minCardWidth + outerPad * 2  // = 1164
             onboardingInterviewWindow = BorderlessOverlayWindow(
                 contentRect: NSRect(x: 0, y: 0, width: windowW, height: 700)
             )
@@ -321,47 +294,32 @@ final class SecondaryWindowManager {
         triggerWeeklyReflection: Bool = false
     ) {
         Logger.info("showDiscoveryWindow invoked (section: \(section?.rawValue ?? "nil"), onboarding: \(startOnboarding))", category: .ui)
+        guard let deps else {
+            Logger.error("Discovery window requested before app services were configured", category: .ui)
+            return
+        }
         if let window = searchOpsWindow, !window.isVisible {
             searchOpsWindow = nil
         }
         if searchOpsWindow == nil {
-            let searchOpsView = DiscoveryMainView()
-            let hostingView: NSHostingView<AnyView>
-            if let modelContainer,
-               let appEnvironment,
-               let searchOpsCoordinator,
-               let coverRefStore,
-               let knowledgeCardStore,
-               let applicantProfileStore,
-               let guidanceStore,
-               let candidateDossierStore {
-                let root = searchOpsView
-                    .modelContainer(modelContainer)
-                    .environment(appEnvironment)
-                    .environment(appEnvironment.appState)
-                    .environment(searchOpsCoordinator)
-                    .environment(coverRefStore)
-                    .environment(knowledgeCardStore)
-                    .environment(applicantProfileStore)
-                    .environment(guidanceStore)
-                    .environment(candidateDossierStore)
-                hostingView = NSHostingView(rootView: AnyView(root))
-            } else if let modelContainer {
-                hostingView = NSHostingView(rootView: AnyView(searchOpsView.modelContainer(modelContainer)))
-            } else {
-                hostingView = NSHostingView(rootView: AnyView(searchOpsView))
-            }
-            searchOpsWindow = NSWindow(
-                contentRect: NSRect(x: 0, y: 0, width: 900, height: 700),
-                styleMask: [.titled, .closable, .miniaturizable, .resizable],
-                backing: .buffered,
-                defer: false
+            let appEnvironment = deps.appEnvironment
+            let root = DiscoveryMainView()
+                .modelContainer(deps.modelContainer)
+                .environment(appEnvironment)
+                .environment(appEnvironment.appState)
+                .environment(deps.searchOpsCoordinator)
+                .environment(deps.coverRefStore)
+                .environment(deps.knowledgeCardStore)
+                .environment(deps.applicantProfileStore)
+                .environment(deps.guidanceStore)
+                .environment(deps.candidateDossierStore)
+            searchOpsWindow = makeWindow(
+                WindowSpec(
+                    title: "Discovery", width: 900, height: 700,
+                    minSize: NSSize(width: 700, height: 500)
+                ),
+                content: NSHostingView(rootView: AnyView(root))
             )
-            searchOpsWindow?.contentView = hostingView
-            searchOpsWindow?.title = "Discovery"
-            searchOpsWindow?.isReleasedWhenClosed = false
-            searchOpsWindow?.center()
-            searchOpsWindow?.minSize = NSSize(width: 700, height: 500)
         }
         searchOpsWindow?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
@@ -383,7 +341,7 @@ final class SecondaryWindowManager {
             if triggerTaskGeneration {
                 NotificationCenter.default.post(name: .discoveryTriggerTaskGeneration, object: nil)
             }
-            if triggerWeeklyReflection, let coordinator = self?.searchOpsCoordinator {
+            if triggerWeeklyReflection, let coordinator = self?.deps?.searchOpsCoordinator {
                 Task {
                     do {
                         try await coordinator.generateWeeklyReflection()
@@ -399,61 +357,29 @@ final class SecondaryWindowManager {
     // MARK: - Experience Editor Window
 
     func showExperienceEditor() {
+        guard let deps else {
+            Logger.warning("Experience Editor window requested before app services were configured", category: .appLifecycle)
+            return
+        }
         if let window = experienceEditorWindow, !window.isVisible {
             experienceEditorWindow = nil
         }
         if experienceEditorWindow == nil {
-            let editorView = ExperienceEditorView()
-            let hostingView: NSHostingView<AnyView>
-            if let modelContainer,
-               let appEnvironment,
-               let experienceDefaultsStore,
-               let guidanceStore {
-                hostingView = NSHostingView(rootView: AnyView(
-                    editorView
-                        .modelContainer(modelContainer)
-                        .environment(appEnvironment)
-                        .environment(appEnvironment.appState)
-                        .environment(experienceDefaultsStore)
-                        .environment(appEnvironment.careerKeywordStore)
-                        .environment(guidanceStore)
-                ))
-            } else if let modelContainer,
-                      let experienceDefaultsStore,
-                      let careerKeywordStore {
-                hostingView = NSHostingView(rootView: AnyView(
-                    editorView
-                        .modelContainer(modelContainer)
-                        .environment(experienceDefaultsStore)
-                        .environment(careerKeywordStore)
-                ))
-            } else if let experienceDefaultsStore,
-                      let careerKeywordStore {
-                hostingView = NSHostingView(rootView: AnyView(
-                    editorView
-                        .environment(experienceDefaultsStore)
-                        .environment(careerKeywordStore)
-                ))
-            } else {
-                hostingView = NSHostingView(rootView: AnyView(editorView))
-            }
-            experienceEditorWindow = NSWindow(
-                contentRect: NSRect(x: 0, y: 0, width: 1180, height: 780),
-                styleMask: [.titled, .closable, .miniaturizable, .resizable],
-                backing: .buffered,
-                defer: false
-            )
-            experienceEditorWindow?.title = "Experience Editor"
-            experienceEditorWindow?.tabbingMode = .disallowed
-            experienceEditorWindow?.contentView = hostingView
-            experienceEditorWindow?.isReleasedWhenClosed = false
-            experienceEditorWindow?.center()
-            experienceEditorWindow?.minSize = NSSize(width: 960, height: 680)
-            NotificationCenter.default.addObserver(
-                self,
-                selector: #selector(windowWillClose(_:)),
-                name: NSWindow.willCloseNotification,
-                object: experienceEditorWindow
+            let appEnvironment = deps.appEnvironment
+            let root = ExperienceEditorView()
+                .modelContainer(deps.modelContainer)
+                .environment(appEnvironment)
+                .environment(appEnvironment.appState)
+                .environment(deps.experienceDefaultsStore)
+                .environment(appEnvironment.careerKeywordStore)
+                .environment(deps.guidanceStore)
+            experienceEditorWindow = makeWindow(
+                WindowSpec(
+                    title: "Experience Editor", width: 1180, height: 780,
+                    minSize: NSSize(width: 960, height: 680), disallowTabbing: true
+                ),
+                content: NSHostingView(rootView: AnyView(root)),
+                observeClose: true
             )
         }
         experienceEditorWindow?.makeKeyAndOrderFront(nil)
@@ -467,11 +393,11 @@ final class SecondaryWindowManager {
     /// `.customizeResume`, which AppDelegate routes here. Gating and session
     /// identity checks live here and nowhere else.
     func showResumeRevision() {
-        guard let jobAppStore else {
+        guard let deps else {
             Logger.warning("Resume revision requested before app services were configured", category: .ui)
             return
         }
-        guard let selectedResume = jobAppStore.selectedApp?.selectedRes else {
+        guard let selectedResume = deps.jobAppStore.selectedApp?.selectedRes else {
             presentRevisionGuidanceAlert(
                 title: "No Resume Selected",
                 message: "Select a job application with a resume before starting a Customize session."
@@ -499,18 +425,7 @@ final class SecondaryWindowManager {
             window.close()
         }
 
-        guard let modelContainer,
-              let appEnvironment,
-              let templateStore,
-              let knowledgeCardStore,
-              let skillStore,
-              let coverRefStore,
-              let titleSetStore,
-              let guidanceStore else {
-            Logger.error("Missing dependencies for resume revision window", category: .ui)
-            return
-        }
-
+        let appEnvironment = deps.appEnvironment
         let revisionView = ResumeRevisionView(
             resume: selectedResume,
             onAgentCreated: { [weak self, weak selectedResume] agent in
@@ -527,36 +442,24 @@ final class SecondaryWindowManager {
                 self?.resumeRevisionWindow?.close()
             }
         )
-        let hostingView = NSHostingView(rootView: AnyView(
-            revisionView
-                .modelContainer(modelContainer)
-                .environment(appEnvironment.llmFacade)
-                .environment(templateStore)
-                .environment(appEnvironment.applicantProfileStore)
-                .environment(knowledgeCardStore)
-                .environment(skillStore)
-                .environment(coverRefStore)
-                .environment(titleSetStore)
-                .environment(guidanceStore)
-        ))
+        let root = revisionView
+            .modelContainer(deps.modelContainer)
+            .environment(appEnvironment.llmFacade)
+            .environment(deps.templateStore)
+            .environment(appEnvironment.applicantProfileStore)
+            .environment(deps.knowledgeCardStore)
+            .environment(deps.skillStore)
+            .environment(deps.coverRefStore)
+            .environment(deps.titleSetStore)
+            .environment(deps.guidanceStore)
 
-        let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 1300, height: 800),
-            styleMask: [.titled, .closable, .miniaturizable, .resizable],
-            backing: .buffered,
-            defer: false
-        )
-        window.title = revisionWindowTitle(for: selectedResume)
-        window.tabbingMode = .disallowed
-        window.contentView = hostingView
-        window.isReleasedWhenClosed = false
-        window.center()
-        window.minSize = NSSize(width: 1100, height: 650)
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(windowWillClose(_:)),
-            name: NSWindow.willCloseNotification,
-            object: window
+        let window = makeWindow(
+            WindowSpec(
+                title: revisionWindowTitle(for: selectedResume), width: 1300, height: 800,
+                minSize: NSSize(width: 1100, height: 650), disallowTabbing: true
+            ),
+            content: NSHostingView(rootView: AnyView(root)),
+            observeClose: true
         )
 
         resumeRevisionWindow = window
@@ -597,20 +500,13 @@ final class SecondaryWindowManager {
         }
         if debugLogsWindow == nil {
             Logger.info("Creating debug logs window", category: .ui)
-            let debugView = EventDumpView(coordinator: coordinator)
-            let hostingView = NSHostingView(rootView: debugView)
-
-            debugLogsWindow = NSWindow(
-                contentRect: NSRect(x: 0, y: 0, width: 800, height: 600),
-                styleMask: [.titled, .closable, .miniaturizable, .resizable],
-                backing: .buffered,
-                defer: false
+            debugLogsWindow = makeWindow(
+                WindowSpec(
+                    title: "Debug Logs", width: 800, height: 600,
+                    minSize: NSSize(width: 600, height: 400)
+                ),
+                content: NSHostingView(rootView: EventDumpView(coordinator: coordinator))
             )
-            debugLogsWindow?.title = "Debug Logs"
-            debugLogsWindow?.contentView = hostingView
-            debugLogsWindow?.isReleasedWhenClosed = false
-            debugLogsWindow?.center()
-            debugLogsWindow?.minSize = NSSize(width: 600, height: 400)
         }
         debugLogsWindow?.makeKeyAndOrderFront(nil)
     }
@@ -619,6 +515,10 @@ final class SecondaryWindowManager {
 
     func showSeedGeneration() async {
         Logger.info("showSeedGenerationWindow called", category: .ui)
+        guard let deps else {
+            Logger.error("Cannot show seed generation: app services not configured", category: .ui)
+            return
+        }
 
         // Reset window if it was closed
         if let window = seedGenerationWindow, !window.isVisible {
@@ -626,23 +526,16 @@ final class SecondaryWindowManager {
         }
 
         if seedGenerationWindow == nil {
-            guard let onboardingCoordinator,
-                  let appEnvironment,
-                  let skillStore,
-                  let experienceDefaultsStore,
-                  let modelContainer else {
-                Logger.error("Cannot show seed generation: missing dependencies", category: .ui)
-                return
-            }
+            let appEnvironment = deps.appEnvironment
 
             // Build SeedGenerationContext from onboarding artifacts
             guard let context = await SeedGenerationContextBuilder.build(
-                coordinator: onboardingCoordinator,
-                skillStore: skillStore,
-                experienceDefaultsStore: experienceDefaultsStore,
-                applicantProfileStore: applicantProfileStore,
-                coverRefStore: coverRefStore,
-                titleSetStore: titleSetStore
+                coordinator: deps.onboardingCoordinator,
+                skillStore: deps.skillStore,
+                experienceDefaultsStore: deps.experienceDefaultsStore,
+                applicantProfileStore: deps.applicantProfileStore,
+                coverRefStore: deps.coverRefStore,
+                titleSetStore: deps.titleSetStore
             ) else {
                 Logger.error("Failed to build SeedGenerationContext", category: .ui)
                 return
@@ -663,42 +556,24 @@ final class SecondaryWindowManager {
                 llmFacade: appEnvironment.llmFacade,
                 modelId: modelId,
                 backend: backend,
-                experienceDefaultsStore: experienceDefaultsStore
+                experienceDefaultsStore: deps.experienceDefaultsStore
             )
 
-            let sgmView = SeedGenerationView(orchestrator: orchestrator)
-            let hostingView: NSHostingView<AnyView>
-
-            if let guidanceStore,
-               let titleSetStore {
-                let root = sgmView
-                    .modelContainer(modelContainer)
-                    .environment(appEnvironment)
-                    .environment(appEnvironment.appState)
-                    .environment(appEnvironment.llmFacade)
-                    .environment(experienceDefaultsStore)
-                    .environment(guidanceStore)
-                    .environment(titleSetStore)
-                hostingView = NSHostingView(rootView: AnyView(root))
-            } else {
-                hostingView = NSHostingView(rootView: AnyView(
-                    sgmView.modelContainer(modelContainer)
-                ))
-            }
-
-            seedGenerationWindow = NSWindow(
-                contentRect: NSRect(x: 0, y: 0, width: 1000, height: 700),
-                styleMask: [.titled, .closable, .miniaturizable, .resizable],
-                backing: .buffered,
-                defer: false
+            let root = SeedGenerationView(orchestrator: orchestrator)
+                .modelContainer(deps.modelContainer)
+                .environment(appEnvironment)
+                .environment(appEnvironment.appState)
+                .environment(appEnvironment.llmFacade)
+                .environment(deps.experienceDefaultsStore)
+                .environment(deps.guidanceStore)
+                .environment(deps.titleSetStore)
+            seedGenerationWindow = makeWindow(
+                WindowSpec(
+                    title: "Seed Generation", width: 1000, height: 700,
+                    minSize: NSSize(width: 800, height: 600), disallowTabbing: true
+                ),
+                content: NSHostingView(rootView: AnyView(root))
             )
-            seedGenerationWindow?.title = "Seed Generation"
-            seedGenerationWindow?.tabbingMode = .disallowed
-            seedGenerationWindow?.contentView = hostingView
-            seedGenerationWindow?.isReleasedWhenClosed = false
-            seedGenerationWindow?.center()
-            seedGenerationWindow?.minSize = NSSize(width: 800, height: 600)
-
             Logger.info("Created seed generation window", category: .ui)
         }
 
@@ -714,26 +589,18 @@ final class SecondaryWindowManager {
             return
         }
 
-        guard let tracker = backgroundActivityTracker else {
+        guard let tracker = deps?.backgroundActivityTracker else {
             Logger.warning("Background activity tracker not configured", category: .appLifecycle)
             return
         }
 
-        let contentView = BackgroundActivityContent(tracker: tracker)
-        let hostingView = NSHostingView(rootView: contentView)
-
-        let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 700, height: 450),
-            styleMask: [.titled, .closable, .miniaturizable, .resizable],
-            backing: .buffered,
-            defer: false
+        let window = makeWindow(
+            WindowSpec(
+                title: "Background Activity", width: 700, height: 450,
+                minSize: NSSize(width: 500, height: 300)
+            ),
+            content: NSHostingView(rootView: BackgroundActivityContent(tracker: tracker))
         )
-        window.title = "Background Activity"
-        window.contentView = hostingView
-        window.isReleasedWhenClosed = false
-        window.center()
-        window.minSize = NSSize(width: 500, height: 300)
-
         backgroundActivityWindow = window
         window.makeKeyAndOrderFront(nil)
     }

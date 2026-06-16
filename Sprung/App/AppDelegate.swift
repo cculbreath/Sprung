@@ -83,8 +83,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     /// Attach a pure AppKit NSToolbar to the main window, bypassing SwiftUI's broken toolbar(id:).
     func setupMainWindowToolbar() {
         let coordinator = ToolbarCoordinator()
-        coordinator.jobAppStore = windowManager.jobAppStore
-        coordinator.navigationState = windowManager.appEnvironment?.navigationState
+        coordinator.jobAppStore = windowManager.deps?.jobAppStore
+        coordinator.navigationState = windowManager.deps?.appEnvironment.navigationState
         self.toolbarCoordinator = coordinator
 
         // Delay slightly so the SwiftUI Window scene has finished creating the NSWindow

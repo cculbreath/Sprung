@@ -91,25 +91,9 @@ struct SprungApp: App {
                 .environment(appDependencies.focusState)
                 .environment(appDependencies.windowCoordinator)
                 .onAppear {
-                    // Pass environment and dependencies to window manager for secondary windows
-                    let wm = appDelegate.windowManager
-                    wm.appEnvironment = appEnvironment
-                    wm.modelContainer = modelContainer
-                    wm.enabledLLMStore = appDependencies.enabledLLMStore
-                    wm.applicantProfileStore = appDependencies.applicantProfileStore
-                    wm.experienceDefaultsStore = appDependencies.experienceDefaultsStore
-                    wm.careerKeywordStore = appDependencies.careerKeywordStore
-                    wm.guidanceStore = appDependencies.guidanceStore
-                    wm.onboardingCoordinator = appDependencies.onboardingCoordinator
-                    wm.searchOpsCoordinator = appDependencies.searchOpsCoordinator
-                    wm.coverRefStore = appDependencies.coverRefStore
-                    wm.knowledgeCardStore = appDependencies.knowledgeCardStore
-                    wm.skillStore = appDependencies.skillStore
-                    wm.titleSetStore = appDependencies.titleSetStore
-                    wm.candidateDossierStore = appDependencies.candidateDossierStore
-                    wm.jobAppStore = appDependencies.jobAppStore
-                    wm.templateStore = appDependencies.templateStore
-                    wm.backgroundActivityTracker = appDependencies.backgroundActivityTracker
+                    // Hand the composition root to the window manager (one-shot)
+                    // so every secondary window resolves its dependencies from it.
+                    appDelegate.windowManager.configure(deps: appDependencies)
                     appDelegate.setupMainWindowToolbar()
                 }
         }

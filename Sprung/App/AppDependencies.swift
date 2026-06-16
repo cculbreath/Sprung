@@ -46,8 +46,13 @@ final class AppDependencies {
     let globalKeyboardHandler: GlobalKeyboardHandler
     // MARK: - Core Services
     let appEnvironment: AppEnvironment
+    /// The shared SwiftData container backing every store, exposed so the
+    /// secondary-window host can inject `.modelContainer(_:)` without a separate
+    /// hand-off.
+    let modelContainer: ModelContainer
     // MARK: - Init
     init(modelContext: ModelContext) {
+        self.modelContainer = modelContext.container
         let debugSettingsStore = DebugSettingsStore()
         self.debugSettingsStore = debugSettingsStore
         #if DEBUG
