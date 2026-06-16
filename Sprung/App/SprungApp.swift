@@ -355,20 +355,12 @@ private extension SprungApp {
             // Use same store location as createWithMigration for consistency
             config = ModelConfiguration(url: ModelContainer.storeURL, allowsSave: true)
         }
+        // Register the full schema (not a hand-maintained subset). This recovery
+        // container runs precisely when migration already failed; registering only
+        // some of the 34 model types would make the read-only safety net throw on
+        // every unregistered entity.
         return try ModelContainer(
-            for:
-                JobApp.self,
-                Resume.self,
-                KnowledgeCard.self,
-                TreeNode.self,
-                FontSizeNode.self,
-                CoverLetter.self,
-                CoverRef.self,
-                ApplicantProfile.self,
-                ConversationContext.self,
-                ConversationMessage.self,
-                EnabledLLM.self,
-                InferenceGuidance.self,
+            for: SprungSchema.schema,
             configurations: config
         )
     }
