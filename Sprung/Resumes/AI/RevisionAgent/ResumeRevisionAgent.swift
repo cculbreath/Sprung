@@ -1608,10 +1608,10 @@ class ResumeRevisionAgent {
     /// flags only, never to block anything.
     private func isCoveredByAcceptedProposal(_ entry: RevisionNodeDiff) -> Bool {
         func covered(_ value: String, by recordText: KeyPath<AcceptedChangeRecord, String>) -> Bool {
-            let target = ResumeRevisionWorkspaceService.normalizedForMatch(value)
+            let target = RevisionGroundTruth.normalizedForMatch(value)
             guard !target.isEmpty else { return true }
             for record in acceptedChangeLedger {
-                let text = ResumeRevisionWorkspaceService.normalizedForMatch(record[keyPath: recordText])
+                let text = RevisionGroundTruth.normalizedForMatch(record[keyPath: recordText])
                 guard !text.isEmpty else { continue }
                 // Equality, or the node value appearing inside the reviewed
                 // preview (list proposals render whole lists in one preview).

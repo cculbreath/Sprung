@@ -219,15 +219,15 @@ final class RevisionWorkspaceExportTests: InMemoryStoreCase {
 
     func testNormalizedForMatchCollapsesWhitespaceAndCase() {
         XCTAssertEqual(
-            ResumeRevisionWorkspaceService.normalizedForMatch("  Hello   WORLD\tfoo "),
+            RevisionGroundTruth.normalizedForMatch("  Hello   WORLD\tfoo "),
             "hello world foo")
-        XCTAssertEqual(ResumeRevisionWorkspaceService.normalizedForMatch(""), "")
+        XCTAssertEqual(RevisionGroundTruth.normalizedForMatch(""), "")
     }
 
     func testWrapTextWrapsLongLinesAtWordBoundaries() {
         let words = Array(repeating: "alpha", count: 10).joined(separator: " ") // 10 * 5 + 9 = 59 chars
         // width 20 forces wraps; each output line stays within the width.
-        let wrapped = ResumeRevisionWorkspaceService.wrapText(words, width: 20)
+        let wrapped = RevisionMaterialExporter.wrapText(words, width: 20)
         let lines = wrapped.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
         XCTAssertGreaterThan(lines.count, 1, "a long line is wrapped onto multiple lines")
         for line in lines {
@@ -239,7 +239,7 @@ final class RevisionWorkspaceExportTests: InMemoryStoreCase {
 
     func testWrapTextLeavesShortLinesUnchangedAndPreservesNewlines() {
         let input = "short one\nshort two"
-        XCTAssertEqual(ResumeRevisionWorkspaceService.wrapText(input, width: 100), input,
+        XCTAssertEqual(RevisionMaterialExporter.wrapText(input, width: 100), input,
                        "lines under the width are untouched and newlines are preserved")
     }
 }

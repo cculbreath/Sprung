@@ -47,7 +47,7 @@ struct RevisionPDFRenderer {
             let scratchContext = ModelContext(modelContext.container)
             scratchContext.autosaveEnabled = false
             guard let scratchOriginal = scratchContext.model(for: resume.persistentModelID) as? Resume else {
-                throw ResumeRevisionWorkspaceService.WorkspaceError.invalidResumeData(
+                throw RevisionWorkspaceError.invalidResumeData(
                     "Could not load the resume into the preview context"
                 )
             }
