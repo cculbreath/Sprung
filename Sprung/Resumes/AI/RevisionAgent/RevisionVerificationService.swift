@@ -94,8 +94,14 @@ final class RevisionVerificationService {
 
     private weak var llmFacade: LLMFacade?
     private let modelId: String
-    /// Verdicts are small; the budget only needs to cover the JSON reply.
-    private let maxOutputTokens = 8192
+    /// Sized to comfortably hold the full audited-change set — up to
+    /// `maxAuditedChanges` grounding verdicts, each with unsupported-claim
+    /// lists and a suggested revision — so a large diff's JSON reply is never
+    /// truncated into undecodable garbage (which would silently degrade the
+    /// audit to a note). Matches the main loop's per-turn budget; the stream
+    /// is `stream: true`, so this is a ceiling, not a guaranteed spend, and the
+    /// inactivity watchdog — not this cap — is what bounds a hung stream.
+    private let maxOutputTokens = 32_000
     /// Inactivity threshold for the per-pass stream watchdog (mirrors the
     /// main loop's pattern): it fires only when NO events arrive for this
     /// long, so a healthy long reply — 80 verdicts with suggested revisions —
