@@ -14,7 +14,7 @@ struct ModelsSettingsView: View {
     @AppStorage("onboardingAnthropicModelId") private var onboardingAnthropicModelId: String = ""
 
     // MARK: - Seed Generation (per-backend persistence)
-    @AppStorage("seedGenerationBackend") private var seedGenerationBackend: String = "anthropic"
+    @AppStorage("seedGenerationBackend") private var seedGenerationBackend: String = ""
     @AppStorage("seedGenerationAnthropicModelId") private var seedGenerationAnthropicModelId: String = ""
     @AppStorage("seedGenerationOpenRouterModelId") private var seedGenerationOpenRouterModelId: String = ""
 
@@ -216,7 +216,7 @@ struct ModelsSettingsView: View {
                 Button("OpenRouter") { seedGenerationBackend = "openrouter" }
             } label: {
                 HStack(spacing: 4) {
-                    Text(seedGenerationBackend == "anthropic" ? "Anthropic" : "OpenRouter")
+                    Text(backendLabel(seedGenerationBackend))
                     Image(systemName: "chevron.up.chevron.down")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
@@ -225,15 +225,26 @@ struct ModelsSettingsView: View {
             .menuStyle(.borderlessButton)
             .frame(width: backendWidth, alignment: .leading)
 
-            // Model picker based on backend
+            // Model picker based on backend (no silent default — a backend must be chosen)
             if seedGenerationBackend == "anthropic" {
                 anthropicPicker(selection: $seedGenerationAnthropicModelId)
-            } else {
+            } else if seedGenerationBackend == "openrouter" {
                 openRouterPicker(selection: $seedGenerationOpenRouterModelId)
+            } else {
+                Text("Select a backend")
+                    .foregroundStyle(.secondary)
             }
             Spacer()
         }
         .padding(.vertical, 6)
+    }
+
+    private func backendLabel(_ backend: String) -> String {
+        switch backend {
+        case "anthropic": return "Anthropic"
+        case "openrouter": return "OpenRouter"
+        default: return "Select…"
+        }
     }
 
     private var discoveryAIRow: some View {

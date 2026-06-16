@@ -541,8 +541,13 @@ final class SecondaryWindowManager {
                 return
             }
 
-            // Get model and backend from settings (per-backend model persistence)
-            let backendString = UserDefaults.standard.string(forKey: "seedGenerationBackend") ?? "anthropic"
+            // Get model and backend from settings (per-backend model persistence).
+            // No silent backend default — an unconfigured backend surfaces the picker.
+            guard let backendString = UserDefaults.standard.string(forKey: "seedGenerationBackend"),
+                  !backendString.isEmpty else {
+                Logger.error("Cannot show seed generation: no backend configured. Please select a backend in Settings > Models.", category: .ui)
+                return
+            }
             let backend: LLMFacade.Backend = backendString == "anthropic" ? .anthropic : .openRouter
             let modelKey = backendString == "anthropic" ? "seedGenerationAnthropicModelId" : "seedGenerationOpenRouterModelId"
             guard let modelId = UserDefaults.standard.string(forKey: modelKey),

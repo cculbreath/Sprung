@@ -279,21 +279,17 @@ final class TitleSetGenerationService {
     }
 
     private func getModelConfig() -> (modelId: String, backend: LLMFacade.Backend) {
-        let backendString = UserDefaults.standard.string(forKey: "seedGenerationBackend") ?? "anthropic"
-        let modelKey = backendString == "anthropic" ? "seedGenerationAnthropicModelId" : "seedGenerationOpenRouterModelId"
-        let modelId = UserDefaults.standard.string(forKey: modelKey) ?? ""
-
-        let backend: LLMFacade.Backend
-        switch backendString {
+        // No silent backend default. When no backend is configured, return an empty
+        // modelId so the caller's `!modelId.isEmpty` guard throws `.modelNotConfigured`
+        // and surfaces the picker (the placeholder backend is never read in that case).
+        switch UserDefaults.standard.string(forKey: "seedGenerationBackend") {
         case "anthropic":
-            backend = .anthropic
+            return (UserDefaults.standard.string(forKey: "seedGenerationAnthropicModelId") ?? "", .anthropic)
         case "openrouter":
-            backend = .openRouter
+            return (UserDefaults.standard.string(forKey: "seedGenerationOpenRouterModelId") ?? "", .openRouter)
         default:
-            backend = .anthropic
+            return ("", .anthropic)
         }
-
-        return (modelId, backend)
     }
 }
 
