@@ -16,11 +16,11 @@ actor DiscoveryToolExecutor {
 
     // MARK: - Dependencies
 
-    private let contextProvider: DiscoveryContextProvider
+    private let contextProvider: DiscoveryContextProviderImpl
 
     // MARK: - Initialization
 
-    init(contextProvider: DiscoveryContextProvider) {
+    init(contextProvider: DiscoveryContextProviderImpl) {
         self.contextProvider = contextProvider
     }
 

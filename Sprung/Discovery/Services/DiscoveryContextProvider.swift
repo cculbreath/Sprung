@@ -8,30 +8,11 @@
 
 import Foundation
 
-// MARK: - Context Provider Protocol
-
-protocol DiscoveryContextProvider: Sendable {
-    // Daily Tasks
-    func getDailyTaskContext() async -> String
-
-    // Preferences
-    func getPreferencesContext() async -> String
-
-    // Networking Events
-    func getEventContext(eventId: String) async -> String
-
-    // Contacts
-    func getContactsAtCompanies(_ companies: [String]) async -> String
-
-    // Weekly Goals & Performance
-    func getWeeklySummaryContext() async -> String
-    func getGoalProgressContext() async -> String
-}
-
 // MARK: - Implementation
 
-/// Provides context from DiscoveryCoordinator to LLM tools
-final class DiscoveryContextProviderImpl: DiscoveryContextProvider, @unchecked Sendable {
+/// Provides context from DiscoveryCoordinator to LLM tools.
+/// Bridges the @MainActor coordinator with the actor-based tool executor.
+final class DiscoveryContextProviderImpl: @unchecked Sendable {
     private weak var coordinator: DiscoveryCoordinator?
 
     private let encoder: JSONEncoder = {

@@ -29,7 +29,7 @@ actor DiscoveryAgentService {
 
     init(
         llmFacade: LLMFacade,
-        contextProvider: DiscoveryContextProvider,
+        contextProvider: DiscoveryContextProviderImpl,
         settingsStore: DiscoverySettingsStore
     ) {
         self.llmFacade = llmFacade
