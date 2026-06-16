@@ -202,6 +202,7 @@ final class SecondaryWindowManager {
                 .environment(appEnvironment)
                 .environment(appEnvironment.appState)
                 .environment(appEnvironment.navigationState)
+                .environment(deps.jobAppStore)
                 .environment(appEnvironment.experienceDefaultsStore)
                 .environment(appEnvironment.careerKeywordStore)
                 .environment(appEnvironment.applicantProfileStore)

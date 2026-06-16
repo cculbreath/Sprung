@@ -69,7 +69,6 @@ struct ResumeEditorModuleView: View {
         }
         .appSheets(sheets: $sheets)
         .onChange(of: jobAppStore.selectedApp) { _, newValue in
-            navigationState.saveSelectedJobApp(newValue)
             updateMyLetter()
             focusState.focusedJob = newValue
             NotificationCenter.default.post(name: .toolbarNeedsValidation, object: nil)
@@ -93,11 +92,13 @@ struct ResumeEditorModuleView: View {
                 sheets: $sheets,
                 selectedTab: $navigationState.selectedTab
             )
-            navigationState.restoreSelectedJobApp(from: jobAppStore)
+            // Restore the persisted job focus (single source: UnifiedJobFocusState ->
+            // unifiedFocusedJobId), then propagate it to the store selection below.
+            focusState.restoreFocus(from: jobAppStore.jobApps)
             updateMyLetter()
 
-            // If another module (e.g. Pipeline) set a specific job via focusState,
-            // override the restored selection with it
+            // Apply the focused job (restored above, or set by another module e.g.
+            // Pipeline before this view appeared) to the store selection.
             if let job = focusState.focusedJob, job.id != jobAppStore.selectedApp?.id {
                 jobAppStore.selectedApp = job
             }

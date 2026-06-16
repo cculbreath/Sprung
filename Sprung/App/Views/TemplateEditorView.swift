@@ -22,7 +22,7 @@ extension Color {
     }
 }
 struct TemplateEditorView: View {
-    @Environment(NavigationStateService.self) var navigationState
+    @Environment(JobAppStore.self) var jobAppStore
     @Environment(AppEnvironment.self) var appEnvironment
     @State var selectedTemplate: String = ""
     @State var selectedTab: TemplateEditorTab = .pdfTemplate
@@ -77,7 +77,7 @@ struct TemplateEditorView: View {
         TemplateTextFilters.reference
     }
     var selectedResume: Resume? {
-        navigationState.selectedResume
+        jobAppStore.selectedApp?.selectedRes
     }
     func templateDisplayName(_ template: String) -> String {
         if let record = appEnvironment.templateStore.template(slug: template) {
