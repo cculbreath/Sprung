@@ -24,7 +24,7 @@ private enum LinkedInScrapeAssociatedKeys {
 
 @MainActor
 @Observable
-class LinkedInSessionManager {
+class LinkedInSessionStore {
     var isLoggedIn = false
     var sessionExpired = false
     private var webView: WKWebView?
@@ -89,7 +89,7 @@ extension JobApp {
     static func extractLinkedInJobDetails(
         from urlString: String,
         jobAppStore: JobAppStore,
-        sessionManager: LinkedInSessionManager
+        sessionManager: LinkedInSessionStore
     ) async -> JobApp? {
         guard let url = URL(string: urlString) else {
             Logger.error("🚨 Invalid LinkedIn URL: \(urlString)")

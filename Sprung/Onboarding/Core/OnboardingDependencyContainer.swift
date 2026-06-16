@@ -5,7 +5,7 @@ import SwiftOpenAI
 // MARK: - Initialization Result Types
 /// Groups core infrastructure components for initialization
 private struct CoreInfrastructure {
-    let eventBus: EventCoordinator
+    let eventBus: EventBus
     let toolRegistry: ToolRegistry
     let phaseRegistry: PhaseScriptRegistry
     let phasePolicy: PhasePolicy
@@ -31,7 +31,7 @@ private struct DocumentComponents {
 
 /// Groups tool routing components for initialization
 private struct ToolRouterComponents {
-    let toolRouter: ToolHandler
+    let toolRouter: ToolInteractionRouter
     let toolExecutor: ToolExecutor
     let toolExecutionCoordinator: ToolExecutionCoordinator
 }
@@ -57,16 +57,16 @@ private struct ArtifactIngestionComponents {
 @MainActor
 final class OnboardingDependencyContainer {
     // MARK: - Core Infrastructure
-    let eventBus: EventCoordinator
+    let eventBus: EventBus
     let state: StateCoordinator
     let toolRegistry: ToolRegistry
     let phaseRegistry: PhaseScriptRegistry
     // MARK: - Handlers
-    let toolRouter: ToolHandler
+    let toolRouter: ToolInteractionRouter
     let toolExecutionCoordinator: ToolExecutionCoordinator
     // MARK: - Controllers
-    let lifecycleController: InterviewLifecycleController
-    let phaseTransitionController: PhaseTransitionController
+    let lifecycleController: InterviewLifecycleService
+    let phaseTransitionController: PhaseTransitionService
     let uiStateUpdateHandler: UIStateUpdateHandler
     // MARK: - Services
     let extractionManagementService: ExtractionManagementService
@@ -75,7 +75,7 @@ final class OnboardingDependencyContainer {
     let dataPersistenceService: DataPersistenceService
     let voiceProfileService: VoiceProfileService
     let dataResetService: OnboardingDataResetService
-    let artifactArchiveManager: ArtifactArchiveManager
+    let artifactArchiveManager: ArtifactArchiveService
 
     // MARK: - Artifact Ingestion Infrastructure
     let documentIngestionKernel: DocumentIngestionKernel
@@ -87,7 +87,7 @@ final class OnboardingDependencyContainer {
     let webExtractionService: WebExtractionService
     let documentArtifactHandler: DocumentArtifactHandler
     let documentArtifactMessenger: DocumentArtifactMessenger
-    let profilePersistenceHandler: ProfilePersistenceHandler
+    let profilePersistenceHandler: ProfilePersistenceService
     let uiResponseCoordinator: UIResponseCoordinator
     let voiceProfileExtractionHandler: VoiceProfileExtractionHandler
     // MARK: - Stores
@@ -96,7 +96,7 @@ final class OnboardingDependencyContainer {
     let streamingBuffer: StreamingMessageBuffer
     let sessionUIState: SessionUIState
     // MARK: - Session Persistence
-    let sessionPersistenceHandler: SwiftDataSessionPersistenceHandler
+    let sessionPersistenceHandler: SessionPersistenceService
     // MARK: - Tool Execution
     let toolExecutor: ToolExecutor
     // MARK: - Artifact Store (SwiftData)
@@ -139,7 +139,7 @@ final class OnboardingDependencyContainer {
     let artifactFilesystemContext: ArtifactFilesystemContext
 
     // MARK: - UI Tool Continuation Manager
-    let uiToolContinuationManager: UIToolContinuationManager
+    let uiToolContinuationManager: UIToolContinuationRegistry
 
     // MARK: - User Action Queue Infrastructure
     let userActionQueue: UserActionQueue
@@ -170,7 +170,7 @@ final class OnboardingDependencyContainer {
         dataStore: InterviewDataStore,
         candidateDossierStore: CandidateDossierStore,
         preferences: OnboardingPreferences,
-        reasoningStreamManager: ReasoningStreamManager
+        reasoningStreamManager: ReasoningStreamState
     ) {
         // Store external dependencies
         self.llmFacade = llmFacade
@@ -206,7 +206,7 @@ final class OnboardingDependencyContainer {
         self.tokenUsageTracker = TokenUsageTracker()
         self.todoStore = InterviewTodoStore(eventBus: core.eventBus)
         self.artifactFilesystemContext = ArtifactFilesystemContext()
-        self.uiToolContinuationManager = UIToolContinuationManager()
+        self.uiToolContinuationManager = UIToolContinuationRegistry()
 
         // 2b. Initialize user action queue infrastructure
         self.userActionQueue = UserActionQueue()
@@ -298,7 +298,7 @@ final class OnboardingDependencyContainer {
         self.toolExecutionCoordinator = tools.toolExecutionCoordinator
 
         // 7. Initialize session persistence handler (needed by phase transition controller)
-        self.sessionPersistenceHandler = SwiftDataSessionPersistenceHandler(
+        self.sessionPersistenceHandler = SessionPersistenceService(
             eventBus: core.eventBus,
             sessionStore: sessionStore,
             artifactRecordStore: artifactRecordStore
@@ -308,7 +308,7 @@ final class OnboardingDependencyContainer {
         self.voiceProfileService = VoiceProfileService(llmFacade: llmFacade, reasoningStreamManager: reasoningStreamManager)
 
         // 7d. Initialize artifact archive manager
-        self.artifactArchiveManager = ArtifactArchiveManager(
+        self.artifactArchiveManager = ArtifactArchiveService(
             artifactRecordStore: artifactRecordStore,
             artifactRepository: stores.artifactRepository,
             sessionPersistenceHandler: sessionPersistenceHandler,
@@ -336,7 +336,7 @@ final class OnboardingDependencyContainer {
         #endif
 
         // 8. Initialize phase transition controller (depends on session persistence handler)
-        self.phaseTransitionController = PhaseTransitionController(
+        self.phaseTransitionController = PhaseTransitionService(
             state: state, eventBus: core.eventBus, phaseRegistry: core.phaseRegistry,
             artifactRecordStore: artifactRecordStore, sessionPersistenceHandler: sessionPersistenceHandler,
             knowledgeCardStore: knowledgeCardStore, artifactFilesystemContext: artifactFilesystemContext
@@ -366,7 +366,7 @@ final class OnboardingDependencyContainer {
         )
 
         // 10. Initialize lifecycle controller (merged with session coordinator)
-        self.lifecycleController = InterviewLifecycleController(
+        self.lifecycleController = InterviewLifecycleService(
             state: state,
             eventBus: core.eventBus,
             phaseRegistry: core.phaseRegistry,
@@ -402,7 +402,7 @@ final class OnboardingDependencyContainer {
         }
 
         // 12. Initialize remaining handlers
-        self.profilePersistenceHandler = ProfilePersistenceHandler(
+        self.profilePersistenceHandler = ProfilePersistenceService(
             applicantProfileStore: applicantProfileStore, toolRouter: tools.toolRouter, eventBus: core.eventBus, ui: ui
         )
         self.uiResponseCoordinator = UIResponseCoordinator(
@@ -539,7 +539,7 @@ final class OnboardingDependencyContainer {
 
     // MARK: - Private Factory Methods
     private static func createCoreInfrastructure() -> CoreInfrastructure {
-        let eventBus = EventCoordinator()
+        let eventBus = EventBus()
         let toolRegistry = ToolRegistry()
         let phaseRegistry = PhaseScriptRegistry()
         let phasePolicy = PhasePolicy(
@@ -553,7 +553,7 @@ final class OnboardingDependencyContainer {
                                   phaseRegistry: phaseRegistry, phasePolicy: phasePolicy)
     }
 
-    private static func createStateStores(eventBus: EventCoordinator, phasePolicy: PhasePolicy) -> StateStores {
+    private static func createStateStores(eventBus: EventBus, phasePolicy: PhasePolicy) -> StateStores {
         let operationTracker = OperationTracker()
         let conversationLog = ConversationLog(operations: operationTracker, eventBus: eventBus)
         return StateStores(
@@ -567,7 +567,7 @@ final class OnboardingDependencyContainer {
     }
 
     private static func createDocumentComponents(
-        eventBus: EventCoordinator, documentExtractionService: DocumentExtractionService, dataStore: InterviewDataStore,
+        eventBus: EventBus, documentExtractionService: DocumentExtractionService, dataStore: InterviewDataStore,
         stateCoordinator: StateCoordinator, agentTracker: AgentActivityTracker, llmFacade: LLMFacade?
     ) -> DocumentComponents {
         let uploadStorage = OnboardingUploadStorage()
@@ -586,7 +586,7 @@ final class OnboardingDependencyContainer {
     }
 
     private static func createToolRouterComponents(
-        eventBus: EventCoordinator, toolRegistry: ToolRegistry, state: StateCoordinator,
+        eventBus: EventBus, toolRegistry: ToolRegistry, state: StateCoordinator,
         uploadStorage: OnboardingUploadStorage, applicantProfileStore: ApplicantProfileStore,
         dataStore: InterviewDataStore, ui: OnboardingUIState
     ) -> ToolRouterComponents {
@@ -599,7 +599,7 @@ final class OnboardingDependencyContainer {
             applicantProfileStore: applicantProfileStore,
             eventBus: eventBus, extractionProgressHandler: nil
         )
-        let toolRouter = ToolHandler(
+        let toolRouter = ToolInteractionRouter(
             promptHandler: PromptInteractionHandler(), uploadHandler: uploadHandler,
             profileHandler: ProfileInteractionHandler(contactsImportService: ContactsImportService(), eventBus: eventBus),
             sectionHandler: SectionToggleHandler(), eventBus: eventBus
@@ -609,8 +609,8 @@ final class OnboardingDependencyContainer {
     }
 
     private static func createServices(
-        eventBus: EventCoordinator, state: StateCoordinator, toolRouter: ToolHandler,
-        wizardTracker: WizardProgressTracker, phaseTransitionController: PhaseTransitionController,
+        eventBus: EventBus, state: StateCoordinator, toolRouter: ToolInteractionRouter,
+        wizardTracker: WizardProgressTracker, phaseTransitionController: PhaseTransitionService,
         dataStore: InterviewDataStore, applicantProfileStore: ApplicantProfileStore
     ) -> Services {
         Services(
@@ -631,7 +631,7 @@ final class OnboardingDependencyContainer {
     }
 
     private static func createArtifactIngestionComponents(
-        eventBus: EventCoordinator, documentProcessingService: DocumentProcessingService, llmFacade: LLMFacade?
+        eventBus: EventBus, documentProcessingService: DocumentProcessingService, llmFacade: LLMFacade?
     ) -> ArtifactIngestionComponents {
         let documentKernel = DocumentIngestionKernel(
             documentProcessingService: documentProcessingService, eventBus: eventBus

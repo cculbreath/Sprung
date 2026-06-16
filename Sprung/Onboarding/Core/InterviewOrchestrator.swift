@@ -13,7 +13,7 @@ import SwiftOpenAI
 /// Delegates to NetworkRouter (§4.4) for stream event processing.
 actor InterviewOrchestrator: OnboardingEventEmitter {
     // MARK: - Properties
-    let eventBus: EventCoordinator
+    let eventBus: EventBus
     private let state: StateCoordinator
     private let llmMessenger: LLMMessenger
     private let networkRouter: NetworkRouter
@@ -22,7 +22,7 @@ actor InterviewOrchestrator: OnboardingEventEmitter {
     init(
         llmFacade: LLMFacade,
         baseSystemPrompt: String,
-        eventBus: EventCoordinator,
+        eventBus: EventBus,
         toolRegistry: ToolRegistry,
         state: StateCoordinator,
         todoStore: InterviewTodoStore

@@ -58,7 +58,7 @@ final class CoveragePlannerService {
 
     // MARK: Dependencies
 
-    private let eventBus: EventCoordinator
+    private let eventBus: EventBus
     private let artifactRepository: ArtifactRepository
     private let knowledgeCardStore: KnowledgeCardStore
     private let candidateDossierStore: CandidateDossierStore
@@ -75,7 +75,7 @@ final class CoveragePlannerService {
     // MARK: Initialization
 
     init(
-        eventBus: EventCoordinator,
+        eventBus: EventBus,
         artifactRepository: ArtifactRepository,
         knowledgeCardStore: KnowledgeCardStore,
         candidateDossierStore: CandidateDossierStore,
@@ -105,7 +105,7 @@ final class CoveragePlannerService {
                     self.runPlannerIfNeeded()
                 } else if phase.order < InterviewPhase.phase4StrategicSynthesis.order {
                     // A fresh interview applies Phase 1 at start
-                    // (InterviewLifecycleController.startLLM), and phases only
+                    // (InterviewLifecycleService.startLLM), and phases only
                     // move forward within an interview — so any pre-Phase-4
                     // application means a new run toward the Phase 4 boundary.
                     if self.hasRun {

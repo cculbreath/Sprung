@@ -1,5 +1,5 @@
 //
-//  SessionReplayController.swift
+//  SessionReplayService.swift
 //  Sprung
 //
 //  Drives RESTORE-TO-N then GO-LIVE for a recorded onboarding session.
@@ -56,7 +56,7 @@ import SwiftOpenAI
 import SwiftyJSON
 
 @MainActor
-final class SessionReplayController {
+final class SessionReplayService {
 
     enum ReplayControllerError: Error, LocalizedError {
         case noUserMessages(sessionId: String)
@@ -78,7 +78,7 @@ final class SessionReplayController {
     // MARK: - Dependencies
 
     private let state: StateCoordinator
-    private let eventBus: EventCoordinator
+    private let eventBus: EventBus
     private let llmFacade: LLMFacade?
     private let toolExecutionCoordinator: ToolExecutionCoordinator
     private let tapeStore: TapeStore
@@ -97,7 +97,7 @@ final class SessionReplayController {
 
     init(
         state: StateCoordinator,
-        eventBus: EventCoordinator,
+        eventBus: EventBus,
         llmFacade: LLMFacade?,
         toolExecutionCoordinator: ToolExecutionCoordinator,
         tapeStore: TapeStore = TapeStore(),

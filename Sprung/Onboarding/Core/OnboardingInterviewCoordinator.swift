@@ -10,14 +10,14 @@ final class OnboardingInterviewCoordinator {
     private let container: OnboardingDependencyContainer
     // MARK: - Public Dependencies (for View access)
     var state: StateCoordinator { container.state }
-    var eventBus: EventCoordinator { container.eventBus }
-    var toolRouter: ToolHandler { container.toolRouter }
+    var eventBus: EventBus { container.eventBus }
+    var toolRouter: ToolInteractionRouter { container.toolRouter }
     var wizardTracker: WizardProgressTracker { container.wizardTracker }
     var phaseRegistry: PhaseScriptRegistry { container.phaseRegistry }
     var toolRegistry: ToolRegistry { container.toolRegistry }
     var ui: OnboardingUIState { container.ui }
     var conversationLogStore: ConversationLogStore { container.conversationLogStore }
-    var uiToolContinuationManager: UIToolContinuationManager { container.uiToolContinuationManager }
+    var uiToolContinuationManager: UIToolContinuationRegistry { container.uiToolContinuationManager }
     // MARK: - Public Sub-Services (Direct Access)
     // Timeline Management
     var timeline: TimelineManagementService { container.timelineManagementService }
@@ -26,17 +26,17 @@ final class OnboardingInterviewCoordinator {
     // Extraction Management
     var extraction: ExtractionManagementService { container.extractionManagementService }
     // Phase & Objective Management
-    var phases: PhaseTransitionController { container.phaseTransitionController }
+    var phases: PhaseTransitionService { container.phaseTransitionController }
 
     // MARK: - Private Accessors (for internal use)
     // Lifecycle
-    private var lifecycleController: InterviewLifecycleController { container.lifecycleController }
+    private var lifecycleController: InterviewLifecycleService { container.lifecycleController }
     // UI State
     private var uiStateUpdateHandler: UIStateUpdateHandler { container.uiStateUpdateHandler }
     private var uiResponseCoordinator: UIResponseCoordinator { container.uiResponseCoordinator }
     private var coordinatorEventRouter: CoordinatorEventRouter { container.coordinatorEventRouter }
     // Profile Persistence
-    private var profilePersistenceHandler: ProfilePersistenceHandler { container.profilePersistenceHandler }
+    private var profilePersistenceHandler: ProfilePersistenceService { container.profilePersistenceHandler }
     // Data Stores (used for data existence checks, reset, and view access)
     private var applicantProfileStore: ApplicantProfileStore { container.getApplicantProfileStore() }
     var knowledgeCardStore: KnowledgeCardStore { container.getKnowledgeCardStore() }
@@ -45,7 +45,7 @@ final class OnboardingInterviewCoordinator {
     private var coverRefStore: CoverRefStore { container.getCoverRefStore() }
     private var experienceDefaultsStore: ExperienceDefaultsStore { container.getExperienceDefaultsStore() }
     private var artifactRecordStore: ArtifactRecordStore { container.artifactRecordStore }
-    private var sessionPersistenceHandler: SwiftDataSessionPersistenceHandler { container.sessionPersistenceHandler }
+    private var sessionPersistenceHandler: SessionPersistenceService { container.sessionPersistenceHandler }
     // MARK: - Computed Properties (Read from StateCoordinator)
     var currentPhase: InterviewPhase {
         get async { await state.phase }
@@ -160,7 +160,7 @@ final class OnboardingInterviewCoordinator {
         dataStore: InterviewDataStore,
         candidateDossierStore: CandidateDossierStore,
         preferences: OnboardingPreferences,
-        reasoningStreamManager: ReasoningStreamManager
+        reasoningStreamManager: ReasoningStreamState
     ) {
         // Create dependency container with all service wiring
         self.container = OnboardingDependencyContainer(
@@ -705,7 +705,7 @@ final class OnboardingInterviewCoordinator {
         // the replay service in a recording decorator (which corrupts go-live).
         lifecycleController.suppressTapeRecording = true
         defer { lifecycleController.suppressTapeRecording = false }
-        let controller = SessionReplayController(
+        let controller = SessionReplayService(
             state: state,
             eventBus: eventBus,
             llmFacade: llmFacade,
@@ -718,7 +718,7 @@ final class OnboardingInterviewCoordinator {
             try await controller.restore(sessionId: sessionId, throughUserMessageOrdinal: throughUserMessageOrdinal, goLive: goLive)
         } catch {
             Logger.error("Replay restore failed: \(error.localizedDescription)", category: .ai)
-            ToastManager.shared.show(.error("Replay failed: \(error.localizedDescription)"))
+            ToastCenter.shared.show(.error("Replay failed: \(error.localizedDescription)"))
         }
     }
 
@@ -929,7 +929,7 @@ final class OnboardingInterviewCoordinator {
     func getRecentEvents(count: Int = 10) async -> [OnboardingEvent] {
         await eventBus.getRecentEvents(count: count)
     }
-    func getEventMetrics() async -> EventCoordinator.EventMetrics {
+    func getEventMetrics() async -> EventBus.EventMetrics {
         await eventBus.getMetrics()
     }
     func clearEventHistory() async {

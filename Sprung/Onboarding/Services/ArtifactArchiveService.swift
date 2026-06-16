@@ -1,5 +1,5 @@
 //
-//  ArtifactArchiveManager.swift
+//  ArtifactArchiveService.swift
 //  Sprung
 //
 //  Manages artifact archive operations: promotion, demotion, deletion, and JSON conversion.
@@ -19,17 +19,17 @@ struct DemoteResult {
 /// Manages artifact archive operations: promotion from archive to session,
 /// demotion from session to archive, and permanent deletion.
 @MainActor
-final class ArtifactArchiveManager {
+final class ArtifactArchiveService {
     private let artifactRecordStore: ArtifactRecordStore
     private let artifactRepository: ArtifactRepository
-    private let sessionPersistenceHandler: SwiftDataSessionPersistenceHandler
-    private let eventBus: EventCoordinator
+    private let sessionPersistenceHandler: SessionPersistenceService
+    private let eventBus: EventBus
 
     init(
         artifactRecordStore: ArtifactRecordStore,
         artifactRepository: ArtifactRepository,
-        sessionPersistenceHandler: SwiftDataSessionPersistenceHandler,
-        eventBus: EventCoordinator
+        sessionPersistenceHandler: SessionPersistenceService,
+        eventBus: EventBus
     ) {
         self.artifactRecordStore = artifactRecordStore
         self.artifactRepository = artifactRepository

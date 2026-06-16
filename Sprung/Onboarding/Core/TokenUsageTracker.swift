@@ -216,7 +216,7 @@ class TokenUsageTracker {
     /// Start listening to token usage events from the event bus.
     /// Also watches phase events so a session-total summary is logged once
     /// when the interview completes.
-    func startEventSubscription(eventBus: EventCoordinator) {
+    func startEventSubscription(eventBus: EventBus) {
         Task { @MainActor [weak self] in
             for await event in await eventBus.stream(topic: .llm) {
                 guard let self = self else { return }

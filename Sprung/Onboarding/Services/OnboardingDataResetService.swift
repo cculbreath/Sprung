@@ -13,7 +13,7 @@ import Foundation
 /// without performing a full factory reset of the application.
 @MainActor
 final class OnboardingDataResetService {
-    private let sessionPersistenceHandler: SwiftDataSessionPersistenceHandler
+    private let sessionPersistenceHandler: SessionPersistenceService
     private let knowledgeCardStore: KnowledgeCardStore
     private let skillStore: SkillStore
     private let coverRefStore: CoverRefStore
@@ -23,7 +23,7 @@ final class OnboardingDataResetService {
     private let dataPersistenceService: DataPersistenceService
 
     init(
-        sessionPersistenceHandler: SwiftDataSessionPersistenceHandler,
+        sessionPersistenceHandler: SessionPersistenceService,
         knowledgeCardStore: KnowledgeCardStore,
         skillStore: SkillStore,
         coverRefStore: CoverRefStore,

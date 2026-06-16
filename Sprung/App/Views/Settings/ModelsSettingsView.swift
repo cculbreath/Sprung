@@ -462,11 +462,11 @@ struct ModelsSettingsView: View {
     // MARK: - Computed Properties
 
     private var hasAnthropicKey: Bool {
-        APIKeyManager.get(.anthropic) != nil
+        APIKeyStore.get(.anthropic) != nil
     }
 
     private var hasOpenAIKey: Bool {
-        guard let key = APIKeyManager.get(.openAI) else { return false }
+        guard let key = APIKeyStore.get(.openAI) else { return false }
         return !key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
@@ -539,7 +539,7 @@ private extension ModelsSettingsView {
     @MainActor
     func loadOpenAIModels() async {
         guard hasOpenAIKey else { return }
-        guard let apiKey = APIKeyManager.get(.openAI) else { return }
+        guard let apiKey = APIKeyStore.get(.openAI) else { return }
 
         isLoadingOpenAIModels = true
         openAIModelError = nil

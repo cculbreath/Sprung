@@ -16,7 +16,7 @@ import SwiftyJSON
 /// Git repository ingestion kernel using an async LLM agent on the Anthropic Messages API
 actor GitIngestionKernel {
 
-    private let eventBus: EventCoordinator
+    private let eventBus: EventBus
     private var llmFacade: LLMFacade?
     /// Shared document-analysis service: derives skills/cards from the rendered
     /// digest via the SAME path PDFs take. Injected at container wiring.
@@ -32,7 +32,7 @@ actor GitIngestionKernel {
     /// Mapping from pending ID to agent tracker ID
     private var agentIds: [String: String] = [:]
 
-    init(eventBus: EventCoordinator) {
+    init(eventBus: EventBus) {
         self.eventBus = eventBus
     }
 
@@ -331,7 +331,7 @@ actor GitIngestionKernel {
         modelId: String,
         gitEvidence: String,
         gitData: JSON,
-        eventBus: EventCoordinator,
+        eventBus: EventBus,
         agentId: String,
         tracker: AgentActivityTracker?
     ) async throws -> RepositoryDigest {

@@ -5,10 +5,10 @@ import SwiftOpenAI
 @MainActor
 final class KCRefinementService {
     private let llmFacade: LLMFacade
-    private let reasoningStreamManager: ReasoningStreamManager
+    private let reasoningStreamManager: ReasoningStreamState
     private var activeStreamingHandle: LLMStreamingHandle?
 
-    init(llmFacade: LLMFacade, reasoningStreamManager: ReasoningStreamManager) {
+    init(llmFacade: LLMFacade, reasoningStreamManager: ReasoningStreamState) {
         self.llmFacade = llmFacade
         self.reasoningStreamManager = reasoningStreamManager
     }

@@ -17,17 +17,17 @@ import SwiftyJSON
 actor CardMergeService {
     private var llmFacade: LLMFacade?
     private let artifactRecordStore: ArtifactRecordStore
-    private let sessionPersistenceHandler: SwiftDataSessionPersistenceHandler
+    private let sessionPersistenceHandler: SessionPersistenceService
     private let skillBankService: SkillBankService
     private var deduplicationService: NarrativeDeduplicationService?
-    private weak var eventBus: EventCoordinator?
+    private weak var eventBus: EventBus?
     private weak var agentActivityTracker: AgentActivityTracker?
 
     init(
         artifactRecordStore: ArtifactRecordStore,
-        sessionPersistenceHandler: SwiftDataSessionPersistenceHandler,
+        sessionPersistenceHandler: SessionPersistenceService,
         llmFacade: LLMFacade?,
-        eventBus: EventCoordinator? = nil,
+        eventBus: EventBus? = nil,
         agentActivityTracker: AgentActivityTracker? = nil
     ) {
         self.artifactRecordStore = artifactRecordStore

@@ -1,5 +1,5 @@
 //
-//  APIKeyManager.swift
+//  APIKeyStore.swift
 //  Sprung
 //
 //  Keychain-backed storage for API keys.
@@ -12,7 +12,7 @@ enum APIKeyType: String {
     case gemini = "geminiApiKey"
     case anthropic = "anthropicApiKey"
 }
-struct APIKeyManager {
+struct APIKeyStore {
     private static let service = Bundle.main.bundleIdentifier ?? "physicscloud.Sprung"
     static func get(_ type: APIKeyType) -> String? {
         let query: [String: Any] = [

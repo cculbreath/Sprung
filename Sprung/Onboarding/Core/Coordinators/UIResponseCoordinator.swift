@@ -4,23 +4,23 @@ import SwiftyJSON
 /// This extracts the "User Action -> LLM Message" logic from the main coordinator.
 @MainActor
 final class UIResponseCoordinator {
-    private let eventBus: EventCoordinator
-    private let toolRouter: ToolHandler
+    private let eventBus: EventBus
+    private let toolRouter: ToolInteractionRouter
     private let state: StateCoordinator
     private let ui: OnboardingUIState
     private let sessionUIState: SessionUIState
-    private let continuationManager: UIToolContinuationManager
+    private let continuationManager: UIToolContinuationRegistry
     private let userActionQueue: UserActionQueue
     private let drainGate: DrainGate
     private let queueDrainCoordinator: QueueDrainCoordinator
 
     init(
-        eventBus: EventCoordinator,
-        toolRouter: ToolHandler,
+        eventBus: EventBus,
+        toolRouter: ToolInteractionRouter,
         state: StateCoordinator,
         ui: OnboardingUIState,
         sessionUIState: SessionUIState,
-        continuationManager: UIToolContinuationManager,
+        continuationManager: UIToolContinuationRegistry,
         userActionQueue: UserActionQueue,
         drainGate: DrainGate,
         queueDrainCoordinator: QueueDrainCoordinator

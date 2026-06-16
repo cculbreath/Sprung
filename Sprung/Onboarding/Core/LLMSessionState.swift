@@ -2,7 +2,7 @@ import Foundation
 import SwiftyJSON
 
 /// Manages LLM-specific state: allowed tools, model configuration, and UI tool coordination.
-actor LLMStateManager {
+actor LLMSessionState {
     // MARK: - State
 
     /// Currently allowed tool names for LLM calls

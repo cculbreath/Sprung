@@ -11,9 +11,9 @@ import SwiftOpenAI
 
 struct CreateWebArtifactTool: InterviewTool {
     private static let schema: JSONSchema = ArtifactSchemas.createWebArtifact
-    private let eventBus: EventCoordinator
+    private let eventBus: EventBus
 
-    init(coordinator _: OnboardingInterviewCoordinator, eventBus: EventCoordinator) {
+    init(coordinator _: OnboardingInterviewCoordinator, eventBus: EventBus) {
         self.eventBus = eventBus
     }
 

@@ -13,7 +13,7 @@ import Foundation
 @MainActor
 final class NarrativeDeduplicationService {
     private var llmFacade: LLMFacade?
-    private weak var eventBus: EventCoordinator?
+    private weak var eventBus: EventBus?
     private weak var agentActivityTracker: AgentActivityTracker?
 
     private func getModelId() throws -> String {
@@ -22,7 +22,7 @@ final class NarrativeDeduplicationService {
 
     private let workspaceService = CardMergeWorkspaceService()
 
-    init(llmFacade: LLMFacade?, eventBus: EventCoordinator? = nil, agentActivityTracker: AgentActivityTracker? = nil) {
+    init(llmFacade: LLMFacade?, eventBus: EventBus? = nil, agentActivityTracker: AgentActivityTracker? = nil) {
         self.llmFacade = llmFacade
         self.eventBus = eventBus
         self.agentActivityTracker = agentActivityTracker
@@ -33,7 +33,7 @@ final class NarrativeDeduplicationService {
         self.llmFacade = facade
     }
 
-    func setEventBus(_ eventBus: EventCoordinator) {
+    func setEventBus(_ eventBus: EventBus) {
         self.eventBus = eventBus
     }
 

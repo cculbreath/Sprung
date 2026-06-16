@@ -96,7 +96,7 @@ final class ConversationLogStore {
 
     // MARK: - Event Subscription
 
-    func startListening(eventBus: EventCoordinator) {
+    func startListening(eventBus: EventBus) {
         // Subscribe to LLM events
         Task {
             for await event in await eventBus.stream(topic: .llm) {

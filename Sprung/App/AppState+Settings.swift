@@ -7,7 +7,7 @@ import Foundation
 /// Extension to AppState to provide access to application settings
 extension AppState {
     /// Application settings manager
-    class SettingsManager {
+    class SettingsStore {
         /// Gets the selected models for batch cover letter generation
         var batchCoverLetterModels: Set<String> {
             get {
@@ -34,7 +34,7 @@ extension AppState {
         }
     }
     /// The settings manager for the application
-    var settings: SettingsManager {
-        return SettingsManager()
+    var settings: SettingsStore {
+        return SettingsStore()
     }
 }

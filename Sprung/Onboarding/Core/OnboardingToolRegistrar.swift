@@ -5,7 +5,7 @@ final class OnboardingToolRegistrar {
     private weak var coordinator: OnboardingInterviewCoordinator?
     private let toolRegistry: ToolRegistry
     private let dataStore: InterviewDataStore
-    private let eventBus: EventCoordinator
+    private let eventBus: EventBus
     private let phaseRegistry: PhaseScriptRegistry
     private let todoStore: InterviewTodoStore
     private let artifactFilesystemContext: ArtifactFilesystemContext
@@ -15,7 +15,7 @@ final class OnboardingToolRegistrar {
         coordinator: OnboardingInterviewCoordinator,
         toolRegistry: ToolRegistry,
         dataStore: InterviewDataStore,
-        eventBus: EventCoordinator,
+        eventBus: EventBus,
         phaseRegistry: PhaseScriptRegistry,
         todoStore: InterviewTodoStore,
         artifactFilesystemContext: ArtifactFilesystemContext,

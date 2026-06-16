@@ -10,12 +10,12 @@ import SwiftyJSON
 /// Service that handles timeline management operations
 actor TimelineManagementService: OnboardingEventEmitter {
     // MARK: - Properties
-    let eventBus: EventCoordinator
-    private let phaseTransitionController: PhaseTransitionController
+    let eventBus: EventBus
+    private let phaseTransitionController: PhaseTransitionService
     // MARK: - Initialization
     init(
-        eventBus: EventCoordinator,
-        phaseTransitionController: PhaseTransitionController
+        eventBus: EventBus,
+        phaseTransitionController: PhaseTransitionService
     ) {
         self.eventBus = eventBus
         self.phaseTransitionController = phaseTransitionController

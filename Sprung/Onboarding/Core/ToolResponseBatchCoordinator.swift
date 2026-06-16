@@ -6,10 +6,10 @@ import SwiftyJSON
 /// ConversationLog slots are filled.
 actor ToolResponseBatchCoordinator {
     private let conversationLog: ConversationLog
-    private let streamQueueManager: StreamQueueManager
+    private let streamQueueManager: StreamQueue
     private var collectedPayloads: [JSON] = []
 
-    init(conversationLog: ConversationLog, streamQueueManager: StreamQueueManager) {
+    init(conversationLog: ConversationLog, streamQueueManager: StreamQueue) {
         self.conversationLog = conversationLog
         self.streamQueueManager = streamQueueManager
     }

@@ -74,7 +74,7 @@ class CardMergeAgent: AnthropicToolLoopDelegate {
     private let workspacePath: URL
     private let modelId: String
     private weak var facade: LLMFacade?
-    private var eventBus: EventCoordinator?
+    private var eventBus: EventBus?
 
     // Agent tracking
     private let agentId: String?
@@ -132,7 +132,7 @@ class CardMergeAgent: AnthropicToolLoopDelegate {
         workspacePath: URL,
         modelId: String,
         facade: LLMFacade,
-        eventBus: EventCoordinator? = nil,
+        eventBus: EventBus? = nil,
         agentId: String? = nil,
         tracker: AgentActivityTracker? = nil
     ) {

@@ -9,18 +9,18 @@ final class OnboardingPersistenceService {
     private let dataStore: InterviewDataStore
     private let coverRefStore: CoverRefStore
     private let experienceDefaultsStore: ExperienceDefaultsStore
-    private let eventBus: EventCoordinator
+    private let eventBus: EventBus
     private let artifactRecordStore: ArtifactRecordStore
-    private let sessionPersistenceHandler: SwiftDataSessionPersistenceHandler
+    private let sessionPersistenceHandler: SessionPersistenceService
 
     init(
         ui: OnboardingUIState,
         dataStore: InterviewDataStore,
         coverRefStore: CoverRefStore,
         experienceDefaultsStore: ExperienceDefaultsStore,
-        eventBus: EventCoordinator,
+        eventBus: EventBus,
         artifactRecordStore: ArtifactRecordStore,
-        sessionPersistenceHandler: SwiftDataSessionPersistenceHandler
+        sessionPersistenceHandler: SessionPersistenceService
     ) {
         self.ui = ui
         self.dataStore = dataStore

@@ -139,7 +139,7 @@ actor ConversationLog {
 
     private(set) var entries: [ConversationEntry] = []
     private let operations: OperationTracker
-    private let eventBus: EventCoordinator
+    private let eventBus: EventBus
 
     // MARK: - Wire-Text State (see PROMPT-CACHE INVARIANT in file header)
 
@@ -173,7 +173,7 @@ actor ConversationLog {
 
     // MARK: - Initialization
 
-    init(operations: OperationTracker, eventBus: EventCoordinator) {
+    init(operations: OperationTracker, eventBus: EventBus) {
         self.operations = operations
         self.eventBus = eventBus
         Logger.info("ConversationLog initialized", category: .ai)

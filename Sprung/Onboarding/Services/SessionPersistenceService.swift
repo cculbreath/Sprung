@@ -1,5 +1,5 @@
 //
-//  SwiftDataSessionPersistenceHandler.swift
+//  SessionPersistenceService.swift
 //  Sprung
 //
 //  Event-driven persistence handler for onboarding sessions using SwiftData.
@@ -11,9 +11,9 @@ import SwiftyJSON
 /// Handles SwiftData persistence of onboarding session state.
 /// Listens to events and persists messages, artifacts, objectives, and plan items.
 @MainActor
-final class SwiftDataSessionPersistenceHandler {
+final class SessionPersistenceService {
     // MARK: - Dependencies
-    private let eventBus: EventCoordinator
+    private let eventBus: EventBus
     private let sessionStore: OnboardingSessionStore
     private let artifactRecordStore: ArtifactRecordStore
 
@@ -24,14 +24,14 @@ final class SwiftDataSessionPersistenceHandler {
 
     // MARK: - Initialization
     init(
-        eventBus: EventCoordinator,
+        eventBus: EventBus,
         sessionStore: OnboardingSessionStore,
         artifactRecordStore: ArtifactRecordStore
     ) {
         self.eventBus = eventBus
         self.sessionStore = sessionStore
         self.artifactRecordStore = artifactRecordStore
-        Logger.info("SwiftDataSessionPersistenceHandler initialized", category: .ai)
+        Logger.info("SessionPersistenceService initialized", category: .ai)
     }
 
     // MARK: - Session Lifecycle
@@ -163,7 +163,7 @@ final class SwiftDataSessionPersistenceHandler {
         }
         subscriptionTasks.append(timelineTask)
 
-        Logger.info("SwiftDataSessionPersistenceHandler started", category: .ai)
+        Logger.info("SessionPersistenceService started", category: .ai)
     }
 
     /// Stop listening to events
@@ -176,7 +176,7 @@ final class SwiftDataSessionPersistenceHandler {
         }
         subscriptionTasks.removeAll()
 
-        Logger.info("SwiftDataSessionPersistenceHandler stopped", category: .ai)
+        Logger.info("SessionPersistenceService stopped", category: .ai)
     }
 
     // MARK: - Event Handlers

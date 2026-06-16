@@ -34,10 +34,10 @@ struct SprungApp: App {
         }
 
         // Perform any pending store reset from previous session (must happen before opening)
-        SwiftDataBackupManager.performPendingResetIfNeeded()
+        SwiftDataBackupService.performPendingResetIfNeeded()
 
         // Preflight backup before opening/migrating the store
-        SwiftDataBackupManager.performPreflightBackupIfNeeded()
+        SwiftDataBackupService.performPreflightBackupIfNeeded()
         var resolvedContainer: ModelContainer
         var launchState: AppEnvironment.LaunchState = .ready
         // Attempt to create the migration-aware container first

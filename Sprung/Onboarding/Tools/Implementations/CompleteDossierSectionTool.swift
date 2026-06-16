@@ -62,7 +62,7 @@ struct CompleteDossierSectionTool: InterviewTool {
         )
     }()
 
-    private let eventBus: EventCoordinator
+    private let eventBus: EventBus
     private let candidateDossierStore: CandidateDossierStore
 
     var name: String { OnboardingToolName.completeDossierSection.rawValue }
@@ -76,7 +76,7 @@ struct CompleteDossierSectionTool: InterviewTool {
     }
     var parameters: JSONSchema { Self.schema }
 
-    init(eventBus: EventCoordinator, candidateDossierStore: CandidateDossierStore) {
+    init(eventBus: EventBus, candidateDossierStore: CandidateDossierStore) {
         self.eventBus = eventBus
         self.candidateDossierStore = candidateDossierStore
     }

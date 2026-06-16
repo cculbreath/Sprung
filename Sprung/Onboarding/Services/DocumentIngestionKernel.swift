@@ -12,7 +12,7 @@ import SwiftyJSON
 actor DocumentIngestionKernel {
 
     private let documentProcessingService: DocumentProcessingService
-    private let eventBus: EventCoordinator
+    private let eventBus: EventBus
     private weak var ingestionCoordinator: ArtifactIngestionCoordinator?
 
     /// Active ingestion tasks by pending ID
@@ -20,7 +20,7 @@ actor DocumentIngestionKernel {
 
     init(
         documentProcessingService: DocumentProcessingService,
-        eventBus: EventCoordinator
+        eventBus: EventBus
     ) {
         self.documentProcessingService = documentProcessingService
         self.eventBus = eventBus

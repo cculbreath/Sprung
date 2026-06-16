@@ -10,14 +10,14 @@ import SwiftyJSON
 /// Engine that automatically triggers workflows when objectives complete
 actor ObjectiveWorkflowEngine: OnboardingEventEmitter {
     // MARK: - Properties
-    let eventBus: EventCoordinator
+    let eventBus: EventBus
     private let phaseRegistry: PhaseScriptRegistry
     private let state: StateCoordinator
     private var subscriptionTask: Task<Void, Never>?
     private var isActive = false
     // MARK: - Initialization
     init(
-        eventBus: EventCoordinator,
+        eventBus: EventBus,
         phaseRegistry: PhaseScriptRegistry,
         state: StateCoordinator
     ) {

@@ -3,14 +3,14 @@
 //  Sprung
 //
 //  Application lifecycle delegate. Window management is handled by
-//  SecondaryWindowManager; menu construction by AppMenuBuilder.
+//  SecondaryWindowService; menu construction by AppMenuBuilder.
 //
 import Cocoa
 import SwiftUI
 
 @MainActor
 class AppDelegate: NSObject, NSApplicationDelegate {
-    let windowManager = SecondaryWindowManager()
+    let windowManager = SecondaryWindowService()
     var toolbarCoordinator: ToolbarCoordinator?
 
     // MARK: - Lifecycle
@@ -37,7 +37,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Customize entry choke point: observed here so the revision window
         // opens regardless of which module is active. Gating lives in
-        // SecondaryWindowManager.showResumeRevision().
+        // SecondaryWindowService.showResumeRevision().
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(handleCustomizeResume(_:)),

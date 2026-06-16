@@ -12,7 +12,7 @@ struct UnifiedAppLayout: View {
     @Environment(ModuleNavigationService.self) private var navigation
     @Environment(WindowCoordinator.self) private var windowCoordinator
     @Environment(AppEnvironment.self) private var appEnvironment
-    @Environment(ReasoningStreamManager.self) private var reasoningStreamManager
+    @Environment(ReasoningStreamState.self) private var reasoningStreamManager
     @Environment(AppState.self) private var appState
     @Environment(EnabledLLMStore.self) private var enabledLLMStore
 
@@ -103,8 +103,8 @@ struct UnifiedAppLayout: View {
     private func shouldShowSetupWizard() -> Bool {
         guard !appEnvironment.launchState.isReadOnly else { return false }
 
-        let hasOpenRouterKey = !(APIKeyManager.get(.openRouter)?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
-        let hasOpenAIKey = !(APIKeyManager.get(.openAI)?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
+        let hasOpenRouterKey = !(APIKeyStore.get(.openRouter)?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
+        let hasOpenAIKey = !(APIKeyStore.get(.openAI)?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
 
         if !hasOpenRouterKey || !hasOpenAIKey {
             return true
@@ -112,7 +112,7 @@ struct UnifiedAppLayout: View {
 
         guard !hasCompletedSetupWizard else { return false }
 
-        let hasAnthropicKey = !(APIKeyManager.get(.anthropic)?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
+        let hasAnthropicKey = !(APIKeyStore.get(.anthropic)?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
         let hasModels = !enabledLLMStore.enabledModels.isEmpty
         return !hasAnthropicKey || !hasModels
     }

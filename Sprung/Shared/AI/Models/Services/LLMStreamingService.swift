@@ -1,5 +1,5 @@
 //
-//  LLMFacadeStreamingManager.swift
+//  LLMStreamingService.swift
 //  Sprung
 //
 //  Manages streaming task lifecycle for LLM operations.
@@ -10,7 +10,7 @@ import Foundation
 
 /// Manages streaming task lifecycle for LLM operations
 @MainActor
-final class LLMFacadeStreamingManager {
+final class LLMStreamingService {
     private var activeStreamingTasks: [UUID: Task<Void, Never>] = [:]
 
     // MARK: - Task Management

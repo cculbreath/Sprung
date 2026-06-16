@@ -16,7 +16,7 @@ actor QueueDrainCoordinator {
 
     private let queue: UserActionQueue
     private let gate: DrainGate
-    private let eventBus: EventCoordinator
+    private let eventBus: EventBus
 
     // MARK: - State
 
@@ -28,7 +28,7 @@ actor QueueDrainCoordinator {
 
     // MARK: - Initialization
 
-    init(queue: UserActionQueue, gate: DrainGate, eventBus: EventCoordinator) {
+    init(queue: UserActionQueue, gate: DrainGate, eventBus: EventBus) {
         self.queue = queue
         self.gate = gate
         self.eventBus = eventBus

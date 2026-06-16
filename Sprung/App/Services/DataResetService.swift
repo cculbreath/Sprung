@@ -152,7 +152,7 @@ final class DataResetService {
         do {
             // Mark SwiftData store for deletion on next launch.
             // This avoids SQLite relationship constraint errors from batch delete.
-            try SwiftDataBackupManager.destroyCurrentStore()
+            try SwiftDataBackupService.destroyCurrentStore()
             resetAPIKeys()
             resetUserDefaults()
             try resetFileBasedStorage()
@@ -165,10 +165,10 @@ final class DataResetService {
     }
     // MARK: - Private Reset Methods
     private func resetAPIKeys() {
-        APIKeyManager.delete(.openRouter)
-        APIKeyManager.delete(.openAI)
-        APIKeyManager.delete(.anthropic)
-        APIKeyManager.delete(.gemini)
+        APIKeyStore.delete(.openRouter)
+        APIKeyStore.delete(.openAI)
+        APIKeyStore.delete(.anthropic)
+        APIKeyStore.delete(.gemini)
         Logger.debug("✅ API keys cleared from Keychain", category: .appLifecycle)
     }
 

@@ -7,7 +7,7 @@ import Foundation
 struct ResumeReviewSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(AppEnvironment.self) private var appEnvironment
-    @Environment(ReasoningStreamManager.self) private var reasoningStreamManager
+    @Environment(ReasoningStreamState.self) private var reasoningStreamManager
     @Environment(OpenRouterService.self) private var openRouterService
     @Environment(CoverRefStore.self) private var coverRefStore
     @Binding var selectedResume: Resume?

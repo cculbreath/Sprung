@@ -1,5 +1,5 @@
 //
-//  SwiftDataBackupManager.swift
+//  SwiftDataBackupService.swift
 //  Sprung
 //
 //  Creates timestamped backups of the SwiftData store files in Application Support
@@ -18,7 +18,7 @@ enum SwiftDataBackupError: Error, LocalizedError {
         }
     }
 }
-struct SwiftDataBackupManager {
+struct SwiftDataBackupService {
     private static let lastBackupKey = "swiftdata.lastBackupTimestamp"
     private static let backupFolderName = "Sprung_Backups"
     private static let pendingResetKey = "swiftdata.pendingStoreReset"

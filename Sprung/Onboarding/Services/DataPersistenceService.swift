@@ -9,17 +9,17 @@ import Foundation
 /// Service that handles data persistence operations
 actor DataPersistenceService: OnboardingEventEmitter {
     // MARK: - Properties
-    let eventBus: EventCoordinator
+    let eventBus: EventBus
     private let state: StateCoordinator
     private let dataStore: InterviewDataStore
-    private let toolRouter: ToolHandler
+    private let toolRouter: ToolInteractionRouter
     private let wizardTracker: WizardProgressTracker
     // MARK: - Initialization
     init(
-        eventBus: EventCoordinator,
+        eventBus: EventBus,
         state: StateCoordinator,
         dataStore: InterviewDataStore,
-        toolRouter: ToolHandler,
+        toolRouter: ToolInteractionRouter,
         wizardTracker: WizardProgressTracker
     ) {
         self.eventBus = eventBus

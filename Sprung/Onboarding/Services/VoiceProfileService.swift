@@ -13,14 +13,14 @@ import SwiftOpenAI
 @MainActor
 final class VoiceProfileService {
     private var llmFacade: LLMFacade?
-    private let reasoningStreamManager: ReasoningStreamManager
+    private let reasoningStreamManager: ReasoningStreamState
     private var activeStreamingHandle: LLMStreamingHandle?
 
     private func getModelId() throws -> String {
         try ModelConfigResolver.resolve(key: "voiceProfileModelId", operation: "Voice Profile Generation")
     }
 
-    init(llmFacade: LLMFacade?, reasoningStreamManager: ReasoningStreamManager) {
+    init(llmFacade: LLMFacade?, reasoningStreamManager: ReasoningStreamState) {
         self.llmFacade = llmFacade
         self.reasoningStreamManager = reasoningStreamManager
     }

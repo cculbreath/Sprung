@@ -11,7 +11,7 @@ import SwiftyJSON
 /// Coordinates artifact ingestion from all sources
 /// Tracks pending artifacts and notifies LLM when artifacts are ready
 actor ArtifactIngestionCoordinator {
-    private let eventBus: EventCoordinator
+    private let eventBus: EventBus
     private let documentKernel: DocumentIngestionKernel
     private let gitKernel: GitIngestionKernel
     private let documentProcessingService: DocumentProcessingService
@@ -23,7 +23,7 @@ actor ArtifactIngestionCoordinator {
     private var artifactsByPlanItem: [String: Set<String>] = [:]
 
     init(
-        eventBus: EventCoordinator,
+        eventBus: EventBus,
         documentKernel: DocumentIngestionKernel,
         gitKernel: GitIngestionKernel,
         documentProcessingService: DocumentProcessingService

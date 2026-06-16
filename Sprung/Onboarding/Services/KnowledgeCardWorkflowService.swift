@@ -14,13 +14,13 @@ final class KnowledgeCardWorkflowService {
     private let state: StateCoordinator
     private let knowledgeCardStore: KnowledgeCardStore
     private let skillStore: SkillStore
-    private let eventBus: EventCoordinator
+    private let eventBus: EventBus
     private let cardMergeService: CardMergeService
     private let chatInventoryService: ChatInventoryService?
     private let agentActivityTracker: AgentActivityTracker
     private let artifactRecordStore: ArtifactRecordStore
     private weak var sessionUIState: SessionUIState?
-    private weak var phaseTransitionController: PhaseTransitionController?
+    private weak var phaseTransitionController: PhaseTransitionService?
 
     // Skills processing service for deduplication and ATS expansion
     private var skillsProcessingService: SkillsProcessingService?
@@ -33,13 +33,13 @@ final class KnowledgeCardWorkflowService {
         state: StateCoordinator,
         knowledgeCardStore: KnowledgeCardStore,
         skillStore: SkillStore,
-        eventBus: EventCoordinator,
+        eventBus: EventBus,
         cardMergeService: CardMergeService,
         chatInventoryService: ChatInventoryService?,
         agentActivityTracker: AgentActivityTracker,
         artifactRecordStore: ArtifactRecordStore,
         sessionUIState: SessionUIState,
-        phaseTransitionController: PhaseTransitionController?
+        phaseTransitionController: PhaseTransitionService?
     ) {
         self.ui = ui
         self.state = state

@@ -50,7 +50,7 @@ struct SkillExtractionSheet: View {
     }
 
     private var hasAnthropicKey: Bool {
-        APIKeyManager.get(.anthropic) != nil
+        APIKeyStore.get(.anthropic) != nil
     }
 
     private var filteredAnthropicModels: [AnthropicModel] {

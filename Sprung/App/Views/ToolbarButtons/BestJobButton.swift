@@ -8,7 +8,7 @@ struct BestJobButton: View {
     @Environment(CandidateDossierStore.self) private var candidateDossierStore
     @Environment(CoverRefStore.self) private var coverRefStore
     @Environment(LLMFacade.self) private var llmFacade
-    @Environment(ReasoningStreamManager.self) private var reasoningStreamManager
+    @Environment(ReasoningStreamState.self) private var reasoningStreamManager
 
     @State private var showModelSheet = false
     @State private var isProcessing = false

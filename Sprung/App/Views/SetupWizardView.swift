@@ -22,9 +22,9 @@ struct SetupWizardView: View {
     @AppStorage("onboardingGitIngestModelId") private var gitIngestModelId: String = ""
     @AppStorage("discoveryCoachingModelId") private var coachingModelId: String = ""
 
-    @State private var openRouterApiKey: String = APIKeyManager.get(.openRouter) ?? ""
-    @State private var openAiApiKey: String = APIKeyManager.get(.openAI) ?? ""
-    @State private var anthropicApiKey: String = APIKeyManager.get(.anthropic) ?? ""
+    @State private var openRouterApiKey: String = APIKeyStore.get(.openRouter) ?? ""
+    @State private var openAiApiKey: String = APIKeyStore.get(.openAI) ?? ""
+    @State private var anthropicApiKey: String = APIKeyStore.get(.anthropic) ?? ""
     @State private var currentStep: Int = 0
     @State private var showModelPicker = false
     @State private var showExitAlert = false
@@ -596,19 +596,19 @@ private extension SetupWizardView {
         let anthropic = anthropicApiKey.trimmingCharacters(in: .whitespacesAndNewlines)
 
         if router.isEmpty {
-            APIKeyManager.delete(.openRouter)
+            APIKeyStore.delete(.openRouter)
         } else {
-            _ = APIKeyManager.set(.openRouter, value: router)
+            _ = APIKeyStore.set(.openRouter, value: router)
         }
         if openai.isEmpty {
-            APIKeyManager.delete(.openAI)
+            APIKeyStore.delete(.openAI)
         } else {
-            _ = APIKeyManager.set(.openAI, value: openai)
+            _ = APIKeyStore.set(.openAI, value: openai)
         }
         if anthropic.isEmpty {
-            APIKeyManager.delete(.anthropic)
+            APIKeyStore.delete(.anthropic)
         } else {
-            _ = APIKeyManager.set(.anthropic, value: anthropic)
+            _ = APIKeyStore.set(.anthropic, value: anthropic)
         }
         NotificationCenter.default.post(name: .apiKeysChanged, object: nil)
         appState.reconfigureOpenRouterService()

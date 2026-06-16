@@ -24,11 +24,11 @@ final class ProfileInteractionHandler {
     }()
     // MARK: - Dependencies
     private let contactsImportService: ContactsImportService
-    private let eventBus: EventCoordinator
+    private let eventBus: EventBus
     // MARK: - Init
     init(
         contactsImportService: ContactsImportService,
-        eventBus: EventCoordinator
+        eventBus: EventBus
     ) {
         self.contactsImportService = contactsImportService
         self.eventBus = eventBus

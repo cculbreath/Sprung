@@ -29,7 +29,7 @@ class ModelValidationService {
     }
     /// Validate a single model by calling its endpoint
     func validateModel(_ modelId: String) async -> ModelValidationResult {
-        let apiKey = APIKeyManager.get(.openRouter) ?? ""
+        let apiKey = APIKeyStore.get(.openRouter) ?? ""
         guard !apiKey.isEmpty else {
             return ModelValidationResult(
                 isAvailable: false,

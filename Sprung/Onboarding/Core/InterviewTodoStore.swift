@@ -48,7 +48,7 @@ actor InterviewTodoStore {
 
     // MARK: - Dependencies
 
-    private weak var eventBus: EventCoordinator?
+    private weak var eventBus: EventBus?
 
     // MARK: - State
 
@@ -56,12 +56,12 @@ actor InterviewTodoStore {
 
     // MARK: - Initialization
 
-    init(eventBus: EventCoordinator? = nil) {
+    init(eventBus: EventBus? = nil) {
         self.eventBus = eventBus
     }
 
     /// Set the event bus after initialization (for dependency injection)
-    func setEventBus(_ eventBus: EventCoordinator) {
+    func setEventBus(_ eventBus: EventBus) {
         self.eventBus = eventBus
     }
 

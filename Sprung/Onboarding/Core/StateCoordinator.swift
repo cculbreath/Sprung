@@ -9,15 +9,15 @@ struct PhasePolicy {
 /// Delegates domain logic to injected services and maintains sync caches for SwiftUI.
 actor StateCoordinator: OnboardingEventEmitter {
     // MARK: - Event System
-    let eventBus: EventCoordinator
+    let eventBus: EventBus
     private var subscriptionTask: Task<Void, Never>?
     // MARK: - Domain Services (Injected)
     private let objectiveStore: ObjectiveStore
     private let artifactRepository: ArtifactRepository
     private let streamingBuffer: StreamingMessageBuffer
     private let uiState: SessionUIState
-    private let streamQueueManager: StreamQueueManager
-    private let llmStateManager: LLMStateManager
+    private let streamQueueManager: StreamQueue
+    private let llmStateManager: LLMSessionState
     private let todoStore: InterviewTodoStore
     private let phaseRegistry: PhaseScriptRegistry
 
@@ -56,13 +56,13 @@ actor StateCoordinator: OnboardingEventEmitter {
     // MARK: - Tool Response Batching (Delegated to ToolResponseBatchCoordinator)
     private let toolResponseBatchCoordinator: ToolResponseBatchCoordinator
 
-    // MARK: - Stream Queue (Delegated to StreamQueueManager)
-    // StreamQueueManager handles serial LLM streaming (simplified - no tool tracking)
-    // MARK: - LLM State (Delegated to LLMStateManager)
-    // LLMStateManager handles tool names, response IDs, model config, and tool pane cards
+    // MARK: - Stream Queue (Delegated to StreamQueue)
+    // StreamQueue handles serial LLM streaming (simplified - no tool tracking)
+    // MARK: - LLM State (Delegated to LLMSessionState)
+    // LLMSessionState handles tool names, response IDs, model config, and tool pane cards
     // MARK: - Initialization
     init(
-        eventBus: EventCoordinator,
+        eventBus: EventBus,
         phasePolicy: PhasePolicy,
         phaseRegistry: PhaseScriptRegistry,
         objectives: ObjectiveStore,
@@ -81,8 +81,8 @@ actor StateCoordinator: OnboardingEventEmitter {
         self.streamingBuffer = streamingBuffer
         self.uiState = uiState
         self.todoStore = todoStore
-        self.streamQueueManager = StreamQueueManager(eventBus: eventBus)
-        self.llmStateManager = LLMStateManager()
+        self.streamQueueManager = StreamQueue(eventBus: eventBus)
+        self.llmStateManager = LLMSessionState()
 
         // New architecture: ConversationLog with OperationTracker (injected)
         self.operationTracker = operationTracker
@@ -287,7 +287,7 @@ actor StateCoordinator: OnboardingEventEmitter {
             }
         }
         try? await Task.sleep(nanoseconds: 10_000_000) // 10ms
-        // Ensure LLMStateManager has an initial allowed-tools snapshot, even if
+        // Ensure LLMSessionState has an initial allowed-tools snapshot, even if
         // SessionUIState published tool permissions before subscriptions attached.
         let effectiveTools = await uiState.getEffectiveAllowedToolsSnapshot()
         await llmStateManager.setAllowedToolNames(effectiveTools)
@@ -549,7 +549,7 @@ actor StateCoordinator: OnboardingEventEmitter {
     /// Retry tool responses with exponential backoff based on retry attempt
     /// Implements: 2s → 4s → 8s progression with max 3 retries
     private func retryToolResponses(_ payloads: [JSON]) async {
-        // Get current retry count from LLMStateManager to calculate delay
+        // Get current retry count from LLMSessionState to calculate delay
         let retryCount = await llmStateManager.getPendingToolResponseRetryCount()
 
         // Calculate exponential backoff delay: 2^(retryCount) seconds
@@ -568,7 +568,7 @@ actor StateCoordinator: OnboardingEventEmitter {
         }
     }
 
-    // MARK: - Stream Queue Management (Delegated to StreamQueueManager)
+    // MARK: - Stream Queue Management (Delegated to StreamQueue)
     /// Mark stream as completed - emits event to ensure proper ordering with pending tool calls
     /// This method should be called by LLMMessenger when a stream finishes
     func markStreamCompleted() async {
@@ -587,7 +587,7 @@ actor StateCoordinator: OnboardingEventEmitter {
             Logger.info("✅ Restored hasStreamedFirstResponse=true (session has messages)", category: .ai)
         }
     }
-    // MARK: - LLM State Accessors (Delegated to LLMStateManager)
+    // MARK: - LLM State Accessors (Delegated to LLMSessionState)
 
     /// Set model ID
     func setModelId(_ modelId: String) async {
@@ -695,7 +695,7 @@ actor StateCoordinator: OnboardingEventEmitter {
     func getOperationTracker() -> OperationTracker {
         operationTracker
     }
-    // MARK: - ToolPane Card Tracking (Delegated to LLMStateManager)
+    // MARK: - ToolPane Card Tracking (Delegated to LLMSessionState)
     func getCurrentToolPaneCard() async -> OnboardingToolPaneCard {
         await llmStateManager.getCurrentToolPaneCard()
     }

@@ -11,7 +11,7 @@ struct KnowledgeCardsBrowserTab: View {
 
     @Environment(ArtifactRecordStore.self) private var artifactRecordStore
     @Environment(SkillStore.self) private var skillStore
-    @Environment(ReasoningStreamManager.self) private var reasoningStreamManager
+    @Environment(ReasoningStreamState.self) private var reasoningStreamManager
 
     @State private var selectedFilter: CardTypeFilter = .all
     @State private var searchText = ""

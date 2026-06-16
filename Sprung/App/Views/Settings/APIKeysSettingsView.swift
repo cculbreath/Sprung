@@ -8,9 +8,9 @@ struct APIKeysSettingsView: View {
     @Environment(AppState.self) private var appState
     @Environment(EnabledLLMStore.self) private var enabledLLMStore
     @Environment(OpenRouterService.self) private var openRouterService: OpenRouterService
-    @State private var openRouterApiKey: String = APIKeyManager.get(.openRouter) ?? ""
-    @State private var openAiTTSApiKey: String = APIKeyManager.get(.openAI) ?? ""
-    @State private var anthropicApiKey: String = APIKeyManager.get(.anthropic) ?? ""
+    @State private var openRouterApiKey: String = APIKeyStore.get(.openRouter) ?? ""
+    @State private var openAiTTSApiKey: String = APIKeyStore.get(.openAI) ?? ""
+    @State private var anthropicApiKey: String = APIKeyStore.get(.anthropic) ?? ""
     @State private var showModelSelectionSheet = false
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -84,10 +84,10 @@ struct APIKeysSettingsView: View {
     private func handleOpenRouterSave(_ newValue: String) {
         let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty {
-            APIKeyManager.delete(.openRouter)
+            APIKeyStore.delete(.openRouter)
             openRouterApiKey = ""
         } else {
-            _ = APIKeyManager.set(.openRouter, value: trimmed)
+            _ = APIKeyStore.set(.openRouter, value: trimmed)
             openRouterApiKey = trimmed
         }
         appState.reconfigureOpenRouterService()
@@ -96,10 +96,10 @@ struct APIKeysSettingsView: View {
     private func handleOpenAITTSSave(_ newValue: String) {
         let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty {
-            APIKeyManager.delete(.openAI)
+            APIKeyStore.delete(.openAI)
             openAiTTSApiKey = ""
         } else {
-            _ = APIKeyManager.set(.openAI, value: trimmed)
+            _ = APIKeyStore.set(.openAI, value: trimmed)
             openAiTTSApiKey = trimmed
         }
         NotificationCenter.default.post(name: .apiKeysChanged, object: nil)
@@ -107,18 +107,18 @@ struct APIKeysSettingsView: View {
     private func handleAnthropicSave(_ newValue: String) {
         let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty {
-            APIKeyManager.delete(.anthropic)
+            APIKeyStore.delete(.anthropic)
             anthropicApiKey = ""
         } else {
-            _ = APIKeyManager.set(.anthropic, value: trimmed)
+            _ = APIKeyStore.set(.anthropic, value: trimmed)
             anthropicApiKey = trimmed
         }
         NotificationCenter.default.post(name: .apiKeysChanged, object: nil)
     }
     private func refreshKeys() {
-        openRouterApiKey = APIKeyManager.get(.openRouter) ?? ""
-        openAiTTSApiKey = APIKeyManager.get(.openAI) ?? ""
-        anthropicApiKey = APIKeyManager.get(.anthropic) ?? ""
+        openRouterApiKey = APIKeyStore.get(.openRouter) ?? ""
+        openAiTTSApiKey = APIKeyStore.get(.openAI) ?? ""
+        anthropicApiKey = APIKeyStore.get(.anthropic) ?? ""
     }
 }
 

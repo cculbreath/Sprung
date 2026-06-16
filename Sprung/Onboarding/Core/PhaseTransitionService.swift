@@ -3,23 +3,23 @@ import SwiftyJSON
 /// Manages phase transitions, advances, and system prompt updates.
 /// Extracted from OnboardingInterviewCoordinator to improve maintainability.
 @MainActor
-final class PhaseTransitionController {
+final class PhaseTransitionService {
     // MARK: - Dependencies
     private let state: StateCoordinator
-    private let eventBus: EventCoordinator
+    private let eventBus: EventBus
     private let phaseRegistry: PhaseScriptRegistry
     private let artifactRecordStore: ArtifactRecordStore
-    private weak var sessionPersistenceHandler: SwiftDataSessionPersistenceHandler?
+    private weak var sessionPersistenceHandler: SessionPersistenceService?
     private let knowledgeCardStore: KnowledgeCardStore
     private let artifactFilesystemContext: ArtifactFilesystemContext
 
     // MARK: - Initialization
     init(
         state: StateCoordinator,
-        eventBus: EventCoordinator,
+        eventBus: EventBus,
         phaseRegistry: PhaseScriptRegistry,
         artifactRecordStore: ArtifactRecordStore,
-        sessionPersistenceHandler: SwiftDataSessionPersistenceHandler,
+        sessionPersistenceHandler: SessionPersistenceService,
         knowledgeCardStore: KnowledgeCardStore,
         artifactFilesystemContext: ArtifactFilesystemContext
     ) {

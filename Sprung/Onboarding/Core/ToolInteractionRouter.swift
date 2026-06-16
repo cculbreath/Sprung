@@ -27,7 +27,7 @@ struct OnboardingToolStatusSnapshot: Equatable {
 /// a single surface for the coordinator and service to query state and construct continuation payloads.
 @MainActor
 @Observable
-final class ToolHandler {
+final class ToolInteractionRouter {
     // MARK: - Handlers
     let promptHandler: PromptInteractionHandler
     let uploadHandler: UploadInteractionHandler
@@ -35,14 +35,14 @@ final class ToolHandler {
     let sectionHandler: SectionToggleHandler
     private var statusResolvers: [OnboardingToolIdentifier: () -> OnboardingToolStatus] = [:]
     // Event subscription
-    private weak var eventBus: EventCoordinator?
+    private weak var eventBus: EventBus?
     // MARK: - Init
     init(
         promptHandler: PromptInteractionHandler,
         uploadHandler: UploadInteractionHandler,
         profileHandler: ProfileInteractionHandler,
         sectionHandler: SectionToggleHandler,
-        eventBus: EventCoordinator? = nil
+        eventBus: EventBus? = nil
     ) {
         self.promptHandler = promptHandler
         self.uploadHandler = uploadHandler
@@ -62,7 +62,7 @@ final class ToolHandler {
         }
         // Small delay to ensure stream is connected
         try? await Task.sleep(nanoseconds: 10_000_000) // 10ms
-        Logger.info("📡 ToolHandler subscribed to toolpane events", category: .ai)
+        Logger.info("📡 ToolInteractionRouter subscribed to toolpane events", category: .ai)
     }
     private func handleToolUIEvent(_ event: OnboardingEvent) {
         switch event {

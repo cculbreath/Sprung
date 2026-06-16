@@ -4,7 +4,7 @@ import SwiftyJSON
 /// Owns all objective state and provides async APIs for updates.
 actor ObjectiveStore: OnboardingEventEmitter {
     // MARK: - Event System
-    let eventBus: EventCoordinator
+    let eventBus: EventBus
     // MARK: - Policy
     private let phasePolicy: PhasePolicy
     // MARK: - Objective Storage
@@ -46,7 +46,7 @@ actor ObjectiveStore: OnboardingEventEmitter {
         }
     }
     // MARK: - Initialization
-    init(eventBus: EventCoordinator, phasePolicy: PhasePolicy, initialPhase: InterviewPhase) {
+    init(eventBus: EventBus, phasePolicy: PhasePolicy, initialPhase: InterviewPhase) {
         self.eventBus = eventBus
         self.phasePolicy = phasePolicy
         // Register initial objectives for the starting phase

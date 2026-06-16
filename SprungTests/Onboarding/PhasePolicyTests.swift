@@ -13,7 +13,7 @@
 //   • PhaseScript.canAdvance / missingObjectives — the default protocol logic over the
 //     concrete phase scripts (plain structs, no-arg init).
 //
-//  StateCoordinator / PhaseTransitionController are intentionally NOT exercised here —
+//  StateCoordinator / PhaseTransitionService are intentionally NOT exercised here —
 //  they require a SwiftData + multi-store graph that is not cleanly constructible in a
 //  unit test (see the Phase 4 report).
 //

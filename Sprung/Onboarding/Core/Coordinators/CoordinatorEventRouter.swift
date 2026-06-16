@@ -6,9 +6,9 @@ import SwiftyJSON
 final class CoordinatorEventRouter {
     private let ui: OnboardingUIState
     private let state: StateCoordinator
-    private let phaseTransitionController: PhaseTransitionController
-    private let toolRouter: ToolHandler
-    private let eventBus: EventCoordinator
+    private let phaseTransitionController: PhaseTransitionService
+    private let toolRouter: ToolInteractionRouter
+    private let eventBus: EventBus
 
     // Domain services (extracted from this class for better separation of concerns)
     private let knowledgeCardWorkflow: KnowledgeCardWorkflowService
@@ -23,9 +23,9 @@ final class CoordinatorEventRouter {
     init(
         ui: OnboardingUIState,
         state: StateCoordinator,
-        phaseTransitionController: PhaseTransitionController,
-        toolRouter: ToolHandler,
-        eventBus: EventCoordinator,
+        phaseTransitionController: PhaseTransitionService,
+        toolRouter: ToolInteractionRouter,
+        eventBus: EventBus,
         knowledgeCardWorkflow: KnowledgeCardWorkflowService,
         onboardingPersistence: OnboardingPersistenceService
     ) {
@@ -38,7 +38,7 @@ final class CoordinatorEventRouter {
         self.onboardingPersistence = onboardingPersistence
     }
 
-    func subscribeToEvents(lifecycle: InterviewLifecycleController) {
+    func subscribeToEvents(lifecycle: InterviewLifecycleService) {
         lifecycle.subscribeToEvents { [weak self] event in
             await self?.handleEvent(event)
         }
@@ -78,7 +78,7 @@ final class CoordinatorEventRouter {
             // Handle failed message: remove from transcript and prepare for input restoration
             ui.handleMessageFailure(messageId: messageId, originalText: originalText, error: error)
         case .state(.applicantProfileStored):
-            // Handled by ProfilePersistenceHandler
+            // Handled by ProfilePersistenceService
             break
         case .state(.skeletonTimelineStored), .state(.enabledSectionsUpdated):
             break

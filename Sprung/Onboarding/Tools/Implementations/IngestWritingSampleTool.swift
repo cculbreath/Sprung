@@ -47,9 +47,9 @@ struct IngestWritingSampleTool: InterviewTool {
     }()
 
     private weak var coordinator: OnboardingInterviewCoordinator?
-    private let eventBus: EventCoordinator
+    private let eventBus: EventBus
 
-    init(coordinator: OnboardingInterviewCoordinator, eventBus: EventCoordinator) {
+    init(coordinator: OnboardingInterviewCoordinator, eventBus: EventBus) {
         self.coordinator = coordinator
         self.eventBus = eventBus
     }

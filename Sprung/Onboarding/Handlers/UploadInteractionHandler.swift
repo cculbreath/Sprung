@@ -18,14 +18,14 @@ final class UploadInteractionHandler {
     private let uploadFileService: UploadFileService
     private let uploadStorage: OnboardingUploadStorage
     private let applicantProfileStore: ApplicantProfileStore
-    private let eventBus: EventCoordinator
+    private let eventBus: EventBus
     private var extractionProgressHandler: ExtractionProgressHandler?
     // MARK: - Init
     init(
         uploadFileService: UploadFileService,
         uploadStorage: OnboardingUploadStorage,
         applicantProfileStore: ApplicantProfileStore,
-        eventBus: EventCoordinator,
+        eventBus: EventBus,
         extractionProgressHandler: ExtractionProgressHandler?
     ) {
         self.uploadFileService = uploadFileService

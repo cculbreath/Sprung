@@ -1,5 +1,5 @@
 //
-//  CloudflareCookieManager.swift
+//  CloudflareCookieStore.swift
 //  Sprung
 //
 //
@@ -11,7 +11,7 @@ import WebKit
 ///
 /// Cookies are stored under the user's Application Support directory on macOS.
 /// When adapting this helper to iOS, prefer persisting data via the keychain.
-final class CloudflareCookieManager: NSObject, WKNavigationDelegate {
+final class CloudflareCookieStore: NSObject, WKNavigationDelegate {
     // MARK: Public -------------------------------------------------
     /// Ensures a valid `cf_clearance` cookie exists for the given URL’s host.
     /// - Returns: The cookie (newly fetched or cached) or `nil` if we failed.
@@ -23,7 +23,7 @@ final class CloudflareCookieManager: NSObject, WKNavigationDelegate {
         }
         // 2. Need to perform the Cloudflare challenge in a hidden WebView
         return await withCheckedContinuation { cont in
-            let helper = CloudflareCookieManager(targetURL: url, cont)
+            let helper = CloudflareCookieStore(targetURL: url, cont)
             helper.startChallenge()
         }
     }
@@ -43,7 +43,7 @@ final class CloudflareCookieManager: NSObject, WKNavigationDelegate {
     private let targetURL: URL
     private var continuation: CheckedContinuation<HTTPCookie?, Never>?
     private var webView: WKWebView!
-    private var selfRetain: CloudflareCookieManager? // keep self alive
+    private var selfRetain: CloudflareCookieStore? // keep self alive
     private init(targetURL: URL, _ cont: CheckedContinuation<HTTPCookie?, Never>) {
         self.targetURL = targetURL
         continuation = cont
@@ -75,7 +75,7 @@ final class CloudflareCookieManager: NSObject, WKNavigationDelegate {
             if let clearance = cookies.first(where: { $0.name == "cf_clearance" &&
                     ((self.targetURL.host ?? "").hasSuffix($0.domain))
             }) {
-                CloudflareCookieManager.store(cookie: clearance)
+                CloudflareCookieStore.store(cookie: clearance)
                 self.finish(with: clearance)
                 return
             }

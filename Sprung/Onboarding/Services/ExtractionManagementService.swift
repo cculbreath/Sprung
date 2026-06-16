@@ -11,13 +11,13 @@ import SwiftyJSON
 @MainActor
 final class ExtractionManagementService: OnboardingEventEmitter {
     // MARK: - Properties
-    let eventBus: EventCoordinator
+    let eventBus: EventBus
     private let state: StateCoordinator
     /// Buffer for extraction progress updates that arrive before extraction is set
     private var pendingExtractionProgressBuffer: [ExtractionProgressUpdate] = []
     // MARK: - Initialization
     init(
-        eventBus: EventCoordinator,
+        eventBus: EventBus,
         state: StateCoordinator
     ) {
         self.eventBus = eventBus

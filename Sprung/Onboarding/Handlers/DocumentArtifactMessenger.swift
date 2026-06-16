@@ -17,7 +17,7 @@ import SwiftyJSON
 /// Batches multiple artifacts from a single upload into one message
 actor DocumentArtifactMessenger: OnboardingEventEmitter {
     // MARK: - Properties
-    let eventBus: EventCoordinator
+    let eventBus: EventBus
     private let stateCoordinator: StateCoordinator
 
     // MARK: - Lifecycle State
@@ -51,7 +51,7 @@ actor DocumentArtifactMessenger: OnboardingEventEmitter {
     }
 
     // MARK: - Initialization
-    init(eventBus: EventCoordinator, stateCoordinator: StateCoordinator) {
+    init(eventBus: EventBus, stateCoordinator: StateCoordinator) {
         self.eventBus = eventBus
         self.stateCoordinator = stateCoordinator
         Logger.info("📤 DocumentArtifactMessenger initialized", category: .ai)

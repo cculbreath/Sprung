@@ -89,7 +89,7 @@ class GitAnalysisAgent: AnthropicToolLoopDelegate {
     /// layers, assembled here rather than re-emitted by the model.
     private let gitData: JSON
     private weak var facade: LLMFacade?
-    private var eventBus: EventCoordinator?
+    private var eventBus: EventBus?
 
     // Agent tracking
     private let agentId: String?
@@ -127,7 +127,7 @@ class GitAnalysisAgent: AnthropicToolLoopDelegate {
         gitEvidence: String,
         gitData: JSON,
         facade: LLMFacade,
-        eventBus: EventCoordinator? = nil,
+        eventBus: EventBus? = nil,
         agentId: String? = nil,
         tracker: AgentActivityTracker? = nil
     ) {

@@ -85,8 +85,8 @@ final class OnboardingUIState {
     var wizardStep: OnboardingWizardStep = .voice
     var completedWizardSteps: Set<OnboardingWizardStep> = []
     var phase: InterviewPhase = .phase1VoiceContext
-    // MARK: - Tool Pane State (Mirrored from ToolHandler)
-    // Note: ToolHandler (via ToolRouter) manages its own state, but we might want to mirror it here
+    // MARK: - Tool Pane State (Mirrored from ToolInteractionRouter)
+    // Note: ToolInteractionRouter (via ToolRouter) manages its own state, but we might want to mirror it here
     // or keep accessing it via the router. For now, we'll keep the pattern of accessing via router
     // to avoid duplication, but we can add computed properties if needed.
     // MARK: - Sync Caches (Mirrored from StateCoordinator)

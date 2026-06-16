@@ -20,16 +20,16 @@ struct NewAppSheetView: View {
     @State private var showLinkedInLogin: Bool = false
     @State private var isProcessingJob: Bool = false
     @State private var llmStatusMessage: String = ""
-    @State private var linkedInSessionManager: LinkedInSessionManager
+    @State private var linkedInSessionManager: LinkedInSessionStore
     @Binding var isPresented: Bool
     var initialURL: String?
 
     @MainActor
     init(isPresented: Binding<Bool>, initialURL: String? = nil) {
-        self.init(isPresented: isPresented, sessionManager: LinkedInSessionManager(), initialURL: initialURL)
+        self.init(isPresented: isPresented, sessionManager: LinkedInSessionStore(), initialURL: initialURL)
     }
     @MainActor
-    init(isPresented: Binding<Bool>, sessionManager: LinkedInSessionManager, initialURL: String? = nil) {
+    init(isPresented: Binding<Bool>, sessionManager: LinkedInSessionStore, initialURL: String? = nil) {
         _isPresented = isPresented
         _linkedInSessionManager = State(initialValue: sessionManager)
         self.initialURL = initialURL
@@ -298,7 +298,7 @@ struct NewAppSheetView: View {
         }
 
         // Check for OpenAI API key
-        guard let apiKey = APIKeyManager.get(.openAI), !apiKey.isEmpty else {
+        guard let apiKey = APIKeyStore.get(.openAI), !apiKey.isEmpty else {
             await MainActor.run {
                 errorMessage = "OpenAI API key required to import from this site. Add your key in Settings."
                 showError = true

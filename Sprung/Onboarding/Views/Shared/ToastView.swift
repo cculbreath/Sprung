@@ -44,8 +44,8 @@ struct Toast: Identifiable, Equatable {
 
 /// Manages toast display across the app
 @MainActor @Observable
-final class ToastManager {
-    static let shared = ToastManager()
+final class ToastCenter {
+    static let shared = ToastCenter()
 
     private(set) var currentToast: Toast?
     private var dismissTask: Task<Void, Never>?
@@ -70,7 +70,7 @@ final class ToastManager {
 
 /// Overlay view that displays toasts
 struct ToastOverlay: View {
-    @State private var manager = ToastManager.shared
+    @State private var manager = ToastCenter.shared
 
     var body: some View {
         Group {

@@ -68,7 +68,7 @@ class AppState {
         llmService?.reconfigureClient()
     }
     private func normalizedKey(for type: APIKeyType) -> String {
-        guard let raw = APIKeyManager.get(type)?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty else {
+        guard let raw = APIKeyStore.get(type)?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty else {
             return ""
         }
         if raw.caseInsensitiveCompare("none") == .orderedSame {

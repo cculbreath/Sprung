@@ -4,7 +4,7 @@
 //
 //  Pure-domain tests for SectionCardManagementService — the actor that mints ids and
 //  shapes the result JSON for non-chronological cards (awards / languages / references
-//  and publications). It has a single clean dependency (EventCoordinator, no-arg init),
+//  and publications). It has a single clean dependency (EventBus, no-arg init),
 //  so it is constructible in isolation.
 //
 //  We assert the return contract (status/success/id/sectionType/count) and the
@@ -20,7 +20,7 @@ import SwiftyJSON
 final class SectionCardManagementServiceTests: XCTestCase {
 
     private func makeService() -> SectionCardManagementService {
-        SectionCardManagementService(eventBus: EventCoordinator())
+        SectionCardManagementService(eventBus: EventBus())
     }
 
     // MARK: - Section cards: create

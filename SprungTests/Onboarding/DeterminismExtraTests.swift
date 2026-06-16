@@ -56,7 +56,7 @@ final class DeterminismExtraTests: XCTestCase {
     func testMultiCardMintSequenceReplaysIdenticallyAcrossActorHop() async {
         let recording = DeterminismContext(mode: .recording)
         let recordedIds: [String] = await DeterminismScope.$current.withValue(recording) {
-            let service = SectionCardManagementService(eventBus: EventCoordinator())
+            let service = SectionCardManagementService(eventBus: EventBus())
             let r1 = await service.createSectionCard(sectionType: "award", fields: JSON(["title": "A"]))
             let r2 = await service.createSectionCard(sectionType: "language", fields: JSON(["language": "Welsh"]))
             let r3 = await service.createPublicationCard(fields: JSON(["name": "P"]))
@@ -69,7 +69,7 @@ final class DeterminismExtraTests: XCTestCase {
 
         let replaying = DeterminismContext(mode: .replaying(recording.mintedIds))
         let replayedIds: [String] = await DeterminismScope.$current.withValue(replaying) {
-            let service = SectionCardManagementService(eventBus: EventCoordinator())
+            let service = SectionCardManagementService(eventBus: EventBus())
             let r1 = await service.createSectionCard(sectionType: "award", fields: JSON(["title": "A"]))
             let r2 = await service.createSectionCard(sectionType: "language", fields: JSON(["language": "Welsh"]))
             let r3 = await service.createPublicationCard(fields: JSON(["name": "P"]))

@@ -63,7 +63,7 @@ struct ContentViewLaunch: View {
         restoreStatus = nil
         Task {
             do {
-                try SwiftDataBackupManager.restoreMostRecentBackup()
+                try SwiftDataBackupService.restoreMostRecentBackup()
                 await MainActor.run {
                     restoreStatus = .success("Latest backup restored. Quit and relaunch the app to load your data.")
                 }
@@ -91,7 +91,7 @@ struct ContentViewLaunch: View {
         restoreStatus = nil
         Task {
             do {
-                try SwiftDataBackupManager.destroyCurrentStore()
+                try SwiftDataBackupService.destroyCurrentStore()
                 await MainActor.run {
                     restoreStatus = .success("Data store will be removed on next launch. Quit and relaunch Sprung to start fresh.")
                 }

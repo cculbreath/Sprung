@@ -8,7 +8,7 @@ import ObjectiveC
 /// Interactive LinkedIn login view that handles Google SSO and other authentication methods
 struct LinkedInLoginView: NSViewRepresentable {
     @Binding var isPresented: Bool
-    let sessionManager: LinkedInSessionManager
+    let sessionManager: LinkedInSessionStore
     func makeCoordinator() -> Coordinator {
         Coordinator(parent: self)
     }
@@ -187,7 +187,7 @@ struct LinkedInLoginView: NSViewRepresentable {
 // MARK: - LinkedIn Login Sheet
 struct LinkedInLoginSheet: View {
     @Binding var isPresented: Bool
-    var sessionManager: LinkedInSessionManager
+    var sessionManager: LinkedInSessionStore
     var onSuccess: (() -> Void)?
     var body: some View {
         VStack(spacing: 0) {
@@ -279,7 +279,7 @@ struct LinkedInLoginSheet: View {
 }
 // MARK: - LinkedIn Session Status View
 struct LinkedInSessionStatusView: View {
-    var sessionManager: LinkedInSessionManager
+    var sessionManager: LinkedInSessionStore
     @State private var showLoginSheet = false
     var body: some View {
         HStack(spacing: 12) {

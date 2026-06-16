@@ -15,13 +15,13 @@ import SwiftyJSON
 /// - Emit Tool.result and LLM.toolResponseMessage events
 actor ToolExecutionCoordinator: OnboardingEventEmitter {
     // MARK: - Properties
-    let eventBus: EventCoordinator
+    let eventBus: EventBus
     private let toolExecutor: ToolExecutor
     private let stateCoordinator: StateCoordinator
     private let ui: OnboardingUIState
     // MARK: - Initialization
     init(
-        eventBus: EventCoordinator,
+        eventBus: EventBus,
         toolExecutor: ToolExecutor,
         stateCoordinator: StateCoordinator,
         ui: OnboardingUIState

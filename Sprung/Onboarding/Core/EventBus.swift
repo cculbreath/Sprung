@@ -1,15 +1,15 @@
 //
-//  EventCoordinator.swift
+//  EventBus.swift
 //  Sprung
 //
 //  Event bus implementation: publish/subscribe distribution using AsyncStream.
 //
 import Foundation
 
-// MARK: - EventCoordinator
+// MARK: - EventBus
 
 /// Event bus that manages event distribution using AsyncStream
-actor EventCoordinator {
+actor EventBus {
     // Broadcast continuations: each topic has multiple subscriber continuations
     private var subscriberContinuations: [EventTopic: [UUID: AsyncStream<OnboardingEvent>.Continuation]] = [:]
 
@@ -40,7 +40,7 @@ actor EventCoordinator {
             metrics.publishedCount[topic] = 0
             #endif
         }
-        Logger.info("📡 EventCoordinator initialized with AsyncStream broadcast architecture", category: .ai)
+        Logger.info("📡 EventBus initialized with AsyncStream broadcast architecture", category: .ai)
     }
 
     deinit {
@@ -192,7 +192,7 @@ actor EventCoordinator {
 
 /// Protocol for components that can emit events
 protocol OnboardingEventEmitter {
-    var eventBus: EventCoordinator { get }
+    var eventBus: EventBus { get }
 }
 
 extension OnboardingEventEmitter {

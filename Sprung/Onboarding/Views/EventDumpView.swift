@@ -25,7 +25,7 @@ struct EventDumpView: View {
     @State private var tapeSessions: [TapeSessionSummary] = []
     @State private var expandedSessionId: String?
     @State private var sessionSteps: [TapeStep] = []
-    @State private var recordingEnabled = UserDefaults.standard.bool(forKey: InterviewLifecycleController.recordingEnabledKey)
+    @State private var recordingEnabled = UserDefaults.standard.bool(forKey: InterviewLifecycleService.recordingEnabledKey)
     @State private var replayingSessionId: String?
 
     var body: some View {
@@ -406,7 +406,7 @@ struct EventDumpView: View {
             }
             .toggleStyle(.switch)
             .onChange(of: recordingEnabled) { _, newValue in
-                UserDefaults.standard.set(newValue, forKey: InterviewLifecycleController.recordingEnabledKey)
+                UserDefaults.standard.set(newValue, forKey: InterviewLifecycleService.recordingEnabledKey)
             }
             .help("Tee the next fresh interview to a session tape (~/Library/Application Support/Sprung/Recordings)")
             Spacer()
@@ -807,7 +807,7 @@ struct EventDumpView: View {
             return "\(event)"
         }
     }
-    private func formatMetrics(_ metrics: EventCoordinator.EventMetrics) -> String {
+    private func formatMetrics(_ metrics: EventBus.EventMetrics) -> String {
         var lines: [String] = []
 
         // Token Usage Summary
@@ -895,10 +895,10 @@ struct EventDumpView: View {
             do {
                 try output.write(to: url, atomically: true, encoding: .utf8)
                 Logger.info("Event dump exported to: \(url.path)", category: .general)
-                ToastManager.shared.show(.success("Event dump exported successfully"))
+                ToastCenter.shared.show(.success("Event dump exported successfully"))
             } catch {
                 Logger.error("Failed to export event dump: \(error.localizedDescription)", category: .general)
-                ToastManager.shared.show(.error("Export failed: \(error.localizedDescription)"))
+                ToastCenter.shared.show(.error("Export failed: \(error.localizedDescription)"))
             }
         }
     }
@@ -936,17 +936,17 @@ struct EventDumpView: View {
             do {
                 try output.write(to: url, atomically: true, encoding: .utf8)
                 Logger.info("Conversation log exported to: \(url.path)", category: .general)
-                ToastManager.shared.show(.success("Conversation log exported successfully"))
+                ToastCenter.shared.show(.success("Conversation log exported successfully"))
             } catch {
                 Logger.error("Failed to export conversation log: \(error.localizedDescription)", category: .general)
-                ToastManager.shared.show(.error("Export failed: \(error.localizedDescription)"))
+                ToastCenter.shared.show(.error("Export failed: \(error.localizedDescription)"))
             }
         }
     }
 
     private func exportContextPreview() {
         guard let preview = contextPreview else {
-            ToastManager.shared.show(.error("No context preview available"))
+            ToastCenter.shared.show(.error("No context preview available"))
             return
         }
 
@@ -988,10 +988,10 @@ struct EventDumpView: View {
             do {
                 try output.write(to: url, atomically: true, encoding: .utf8)
                 Logger.info("Context preview exported to: \(url.path)", category: .general)
-                ToastManager.shared.show(.success("Context preview exported successfully"))
+                ToastCenter.shared.show(.success("Context preview exported successfully"))
             } catch {
                 Logger.error("Failed to export context preview: \(error.localizedDescription)", category: .general)
-                ToastManager.shared.show(.error("Export failed: \(error.localizedDescription)"))
+                ToastCenter.shared.show(.error("Export failed: \(error.localizedDescription)"))
             }
         }
     }

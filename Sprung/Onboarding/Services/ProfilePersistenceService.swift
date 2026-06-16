@@ -3,16 +3,16 @@ import SwiftyJSON
 /// Handler responsible for persisting applicant profile data to SwiftData.
 /// Listens to `.applicantProfileStored` events and syncs with SwiftData storage.
 @MainActor
-final class ProfilePersistenceHandler {
+final class ProfilePersistenceService {
     private let applicantProfileStore: ApplicantProfileStore
-    private let toolRouter: ToolHandler
-    private let eventBus: EventCoordinator
+    private let toolRouter: ToolInteractionRouter
+    private let eventBus: EventBus
     private let ui: OnboardingUIState
     private var subscriptionTask: Task<Void, Never>?
     init(
         applicantProfileStore: ApplicantProfileStore,
-        toolRouter: ToolHandler,
-        eventBus: EventCoordinator,
+        toolRouter: ToolInteractionRouter,
+        eventBus: EventBus,
         ui: OnboardingUIState
     ) {
         self.applicantProfileStore = applicantProfileStore
@@ -29,7 +29,7 @@ final class ProfilePersistenceHandler {
                 await self.handleEvent(event)
             }
         }
-        Logger.info("📋 ProfilePersistenceHandler started", category: .ai)
+        Logger.info("📋 ProfilePersistenceService started", category: .ai)
     }
     private func handleEvent(_ event: OnboardingEvent) async {
         switch event {

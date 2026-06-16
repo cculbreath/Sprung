@@ -16,10 +16,10 @@ struct ResumeRevisionView: View {
     @Environment(\.modelContext) private var modelContext
 
     let resume: Resume
-    /// Hands the freshly created agent to SecondaryWindowManager so window
+    /// Hands the freshly created agent to SecondaryWindowService so window
     /// teardown can cancel it (the single cancellation choke point).
     let onAgentCreated: (ResumeRevisionAgent) -> Void
-    /// Closes the hosting window via SecondaryWindowManager. Teardown
+    /// Closes the hosting window via SecondaryWindowService. Teardown
     /// (agent cancellation) happens in the manager's windowWillClose handler.
     let onRequestClose: () -> Void
 

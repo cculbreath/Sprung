@@ -11,10 +11,10 @@ import SwiftyJSON
 /// Service that handles section card and publication card management operations
 actor SectionCardManagementService: OnboardingEventEmitter {
     // MARK: - Properties
-    let eventBus: EventCoordinator
+    let eventBus: EventBus
 
     // MARK: - Initialization
-    init(eventBus: EventCoordinator) {
+    init(eventBus: EventBus) {
         self.eventBus = eventBus
     }
 

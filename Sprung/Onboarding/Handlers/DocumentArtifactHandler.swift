@@ -10,7 +10,7 @@ import Foundation
 /// Handles document upload completion by processing files and emitting artifact records
 actor DocumentArtifactHandler: OnboardingEventEmitter {
     // MARK: - Properties
-    let eventBus: EventCoordinator
+    let eventBus: EventBus
     private let documentProcessingService: DocumentProcessingService
     private let agentTracker: AgentActivityTracker
     private let stateCoordinator: StateCoordinator
@@ -42,7 +42,7 @@ actor DocumentArtifactHandler: OnboardingEventEmitter {
     private var isActive = false
     // MARK: - Initialization
     init(
-        eventBus: EventCoordinator,
+        eventBus: EventBus,
         documentProcessingService: DocumentProcessingService,
         agentTracker: AgentActivityTracker,
         stateCoordinator: StateCoordinator

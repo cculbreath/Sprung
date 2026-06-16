@@ -19,7 +19,7 @@ import SwiftyJSON
 /// - Emit message sent/status events
 /// - Coordinate with NetworkRouter for stream processing
 actor LLMMessenger: OnboardingEventEmitter {
-    let eventBus: EventCoordinator
+    let eventBus: EventBus
     private let networkRouter: NetworkRouter
     private let llmFacade: LLMFacade
     private let stateCoordinator: StateCoordinator
@@ -37,7 +37,7 @@ actor LLMMessenger: OnboardingEventEmitter {
     init(
         llmFacade: LLMFacade,
         baseSystemPrompt: String,
-        eventBus: EventCoordinator,
+        eventBus: EventBus,
         networkRouter: NetworkRouter,
         toolRegistry: ToolRegistry,
         state: StateCoordinator,

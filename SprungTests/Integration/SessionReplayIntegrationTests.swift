@@ -13,7 +13,7 @@
 //     reproduce identically on replay — the property that lets a re-executed "create" keep
 //     the id a later recorded "update" references.
 //
-//  The live turn re-drive on top of this (SessionReplayController + the full onboarding
+//  The live turn re-drive on top of this (SessionReplayService + the full onboarding
 //  coordinator) is exercised at runtime; everything beneath it is covered here.
 //
 

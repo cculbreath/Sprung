@@ -22,7 +22,7 @@ actor LLMRequestExecutor {
     // MARK: - Client Configuration
     /// Configure the OpenRouter client with the current API key from Keychain
     func configureClient() {
-        let apiKey = APIKeyManager.get(.openRouter) ?? ""
+        let apiKey = APIKeyStore.get(.openRouter) ?? ""
         Logger.debug("🔑 LLMRequestExecutor API key length: \(apiKey.count) chars", category: .diagnostics)
         if !apiKey.isEmpty {
             // Log first/last 4 chars for debugging (same as SettingsView does)

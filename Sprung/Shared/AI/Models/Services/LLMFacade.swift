@@ -56,7 +56,7 @@ final class LLMFacade {
         (try? JSONEncoder().encode(value)).flatMap { String(data: $0, encoding: .utf8) } ?? String(describing: value)
     }
 
-    private let streamingManager = LLMFacadeStreamingManager()
+    private let streamingManager = LLMStreamingService()
     private let capabilityValidator: LLMFacadeCapabilityValidator
     private let specializedAPIs = LLMFacadeSpecializedAPIs()
     private let openAIToolsAdapter: LLMFacadeOpenAIToolsAdapter

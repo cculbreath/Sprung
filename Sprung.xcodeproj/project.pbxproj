@@ -15,11 +15,21 @@
 		57DC509F2DBA3B68000F1A48 /* OrderedCollections in Frameworks */ = {isa = PBXBuildFile; productRef = 57DC509E2DBA3B68000F1A48 /* OrderedCollections */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		57FB00092E99ABCD0074D1E0 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 570FEC602C855BF50074D1E0 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 570FEC672C855BF50074D1E0;
+			remoteInfo = Sprung;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
 		570FEC682C855BF50074D1E0 /* Sprung.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Sprung.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		57FB00022E99ABCD0074D1E0 /* SprungTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SprungTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		57306AFA2DDE6B630053246D /* SwiftData.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftData.framework; path = System/Library/Frameworks/SwiftData.framework; sourceTree = SDKROOT; };
 		57306AFC2DDE6B730053246D /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
+		57FB00022E99ABCD0074D1E0 /* SprungTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SprungTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -80,6 +90,7 @@
 				570FEC6A2C855BF50074D1E0 /* Sprung */,
 				57DC4F252DBA356C000F1A48 /* Frameworks */,
 				570FEC692C855BF50074D1E0 /* Products */,
+				57B7C6482FE2071100EE4BC3 /* Recovered References */,
 			);
 			sourceTree = "<group>";
 		};
@@ -90,6 +101,14 @@
 				57FB00022E99ABCD0074D1E0 /* SprungTests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		57B7C6482FE2071100EE4BC3 /* Recovered References */ = {
+			isa = PBXGroup;
+			children = (
+				57FB00012E99ABCD0074D1E0 /* SprungTests */,
+			);
+			name = "Recovered References";
 			sourceTree = "<group>";
 		};
 		57DC4F252DBA356C000F1A48 /* Frameworks */ = {
@@ -223,16 +242,6 @@
 			targetProxy = 57FB00092E99ABCD0074D1E0 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
-
-/* Begin PBXContainerItemProxy section */
-		57FB00092E99ABCD0074D1E0 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 570FEC602C855BF50074D1E0 /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = 570FEC672C855BF50074D1E0;
-			remoteInfo = Sprung;
-		};
-/* End PBXContainerItemProxy section */
 
 /* Begin XCBuildConfiguration section */
 		570FEC772C855BF80074D1E0 /* Debug configuration for PBXProject "Sprung" */ = {
@@ -460,7 +469,7 @@
 			};
 			name = Release;
 		};
-		57FB000A2E99ABCD0074D1E0 /* Debug */ = {
+		57FB000A2E99ABCD0074D1E0 /* Debug configuration for PBXNativeTarget "SprungTests" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
@@ -479,7 +488,7 @@
 			};
 			name = Debug;
 		};
-		57FB000B2E99ABCD0074D1E0 /* Release */ = {
+		57FB000B2E99ABCD0074D1E0 /* Release configuration for PBXNativeTarget "SprungTests" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
@@ -520,8 +529,8 @@
 		57FB00042E99ABCD0074D1E0 /* Build configuration list for PBXNativeTarget "SprungTests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				57FB000A2E99ABCD0074D1E0 /* Debug */,
-				57FB000B2E99ABCD0074D1E0 /* Release */,
+				57FB000A2E99ABCD0074D1E0 /* Debug configuration for PBXNativeTarget "SprungTests" */,
+				57FB000B2E99ABCD0074D1E0 /* Release configuration for PBXNativeTarget "SprungTests" */,
 			);
 			defaultConfigurationName = Release;
 		};

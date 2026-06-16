@@ -4,7 +4,7 @@ import SwiftyJSON
 /// Owns all artifact state including timeline cards, knowledge cards, and uploaded documents.
 actor ArtifactRepository: OnboardingEventEmitter {
     // MARK: - Event System
-    let eventBus: EventCoordinator
+    let eventBus: EventBus
     // MARK: - Artifact Storage
     private var artifacts = OnboardingArtifacts()
 
@@ -20,7 +20,7 @@ actor ArtifactRepository: OnboardingEventEmitter {
     /// Sync cache for SwiftUI access. Safe for same reasons as artifactRecordsSync.
     nonisolated(unsafe) private(set) var archivedArtifactsSync: [JSON] = []
     // MARK: - Initialization
-    init(eventBus: EventCoordinator) {
+    init(eventBus: EventBus) {
         self.eventBus = eventBus
         Logger.info("📦 ArtifactRepository initialized", category: .ai)
     }

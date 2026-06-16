@@ -1,5 +1,5 @@
 //
-//  SecondaryWindowManager.swift
+//  SecondaryWindowService.swift
 //  Sprung
 //
 //  Owns the lifetime and presentation of all secondary NSWindow instances.
@@ -26,7 +26,7 @@ private struct WindowSpec {
 
 @Observable
 @MainActor
-final class SecondaryWindowManager {
+final class SecondaryWindowService {
     // MARK: - Window References
 
     var settingsWindow: NSWindow?

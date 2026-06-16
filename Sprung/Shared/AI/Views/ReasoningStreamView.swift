@@ -285,7 +285,7 @@ struct ReasoningStreamView: View {
 /// Manages the reasoning stream state and text accumulation
 @MainActor
 @Observable
-class ReasoningStreamManager {
+class ReasoningStreamState {
     var isVisible: Bool = false
     var reasoningText: String = ""
     var modelName: String = ""

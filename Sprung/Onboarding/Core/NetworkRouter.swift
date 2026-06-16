@@ -8,14 +8,14 @@
 import Foundation
 import SwiftOpenAI
 import SwiftyJSON
-/// Routes inbound network streams to EventCoordinator
+/// Routes inbound network streams to EventBus
 /// Responsibilities (Spec §4.4):
 /// - Monitor SSE/WebSocket streams
 /// - Parse streaming deltas
 /// - Emit events: LLM.messageDelta, LLM.messageReceived, LLM.toolCallReceived, LLM.error
 actor NetworkRouter: OnboardingEventEmitter {
     // MARK: - Properties
-    let eventBus: EventCoordinator
+    let eventBus: EventBus
     // Stream buffering for delta accumulation
     private struct StreamBuffer {
         let messageId: UUID
@@ -29,7 +29,7 @@ actor NetworkRouter: OnboardingEventEmitter {
     // Track tool call IDs for parallel tool call batching
     private var pendingToolCallIds: [String] = []
     // MARK: - Initialization
-    init(eventBus: EventCoordinator) {
+    init(eventBus: EventBus) {
         self.eventBus = eventBus
         Logger.info("📡 NetworkRouter initialized", category: .ai)
     }

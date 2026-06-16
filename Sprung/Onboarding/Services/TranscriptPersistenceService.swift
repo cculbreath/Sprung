@@ -1,5 +1,5 @@
 //
-//  TranscriptPersistenceHandler.swift
+//  TranscriptPersistenceService.swift
 //  Sprung
 //
 //  Phase 1: Transcript persistence to disk
@@ -9,17 +9,17 @@ import Foundation
 import SwiftyJSON
 /// Handles persistence of transcript records to disk
 /// Listens to user message sends and assistant message finalizations
-actor TranscriptPersistenceHandler: OnboardingEventEmitter {
+actor TranscriptPersistenceService: OnboardingEventEmitter {
     // MARK: - Properties
-    let eventBus: EventCoordinator
+    let eventBus: EventBus
     private let dataStore: InterviewDataStore
     private var subscriptionTask: Task<Void, Never>?
     private var isActive = false
     // MARK: - Initialization
-    init(eventBus: EventCoordinator, dataStore: InterviewDataStore) {
+    init(eventBus: EventBus, dataStore: InterviewDataStore) {
         self.eventBus = eventBus
         self.dataStore = dataStore
-        Logger.info("📝 TranscriptPersistenceHandler initialized", category: .ai)
+        Logger.info("📝 TranscriptPersistenceService initialized", category: .ai)
     }
     // MARK: - Lifecycle
     func start() {
@@ -32,14 +32,14 @@ actor TranscriptPersistenceHandler: OnboardingEventEmitter {
                 await self.handleLLMEvent(event)
             }
         }
-        Logger.info("▶️ TranscriptPersistenceHandler started", category: .ai)
+        Logger.info("▶️ TranscriptPersistenceService started", category: .ai)
     }
     func stop() {
         guard isActive else { return }
         isActive = false
         subscriptionTask?.cancel()
         subscriptionTask = nil
-        Logger.info("⏹️ TranscriptPersistenceHandler stopped", category: .ai)
+        Logger.info("⏹️ TranscriptPersistenceService stopped", category: .ai)
     }
     // MARK: - Event Handling
     private func handleLLMEvent(_ event: OnboardingEvent) async {

@@ -145,7 +145,7 @@ struct ToolGating {
 /// KEY INNOVATION: The service that owns waiting state also publishes tool permissions.
 actor SessionUIState: OnboardingEventEmitter {
     // MARK: - Event System
-    let eventBus: EventCoordinator
+    let eventBus: EventBus
     // MARK: - Policy
     private let phasePolicy: PhasePolicy
     private var currentPhase: InterviewPhase
@@ -176,7 +176,7 @@ actor SessionUIState: OnboardingEventEmitter {
     private(set) var titleSetsCurated: Bool = false
 
     // MARK: - Initialization
-    init(eventBus: EventCoordinator, phasePolicy: PhasePolicy, initialPhase: InterviewPhase) {
+    init(eventBus: EventBus, phasePolicy: PhasePolicy, initialPhase: InterviewPhase) {
         self.eventBus = eventBus
         self.phasePolicy = phasePolicy
         self.currentPhase = initialPhase

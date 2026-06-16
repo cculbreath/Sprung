@@ -207,7 +207,7 @@ struct AnthropicStreamAdapter {
         }
 
         // Emit batch started event for any tool calls (including single tool)
-        // StreamQueueManager needs this to know when it's safe to release tool responses
+        // StreamQueue needs this to know when it's safe to release tool responses
         if !pendingToolCalls.isEmpty {
             let callIds = pendingToolCalls.map { $0.id }
             events.append(.llm(.toolCallBatchStarted(expectedCount: pendingToolCalls.count, callIds: callIds)))

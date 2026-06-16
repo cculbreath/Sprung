@@ -1,5 +1,5 @@
 //
-//  UIToolContinuationManager.swift
+//  UIToolContinuationRegistry.swift
 //  Sprung
 //
 //  Manages continuations for UI tools that block until user action.
@@ -43,7 +43,7 @@ struct UIToolCompletionResult {
 /// - Call `interruptAll()` to cancel all pending UI tools
 /// - Each pending tool receives a cancelled result
 @MainActor
-final class UIToolContinuationManager {
+final class UIToolContinuationRegistry {
 
     /// Pending continuation for a UI tool
     private struct PendingContinuation {

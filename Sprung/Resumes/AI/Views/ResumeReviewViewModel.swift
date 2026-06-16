@@ -114,7 +114,7 @@ class ResumeReviewViewModel {
     /// gate into a dead view.
     private var isSheetDismissed = false
     // MARK: - Dependencies
-    private var reasoningStreamManager: ReasoningStreamManager?
+    private var reasoningStreamManager: ReasoningStreamState?
     private var openRouterService: OpenRouterService?
     private var exportCoordinator: ResumeExportCoordinator?
     private var coverRefStore: CoverRefStore?
@@ -125,7 +125,7 @@ class ResumeReviewViewModel {
     func initialize(
         llmFacade: LLMFacade,
         exportCoordinator: ResumeExportCoordinator,
-        reasoningStreamManager: ReasoningStreamManager,
+        reasoningStreamManager: ReasoningStreamState,
         openRouterService: OpenRouterService,
         coverRefStore: CoverRefStore
     ) {

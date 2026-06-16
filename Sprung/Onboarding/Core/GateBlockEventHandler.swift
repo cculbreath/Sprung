@@ -11,11 +11,11 @@ import Foundation
 /// Handles event-based gate blocking for the user action queue
 actor GateBlockEventHandler {
 
-    private let eventBus: EventCoordinator
+    private let eventBus: EventBus
     private let drainGate: DrainGate
     private var subscriptionTask: Task<Void, Never>?
 
-    init(eventBus: EventCoordinator, drainGate: DrainGate) {
+    init(eventBus: EventBus, drainGate: DrainGate) {
         self.eventBus = eventBus
         self.drainGate = drainGate
     }

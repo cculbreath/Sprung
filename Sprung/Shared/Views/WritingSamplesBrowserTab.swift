@@ -8,7 +8,7 @@ struct WritingSamplesBrowserTab: View {
     let onCardAdded: (CoverRef) -> Void
 
     @Environment(LLMFacade.self) private var llmFacade
-    @Environment(ReasoningStreamManager.self) private var reasoningStreamManager
+    @Environment(ReasoningStreamState.self) private var reasoningStreamManager
     @Environment(InferenceGuidanceStore.self) private var guidanceStore
     @Environment(CoverRefStore.self) private var coverRefStore
 

@@ -3,7 +3,7 @@ import SwiftyJSON
 /// Manages serial streaming queue for LLM requests.
 /// Simplified version: handles request queue only, no tool tracking.
 /// Tool batching is coordinated by StateCoordinator using ConversationLog's hasPendingToolCalls.
-actor StreamQueueManager {
+actor StreamQueue {
     // MARK: - Types
     enum StreamRequestType {
         case userMessage(payload: JSON, isSystemGenerated: Bool, chatboxMessageId: String?, originalText: String?, bundledCoordinatorMessages: [JSON])
@@ -12,7 +12,7 @@ actor StreamQueueManager {
         case coordinatorMessage(payload: JSON)
     }
     // MARK: - Dependencies
-    private let eventBus: EventCoordinator
+    private let eventBus: EventBus
     // MARK: - Stream Queue State
     private var isStreaming = false
     private var streamQueue: [StreamRequestType] = []
@@ -22,9 +22,9 @@ actor StreamQueueManager {
     private let instanceId = UUID()
 
     // MARK: - Initialization
-    init(eventBus: EventCoordinator) {
+    init(eventBus: EventBus) {
         self.eventBus = eventBus
-        Logger.info("📦 StreamQueueManager created: \(instanceId.uuidString.prefix(8))", category: .ai)
+        Logger.info("📦 StreamQueue created: \(instanceId.uuidString.prefix(8))", category: .ai)
     }
     // MARK: - Public API
     /// Enqueue a stream request to be processed serially

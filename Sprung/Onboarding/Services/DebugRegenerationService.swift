@@ -28,7 +28,7 @@ final class DebugRegenerationService {
     private let agentActivityTracker: AgentActivityTracker
     private let cardMergeService: CardMergeService
     private let knowledgeCardStore: KnowledgeCardStore
-    private let eventBus: EventCoordinator
+    private let eventBus: EventBus
 
     /// Provider for getting current session artifacts (avoids circular dependency with coordinator)
     private var sessionArtifactsProvider: (() -> [ArtifactRecord])?
@@ -38,7 +38,7 @@ final class DebugRegenerationService {
         agentActivityTracker: AgentActivityTracker,
         cardMergeService: CardMergeService,
         knowledgeCardStore: KnowledgeCardStore,
-        eventBus: EventCoordinator
+        eventBus: EventBus
     ) {
         self.documentProcessingService = documentProcessingService
         self.agentActivityTracker = agentActivityTracker

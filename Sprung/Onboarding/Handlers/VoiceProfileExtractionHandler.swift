@@ -11,12 +11,12 @@ import SwiftyJSON
 /// Handles voice profile extraction when writing samples are collected.
 @MainActor
 final class VoiceProfileExtractionHandler {
-    private let eventBus: EventCoordinator
+    private let eventBus: EventBus
     private let voiceProfileService: VoiceProfileService
     private let guidanceStore: InferenceGuidanceStore
     private let coverRefStore: CoverRefStore
     private let artifactRecordStore: ArtifactRecordStore
-    private let sessionPersistenceHandler: SwiftDataSessionPersistenceHandler
+    private let sessionPersistenceHandler: SessionPersistenceService
     private let agentActivityTracker: AgentActivityTracker
     private let conversationLog: ConversationLog
 
@@ -25,12 +25,12 @@ final class VoiceProfileExtractionHandler {
     private var agentId: String?
 
     init(
-        eventBus: EventCoordinator,
+        eventBus: EventBus,
         voiceProfileService: VoiceProfileService,
         guidanceStore: InferenceGuidanceStore,
         coverRefStore: CoverRefStore,
         artifactRecordStore: ArtifactRecordStore,
-        sessionPersistenceHandler: SwiftDataSessionPersistenceHandler,
+        sessionPersistenceHandler: SessionPersistenceService,
         agentActivityTracker: AgentActivityTracker,
         conversationLog: ConversationLog
     ) {

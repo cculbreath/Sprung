@@ -105,7 +105,7 @@ final class WebResourceService {
             request.timeoutInterval = config.timeout
 
             // Attach cf_clearance cookie if available
-            if let cookie = await CloudflareCookieManager.clearance(for: url) {
+            if let cookie = await CloudflareCookieStore.clearance(for: url) {
                 let cookieHeader = "\(cookie.name)=\(cookie.value)"
                 request.setValue(cookieHeader, forHTTPHeaderField: "Cookie")
             }
@@ -121,7 +121,7 @@ final class WebResourceService {
                 Logger.warning("⚠️ [WebResourceService] Cloudflare challenge detected (attempt \(attempt)/\(config.maxRetryAttempts))")
 
                 // Refresh clearance cookie via interactive challenge
-                _ = await CloudflareCookieManager.refreshClearance(for: url)
+                _ = await CloudflareCookieStore.refreshClearance(for: url)
                 continue // retry
             }
 
@@ -273,7 +273,7 @@ private final class WebViewFetcher: NSObject, WKNavigationDelegate {
                 $0.name == "cf_clearance" &&
                     ((self.url.host ?? "").hasSuffix($0.domain))
             }) {
-                CloudflareCookieManager.store(cookie: cookie)
+                CloudflareCookieStore.store(cookie: cookie)
             }
         }
     }
@@ -394,7 +394,7 @@ final class WebViewNavigationHelper: NSObject, WKNavigationDelegate {
                 $0.name == "cf_clearance" &&
                     ((self.url.host ?? "").hasSuffix($0.domain))
             }) {
-                CloudflareCookieManager.store(cookie: cookie)
+                CloudflareCookieStore.store(cookie: cookie)
             }
         }
     }

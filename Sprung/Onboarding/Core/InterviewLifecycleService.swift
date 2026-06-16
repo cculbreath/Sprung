@@ -4,24 +4,24 @@ import SwiftOpenAI
 /// Manages interview lifecycle: start/end, orchestrator setup, session persistence, and event subscriptions.
 /// Combines session management with orchestrator lifecycle.
 @MainActor
-final class InterviewLifecycleController {
+final class InterviewLifecycleService {
     // MARK: - Dependencies
     private let state: StateCoordinator
-    private let eventBus: EventCoordinator
+    private let eventBus: EventBus
     private let phaseRegistry: PhaseScriptRegistry
     private let toolExecutionCoordinator: ToolExecutionCoordinator
-    private let toolRouter: ToolHandler
+    private let toolRouter: ToolInteractionRouter
     private var llmFacade: LLMFacade?
     private let toolRegistry: ToolRegistry
     private let dataStore: InterviewDataStore
 
     // Session dependencies (merged from InterviewSessionCoordinator)
-    private let phaseTransitionController: PhaseTransitionController
+    private let phaseTransitionController: PhaseTransitionService
     private let dataPersistenceService: DataPersistenceService
     private let documentArtifactHandler: DocumentArtifactHandler
     private let documentArtifactMessenger: DocumentArtifactMessenger
     private let ui: OnboardingUIState
-    private let sessionPersistenceHandler: SwiftDataSessionPersistenceHandler
+    private let sessionPersistenceHandler: SessionPersistenceService
     private let knowledgeCardStore: KnowledgeCardStore
     private let skillStore: SkillStore
     private let todoStore: InterviewTodoStore
@@ -29,7 +29,7 @@ final class InterviewLifecycleController {
     // MARK: - Lifecycle State
     private(set) var orchestrator: InterviewOrchestrator?
     private(set) var workflowEngine: ObjectiveWorkflowEngine?
-    private(set) var transcriptPersistenceHandler: TranscriptPersistenceHandler?
+    private(set) var transcriptPersistenceHandler: TranscriptPersistenceService?
 
     // Event subscription tracking
     private var eventSubscriptionTask: Task<Void, Never>?
@@ -53,19 +53,19 @@ final class InterviewLifecycleController {
     // MARK: - Initialization
     init(
         state: StateCoordinator,
-        eventBus: EventCoordinator,
+        eventBus: EventBus,
         phaseRegistry: PhaseScriptRegistry,
         toolExecutionCoordinator: ToolExecutionCoordinator,
-        toolRouter: ToolHandler,
+        toolRouter: ToolInteractionRouter,
         llmFacade: LLMFacade?,
         toolRegistry: ToolRegistry,
         dataStore: InterviewDataStore,
-        phaseTransitionController: PhaseTransitionController,
+        phaseTransitionController: PhaseTransitionService,
         dataPersistenceService: DataPersistenceService,
         documentArtifactHandler: DocumentArtifactHandler,
         documentArtifactMessenger: DocumentArtifactMessenger,
         ui: OnboardingUIState,
-        sessionPersistenceHandler: SwiftDataSessionPersistenceHandler,
+        sessionPersistenceHandler: SessionPersistenceService,
         knowledgeCardStore: KnowledgeCardStore,
         skillStore: SkillStore,
         todoStore: InterviewTodoStore
@@ -391,7 +391,7 @@ final class InterviewLifecycleController {
         await engine.start()
 
         // Start transcript persistence handler
-        let transcriptHandler = TranscriptPersistenceHandler(
+        let transcriptHandler = TranscriptPersistenceService(
             eventBus: eventBus,
             dataStore: dataStore
         )
@@ -416,7 +416,7 @@ final class InterviewLifecycleController {
     private func beginTapeRecordingIfEnabled(sessionId: String, modelId: String) async {
         // Never record while replaying — the replay service is already installed,
         // and wrapping it in a recording decorator stacks the two and breaks the
-        // go-live swap (see SessionReplayController).
+        // go-live swap (see SessionReplayService).
         guard !suppressTapeRecording else {
             Logger.info("🎙️ Tape recording suppressed (replay in progress)", category: .ai)
             return

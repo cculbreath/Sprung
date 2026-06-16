@@ -31,7 +31,7 @@ final class AppDependencies {
     let candidateDossierStore: CandidateDossierStore
     let artifactRecordStore: ArtifactRecordStore
     let onboardingCoordinator: OnboardingInterviewCoordinator
-    let reasoningStreamManager: ReasoningStreamManager
+    let reasoningStreamManager: ReasoningStreamState
     let searchOpsCoordinator: DiscoveryCoordinator
     let guidanceStore: InferenceGuidanceStore
     let titleSetStore: TitleSetStore
@@ -92,7 +92,7 @@ final class AppDependencies {
         self.knowledgeCardStore = KnowledgeCardStore(context: modelContext)
         self.skillStore = SkillStore(context: modelContext)
         self.coverRefStore = CoverRefStore(context: modelContext)
-        self.reasoningStreamManager = ReasoningStreamManager()
+        self.reasoningStreamManager = ReasoningStreamState()
         // Dependent stores
         self.coverLetterStore = CoverLetterStore(
             context: modelContext,
@@ -140,7 +140,7 @@ final class AppDependencies {
         // Create DocumentExtractionService (PDFKit/native text extraction for storage)
         let documentExtractionService = DocumentExtractionService()
         // Register OpenAI backend if API key is configured
-        if let openAIKey = APIKeyManager.get(.openAI)?.trimmingCharacters(in: .whitespacesAndNewlines),
+        if let openAIKey = APIKeyStore.get(.openAI)?.trimmingCharacters(in: .whitespacesAndNewlines),
            !openAIKey.isEmpty {
             _ = LLMFacadeFactory.registerOpenAI(
                 facade: llmFacade,
@@ -150,7 +150,7 @@ final class AppDependencies {
         }
 
         // Register Anthropic backend if API key is configured
-        if let anthropicKey = APIKeyManager.get(.anthropic)?.trimmingCharacters(in: .whitespacesAndNewlines),
+        if let anthropicKey = APIKeyStore.get(.anthropic)?.trimmingCharacters(in: .whitespacesAndNewlines),
            !anthropicKey.isEmpty {
             _ = LLMFacadeFactory.registerAnthropic(
                 facade: llmFacade,
@@ -258,7 +258,7 @@ final class AppDependencies {
     private func handleAPIKeysChanged() {
         Logger.info("🔑 API keys changed - refreshing services", category: .appLifecycle)
         // Re-check OpenAI key and update facade
-        if let openAIKey = APIKeyManager.get(.openAI)?.trimmingCharacters(in: .whitespacesAndNewlines),
+        if let openAIKey = APIKeyStore.get(.openAI)?.trimmingCharacters(in: .whitespacesAndNewlines),
            !openAIKey.isEmpty {
             let debugEnabled = Logger.isVerboseEnabled
             let responsesConfiguration = URLSessionConfiguration.default
@@ -281,7 +281,7 @@ final class AppDependencies {
         }
 
         // Re-check Anthropic key and update facade (interview + document analysis)
-        if let anthropicKey = APIKeyManager.get(.anthropic)?.trimmingCharacters(in: .whitespacesAndNewlines),
+        if let anthropicKey = APIKeyStore.get(.anthropic)?.trimmingCharacters(in: .whitespacesAndNewlines),
            !anthropicKey.isEmpty {
             _ = LLMFacadeFactory.registerAnthropic(
                 facade: appEnvironment.llmFacade,

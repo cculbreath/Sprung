@@ -18,13 +18,13 @@ actor ChatInventoryService {
     private let llmFacade: LLMFacade
     private let conversationLog: ConversationLog
     private let artifactRepository: ArtifactRepository
-    private let eventBus: EventCoordinator
+    private let eventBus: EventBus
 
     init(
         llmFacade: LLMFacade,
         conversationLog: ConversationLog,
         artifactRepository: ArtifactRepository,
-        eventBus: EventCoordinator
+        eventBus: EventBus
     ) {
         self.llmFacade = llmFacade
         self.conversationLog = conversationLog
