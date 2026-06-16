@@ -29,6 +29,20 @@ final class ProjectsGenerator: BaseSectionGenerator {
         super.init(sectionKey: .projects)
     }
 
+    /// Structured-output schema shared by execute() and regenerate().
+    private var responseSchema: [String: Any] {
+        [
+            "type": "object",
+            "properties": [
+                "description": ["type": "string"],
+                "highlights": ["type": "array", "items": ["type": "string"]],
+                "keywords": ["type": "array", "items": ["type": "string"]]
+            ],
+            "required": ["description", "highlights", "keywords"],
+            "additionalProperties": false
+        ]
+    }
+
     // MARK: - Task Creation
 
     override func createTasks(context: SeedGenerationContext) -> [GenerationTask] {
@@ -109,16 +123,7 @@ final class ProjectsGenerator: BaseSectionGenerator {
             systemPrompt: systemPrompt,
             config: config,
             responseType: ProjectResponse.self,
-            schema: [
-                "type": "object",
-                "properties": [
-                    "description": ["type": "string"],
-                    "highlights": ["type": "array", "items": ["type": "string"]],
-                    "keywords": ["type": "array", "items": ["type": "string"]]
-                ],
-                "required": ["description", "highlights", "keywords"],
-                "additionalProperties": false
-            ],
+            schema: responseSchema,
             schemaName: "project"
         )
 
@@ -184,16 +189,7 @@ final class ProjectsGenerator: BaseSectionGenerator {
             systemPrompt: systemPrompt,
             config: config,
             responseType: ProjectResponse.self,
-            schema: [
-                "type": "object",
-                "properties": [
-                    "description": ["type": "string"],
-                    "highlights": ["type": "array", "items": ["type": "string"]],
-                    "keywords": ["type": "array", "items": ["type": "string"]]
-                ],
-                "required": ["description", "highlights", "keywords"],
-                "additionalProperties": false
-            ],
+            schema: responseSchema,
             schemaName: "project"
         )
 

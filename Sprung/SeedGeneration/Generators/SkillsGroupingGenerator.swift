@@ -30,6 +30,29 @@ final class SkillsGroupingGenerator: BaseSectionGenerator {
         super.init(sectionKey: .skills)
     }
 
+    /// Structured-output schema shared by execute() and regenerate().
+    private var responseSchema: [String: Any] {
+        [
+            "type": "object",
+            "properties": [
+                "groups": [
+                    "type": "array",
+                    "items": [
+                        "type": "object",
+                        "properties": [
+                            "name": ["type": "string"],
+                            "skills": ["type": "array", "items": ["type": "string"]]
+                        ],
+                        "required": ["name", "skills"],
+                        "additionalProperties": false
+                    ]
+                ]
+            ],
+            "required": ["groups"],
+            "additionalProperties": false
+        ]
+    }
+
     // MARK: - Task Creation
 
     /// Creates a single task for skill grouping (aggregate operation)
@@ -91,25 +114,7 @@ final class SkillsGroupingGenerator: BaseSectionGenerator {
             }
             """
 
-        let schema: [String: Any] = [
-            "type": "object",
-            "properties": [
-                "groups": [
-                    "type": "array",
-                    "items": [
-                        "type": "object",
-                        "properties": [
-                            "name": ["type": "string"],
-                            "skills": ["type": "array", "items": ["type": "string"]]
-                        ],
-                        "required": ["name", "skills"],
-                        "additionalProperties": false
-                    ]
-                ]
-            ],
-            "required": ["groups"],
-            "additionalProperties": false
-        ]
+        let schema = responseSchema
 
         let response: SkillGroupsResponse = try await executeStructuredRequest(
             taskPrompt: taskPrompt,
@@ -165,25 +170,7 @@ final class SkillsGroupingGenerator: BaseSectionGenerator {
             6. Categories should cover different aspects (e.g., Technical, Leadership, Tools, etc.)
             """
 
-        let schema: [String: Any] = [
-            "type": "object",
-            "properties": [
-                "groups": [
-                    "type": "array",
-                    "items": [
-                        "type": "object",
-                        "properties": [
-                            "name": ["type": "string"],
-                            "skills": ["type": "array", "items": ["type": "string"]]
-                        ],
-                        "required": ["name", "skills"],
-                        "additionalProperties": false
-                    ]
-                ]
-            ],
-            "required": ["groups"],
-            "additionalProperties": false
-        ]
+        let schema = responseSchema
 
         let response: SkillGroupsResponse = try await executeStructuredRequest(
             taskPrompt: taskPrompt,

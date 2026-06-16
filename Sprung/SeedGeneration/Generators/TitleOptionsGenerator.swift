@@ -25,6 +25,19 @@ final class TitleOptionsGenerator: BaseSectionGenerator {
         super.init(sectionKey: .custom)
     }
 
+    /// Structured-output schema shared by execute() and regenerate().
+    private var responseSchema: [String: Any] {
+        [
+            "type": "object",
+            "properties": [
+                "selectedId": ["type": "string", "description": "The UUID of the selected title set"],
+                "rationale": ["type": "string", "description": "Brief explanation for the selection"]
+            ],
+            "required": ["selectedId", "rationale"],
+            "additionalProperties": false
+        ]
+    }
+
     // MARK: - Task Creation
 
     /// Creates a single task for title selection (only if title sets exist)
@@ -87,15 +100,7 @@ final class TitleOptionsGenerator: BaseSectionGenerator {
             Return JSON with the selected title set ID and your reasoning.
             """
 
-        let schema: [String: Any] = [
-            "type": "object",
-            "properties": [
-                "selectedId": ["type": "string", "description": "The UUID of the selected title set"],
-                "rationale": ["type": "string", "description": "Brief explanation for the selection"]
-            ],
-            "required": ["selectedId", "rationale"],
-            "additionalProperties": false
-        ]
+        let schema = responseSchema
 
         let response: TitleSelectionResponse = try await executeStructuredRequest(
             taskPrompt: taskPrompt,
@@ -170,15 +175,7 @@ final class TitleOptionsGenerator: BaseSectionGenerator {
             3. Provide rationale for the new selection
             """
 
-        let schema: [String: Any] = [
-            "type": "object",
-            "properties": [
-                "selectedId": ["type": "string", "description": "The UUID of the selected title set"],
-                "rationale": ["type": "string", "description": "Brief explanation for the selection"]
-            ],
-            "required": ["selectedId", "rationale"],
-            "additionalProperties": false
-        ]
+        let schema = responseSchema
 
         let response: TitleSelectionResponse = try await executeStructuredRequest(
             taskPrompt: taskPrompt,

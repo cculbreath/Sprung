@@ -27,6 +27,18 @@ final class WorkHighlightsGenerator: BaseSectionGenerator {
         super.init(sectionKey: .work)
     }
 
+    /// Structured-output schema shared by execute() and regenerate().
+    private var responseSchema: [String: Any] {
+        [
+            "type": "object",
+            "properties": [
+                "highlights": ["type": "array", "items": ["type": "string"]]
+            ],
+            "required": ["highlights"],
+            "additionalProperties": false
+        ]
+    }
+
     // MARK: - Task Creation
 
     override func createTasks(context: SeedGenerationContext) -> [GenerationTask] {
@@ -113,14 +125,7 @@ final class WorkHighlightsGenerator: BaseSectionGenerator {
             systemPrompt: systemPrompt,
             config: config,
             responseType: WorkHighlightsResponse.self,
-            schema: [
-                "type": "object",
-                "properties": [
-                    "highlights": ["type": "array", "items": ["type": "string"]]
-                ],
-                "required": ["highlights"],
-                "additionalProperties": false
-            ],
+            schema: responseSchema,
             schemaName: "work_highlights"
         )
 
@@ -190,14 +195,7 @@ final class WorkHighlightsGenerator: BaseSectionGenerator {
             systemPrompt: systemPrompt,
             config: config,
             responseType: WorkHighlightsResponse.self,
-            schema: [
-                "type": "object",
-                "properties": [
-                    "highlights": ["type": "array", "items": ["type": "string"]]
-                ],
-                "required": ["highlights"],
-                "additionalProperties": false
-            ],
+            schema: responseSchema,
             schemaName: "work_highlights"
         )
 

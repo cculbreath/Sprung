@@ -27,6 +27,19 @@ final class EducationGenerator: BaseSectionGenerator {
         super.init(sectionKey: .education)
     }
 
+    /// Structured-output schema shared by execute() and regenerate().
+    private var responseSchema: [String: Any] {
+        [
+            "type": "object",
+            "properties": [
+                "description": ["type": "string"],
+                "courses": ["type": "array", "items": ["type": "string"]]
+            ],
+            "required": ["description"],
+            "additionalProperties": false
+        ]
+    }
+
     // MARK: - Task Creation
 
     override func createTasks(context: SeedGenerationContext) -> [GenerationTask] {
@@ -108,15 +121,7 @@ final class EducationGenerator: BaseSectionGenerator {
             systemPrompt: systemPrompt,
             config: config,
             responseType: EducationResponse.self,
-            schema: [
-                "type": "object",
-                "properties": [
-                    "description": ["type": "string"],
-                    "courses": ["type": "array", "items": ["type": "string"]]
-                ],
-                "required": ["description"],
-                "additionalProperties": false
-            ],
+            schema: responseSchema,
             schemaName: "education"
         )
 
@@ -180,15 +185,7 @@ final class EducationGenerator: BaseSectionGenerator {
             systemPrompt: systemPrompt,
             config: config,
             responseType: EducationResponse.self,
-            schema: [
-                "type": "object",
-                "properties": [
-                    "description": ["type": "string"],
-                    "courses": ["type": "array", "items": ["type": "string"]]
-                ],
-                "required": ["description"],
-                "additionalProperties": false
-            ],
+            schema: responseSchema,
             schemaName: "education"
         )
 

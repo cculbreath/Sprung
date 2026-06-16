@@ -26,6 +26,19 @@ final class VolunteerGenerator: BaseSectionGenerator {
         super.init(sectionKey: .volunteer)
     }
 
+    /// Structured-output schema shared by execute() and regenerate().
+    private var responseSchema: [String: Any] {
+        [
+            "type": "object",
+            "properties": [
+                "summary": ["type": "string"],
+                "highlights": ["type": "array", "items": ["type": "string"]]
+            ],
+            "required": ["summary", "highlights"],
+            "additionalProperties": false
+        ]
+    }
+
     // MARK: - Task Creation
 
     override func createTasks(context: SeedGenerationContext) -> [GenerationTask] {
@@ -108,15 +121,7 @@ final class VolunteerGenerator: BaseSectionGenerator {
             systemPrompt: systemPrompt,
             config: config,
             responseType: VolunteerResponse.self,
-            schema: [
-                "type": "object",
-                "properties": [
-                    "summary": ["type": "string"],
-                    "highlights": ["type": "array", "items": ["type": "string"]]
-                ],
-                "required": ["summary", "highlights"],
-                "additionalProperties": false
-            ],
+            schema: responseSchema,
             schemaName: "volunteer"
         )
 
@@ -181,15 +186,7 @@ final class VolunteerGenerator: BaseSectionGenerator {
             systemPrompt: systemPrompt,
             config: config,
             responseType: VolunteerResponse.self,
-            schema: [
-                "type": "object",
-                "properties": [
-                    "summary": ["type": "string"],
-                    "highlights": ["type": "array", "items": ["type": "string"]]
-                ],
-                "required": ["summary", "highlights"],
-                "additionalProperties": false
-            ],
+            schema: responseSchema,
             schemaName: "volunteer"
         )
 

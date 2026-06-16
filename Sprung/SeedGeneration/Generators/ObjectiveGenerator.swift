@@ -30,6 +30,18 @@ final class ObjectiveGenerator: BaseSectionGenerator {
         super.init(sectionKey: .custom)  // Uses custom section since objective is a special case
     }
 
+    /// Structured-output schema shared by execute() and regenerate().
+    private var responseSchema: [String: Any] {
+        [
+            "type": "object",
+            "properties": [
+                "summary": ["type": "string"]
+            ],
+            "required": ["summary"],
+            "additionalProperties": false
+        ]
+    }
+
     // MARK: - Task Creation
 
     override func createTasks(context: SeedGenerationContext) -> [GenerationTask] {
@@ -99,14 +111,7 @@ final class ObjectiveGenerator: BaseSectionGenerator {
             systemPrompt: systemPrompt,
             config: config,
             responseType: ObjectiveResponse.self,
-            schema: [
-                "type": "object",
-                "properties": [
-                    "summary": ["type": "string"]
-                ],
-                "required": ["summary"],
-                "additionalProperties": false
-            ],
+            schema: responseSchema,
             schemaName: "objective"
         )
 
@@ -170,14 +175,7 @@ final class ObjectiveGenerator: BaseSectionGenerator {
             systemPrompt: systemPrompt,
             config: config,
             responseType: ObjectiveResponse.self,
-            schema: [
-                "type": "object",
-                "properties": [
-                    "summary": ["type": "string"]
-                ],
-                "required": ["summary"],
-                "additionalProperties": false
-            ],
+            schema: responseSchema,
             schemaName: "objective"
         )
 
