@@ -23,49 +23,15 @@ extension JobApp {
         do {
             // 1. Parse the HTML.
             let doc: Document = try SwiftSoup.parse(html)
-            // 2. Find the JobPosting JSON‑LD block. Indeed may add whitespace or
-            // wrap several JSON‑LD objects in an array, so we parse each script
-            // tag instead of relying on a raw substring search.
-            let scriptTags = try doc.select("script[type=application/ld+json]")
-            func containsJobPostingType(in dict: [String: Any]) -> Bool {
-                if let typeStr = dict["@type"] as? String, typeStr.lowercased() == "jobposting" {
-                    return true
-                }
-                if let typeArr = dict["@type"] as? [String] {
-                    return typeArr.contains { $0.lowercased() == "jobposting" }
-                }
-                return false
-            }
-            func jobPostingDictionary(from json: Any) -> [String: Any]? {
-                if let dict = json as? [String: Any], containsJobPostingType(in: dict) {
-                    return dict
-                }
-                if let dictArray = json as? [[String: Any]] {
-                    return dictArray.first(where: { containsJobPostingType(in: $0) })
-                }
-                if let anyArray = json as? [Any] {
-                    for element in anyArray {
-                        if let dict = element as? [String: Any], containsJobPostingType(in: dict) {
-                            return dict
-                        }
-                    }
-                }
-                return nil
-            }
-            var jobDict: [String: Any]?
-            outer: for tag in scriptTags.array() {
-                var content = try tag.html()
-                // Remove HTML comment markers if present.
-                content = content.replacingOccurrences(of: "<!--", with: "")
-                    .replacingOccurrences(of: "-->", with: "")
-                guard let data = content.data(using: .utf8) else { continue }
-                if let topObj = try? JSONSerialization.jsonObject(with: data, options: []),
-                   let posting = jobPostingDictionary(from: topObj) {
-                    jobDict = posting
-                    break outer
-                }
-            }
-            guard let jobDict else {
+            // 2. Find the JobPosting JSON‑LD block. Indeed embeds it for Google
+            // Jobs indexing; several JSON‑LD objects may be present and may be
+            // wrapped in HTML comments, so decode every ld+json script.
+            let jsonLDObjects = ScriptJSONExtractor.objects(
+                in: html,
+                cssSelector: "script[type=application/ld+json]",
+                stripHTMLComments: true
+            )
+            guard let jobDict = ScriptJSONExtractor.firstJSONLD(ofType: "JobPosting", among: jsonLDObjects) else {
                 // Dump HTML for debugging so the user can provide the file.
                 if UserDefaults.standard.bool(forKey: "saveDebugPrompts") {
                     DebugFileWriter.write(html, prefix: "IndeedNoJSONLD")

@@ -45,18 +45,12 @@ extension JobApp {
 
         // Try to parse from JSON data first (more reliable)
         if html.contains("window.__staticRouterHydrationData") {
-                let jsonPattern = "window\\.__staticRouterHydrationData = JSON\\.parse\\(\"(.*)\"\\);"
-                if let regex = try? NSRegularExpression(pattern: jsonPattern, options: []),
-                   let match = regex.firstMatch(in: html, options: [], range: NSRange(html.startIndex..., in: html)),
-                   let jsonRange = Range(match.range(at: 1), in: html) {
-                    let escapedJson = String(html[jsonRange])
-                    // Unescape the JSON string
-                    let unescapedJson = escapedJson
-                        .replacingOccurrences(of: "\\\"", with: "\"")
-                        .replacingOccurrences(of: "\\\\", with: "\\")
-                    if let jsonData = unescapedJson.data(using: .utf8),
-                       let json = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any],
-                       let loaderData = json["loaderData"] as? [String: Any],
+                if let json = ScriptJSONExtractor.object(
+                    in: html,
+                    capturePattern: "window\\.__staticRouterHydrationData = JSON\\.parse\\(\"(.*)\"\\);",
+                    unescape: true
+                ) {
+                    if let loaderData = json["loaderData"] as? [String: Any],
                        let detailsData = loaderData["routes/external.jobdetails.$positionId"] as? [String: Any] {
                         // Extract data from JSON
                         jobApp.jobPosition = (detailsData["postingTitle"] as? String ?? "").decodingHTMLEntities()
