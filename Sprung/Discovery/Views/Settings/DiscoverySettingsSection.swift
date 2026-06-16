@@ -11,9 +11,7 @@ import SwiftUI
 struct DiscoverySettingsSection: View {
     @Bindable var coordinator: DiscoveryCoordinator
 
-    @State private var isRefreshingSources = false
     @State private var showResetConfirmation = false
-    @State private var sourceRefreshError: String?
 
     var body: some View {
         Section {
@@ -203,27 +201,6 @@ struct DiscoverySettingsSection: View {
 
     private var actionButtons: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Button {
-                    Task { await refreshJobSources() }
-                } label: {
-                    if isRefreshingSources {
-                        ProgressView()
-                            .controlSize(.small)
-                    } else {
-                        Label("Refresh Job Sources", systemImage: "arrow.clockwise")
-                    }
-                }
-                .buttonStyle(.bordered)
-                .disabled(isRefreshingSources)
-
-                if let error = sourceRefreshError {
-                    Label(error, systemImage: "exclamationmark.triangle.fill")
-                        .foregroundStyle(.orange)
-                        .font(.caption)
-                }
-            }
-
             Button(role: .destructive) {
                 showResetConfirmation = true
             } label: {
@@ -242,21 +219,6 @@ struct DiscoverySettingsSection: View {
     }
 
     // MARK: - Actions
-
-    private func refreshJobSources() async {
-        isRefreshingSources = true
-        sourceRefreshError = nil
-        defer { isRefreshingSources = false }
-
-        do {
-            // TODO: Call LLM to discover new job sources
-            try await Task.sleep(for: .seconds(1))
-            Logger.info("Job sources refreshed", category: .ai)
-        } catch {
-            sourceRefreshError = error.localizedDescription
-            Logger.error("Failed to refresh job sources: \(error)", category: .ai)
-        }
-    }
 
     private func resetPreferences() {
         var prefs = coordinator.preferencesStore.current()

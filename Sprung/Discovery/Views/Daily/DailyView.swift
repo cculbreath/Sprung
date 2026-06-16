@@ -576,12 +576,6 @@ struct EventDebriefCard: View {
             }
 
             Spacer()
-
-            Button("Debrief →") {
-                // TODO: Navigate to debrief view
-            }
-            .buttonStyle(.borderedProminent)
-            .tint(.orange)
         }
         .padding()
         .background(Color.orange.opacity(0.1))
@@ -608,13 +602,6 @@ struct UpcomingEventCard: View {
             }
 
             Spacer()
-
-            if event.status == .planned {
-                Button("View Prep") {
-                    // TODO: Navigate to prep view
-                }
-                .buttonStyle(.bordered)
-            }
         }
         .padding()
         .background(Color.blue.opacity(0.1))
@@ -646,11 +633,6 @@ struct ContactAttentionCard: View {
             }
 
             Spacer()
-
-            Button("Log Action") {
-                // TODO: Navigate to interaction logging
-            }
-            .buttonStyle(.bordered)
         }
         .padding(.vertical, 4)
     }
