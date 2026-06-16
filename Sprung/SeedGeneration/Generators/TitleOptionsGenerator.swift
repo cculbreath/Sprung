@@ -217,8 +217,8 @@ final class TitleOptionsGenerator: BaseSectionGenerator {
             return
         }
 
-        // Title sets are stored in InferenceGuidance, not ExperienceDefaults
-        // This apply method is a no-op since titles are handled separately
+        // Title sets are persisted separately (TitleSetStore), not in
+        // ExperienceDefaults — this apply is intentionally a no-op.
         Logger.info("Selected \(titleSets.count) title set(s) (stored separately)", category: .ai)
     }
 

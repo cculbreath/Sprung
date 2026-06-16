@@ -59,37 +59,6 @@ enum TitleEmphasis: String, Codable, CaseIterable {
     }
 }
 
-// MARK: - Identity Vocabulary
-
-/// Identity vocabulary term extracted from documents
-struct IdentityTerm: Codable, Identifiable, Equatable {
-    let id: String
-    var term: String              // "Physicist", "Developer"
-    var evidenceStrength: Double  // 0-1
-    var sourceDocumentIds: [String]
-
-    init(
-        id: String = UUID().uuidString,
-        term: String,
-        evidenceStrength: Double = 0.5,
-        sourceDocumentIds: [String] = []
-    ) {
-        self.id = id
-        self.term = term
-        self.evidenceStrength = evidenceStrength
-        self.sourceDocumentIds = sourceDocumentIds
-    }
-
-    // Custom decoder to handle optional fields with defaults
-    init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        id = try container.decode(String.self, forKey: .id)
-        term = try container.decode(String.self, forKey: .term)
-        evidenceStrength = try container.decode(Double.self, forKey: .evidenceStrength)
-        sourceDocumentIds = try container.decodeIfPresent([String].self, forKey: .sourceDocumentIds) ?? []
-    }
-}
-
 // MARK: - Voice Profile
 
 /// Extracted voice characteristics for objective/narrative generation
@@ -209,17 +178,9 @@ enum EnthusiasmLevel: String, Codable, CaseIterable {
 
 /// Container for structured attachments stored in InferenceGuidance.attachmentsJSON
 struct GuidanceAttachments: Codable {
-    var titleSets: [TitleSet]?
-    var vocabulary: [IdentityTerm]?
     var voiceProfile: VoiceProfile?
 
-    init(
-        titleSets: [TitleSet]? = nil,
-        vocabulary: [IdentityTerm]? = nil,
-        voiceProfile: VoiceProfile? = nil
-    ) {
-        self.titleSets = titleSets
-        self.vocabulary = vocabulary
+    init(voiceProfile: VoiceProfile? = nil) {
         self.voiceProfile = voiceProfile
     }
 
@@ -238,8 +199,6 @@ struct GuidanceAttachments: Codable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case titleSets = "title_sets"
-        case vocabulary
         case voiceProfile = "voice_profile"
     }
 }

@@ -80,44 +80,6 @@ final class InferenceGuidanceStore: EntityStore {
         guidance(for: nodeKey)?.renderedPrompt()
     }
 
-    // MARK: - Title Set Helpers
-
-    /// Get title sets from custom.jobTitles guidance
-    func titleSets() -> [TitleSet] {
-        guard let guidance = guidance(for: "custom.jobTitles"),
-              let attachments = GuidanceAttachments.from(json: guidance.attachmentsJSON) else {
-            return []
-        }
-        return attachments.titleSets ?? []
-    }
-
-    /// Get favorited title sets
-    func favoriteTitleSets() -> [TitleSet] {
-        titleSets().filter { $0.isFavorite }
-    }
-
-    /// Update title sets (preserves other attachments)
-    func updateTitleSets(_ sets: [TitleSet]) {
-        guard let guidance = guidance(for: "custom.jobTitles") else {
-            Logger.warning("⚠️ No guidance found for custom.jobTitles", category: .data)
-            return
-        }
-
-        var attachments = GuidanceAttachments.from(json: guidance.attachmentsJSON) ?? GuidanceAttachments()
-        attachments.titleSets = sets
-        guidance.attachmentsJSON = attachments.asJSON()
-        guidance.updatedAt = Date()
-        persistChanges()
-    }
-
-    /// Toggle favorite status on a title set
-    func toggleTitleSetFavorite(_ setId: String) {
-        var sets = titleSets()
-        guard let idx = sets.firstIndex(where: { $0.id == setId }) else { return }
-        sets[idx].isFavorite.toggle()
-        updateTitleSets(sets)
-    }
-
     // MARK: - Voice Profile Helpers
 
     /// Get voice profile from objective guidance
@@ -127,45 +89,6 @@ final class InferenceGuidanceStore: EntityStore {
             return nil
         }
         return attachments.voiceProfile
-    }
-
-    /// Update voice profile
-    func updateVoiceProfile(_ profile: VoiceProfile) {
-        guard let guidance = guidance(for: "objective") else {
-            Logger.warning("⚠️ No guidance found for objective", category: .data)
-            return
-        }
-
-        var attachments = GuidanceAttachments.from(json: guidance.attachmentsJSON) ?? GuidanceAttachments()
-        attachments.voiceProfile = profile
-        guidance.attachmentsJSON = attachments.asJSON()
-        guidance.updatedAt = Date()
-        persistChanges()
-    }
-
-    // MARK: - Vocabulary Helpers
-
-    /// Get identity vocabulary from custom.jobTitles guidance
-    func identityVocabulary() -> [IdentityTerm] {
-        guard let guidance = guidance(for: "custom.jobTitles"),
-              let attachments = GuidanceAttachments.from(json: guidance.attachmentsJSON) else {
-            return []
-        }
-        return attachments.vocabulary ?? []
-    }
-
-    /// Update identity vocabulary
-    func updateIdentityVocabulary(_ terms: [IdentityTerm]) {
-        guard let guidance = guidance(for: "custom.jobTitles") else {
-            Logger.warning("⚠️ No guidance found for custom.jobTitles", category: .data)
-            return
-        }
-
-        var attachments = GuidanceAttachments.from(json: guidance.attachmentsJSON) ?? GuidanceAttachments()
-        attachments.vocabulary = terms
-        guidance.attachmentsJSON = attachments.asJSON()
-        guidance.updatedAt = Date()
-        persistChanges()
     }
 
     // MARK: - Bulk Operations
