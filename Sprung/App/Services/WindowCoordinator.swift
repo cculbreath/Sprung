@@ -56,47 +56,6 @@ final class WindowCoordinator {
         }
     }
 
-    /// Focus a job and navigate to Resume Editor module
-    func focusJob(_ job: JobApp, tab: TabList = .listing) {
-        focusState.focusedJob = job
-        focusState.focusedTab = tab
-
-        // Navigate to Resume Editor module
-        moduleNavigation?.selectModule(.resumeEditor)
-
-        Logger.info("Focused job: \(job.jobPosition)", category: .ui)
-        activateMainWindow()
-    }
-
-    /// Focus a job from the pipeline/daily view and navigate to Resume Editor module
-    func focusJobFromDiscovery(_ job: JobApp, openMainWindow: Bool = false, tab: TabList = .listing) {
-        focusState.focusedJob = job
-        focusState.focusedTab = tab
-
-        // Navigate to Resume Editor module
-        moduleNavigation?.selectModule(.resumeEditor)
-
-        Logger.info("Focused job from Discovery: \(job.jobPosition)", category: .ui)
-
-        if openMainWindow {
-            activateMainWindow()
-        }
-    }
-
-    /// Clear the current job focus
-    func clearFocus() {
-        focusState.focusedJob = nil
-        Logger.info("Cleared job focus", category: .ui)
-    }
-
-    // MARK: - Module Navigation
-
-    /// Navigate to a specific module
-    func navigateToModule(_ module: AppModule) {
-        moduleNavigation?.selectModule(module)
-        activateMainWindow()
-    }
-
     // MARK: - Tab Navigation
 
     /// Switch to a specific tab (works from any context)
