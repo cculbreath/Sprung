@@ -258,13 +258,13 @@ extension JobApp {
         // Metadata to prepend to description
         var metadataLines: [String] = []
         if let workplaceType = json["workplaceType"] as? String, !workplaceType.isEmpty {
-            metadataLines.append("🏢 Workplace: \(workplaceType)")
+            metadataLines.append("Workplace: \(workplaceType)")
         }
         if let companySize = json["companySize"] as? String, !companySize.isEmpty {
-            metadataLines.append("👥 Company Size: \(companySize)")
+            metadataLines.append("Company Size: \(companySize)")
         }
         if let applicants = json["applicants"] as? String, !applicants.isEmpty {
-            metadataLines.append("👤 Applicants: \(applicants)")
+            metadataLines.append("Applicants: \(applicants)")
         }
 
         if let postedDate = json["postedDate"] as? String, !postedDate.isEmpty {

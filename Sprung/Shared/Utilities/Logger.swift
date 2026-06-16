@@ -110,12 +110,21 @@ final class Logger {
     private static var backend: Logging = OSLoggerBackend(subsystem: configuration.subsystem)
     private static let newlineStripper = CharacterSet.newlines
     private static let consoleLogURL: URL? = {
-        // Path to consolelog.txt for real-time log capture
-        let path = "/Users/cculbreath/devlocal/codebase/Sprung/Sprung/Onboarding/Logs/consolelog.txt"
-        let url = URL(fileURLWithPath: path)
+#if DEBUG
+        // Derive the in-repo log path from this source file's location so it works on
+        // any dev machine without a hardcoded absolute path. Logger.swift lives at
+        // <repo>/Sprung/Shared/Utilities/; the log sink lives at <repo>/Sprung/Onboarding/Logs/.
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()   // Utilities
+            .deletingLastPathComponent()   // Shared
+            .deletingLastPathComponent()   // Sprung (source root)
+            .appendingPathComponent("Onboarding/Logs/consolelog.txt")
         // Clear file on app launch
         try? "".write(to: url, atomically: false, encoding: .utf8)
         return url
+#else
+        return nil
+#endif
     }()
     // MARK: - Public Configuration Accessors
     static var minimumLevel: Level {

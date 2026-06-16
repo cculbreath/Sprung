@@ -13,8 +13,8 @@ enum CoverAiMode: String, Codable {
 enum CoverLetterPrompts {
     enum EditorPrompts: String, Codable, CaseIterable {
         case improve = """
-            Please carefully read the draft and indentify at least three ways the content and quality of the writing can be improved. \
-            Provde a new draft that incorporates the identified improvements.
+            Please carefully read the draft and identify at least three ways the content and quality of the writing can be improved. \
+            Provide a new draft that incorporates the identified improvements.
             """
         case zinsser = """
             Carefully read the letter as a professional editor, specifically William Zinsser, incorporating the writing techniques and style he advocates in "On Writing Well." \
