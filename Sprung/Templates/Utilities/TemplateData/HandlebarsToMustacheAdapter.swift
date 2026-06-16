@@ -174,11 +174,40 @@ enum HandlebarsTranslator {
             warnings.append("Handlebars '#with' helper is not supported; leaving token unchanged.")
             return nil
         }
+        // Inline single-argument filter calls, e.g. Handlebars `{{yearOnly this.start}}`
+        // -> GRMustache filter syntax `{{yearOnly(start)}}`. GRMustache parses the
+        // space-separated form as a key path, not a filter invocation, so rewrite it.
+        if let filterCall = translateInlineFilterCall(expression, isTriple: isTriple) {
+            return filterCall
+        }
         // For triple braces, we keep the original string unchanged.
         if isTriple {
             return "{{{\(expression)}}}"
         }
         return "{{\(expression)}}"
+    }
+    /// GRMustache filters that imported Handlebars themes may invoke with the
+    /// `{{filter arg}}` space-call form (Handlebars helper syntax). Bundled themes
+    /// already author filters in paren form, so only space-call invocations of
+    /// these names are rewritten.
+    private static let inlineFilterNames: Set<String> = ["yearOnly"]
+    private static func translateInlineFilterCall(_ expression: String, isTriple: Bool) -> String? {
+        let parts = expression.split(separator: " ", maxSplits: 1, omittingEmptySubsequences: true)
+        guard parts.count == 2 else { return nil }
+        let name = String(parts[0])
+        guard inlineFilterNames.contains(name) else { return nil }
+        let rawArg = parts[1].trimmingCharacters(in: .whitespaces)
+        guard rawArg.isEmpty == false, rawArg.contains(" ") == false else { return nil }
+        let argument: String
+        if rawArg == "this" {
+            argument = "."
+        } else if rawArg.hasPrefix("this.") {
+            argument = String(rawArg.dropFirst("this.".count))
+        } else {
+            argument = rawArg
+        }
+        let call = "\(name)(\(argument))"
+        return isTriple ? "{{{\(call)}}}" : "{{\(call)}}"
     }
     private static func startConditionalSection(
         name: String,

@@ -317,10 +317,6 @@ class NativePDFGenerator {
         var processed = template
         // Drop the inter-item separator section GRMustache can't evaluate.
         processed = processed.replacingOccurrences(of: "{{^@last}}&nbsp;&middot;&nbsp;{{/@last}}", with: "")
-        // Strip Handlebars helpers GRMustache lacks in imported themes; yearOnly
-        // degrades to the raw date until a real filter is added (Phase 5 PDF work).
-        processed = processed.replacingOccurrences(of: "{{yearOnly this.start}}", with: "{{this.start}}")
-        processed = processed.replacingOccurrences(of: "{{yearOnly end}}", with: "{{this.end}}")
         return processed
     }
     private func logTranslationWarnings(_ warnings: [String], slug: String) {

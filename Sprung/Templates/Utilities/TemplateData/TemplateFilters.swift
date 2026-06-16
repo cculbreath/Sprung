@@ -19,6 +19,7 @@ enum TemplateFilters {
         template.register(htmlDecodeFilter, forKey: "htmlDecode")
         template.register(bulletListFilter, forKey: "bulletList")
         template.register(formatDateFilter, forKey: "formatDate")
+        template.register(yearOnlyFilter, forKey: "yearOnly")
         template.register(uppercaseFilter, forKey: "uppercase")
         template.register(hasContentFilter, forKey: "hasContent")
     }
@@ -139,6 +140,30 @@ enum TemplateFilters {
         let isoFormatter = ISO8601DateFormatter()
         if let date = isoFormatter.date(from: raw) {
             return formatter.string(from: date)
+        }
+        return raw
+    }
+    private static let yearOnlyFilter = VariadicFilter { boxes -> Any? in
+        guard let raw = string(from: boxes.first)?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty else {
+            return nil
+        }
+        if raw.lowercased() == "present" {
+            return "Present"
+        }
+        let parser = DateFormatter()
+        parser.locale = Locale(identifier: "en_US_POSIX")
+        let output = DateFormatter()
+        output.locale = Locale(identifier: "en_US_POSIX")
+        output.dateFormat = "yyyy"
+        for pattern in ["yyyy-MM-dd", "yyyy/MM/dd", "yyyy-MM", "yyyy"] {
+            parser.dateFormat = pattern
+            if let date = parser.date(from: raw) {
+                return output.string(from: date)
+            }
+        }
+        let isoFormatter = ISO8601DateFormatter()
+        if let date = isoFormatter.date(from: raw) {
+            return output.string(from: date)
         }
         return raw
     }
