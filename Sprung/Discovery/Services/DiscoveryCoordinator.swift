@@ -102,10 +102,25 @@ final class DiscoveryState {
 @Observable
 @MainActor
 final class DiscoveryCoordinator {
-    // MARK: - Sub-Coordinators
+    // MARK: - Stores
 
-    let pipelineCoordinator: DiscoveryPipelineCoordinator
-    let networkingCoordinator: DiscoveryNetworkingCoordinator
+    let preferencesStore: SearchPreferencesStore
+    let settingsStore: DiscoverySettingsStore
+    let jobAppStore: JobAppStore
+    let dailyTaskStore: DailyTaskStore
+    let timeEntryStore: TimeEntryStore
+    let weeklyGoalStore: WeeklyGoalStore
+    let jobSourceStore: JobSourceStore
+    let eventStore: NetworkingEventStore
+    let contactStore: NetworkingContactStore
+    let interactionStore: NetworkingInteractionStore
+    let feedbackStore: EventFeedbackStore
+
+    // MARK: - Services
+
+    private(set) var llmService: DiscoveryLLMService?
+    private(set) var calendarService: CalendarIntegrationService?
+    private let urlValidationService: URLValidationService
 
     // MARK: - Discovery Status
 
@@ -122,24 +137,9 @@ final class DiscoveryCoordinator {
     private(set) var coachingService: CoachingService?
     private var coachingAutoStartTimer: Timer?
 
-    // MARK: - Convenience Store Access (delegated to sub-coordinators)
+    // MARK: - Agent Service
 
-    var preferencesStore: SearchPreferencesStore { pipelineCoordinator.preferencesStore }
-    var settingsStore: DiscoverySettingsStore { pipelineCoordinator.settingsStore }
-    var jobSourceStore: JobSourceStore { networkingCoordinator.jobSourceStore }
-    var jobAppStore: JobAppStore { pipelineCoordinator.jobAppStore }
-    var dailyTaskStore: DailyTaskStore { pipelineCoordinator.dailyTaskStore }
-    var timeEntryStore: TimeEntryStore { pipelineCoordinator.timeEntryStore }
-    var weeklyGoalStore: WeeklyGoalStore { pipelineCoordinator.weeklyGoalStore }
-    var eventStore: NetworkingEventStore { networkingCoordinator.eventStore }
-    var contactStore: NetworkingContactStore { networkingCoordinator.contactStore }
-    var interactionStore: NetworkingInteractionStore { networkingCoordinator.interactionStore }
-    var feedbackStore: EventFeedbackStore { networkingCoordinator.feedbackStore }
-
-    // MARK: - Convenience Service Access (delegated to sub-coordinators)
-
-    var llmService: DiscoveryLLMService? { pipelineCoordinator.llmService }
-    var calendarService: CalendarIntegrationService? { pipelineCoordinator.calendarService }
+    private var agentServiceStore: DiscoveryAgentService?
 
     // MARK: - Private Dependencies
 
@@ -156,8 +156,22 @@ final class DiscoveryCoordinator {
         knowledgeCardStore: KnowledgeCardStore,
         skillStore: SkillStore
     ) {
-        self.pipelineCoordinator = DiscoveryPipelineCoordinator(modelContext: modelContext, jobAppStore: jobAppStore)
-        self.networkingCoordinator = DiscoveryNetworkingCoordinator(modelContext: modelContext)
+        // Pipeline stores
+        self.preferencesStore = SearchPreferencesStore()
+        self.settingsStore = DiscoverySettingsStore()
+        self.jobAppStore = jobAppStore
+        self.dailyTaskStore = DailyTaskStore(context: modelContext)
+        self.timeEntryStore = TimeEntryStore(context: modelContext)
+        self.weeklyGoalStore = WeeklyGoalStore(context: modelContext, jobAppStore: jobAppStore)
+        self.calendarService = CalendarIntegrationService()
+        // Networking stores
+        self.jobSourceStore = JobSourceStore(context: modelContext)
+        self.eventStore = NetworkingEventStore(context: modelContext)
+        self.contactStore = NetworkingContactStore(context: modelContext)
+        self.interactionStore = NetworkingInteractionStore(context: modelContext)
+        self.feedbackStore = EventFeedbackStore(context: modelContext)
+        self.urlValidationService = URLValidationService()
+        // Private dependencies
         self.candidateDossierStore = candidateDossierStore
         self.knowledgeCardStore = knowledgeCardStore
         self.skillStore = skillStore
@@ -165,17 +179,17 @@ final class DiscoveryCoordinator {
 
     /// Configure the LLM service. Must be called after initialization with LLMFacade.
     func configureLLMService(llmFacade: LLMFacade) {
-        pipelineCoordinator.configureLLMService(llmFacade: llmFacade)
+        self.llmService = DiscoveryLLMService(llmFacade: llmFacade, settingsStore: settingsStore)
 
         // Set up agent service with full context provider
-        if let llmService = pipelineCoordinator.llmService {
+        if let llmService {
             let contextProvider = DiscoveryContextProviderImpl(coordinator: self)
             let agentService = DiscoveryAgentService(
                 llmFacade: llmService.llmFacade,
                 contextProvider: contextProvider,
                 settingsStore: settingsStore
             )
-            pipelineCoordinator.setAgentService(agentService)
+            self.agentServiceStore = agentService
 
             // Set up coaching service
             configureCoachingService(llmService: llmService)
@@ -184,8 +198,6 @@ final class DiscoveryCoordinator {
 
     /// Configure the coaching service
     private func configureCoachingService(llmService: DiscoveryLLMService) {
-        // Get model context and daily task store from pipeline coordinator
-        let dailyTaskStore = pipelineCoordinator.dailyTaskStore
         let modelContext = dailyTaskStore.modelContext
 
         // Create coaching session store
@@ -248,7 +260,7 @@ final class DiscoveryCoordinator {
     // MARK: - Module State Checks
 
     var needsOnboarding: Bool {
-        pipelineCoordinator.needsOnboarding
+        !preferencesStore.isConfigured
     }
 
     // MARK: - Daily Summary (coordinated across sub-coordinators)
@@ -260,8 +272,8 @@ final class DiscoveryCoordinator {
 
     func todaysSummary() -> DailySummary {
         DailySummary(
-            eventsToday: networkingCoordinator.eventsToday(),
-            contactsNeedingAttention: networkingCoordinator.contactsNeedingAttention(limit: 5)
+            eventsToday: eventsToday(),
+            contactsNeedingAttention: contactsNeedingAttention(limit: 5)
         )
     }
 
@@ -278,15 +290,15 @@ final class DiscoveryCoordinator {
         WeeklySummary(
             goal: weeklyGoalStore.currentWeek(),
             topSources: jobSourceStore.topSourcesByEffectiveness(limit: 3),
-            eventsAttended: networkingCoordinator.eventsAttendedThisWeek(),
-            newContacts: networkingCoordinator.newContactsThisWeek()
+            eventsAttended: eventsAttendedThisWeek(),
+            newContacts: newContactsThisWeek()
         )
     }
 
     // MARK: - Agent Service Access
 
     private var agentService: DiscoveryAgentService? {
-        pipelineCoordinator.getOrCreateAgentService()
+        agentServiceStore
     }
 
     // MARK: - LLM Agent Operations (delegated to sub-coordinators)
@@ -296,7 +308,18 @@ final class DiscoveryCoordinator {
         guard let agent = agentService else {
             throw DiscoveryLLMError.toolExecutionFailed("Agent service not configured")
         }
-        try await pipelineCoordinator.generateDailyTasks(using: agent, focusArea: focusArea)
+        let result = try await agent.generateDailyTasks(focusArea: focusArea)
+
+        // Clear existing LLM-generated tasks for today
+        for task in dailyTaskStore.todaysTasks where task.isLLMGenerated {
+            dailyTaskStore.delete(task)
+        }
+
+        // Convert and add new tasks
+        let tasks = result.tasks.map { $0.toDailyTask() }
+        dailyTaskStore.addAll(tasks)
+
+        Logger.info("✅ Generated \(tasks.count) daily tasks", category: .ai)
     }
 
     /// Discover new job sources using LLM agent
@@ -310,7 +333,7 @@ final class DiscoveryCoordinator {
         do {
             let prefs = preferencesStore.current()
             let candidateContext = buildCandidateContext()
-            try await networkingCoordinator.discoverJobSources(
+            try await performJobSourceDiscovery(
                 using: agent,
                 sectors: prefs.targetSectors,
                 location: prefs.primaryLocation,
@@ -335,7 +358,7 @@ final class DiscoveryCoordinator {
         }
         let prefs = preferencesStore.current()
         let candidateContext = buildCandidateContext()
-        try await networkingCoordinator.discoverNetworkingEvents(
+        try await performNetworkingEventDiscovery(
             using: agent,
             sectors: prefs.targetSectors,
             location: prefs.primaryLocation,
@@ -411,7 +434,7 @@ final class DiscoveryCoordinator {
 
             let prefs = self.preferencesStore.current()
             let candidateContext = self.buildCandidateContext()
-            try await self.networkingCoordinator.discoverJobSources(
+            try await self.performJobSourceDiscovery(
                 using: agent,
                 sectors: prefs.targetSectors,
                 location: prefs.primaryLocation,
@@ -433,7 +456,7 @@ final class DiscoveryCoordinator {
         guard let agent = agentService else {
             throw DiscoveryLLMError.toolExecutionFailed("Agent service not configured")
         }
-        return try await networkingCoordinator.generateEventPitch(for: event, using: agent)
+        return try await performEventPitch(for: event, using: agent)
     }
 
     /// Generate debrief outcomes and suggested next steps using LLM agent
@@ -460,7 +483,138 @@ final class DiscoveryCoordinator {
         guard let agent = agentService else {
             throw DiscoveryLLMError.toolExecutionFailed("Agent service not configured")
         }
-        try await pipelineCoordinator.generateWeeklyReflection(using: agent)
+        let reflection = try await agent.generateWeeklyReflection()
+        weeklyGoalStore.setReflection(reflection)
+        Logger.info("✅ Generated weekly reflection", category: .ai)
+    }
+
+    // MARK: - Merged Sub-Coordinator Operations
+
+    /// Discover new job sources using the LLM agent, validate their URLs, and
+    /// persist the valid ones. (Merged from the former networking sub-coordinator.)
+    private func performJobSourceDiscovery(
+        using agentService: DiscoveryAgentService,
+        sectors: [String],
+        location: String,
+        candidateContext: String = "",
+        statusCallback: (@MainActor @Sendable (DiscoveryStatus) async -> Void)? = nil
+    ) async throws {
+        let result = try await agentService.discoverJobSources(
+            sectors: sectors,
+            location: location,
+            candidateContext: candidateContext,
+            statusCallback: statusCallback
+        )
+
+        await statusCallback?(.webSearchComplete)
+
+        // Filter duplicates
+        let candidateSources = result.sources.filter { generated in
+            !jobSourceStore.exists(url: generated.url)
+        }
+
+        guard !candidateSources.isEmpty else {
+            Logger.info("📋 No new sources to validate", category: .ai)
+            await statusCallback?(.complete(added: 0, filtered: 0))
+            return
+        }
+
+        // Validate URLs before adding
+        await statusCallback?(.validatingURLs(count: candidateSources.count))
+        Logger.info("🔍 Validating \(candidateSources.count) candidate sources", category: .ai)
+        let urls = candidateSources.map { $0.url }
+        let validationResults = await urlValidationService.validateBatch(urls)
+
+        // Create a set of valid URLs for fast lookup
+        let validUrls = Set(validationResults.filter { $0.isValid }.map { $0.url })
+
+        // Filter to only valid sources and convert
+        let validSources = candidateSources.filter { validUrls.contains($0.url) }.map { $0.toJobSource() }
+        let invalidCount = candidateSources.count - validSources.count
+
+        if invalidCount > 0 {
+            Logger.warning("⚠️ Filtered out \(invalidCount) sources with invalid URLs", category: .ai)
+        }
+
+        jobSourceStore.addMultiple(validSources)
+
+        await statusCallback?(.complete(added: validSources.count, filtered: invalidCount))
+        Logger.info("✅ Discovered \(validSources.count) new job sources", category: .ai)
+    }
+
+    /// Discover networking events using the LLM agent and persist new ones.
+    /// (Merged from the former networking sub-coordinator.)
+    private func performNetworkingEventDiscovery(
+        using agentService: DiscoveryAgentService,
+        sectors: [String],
+        location: String,
+        candidateContext: String = "",
+        daysAhead: Int = 14,
+        streamCallback: (@MainActor @Sendable (DiscoveryStatus, String?) async -> Void)? = nil
+    ) async throws {
+        let result = try await agentService.discoverNetworkingEvents(
+            sectors: sectors,
+            location: location,
+            candidateContext: candidateContext,
+            daysAhead: daysAhead,
+            statusCallback: { status in
+                await streamCallback?(status, nil)
+            },
+            reasoningCallback: { text in
+                await streamCallback?(.webSearching(context: "networking events"), text)
+            }
+        )
+
+        // Filter duplicates and add new events
+        let newEvents = eventStore.filterNew(
+            result.events.map { $0.toNetworkingEventOpportunity() }
+        )
+
+        eventStore.addMultiple(newEvents)
+
+        await streamCallback?(.complete(added: newEvents.count, filtered: result.events.count - newEvents.count), nil)
+
+        Logger.info("✅ Discovered \(newEvents.count) new events", category: .ai)
+    }
+
+    /// Generate an elevator pitch for an event using the LLM agent.
+    /// (Merged from the former networking sub-coordinator.)
+    private func performEventPitch(for event: NetworkingEventOpportunity, using agentService: DiscoveryAgentService) async throws -> String? {
+        let result = try await agentService.prepareForEvent(
+            eventId: event.id,
+            focusCompanies: [],
+            goals: nil
+        )
+        return result.pitchScript
+    }
+
+    // MARK: - Summary Data Helpers (merged from networking sub-coordinator)
+
+    private func eventsToday() -> [NetworkingEventOpportunity] {
+        let calendar = Calendar.current
+        return eventStore.upcomingEvents.filter {
+            calendar.isDateInToday($0.date)
+        }
+    }
+
+    private func contactsNeedingAttention(limit: Int = 5) -> [NetworkingContact] {
+        Array(contactStore.needsAttention.prefix(limit))
+    }
+
+    private func eventsAttendedThisWeek() -> [NetworkingEventOpportunity] {
+        let calendar = Calendar.current
+        let weekStart = calendar.date(
+            from: calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: Date())
+        ) ?? Date()
+
+        return eventStore.attendedEvents.filter { event in
+            guard let attendedAt = event.attendedAt else { return false }
+            return attendedAt >= weekStart
+        }
+    }
+
+    private func newContactsThisWeek() -> [NetworkingContact] {
+        contactStore.thisWeeksNewContacts
     }
 
     // MARK: - Role Suggestion (Onboarding)
