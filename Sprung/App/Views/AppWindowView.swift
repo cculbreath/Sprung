@@ -12,7 +12,6 @@ struct AppWindowView: View {
     @Environment(AppState.self) private var appState: AppState
     @State private var listingButtons: SaveButtons = .init(edit: false, save: false, cancel: false)
     @Binding var selectedTab: TabList
-    @Binding var hasVisitedResumeTab: Bool
     @Binding var tabRefresh: Bool
     // Centralized sheet state management for all app windows/modals
     @Binding var sheets: AppSheets
@@ -42,7 +41,6 @@ struct AppWindowView: View {
             coverLetterStore: coverLetterStore,
             appState: appState,
             selectedTab: $selectedTab,
-            hasVisitedResumeTab: $hasVisitedResumeTab,
             updateMyLetter: updateMyLetter
         ))
     }
@@ -121,7 +119,6 @@ struct AppWindowViewModifiers: ViewModifier {
     let coverLetterStore: CoverLetterStore
     let appState: AppState
     @Binding var selectedTab: TabList
-    @Binding var hasVisitedResumeTab: Bool
     let updateMyLetter: () -> Void
     func body(content: Content) -> some View {
         let step1: some View = content
@@ -130,17 +127,8 @@ struct AppWindowViewModifiers: ViewModifier {
             }
             .onChange(of: jobAppStore.selectedApp?.hasAnyRes ?? false) { _, _ in
             }
-            .onChange(of: selectedTab) { _, newTab in
-                if newTab == .resume {
-                    if !hasVisitedResumeTab {
-                        sheets.showResumeInspector = false
-                        hasVisitedResumeTab = true
-                    }
-                }
-            }
             .onAppear {
                 updateMyLetter()
-                hasVisitedResumeTab = false
             }
         let step2: some View = step1
             .sheet(isPresented: $sheets.showResumeReview) {

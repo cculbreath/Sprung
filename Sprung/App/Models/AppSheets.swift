@@ -15,7 +15,6 @@ struct AppSheets {
     var showNewJobApp = false
     var showCreateResume = false
     // UI state that was previously in ResumeButtons
-    var showResumeInspector = false
     var showCoverLetterInspector = false
     // Setup wizard (first-run configuration)
     var showSetupWizard = false

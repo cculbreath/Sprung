@@ -85,14 +85,6 @@ class MenuNotificationHandler {
         ) { [weak self] _ in
             self?.sheets?.wrappedValue.showResumeReview = true
         }
-        NotificationCenter.default.addObserver(
-            forName: .showResumeInspector,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            self?.selectedTab?.wrappedValue = .resume
-            self?.sheets?.wrappedValue.showResumeInspector.toggle()
-        }
         // Cover Letter Commands
         NotificationCenter.default.addObserver(
             forName: .generateCoverLetter,

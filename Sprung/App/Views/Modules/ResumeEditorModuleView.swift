@@ -18,7 +18,6 @@ struct ResumeEditorModuleView: View {
 
     @State var tabRefresh: Bool = false
     @State private var sheets = AppSheets()
-    @State private var hasVisitedResumeTab: Bool = false
     @State private var menuHandler = MenuNotificationHandler()
 
     // Sidebar collapse state - persisted
@@ -83,13 +82,7 @@ struct ResumeEditorModuleView: View {
         .onChange(of: focusState.focusedTab) { _, newTab in
             navigationState.selectedTab = newTab
         }
-        .onChange(of: navigationState.selectedTab) { _, newTab in
-            if newTab == .resume {
-                if !hasVisitedResumeTab {
-                    sheets.showResumeInspector = false
-                    hasVisitedResumeTab = true
-                }
-            }
+        .onChange(of: navigationState.selectedTab) { _, _ in
             NotificationCenter.default.post(name: .toolbarNeedsValidation, object: nil)
         }
         .onAppear {
@@ -102,7 +95,6 @@ struct ResumeEditorModuleView: View {
             )
             navigationState.restoreSelectedJobApp(from: jobAppStore)
             updateMyLetter()
-            hasVisitedResumeTab = false
 
             // If another module (e.g. Pipeline) set a specific job via focusState,
             // override the restored selection with it
@@ -159,7 +151,6 @@ struct ResumeEditorModuleView: View {
             if jobAppStore.selectedApp != nil {
                 AppWindowView(
                     selectedTab: $navigationState.selectedTab,
-                    hasVisitedResumeTab: $hasVisitedResumeTab,
                     tabRefresh: $tabRefresh,
                     sheets: $sheets
                 )
