@@ -162,20 +162,25 @@ final class ExperienceDefaultsToTree {
         node.applyDescriptor(childDescriptor)
     }
 
-    func addHighlightsIfNotHidden(
-        _ highlights: [String],
+    /// Adds a container node holding a list of string values (highlights,
+    /// keywords, courses, roles, …) when the field is not hidden and has at
+    /// least one non-empty value. Replaces the four per-field copies that
+    /// differed only by the field-name literal.
+    func addStringListIfNotHidden(
+        _ fieldName: String,
+        values: [String],
         parent: TreeNode,
         path: [String],
         descriptor: TemplateManifest.Section.FieldDescriptor?
     ) {
-        let fieldPath = path + ["highlights"]
+        let fieldPath = path + [fieldName]
         guard !isFieldHidden(path: fieldPath) else { return }
-        let nonEmptyHighlights = highlights.filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-        guard !nonEmptyHighlights.isEmpty else { return }
+        let nonEmptyValues = values.filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        guard !nonEmptyValues.isEmpty else { return }
 
-        let childDescriptor = descriptor?.children?.first(where: { $0.key == "highlights" })
+        let childDescriptor = descriptor?.children?.first(where: { $0.key == fieldName })
         let container = parent.addChild(TreeNode(
-            name: "highlights",
+            name: fieldName,
             value: "",
             inEditor: true,
             status: .isNotLeaf,
@@ -184,109 +189,10 @@ final class ExperienceDefaultsToTree {
         container.schemaAllowsChildMutation = childDescriptor?.allowsManualMutations ?? false
         container.applyDescriptor(childDescriptor)
 
-        for highlight in nonEmptyHighlights {
+        for value in nonEmptyValues {
             _ = container.addChild(TreeNode(
                 name: "",
-                value: highlight,
-                inEditor: true,
-                status: .saved,
-                resume: resume
-            ))
-        }
-    }
-
-    func addKeywordsIfNotHidden(
-        _ keywords: [String],
-        parent: TreeNode,
-        path: [String],
-        descriptor: TemplateManifest.Section.FieldDescriptor?
-    ) {
-        let fieldPath = path + ["keywords"]
-        guard !isFieldHidden(path: fieldPath) else { return }
-        let nonEmptyKeywords = keywords.filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-        guard !nonEmptyKeywords.isEmpty else { return }
-
-        let childDescriptor = descriptor?.children?.first(where: { $0.key == "keywords" })
-        let container = parent.addChild(TreeNode(
-            name: "keywords",
-            value: "",
-            inEditor: true,
-            status: .isNotLeaf,
-            resume: resume
-        ))
-        container.schemaAllowsChildMutation = childDescriptor?.allowsManualMutations ?? false
-        container.applyDescriptor(childDescriptor)
-
-        for keyword in nonEmptyKeywords {
-            _ = container.addChild(TreeNode(
-                name: "",
-                value: keyword,
-                inEditor: true,
-                status: .saved,
-                resume: resume
-            ))
-        }
-    }
-
-    func addCoursesIfNotHidden(
-        _ courses: [String],
-        parent: TreeNode,
-        path: [String],
-        descriptor: TemplateManifest.Section.FieldDescriptor?
-    ) {
-        let fieldPath = path + ["courses"]
-        guard !isFieldHidden(path: fieldPath) else { return }
-        let nonEmptyCourses = courses.filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-        guard !nonEmptyCourses.isEmpty else { return }
-
-        let childDescriptor = descriptor?.children?.first(where: { $0.key == "courses" })
-        let container = parent.addChild(TreeNode(
-            name: "courses",
-            value: "",
-            inEditor: true,
-            status: .isNotLeaf,
-            resume: resume
-        ))
-        container.schemaAllowsChildMutation = childDescriptor?.allowsManualMutations ?? false
-        container.applyDescriptor(childDescriptor)
-
-        for course in nonEmptyCourses {
-            _ = container.addChild(TreeNode(
-                name: "",
-                value: course,
-                inEditor: true,
-                status: .saved,
-                resume: resume
-            ))
-        }
-    }
-
-    func addRolesIfNotHidden(
-        _ roles: [String],
-        parent: TreeNode,
-        path: [String],
-        descriptor: TemplateManifest.Section.FieldDescriptor?
-    ) {
-        let fieldPath = path + ["roles"]
-        guard !isFieldHidden(path: fieldPath) else { return }
-        let nonEmptyRoles = roles.filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-        guard !nonEmptyRoles.isEmpty else { return }
-
-        let childDescriptor = descriptor?.children?.first(where: { $0.key == "roles" })
-        let container = parent.addChild(TreeNode(
-            name: "roles",
-            value: "",
-            inEditor: true,
-            status: .isNotLeaf,
-            resume: resume
-        ))
-        container.schemaAllowsChildMutation = childDescriptor?.allowsManualMutations ?? false
-        container.applyDescriptor(childDescriptor)
-
-        for role in nonEmptyRoles {
-            _ = container.addChild(TreeNode(
-                name: "",
-                value: role,
+                value: value,
                 inEditor: true,
                 status: .saved,
                 resume: resume

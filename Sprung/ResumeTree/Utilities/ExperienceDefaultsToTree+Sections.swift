@@ -49,7 +49,7 @@ extension ExperienceDefaultsToTree {
             addFieldIfNotHidden("startDate", value: work.startDate, parent: entry, path: path, descriptor: entryDescriptor)
             addFieldIfNotHidden("endDate", value: work.endDate, parent: entry, path: path, descriptor: entryDescriptor)
             addFieldIfNotHidden("summary", value: work.summary, parent: entry, path: path, descriptor: entryDescriptor)
-            addHighlightsIfNotHidden(work.highlights.map { $0.text }, parent: entry, path: path, descriptor: entryDescriptor)
+            addStringListIfNotHidden("highlights", values: work.highlights.map { $0.text }, parent: entry, path: path, descriptor: entryDescriptor)
         }
     }
 
@@ -88,7 +88,7 @@ extension ExperienceDefaultsToTree {
             addFieldIfNotHidden("startDate", value: volunteer.startDate, parent: entry, path: path, descriptor: entryDescriptor)
             addFieldIfNotHidden("endDate", value: volunteer.endDate, parent: entry, path: path, descriptor: entryDescriptor)
             addFieldIfNotHidden("summary", value: volunteer.summary, parent: entry, path: path, descriptor: entryDescriptor)
-            addHighlightsIfNotHidden(volunteer.highlights.map { $0.text }, parent: entry, path: path, descriptor: entryDescriptor)
+            addStringListIfNotHidden("highlights", values: volunteer.highlights.map { $0.text }, parent: entry, path: path, descriptor: entryDescriptor)
         }
     }
 
@@ -128,7 +128,7 @@ extension ExperienceDefaultsToTree {
             addFieldIfNotHidden("startDate", value: education.startDate, parent: entry, path: path, descriptor: entryDescriptor)
             addFieldIfNotHidden("endDate", value: education.endDate, parent: entry, path: path, descriptor: entryDescriptor)
             addFieldIfNotHidden("score", value: education.score, parent: entry, path: path, descriptor: entryDescriptor)
-            addCoursesIfNotHidden(education.courses.map { $0.name }, parent: entry, path: path, descriptor: entryDescriptor)
+            addStringListIfNotHidden("courses", values: education.courses.map { $0.name }, parent: entry, path: path, descriptor: entryDescriptor)
         }
     }
 
@@ -168,9 +168,9 @@ extension ExperienceDefaultsToTree {
             addFieldIfNotHidden("url", value: project.url, parent: entry, path: path, descriptor: entryDescriptor)
             addFieldIfNotHidden("entity", value: project.organization, parent: entry, path: path, descriptor: entryDescriptor)
             addFieldIfNotHidden("type", value: project.type, parent: entry, path: path, descriptor: entryDescriptor)
-            addHighlightsIfNotHidden(project.highlights.map { $0.text }, parent: entry, path: path, descriptor: entryDescriptor)
-            addKeywordsIfNotHidden(project.keywords.map { $0.keyword }, parent: entry, path: path, descriptor: entryDescriptor)
-            addRolesIfNotHidden(project.roles.map { $0.role }, parent: entry, path: path, descriptor: entryDescriptor)
+            addStringListIfNotHidden("highlights", values: project.highlights.map { $0.text }, parent: entry, path: path, descriptor: entryDescriptor)
+            addStringListIfNotHidden("keywords", values: project.keywords.map { $0.keyword }, parent: entry, path: path, descriptor: entryDescriptor)
+            addStringListIfNotHidden("roles", values: project.roles.map { $0.role }, parent: entry, path: path, descriptor: entryDescriptor)
         }
     }
 
@@ -205,7 +205,7 @@ extension ExperienceDefaultsToTree {
             let path = ["skills", "\(index)"]
             addFieldIfNotHidden("name", value: skill.name, parent: entry, path: path, descriptor: entryDescriptor)
             addFieldIfNotHidden("level", value: skill.level, parent: entry, path: path, descriptor: entryDescriptor)
-            addKeywordsIfNotHidden(skill.keywords.map { $0.keyword }, parent: entry, path: path, descriptor: entryDescriptor)
+            addStringListIfNotHidden("keywords", values: skill.keywords.map { $0.keyword }, parent: entry, path: path, descriptor: entryDescriptor)
         }
     }
 
@@ -382,7 +382,7 @@ extension ExperienceDefaultsToTree {
 
             let path = ["interests", "\(index)"]
             addFieldIfNotHidden("name", value: interest.name, parent: entry, path: path, descriptor: entryDescriptor)
-            addKeywordsIfNotHidden(interest.keywords.map { $0.keyword }, parent: entry, path: path, descriptor: entryDescriptor)
+            addStringListIfNotHidden("keywords", values: interest.keywords.map { $0.keyword }, parent: entry, path: path, descriptor: entryDescriptor)
         }
     }
 
