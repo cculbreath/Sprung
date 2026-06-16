@@ -58,7 +58,7 @@ final class LLMFacadeSpecializedAPIs {
         }
 
         // Strip OpenRouter prefix if present
-        let openAIModelId = modelId.hasPrefix("openai/") ? String(modelId.dropFirst(7)) : modelId
+        let openAIModelId = ModelId(modelId).strippingProvider("openai")
 
         let inputItems: [InputItem] = [
             .message(InputMessage(role: "developer", content: .text(systemPrompt))),

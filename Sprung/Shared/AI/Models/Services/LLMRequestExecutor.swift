@@ -66,6 +66,36 @@ actor LLMRequestExecutor {
     // MARK: - Request Execution
     /// Execute a request with retry logic and exponential backoff
     func execute(parameters: ChatCompletionParameters, maxRetries: Int? = nil) async throws -> LLMResponse {
+        try await withRetry(parameters: parameters, maxRetries: maxRetries) { client in
+            let availableTools = parameters.tools?.compactMap { $0.function.name }.joined(separator: ", ") ?? ""
+            let toolInfo = availableTools.isEmpty ? "" : " (tools: \(availableTools))"
+            Logger.info("🌐 Making request with model: \(parameters.model)\(toolInfo)", category: .networking)
+            let response = try await client.startChat(parameters: parameters)
+            let calledTools = response.choices?.first?.message?.toolCalls?.compactMap { $0.function.name } ?? []
+            let calledInfo = calledTools.isEmpty ? "" : " called: [\(calledTools.joined(separator: ", "))]"
+            Logger.info("✅ Request completed for model: \(parameters.model)\(calledInfo)", category: .networking)
+            return response
+        }
+    }
+    /// Execute a streaming request with retry logic
+    func executeStreaming(parameters: ChatCompletionParameters, maxRetries: Int? = nil) async throws -> AsyncThrowingStream<ChatCompletionChunkObject, Error> {
+        try await withRetry(parameters: parameters, maxRetries: maxRetries) { client in
+            Logger.info("🌐 Starting streaming request with model: \(parameters.model)", category: .networking)
+            let stream = try await client.startStreamedChat(parameters: parameters)
+            Logger.info("✅ Streaming started successfully for model: \(parameters.model)", category: .networking)
+            return stream
+        }
+    }
+
+    /// Shared retry skeleton for `execute`/`executeStreaming`: owns request-id
+    /// lifecycle, the cancellation-checked attempt loop, error classification, and
+    /// exponential backoff. The `operation` closure performs the single underlying
+    /// call against the configured client.
+    private func withRetry<R>(
+        parameters: ChatCompletionParameters,
+        maxRetries: Int?,
+        _ operation: (OpenAIService) async throws -> R
+    ) async throws -> R {
         guard let client = openRouterClient else {
             throw LLMError.clientError("OpenRouter client not configured")
         }
@@ -80,165 +110,89 @@ actor LLMRequestExecutor {
                 throw LLMError.clientError("Request was cancelled")
             }
             do {
-                let availableTools = parameters.tools?.compactMap { $0.function.name }.joined(separator: ", ") ?? ""
-                let toolInfo = availableTools.isEmpty ? "" : " (tools: \(availableTools))"
-                Logger.info("🌐 Making request with model: \(parameters.model)\(toolInfo)", category: .networking)
-                let response = try await client.startChat(parameters: parameters)
-                let calledTools = response.choices?.first?.message?.toolCalls?.compactMap { $0.function.name } ?? []
-                let calledInfo = calledTools.isEmpty ? "" : " called: [\(calledTools.joined(separator: ", "))]"
-                Logger.info("✅ Request completed for model: \(parameters.model)\(calledInfo)", category: .networking)
-                return response
+                return try await operation(client)
             } catch {
                 lastError = error
-                Logger.debug("❌ Request failed with error: \(error)", category: .networking)
-                // Handle SwiftOpenAI APIErrors with enhanced error detection
-                if let apiError = error as? SwiftOpenAI.APIError {
-                    Logger.debug("🔍 SwiftOpenAI APIError details: \(apiError.displayDescription)", category: .networking)
-                    // Check for 402 Insufficient Credits
-                    if apiError.displayDescription.contains("status code 402") {
-                        let (requested, available) = parseCreditsError(apiError.displayDescription)
-                        Logger.warning("💳 402 Insufficient credits: requested \(requested), available \(available)", category: .networking)
-                        throw LLMError.insufficientCredits(requested: requested, available: available)
-                    }
-                    // Check for 403 Unauthorized specifically
-                    if apiError.displayDescription.contains("status code 403") {
-                        let modelId = extractModelId(from: parameters)
-                        Logger.debug("🚫 403 Unauthorized detected for model: \(modelId)", category: .networking)
-                        throw LLMError.unauthorized(modelId)
-                    }
-                    if apiError.displayDescription.lowercased().contains("not a valid model id") {
-                        let modelId = extractModelId(from: parameters)
-                        Logger.debug("🚫 Invalid model ID detected: \(modelId)", category: .networking)
-                        throw LLMError.invalidModelId(modelId)
-                    }
-                }
-                // Don't retry on certain errors
-                if let appError = error as? LLMError {
-                    switch appError {
-                    case .decodingFailed, .unexpectedResponseFormat, .clientError, .unauthorized, .invalidModelId, .insufficientCredits:
-                        throw appError
-                    case .rateLimited(let retryAfter):
-                        if let delay = retryAfter, attempt < retries {
-                            Logger.debug("🔄 Rate limited, waiting \(delay)s before retry", category: .networking)
-                            try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
-                            continue
-                        } else {
-                            throw appError
-                        }
-                    case .timeout:
-                        if attempt < retries {
-                            let delay = baseRetryDelay * pow(2.0, Double(attempt))
-                            Logger.debug(
-                                "🔄 Request timeout, retrying in \(delay)s (attempt \(attempt + 1)/\(retries + 1))",
-                                category: .networking
-                            )
-                            try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
-                            continue
-                        } else {
-                            throw appError
-                        }
-                    }
-                }
-                // Retry for network errors
-                if attempt < retries {
-                    let delay = baseRetryDelay * pow(2.0, Double(attempt))
-                    Logger.debug(
-                        "🔄 Network error, retrying in \(delay)s (attempt \(attempt + 1)/\(retries + 1))",
-                        category: .networking
-                    )
-                    try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
-                    continue
-                }
+                // Classify the error: terminal errors rethrow; retryable errors
+                // sleep the backoff and return so the loop retries.
+                try await classifyRequestError(error, parameters: parameters, attempt: attempt, retries: retries)
             }
         }
         // All retries exhausted
         throw lastError ?? LLMError.clientError("Maximum retries exceeded")
     }
-    /// Execute a streaming request with retry logic
-    func executeStreaming(parameters: ChatCompletionParameters, maxRetries: Int? = nil) async throws -> AsyncThrowingStream<ChatCompletionChunkObject, Error> {
-        guard let client = openRouterClient else {
-            throw LLMError.clientError("OpenRouter client not configured")
-        }
-        let requestId = UUID()
-        currentRequestIDs.insert(requestId)
-        defer { currentRequestIDs.remove(requestId) }
-        let retries = maxRetries ?? defaultMaxRetries
-        var lastError: Error?
-        for attempt in 0...retries {
-            // Check if request was cancelled
-            guard currentRequestIDs.contains(requestId) else {
-                throw LLMError.clientError("Request was cancelled")
+
+    /// Classify a failed request. Throws an `LLMError` for terminal conditions
+    /// (insufficient credits, unauthorized, invalid model, exhausted retries).
+    /// For retryable conditions with attempts remaining, sleeps the backoff delay
+    /// and returns — signalling the caller's loop to retry.
+    private func classifyRequestError(
+        _ error: Error,
+        parameters: ChatCompletionParameters,
+        attempt: Int,
+        retries: Int
+    ) async throws {
+        Logger.debug("❌ Request failed with error: \(error)", category: .networking)
+        // Handle SwiftOpenAI APIErrors with enhanced error detection
+        if let apiError = error as? SwiftOpenAI.APIError {
+            Logger.debug("🔍 SwiftOpenAI APIError details: \(apiError.displayDescription)", category: .networking)
+            // Check for 402 Insufficient Credits
+            if apiError.displayDescription.contains("status code 402") {
+                let (requested, available) = parseCreditsError(apiError.displayDescription)
+                Logger.warning("💳 402 Insufficient credits: requested \(requested), available \(available)", category: .networking)
+                throw LLMError.insufficientCredits(requested: requested, available: available)
             }
-            do {
-                Logger.info("🌐 Starting streaming request with model: \(parameters.model)", category: .networking)
-                let stream = try await client.startStreamedChat(parameters: parameters)
-                Logger.info("✅ Streaming started successfully for model: \(parameters.model)", category: .networking)
-                return stream
-            } catch {
-                lastError = error
-                Logger.debug("❌ Streaming request failed with error: \(error)", category: .networking)
-                // Handle SwiftOpenAI APIErrors with enhanced error detection
-                if let apiError = error as? SwiftOpenAI.APIError {
-                    Logger.debug("🔍 SwiftOpenAI APIError details: \(apiError.displayDescription)", category: .networking)
-                    // Check for 402 Insufficient Credits
-                    if apiError.displayDescription.contains("status code 402") {
-                        let (requested, available) = parseCreditsError(apiError.displayDescription)
-                        Logger.warning("💳 402 Insufficient credits: requested \(requested), available \(available)", category: .networking)
-                        throw LLMError.insufficientCredits(requested: requested, available: available)
-                    }
-                    // Check for 403 Unauthorized specifically
-                    if apiError.displayDescription.contains("status code 403") {
-                        let modelId = extractModelId(from: parameters)
-                        Logger.debug("🚫 403 Unauthorized detected for model: \(modelId)", category: .networking)
-                        throw LLMError.unauthorized(modelId)
-                    }
-                    if apiError.displayDescription.lowercased().contains("not a valid model id") {
-                        let modelId = extractModelId(from: parameters)
-                        Logger.debug("🚫 Invalid model ID detected: \(modelId)", category: .networking)
-                        throw LLMError.invalidModelId(modelId)
-                    }
+            // Check for 403 Unauthorized specifically
+            if apiError.displayDescription.contains("status code 403") {
+                let modelId = extractModelId(from: parameters)
+                Logger.debug("🚫 403 Unauthorized detected for model: \(modelId)", category: .networking)
+                throw LLMError.unauthorized(modelId)
+            }
+            if apiError.displayDescription.lowercased().contains("not a valid model id") {
+                let modelId = extractModelId(from: parameters)
+                Logger.debug("🚫 Invalid model ID detected: \(modelId)", category: .networking)
+                throw LLMError.invalidModelId(modelId)
+            }
+        }
+        // Don't retry on certain errors
+        if let appError = error as? LLMError {
+            switch appError {
+            case .decodingFailed, .unexpectedResponseFormat, .clientError, .unauthorized, .invalidModelId, .insufficientCredits:
+                throw appError
+            case .rateLimited(let retryAfter):
+                if let delay = retryAfter, attempt < retries {
+                    Logger.debug("🔄 Rate limited, waiting \(delay)s before retry", category: .networking)
+                    try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                    return
+                } else {
+                    throw appError
                 }
-                // Don't retry on certain errors
-                if let appError = error as? LLMError {
-                    switch appError {
-                    case .decodingFailed, .unexpectedResponseFormat, .clientError, .unauthorized, .invalidModelId, .insufficientCredits:
-                        throw appError
-                    case .rateLimited(let retryAfter):
-                        if let delay = retryAfter, attempt < retries {
-                            Logger.debug("🔄 Rate limited, waiting \(delay)s before retry", category: .networking)
-                            try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
-                            continue
-                        } else {
-                            throw appError
-                        }
-                    case .timeout:
-                        if attempt < retries {
-                            let delay = baseRetryDelay * pow(2.0, Double(attempt))
-                            Logger.debug(
-                                "🔄 Request timeout, retrying in \(delay)s (attempt \(attempt + 1)/\(retries + 1))",
-                                category: .networking
-                            )
-                            try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
-                            continue
-                        } else {
-                            throw appError
-                        }
-                    }
-                }
-                // Retry for network errors
+            case .timeout:
                 if attempt < retries {
                     let delay = baseRetryDelay * pow(2.0, Double(attempt))
                     Logger.debug(
-                        "🔄 Network error, retrying in \(delay)s (attempt \(attempt + 1)/\(retries + 1))",
+                        "🔄 Request timeout, retrying in \(delay)s (attempt \(attempt + 1)/\(retries + 1))",
                         category: .networking
                     )
                     try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
-                    continue
+                    return
+                } else {
+                    throw appError
                 }
             }
         }
-        // All retries exhausted
-        throw lastError ?? LLMError.clientError("Maximum retries exceeded")
+        // Retry for network errors
+        if attempt < retries {
+            let delay = baseRetryDelay * pow(2.0, Double(attempt))
+            Logger.debug(
+                "🔄 Network error, retrying in \(delay)s (attempt \(attempt + 1)/\(retries + 1))",
+                category: .networking
+            )
+            try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+            return
+        }
+        // No retries left and not a classified terminal error: return so the
+        // loop ends and the caller throws the captured lastError.
     }
     /// Cancel all current requests
     func cancelAllRequests() {

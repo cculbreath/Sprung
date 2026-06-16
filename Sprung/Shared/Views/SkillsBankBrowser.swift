@@ -28,12 +28,6 @@ struct SkillsBankBrowser: View {
     @State var curationPlan: SkillCurationPlan?
     @State var isCurating = false
 
-    // Inline editing state
-    @State var editingSkillId: UUID?
-    @State var editingSkillName: String = ""
-    @State var editingSkillCategory: String = ""
-    @State var editingSkillCustomCategory: String = ""
-
     // Refine feature state
     @State var showRefinePopover = false
     @State var refineInstruction = ""
@@ -106,12 +100,41 @@ struct SkillsBankBrowser: View {
                     ScrollView {
                         LazyVStack(spacing: 12) {
                             ForEach(sortedCategories, id: \.self) { category in
-                                categorySection(category)
+                                SkillBankCategorySection(
+                                    category: category,
+                                    skills: groupedSkills[category] ?? [],
+                                    isExpanded: expandedCategories.contains(category),
+                                    sortedCategories: sortedCategories,
+                                    renamingCategory: $renamingCategory,
+                                    renamingCategoryText: $renamingCategoryText,
+                                    onCommitRename: { commitCategoryRename(from: category) },
+                                    isAddingToThisCategory: addingToCategory == category,
+                                    isAddDisabled: addingToCategory != nil,
+                                    isAddingSkill: isAddingSkill,
+                                    newSkillName: $newSkillName,
+                                    onStartAddingSkill: { startAddingSkill(to: category) },
+                                    onCommitNewSkill: commitNewSkill,
+                                    onCancelAddingSkill: cancelAddingSkill,
+                                    onToggleCategory: { toggleCategory(category) },
+                                    isSkillExpanded: { expandedSkills.contains($0.id) },
+                                    onToggleSkillExpand: { toggleSkillExpansion($0) },
+                                    onCommitSkillEdit: { skill, newName, newCategory in
+                                        commitSkillEdit(skill, newName: newName, newCategory: newCategory)
+                                    },
+                                    onDeleteSkill: { deleteSkill($0) }
+                                )
                             }
 
                             // New category creation
                             if isCreatingCategory {
-                                newCategoryRow
+                                SkillBankNewCategoryRow(
+                                    newCategoryName: $newCategoryName,
+                                    onCommit: commitNewCategory,
+                                    onCancel: {
+                                        isCreatingCategory = false
+                                        newCategoryName = ""
+                                    }
+                                )
                             } else {
                                 Button {
                                     isCreatingCategory = true

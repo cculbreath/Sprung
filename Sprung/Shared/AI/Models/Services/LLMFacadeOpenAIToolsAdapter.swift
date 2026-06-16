@@ -27,7 +27,7 @@ struct LLMFacadeOpenAIToolsAdapter {
         modelId: String,
         reasoningEffort: String?
     ) async throws -> ChatCompletionObject {
-        let openAIModelId = modelId.hasPrefix("openai/") ? String(modelId.dropFirst(7)) : modelId
+        let openAIModelId = ModelId(modelId).strippingProvider("openai")
 
         var inputItems: [InputItem] = []
         for message in messages {

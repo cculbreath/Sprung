@@ -37,7 +37,7 @@ struct LLMRequestBuilder {
         _ params: ChatCompletionParameters,
         modelId: String
     ) -> ChatCompletionParameters {
-        guard modelId.hasPrefix("anthropic/") else { return params }
+        guard ModelId(modelId).isAnthropic else { return params }
         var params = params
         params.provider = .init(order: ["Anthropic"], allowFallbacks: false)
         return params
