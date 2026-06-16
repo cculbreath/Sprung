@@ -166,7 +166,7 @@ struct RichTextView: View {
     let jobId: UUID
     var activeSkill: JobSkillEvidence?
 
-    @State private var paragraphs: [Paragraph] = []
+    @State private var paragraphs: [JobDescriptionMarkdownParser.Paragraph] = []
     @State private var highlightScale: CGFloat = 1.0
     @State private var highlightOpacity: Double = 1.0
 
@@ -184,20 +184,6 @@ struct RichTextView: View {
         case .unmatched:
             return Color(.systemGray)
         }
-    }
-
-    struct Paragraph: Identifiable {
-        let id = UUID()
-        let content: String
-        let type: ParagraphType
-        let startIndex: Int // Character offset in original text
-    }
-
-    enum ParagraphType {
-        case normal
-        case bold
-        case list
-        case listItem(String)
     }
 
     var body: some View {
@@ -249,42 +235,9 @@ struct RichTextView: View {
     }
 
     private func processBoldInlineText(_ content: String, startIndex: Int) -> some View {
-        // Check for the simple case first - no bold text
-        if !content.contains("**") {
-            return Text(processTextWithHighlights(content, startIndex: startIndex))
-                .foregroundColor(.primary)
-        }
+        let segments = JobDescriptionMarkdownParser.boldSegments(in: content, startIndex: startIndex)
 
-        // Process bold text with highlighting
-        var segments: [TextSegment] = []
-        let pattern = #"\*\*(.+?)\*\*|([^*]+)"#
-        do {
-            let regex = try NSRegularExpression(pattern: pattern)
-            let nsText = content as NSString
-            let matches = regex.matches(in: content, options: [], range: NSRange(location: 0, length: nsText.length))
-            var currentOffset = 0
-            for match in matches {
-                if match.numberOfRanges > 2 {
-                    if match.range(at: 1).location != NSNotFound {
-                        let boldText = nsText.substring(with: match.range(at: 1))
-                        segments.append(TextSegment(text: boldText, isBold: true, offset: startIndex + currentOffset))
-                        currentOffset += match.range.length
-                    } else if match.range(at: 2).location != NSNotFound {
-                        let regularText = nsText.substring(with: match.range(at: 2))
-                        segments.append(TextSegment(text: regularText, isBold: false, offset: startIndex + currentOffset))
-                        currentOffset += match.range.length
-                    }
-                } else {
-                    let wholeMatch = nsText.substring(with: match.range)
-                    segments.append(TextSegment(text: wholeMatch, isBold: false, offset: startIndex + currentOffset))
-                    currentOffset += match.range.length
-                }
-            }
-        } catch {
-            return Text(processTextWithHighlights(content, startIndex: startIndex))
-                .foregroundColor(.primary)
-        }
-
+        // No bold runs (or the parse produced nothing) → render as plain highlighted text.
         if segments.isEmpty {
             return Text(processTextWithHighlights(content, startIndex: startIndex))
                 .foregroundColor(.primary)
@@ -300,12 +253,6 @@ struct RichTextView: View {
         }
         return Text(attributedString)
             .foregroundColor(.primary)
-    }
-
-    struct TextSegment {
-        let text: String
-        let isBold: Bool
-        let offset: Int
     }
 
     private func bulletList(_ content: String, startIndex: Int) -> some View {
@@ -347,88 +294,7 @@ struct RichTextView: View {
     }
 
     private func processParagraphs() {
-        var result: [Paragraph] = []
-        var preprocessedText = text
-        var currentOffset = 0
-
-        let problemPattern1 = #"\*\*([^*\n]+)[\s\n]+\*\*"#
-        if let regex = try? NSRegularExpression(pattern: problemPattern1, options: []) {
-            let nsString = preprocessedText as NSString
-            let range = NSRange(location: 0, length: nsString.length)
-            let matches = regex.matches(in: preprocessedText, options: [], range: range)
-            for match in matches.reversed() where match.numberOfRanges > 1 {
-                let contentRange = match.range(at: 1)
-                let content = nsString.substring(with: contentRange)
-                let replacement = "**\(content)**"
-                preprocessedText = (preprocessedText as NSString).replacingCharacters(in: match.range, with: replacement)
-            }
-        }
-
-        preprocessedText = preprocessedText.replacingOccurrences(
-            of: "\\*\\*([^*]+?)\\*\\*\\s*\\n\\s*\\n",
-            with: "**$1**\n\n",
-            options: .regularExpression
-        )
-
-        let sections = preprocessedText.components(separatedBy: "\n\n")
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-
-        for section in sections {
-            if section.contains("\n* ") || section.contains("\n• ") || section.hasPrefix("* ") || section.hasPrefix("• ") {
-                result.append(Paragraph(content: section, type: .list, startIndex: currentOffset))
-                currentOffset += section.count + 2
-                continue
-            }
-
-            let boldTitlePattern = #"^\*\*(.+?)\*\*[\s\n]*"#
-            do {
-                let regex = try NSRegularExpression(pattern: boldTitlePattern, options: [.dotMatchesLineSeparators])
-                let nsSection = section as NSString
-                let matches = regex.matches(in: section, options: [], range: NSRange(location: 0, length: nsSection.length))
-                if !matches.isEmpty, let match = matches.first {
-                    if match.numberOfRanges > 1 {
-                        let titleRange = match.range(at: 1)
-                        let boldTitle = nsSection.substring(with: titleRange).trimmingCharacters(in: .whitespacesAndNewlines)
-                        result.append(Paragraph(content: boldTitle, type: .bold, startIndex: currentOffset))
-                        if match.range.upperBound < nsSection.length {
-                            let remainingText = nsSection.substring(from: match.range.upperBound).trimmingCharacters(in: .whitespacesAndNewlines)
-                            if !remainingText.isEmpty {
-                                result.append(Paragraph(content: remainingText, type: .normal, startIndex: currentOffset + match.range.upperBound))
-                            }
-                        }
-                    } else {
-                        result.append(Paragraph(content: section, type: .normal, startIndex: currentOffset))
-                    }
-                } else {
-                    let clearedText = cleanAsterisks(section)
-                    result.append(Paragraph(content: clearedText, type: .normal, startIndex: currentOffset))
-                }
-            } catch {
-                result.append(Paragraph(content: section, type: .normal, startIndex: currentOffset))
-            }
-            currentOffset += section.count + 2
-        }
-        paragraphs = result
-    }
-
-    private func cleanAsterisks(_ text: String) -> String {
-        var result = text
-        let pattern = #"\*\*(.+?)\*\*"#
-        do {
-            let regex = try NSRegularExpression(pattern: pattern)
-            let nsText = text as NSString
-            let matches = regex.matches(in: text, options: [], range: NSRange(location: 0, length: nsText.length))
-            for match in matches.reversed() where match.numberOfRanges > 1 {
-                let contentRange = match.range(at: 1)
-                let content = nsText.substring(with: contentRange)
-                let range = match.range
-                result = (result as NSString).replacingCharacters(in: range, with: content)
-            }
-        } catch {
-            Logger.debug("Failed to normalize markdown markers: \(error.localizedDescription)")
-        }
-        return result
+        paragraphs = JobDescriptionMarkdownParser.paragraphs(from: text)
     }
 
     private func processEmailLinks(_ content: String) -> AttributedString {
