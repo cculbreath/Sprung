@@ -2,8 +2,8 @@
 //  CollapsiblePanel.swift
 //  Sprung
 //
-//  Unified collapsible panel component for consistent drawer behavior.
-//  Uses Adobe-style double chevrons for expand/collapse.
+//  Panel chrome for drawer behavior: chevron toggle, collapsed drag handle,
+//  and a vertical resize handle. Uses Adobe-style double chevrons for expand/collapse.
 //
 
 import SwiftUI
@@ -12,69 +12,6 @@ import SwiftUI
 enum PanelEdge {
     case leading
     case trailing
-}
-
-/// Collapsible panel with animated width transitions
-struct CollapsiblePanel<Content: View>: View {
-    let edge: PanelEdge
-    let collapsedWidth: CGFloat
-    let expandedWidth: CGFloat
-    @Binding var isExpanded: Bool
-    @ViewBuilder let content: () -> Content
-
-    private var currentWidth: CGFloat {
-        isExpanded ? expandedWidth : collapsedWidth
-    }
-
-    var body: some View {
-        HStack(spacing: 0) {
-            if edge == .trailing {
-                separator
-            }
-
-            content()
-                .frame(width: currentWidth)
-                .clipped()
-
-            if edge == .leading {
-                separator
-            }
-        }
-        .frame(width: currentWidth + 1)
-        .animation(.easeInOut(duration: 0.2), value: isExpanded)
-    }
-
-    private var separator: some View {
-        Rectangle()
-            .fill(Color(.separatorColor))
-            .frame(width: 1)
-    }
-}
-
-/// Panel that can fully hide (width goes to 0)
-struct HideablePanel<Content: View>: View {
-    let edge: PanelEdge
-    let width: CGFloat
-    @Binding var isVisible: Bool
-    @ViewBuilder let content: () -> Content
-
-    var body: some View {
-        if isVisible {
-            HStack(spacing: 0) {
-                if edge == .trailing {
-                    Divider()
-                }
-
-                content()
-                    .frame(width: width)
-
-                if edge == .leading {
-                    Divider()
-                }
-            }
-            .transition(.move(edge: edge == .leading ? .leading : .trailing).combined(with: .opacity))
-        }
-    }
 }
 
 /// Chevron toggle button for panel expansion using SF Symbols
@@ -195,83 +132,5 @@ struct VerticalResizeHandle: View {
                         NSCursor.pop()
                     }
             )
-    }
-}
-
-/// Horizontal resize handle for adjusting panel height (drag up/down)
-struct HorizontalResizeHandle: View {
-    @Binding var height: Double
-    let minHeight: CGFloat
-    let maxHeight: CGFloat
-    var inverted: Bool = false  // If true, dragging up increases height
-
-    @State private var isHovered = false
-    @State private var isDragging = false
-    @State private var dragStartHeight: Double = 0
-
-    var body: some View {
-        Rectangle()
-            .fill(isDragging ? Color.accentColor.opacity(0.3) : (isHovered ? Color.primary.opacity(0.1) : Color(.separatorColor)))
-            .frame(height: isDragging ? 3 : 1)
-            .contentShape(Rectangle().inset(by: -3))
-            .onHover { hovering in
-                isHovered = hovering
-                if hovering {
-                    NSCursor.resizeUpDown.push()
-                } else if !isDragging {
-                    NSCursor.pop()
-                }
-            }
-            .gesture(
-                DragGesture(minimumDistance: 1)
-                    .onChanged { value in
-                        if !isDragging {
-                            isDragging = true
-                            dragStartHeight = height
-                            NSCursor.resizeUpDown.push()
-                        }
-                        let delta = inverted ? -value.translation.height : value.translation.height
-                        let newHeight = dragStartHeight + delta
-                        height = min(max(newHeight, Double(minHeight)), Double(maxHeight))
-                    }
-                    .onEnded { _ in
-                        isDragging = false
-                        NSCursor.pop()
-                    }
-            )
-    }
-}
-
-// MARK: - Convenience Modifiers
-
-extension View {
-    /// Wraps content in a collapsible leading panel
-    func leadingPanel(
-        isExpanded: Binding<Bool>,
-        collapsedWidth: CGFloat,
-        expandedWidth: CGFloat
-    ) -> some View {
-        CollapsiblePanel(
-            edge: .leading,
-            collapsedWidth: collapsedWidth,
-            expandedWidth: expandedWidth,
-            isExpanded: isExpanded
-        ) {
-            self
-        }
-    }
-
-    /// Wraps content in a hideable trailing panel
-    func trailingPanel(
-        isVisible: Binding<Bool>,
-        width: CGFloat
-    ) -> some View {
-        HideablePanel(
-            edge: .trailing,
-            width: width,
-            isVisible: isVisible
-        ) {
-            self
-        }
     }
 }
