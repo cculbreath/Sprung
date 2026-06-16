@@ -99,6 +99,13 @@ final class AppDependencies {
             refStore: coverRefStore,
             applicantProfileStore: applicantProfileStore
         )
+        // Created here without its background preprocessor: the preprocessor
+        // needs the LLMFacade (and thus enabledLLMStore), which are built below,
+        // while DiscoveryCoordinator below needs jobAppStore to already exist —
+        // a genuine cycle. The preprocessor is wired in a deferred second phase
+        // (see "Job App Preprocessor" below). Safe because JobAppStore holds it
+        // as a guarded optional: every preprocessing entry point no-ops with a
+        // warning if it has not been set, so jobAppStore is never "half-usable".
         self.jobAppStore = JobAppStore(context: modelContext, resStore: resStore, coverLetterStore: coverLetterStore)
         self.enabledLLMStore = EnabledLLMStore(modelContext: modelContext)
         self.navigationState = NavigationStateService()
@@ -192,7 +199,12 @@ final class AppDependencies {
         let backgroundActivityTracker = BackgroundActivityTracker()
         self.backgroundActivityTracker = backgroundActivityTracker
 
-        // Job App Preprocessor (background processing for job requirements and card selection)
+        // Job App Preprocessor (background processing for job requirements and
+        // card selection). Deferred second phase of jobAppStore wiring: this is
+        // the earliest point where every input exists (llmFacade, skillStore,
+        // backgroundActivityTracker, knowledgeCardStore). Must run before any
+        // jobAppStore preprocessing is triggered — which only happens on user
+        // action, well after init returns.
         let jobAppPreprocessor = JobAppPreprocessor(llmFacade: llmFacade)
         jobAppPreprocessor.setSkillStore(skillStore)
         jobAppPreprocessor.setActivityTracker(backgroundActivityTracker)
