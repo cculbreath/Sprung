@@ -120,8 +120,16 @@ struct SeedGenerationContext {
     /// Get knowledge cards relevant to a specific timeline entry
     /// Matches by organization name and/or date range overlap
     func relevantKCs(for entry: JSON) -> [KnowledgeCard] {
-        let entryOrg = entry["name"].stringValue.lowercased()
-        let entryPosition = entry["position"].stringValue.lowercased()
+        // Timeline entries use type-specific keys for the same concept:
+        // work=company/title, volunteer=organization/position, education=institution,
+        // project=name. Read the union so org-name and title matching fire for every
+        // section (work, the highest-value one, previously matched on neither).
+        let entryOrg = (entry["company"].string
+            ?? entry["organization"].string
+            ?? entry["institution"].string
+            ?? entry["name"].string ?? "").lowercased()
+        let entryPosition = (entry["title"].string
+            ?? entry["position"].string ?? "").lowercased()
         let entryStartDate = entry["startDate"].string
         let entryEndDate = entry["endDate"].string
 
