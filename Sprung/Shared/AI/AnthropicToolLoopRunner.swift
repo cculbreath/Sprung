@@ -20,9 +20,12 @@
 //  Agents supply only what genuinely differs, through AnthropicToolLoopDelegate:
 //  the request/LLM call (runModelTurn — streaming-swappable), tool execution
 //  (sequential or concurrent), completion parsing, the no-tool policy, and a few
-//  optional lifecycle hooks. Because the runner guarantees the pairing invariant
-//  by construction, the standalone AnthropicConversationRepairer that patched
-//  orphaned tool_use ids becomes dead (Phase 1F).
+//  optional lifecycle hooks. For any agent driven by this runner the pairing
+//  invariant holds by construction. (ResumeRevisionAgent deliberately does NOT use
+//  the runner — its streaming + human-in-the-loop loop is a genuinely different
+//  shape — so it keeps its own hand-rolled loop and still relies on
+//  AnthropicConversationRepairer as a defensive safety net for orphaned tool_use
+//  ids.)
 //
 
 import Foundation
