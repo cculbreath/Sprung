@@ -36,6 +36,7 @@ struct ModelsSettingsView: View {
     @AppStorage("onboardingKCAgentModelId") private var kcAgentModelId: String = ""
     @AppStorage("onboardingGitIngestModelId") private var gitIngestModelId: String = ""
     @AppStorage("backgroundProcessingModelId") private var backgroundProcessingModelId: String = ""
+    @AppStorage("jobImportModelId") private var jobImportModelId: String = ""
 
     // MARK: - Discovery Models
     @AppStorage("discoveryCoachingModelId") private var coachingModelId: String = ""
@@ -174,6 +175,7 @@ struct ModelsSettingsView: View {
         modelRow(operation: "Background Processing", backend: .openRouter) {
             openRouterPicker(selection: $backgroundProcessingModelId)
         }
+        jobImportRow
 
         Divider().padding(.vertical, 4)
 
@@ -254,6 +256,18 @@ struct ModelsSettingsView: View {
             backendBadge(.openAI)
                 .frame(width: backendWidth, alignment: .leading)
             openAIPicker(selection: $discoveryLLMModelId)
+            Spacer()
+        }
+        .padding(.vertical, 6)
+    }
+
+    private var jobImportRow: some View {
+        HStack(spacing: 0) {
+            Text("Job Import")
+                .frame(width: operationWidth, alignment: .leading)
+            backendBadge(.openAI)
+                .frame(width: backendWidth, alignment: .leading)
+            openAIPicker(selection: $jobImportModelId)
             Spacer()
         }
         .padding(.vertical, 6)
