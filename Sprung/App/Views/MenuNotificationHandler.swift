@@ -17,7 +17,6 @@ class MenuNotificationHandler {
     private weak var coverLetterStore: CoverLetterStore?
     private var sheets: Binding<AppSheets>?
     private var selectedTab: Binding<TabList>?
-    private var showSlidingList: Binding<Bool>?
     private var observersConfigured = false
     init() {}
     /// Setup the handler with required dependencies
@@ -25,15 +24,13 @@ class MenuNotificationHandler {
         jobAppStore: JobAppStore,
         coverLetterStore: CoverLetterStore,
         sheets: Binding<AppSheets>,
-        selectedTab: Binding<TabList>,
-        showSlidingList: Binding<Bool>
+        selectedTab: Binding<TabList>
     ) {
         Logger.info("🛠️ MenuNotificationHandler configure invoked", category: .ui)
         self.jobAppStore = jobAppStore
         self.coverLetterStore = coverLetterStore
         self.sheets = sheets
         self.selectedTab = selectedTab
-        self.showSlidingList = showSlidingList
         guard !observersConfigured else {
             Logger.debug("♻️ MenuNotificationHandler already configured; skipping observer setup", category: .ui)
             return

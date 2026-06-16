@@ -9,11 +9,8 @@ struct SidebarView: View {
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
     // Live query – sorted by creation time (oldest first) within each status group
     @Query(sort: \JobApp.createdAt, order: .forward) private var jobApps: [JobApp]
-    @Binding var tabRefresh: Bool // Pass down if needed by DraggableSlidingSourceListView
     // Binding for the main list selection
     @Binding var selectedApp: JobApp?
-    // State for the sliding list visibility
-    @Binding var showSlidingList: Bool
     var body: some View {
         VStack(spacing: 0) {
             // --- Main Content ---
@@ -57,12 +54,6 @@ struct SidebarView: View {
             .scrollContentBackground(.hidden)
             .environment(\.defaultMinListRowHeight, 20)
             .frame(maxHeight: .infinity) // List takes remaining space
-            // Draggable Sliding Source List (conditionally shown)
-            if showSlidingList {
-                DraggableSlidingSourceListView(refresh: $tabRefresh, isVisible: $showSlidingList)
-                    .transition(.move(edge: .bottom))
-                    .zIndex(1)
-            }
         }
         .frame(maxHeight: .infinity)
     }

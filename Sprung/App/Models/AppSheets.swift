@@ -25,7 +25,6 @@ struct AppSheets {
 // MARK: - Sheet Presentation ViewModifier
 struct AppSheetsModifier: ViewModifier {
     @Binding var sheets: AppSheets
-    @Binding var refPopup: Bool
     @Environment(JobAppStore.self) private var jobAppStore
     @Environment(ResStore.self) private var resStore
     @Environment(CoverLetterStore.self) private var coverLetterStore
@@ -117,10 +116,6 @@ struct AppSheetsModifier: ViewModifier {
                     .environment(coverLetterStore)
                     .environment(enabledLLMStore)
             }
-            .sheet(isPresented: $refPopup) {
-                ResRefView()
-                    .padding()
-            }
             .sheet(isPresented: $sheets.showSetupWizard) {
                 SetupWizardView {
                     sheets.showSetupWizard = false
@@ -131,7 +126,7 @@ struct AppSheetsModifier: ViewModifier {
 
 // MARK: - Helper View Extension
 extension View {
-    func appSheets(sheets: Binding<AppSheets>, refPopup: Binding<Bool>) -> some View {
-        self.modifier(AppSheetsModifier(sheets: sheets, refPopup: refPopup))
+    func appSheets(sheets: Binding<AppSheets>) -> some View {
+        self.modifier(AppSheetsModifier(sheets: sheets))
     }
 }

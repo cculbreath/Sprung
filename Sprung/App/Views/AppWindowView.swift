@@ -12,10 +12,8 @@ struct AppWindowView: View {
     @Environment(AppState.self) private var appState: AppState
     @State private var listingButtons: SaveButtons = .init(edit: false, save: false, cancel: false)
     @Binding var selectedTab: TabList
-    @Binding var refPopup: Bool
     @Binding var hasVisitedResumeTab: Bool
     @Binding var tabRefresh: Bool
-    @Binding var showSlidingList: Bool
     // Centralized sheet state management for all app windows/modals
     @Binding var sheets: AppSheets
     var body: some View {
@@ -41,7 +39,6 @@ struct AppWindowView: View {
         .modifier(AppWindowViewModifiers(
             jobAppStore: jobAppStore,
             sheets: $sheets,
-            refPopup: $refPopup,
             coverLetterStore: coverLetterStore,
             appState: appState,
             selectedTab: $selectedTab,
@@ -121,7 +118,6 @@ struct SaveButtons {
 struct AppWindowViewModifiers: ViewModifier {
     let jobAppStore: JobAppStore
     @Binding var sheets: AppSheets
-    @Binding var refPopup: Bool
     let coverLetterStore: CoverLetterStore
     let appState: AppState
     @Binding var selectedTab: TabList
@@ -147,10 +143,6 @@ struct AppWindowViewModifiers: ViewModifier {
                 hasVisitedResumeTab = false
             }
         let step2: some View = step1
-            .sheet(isPresented: $refPopup) {
-                ResRefView()
-                    .padding()
-            }
             .sheet(isPresented: $sheets.showResumeReview) {
                 if let selectedResume = jobAppStore.selectedApp?.selectedRes {
                     ResumeReviewSheet(selectedResume: .constant(selectedResume))

@@ -8,19 +8,6 @@ import Foundation
 import SwiftUI
 import SwiftData
 
-// MARK: - FocusedValue for Knowledge Cards Visibility
-/// Allows menu commands to read and toggle the Knowledge Cards pane visibility
-struct KnowledgeCardsVisibleKey: FocusedValueKey {
-    typealias Value = Binding<Bool>
-}
-
-extension FocusedValues {
-    var knowledgeCardsVisible: Binding<Bool>? {
-        get { self[KnowledgeCardsVisibleKey.self] }
-        set { self[KnowledgeCardsVisibleKey.self] = newValue }
-    }
-}
-
 // MARK: - Menu Command Notifications
 /// Central list of notifications bridging AppKit menu/toolbar commands into the SwiftUI layer.
 extension Notification.Name {

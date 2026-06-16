@@ -17,10 +17,8 @@ struct ResumeEditorModuleView: View {
     @Environment(UnifiedJobFocusState.self) private var focusState
 
     @State var tabRefresh: Bool = false
-    @State var showSlidingList: Bool = false
     @State private var sheets = AppSheets()
     @State private var hasVisitedResumeTab: Bool = false
-    @State private var refPopup: Bool = false
     @State private var menuHandler = MenuNotificationHandler()
 
     // Sidebar collapse state - persisted
@@ -70,7 +68,7 @@ struct ResumeEditorModuleView: View {
             .allowsHitTesting(false)
             .accessibilityHidden(true)
         }
-        .appSheets(sheets: $sheets, refPopup: $refPopup)
+        .appSheets(sheets: $sheets)
         .onChange(of: jobAppStore.selectedApp) { _, newValue in
             navigationState.saveSelectedJobApp(newValue)
             updateMyLetter()
@@ -100,8 +98,7 @@ struct ResumeEditorModuleView: View {
                 jobAppStore: jobAppStore,
                 coverLetterStore: coverLetterStore,
                 sheets: $sheets,
-                selectedTab: $navigationState.selectedTab,
-                showSlidingList: $showSlidingList
+                selectedTab: $navigationState.selectedTab
             )
             navigationState.restoreSelectedJobApp(from: jobAppStore)
             updateMyLetter()
@@ -124,7 +121,6 @@ struct ResumeEditorModuleView: View {
                 isSidebarExpanded.toggle()
             }
         }
-        .focusedValue(\.knowledgeCardsVisible, $showSlidingList)
     }
 
     // MARK: - Sidebar
@@ -149,9 +145,7 @@ struct ResumeEditorModuleView: View {
 
             // Job list
             SidebarView(
-                tabRefresh: $tabRefresh,
-                selectedApp: $jobAppStore.selectedApp,
-                showSlidingList: $showSlidingList
+                selectedApp: $jobAppStore.selectedApp
             )
         }
     }
@@ -165,10 +159,8 @@ struct ResumeEditorModuleView: View {
             if jobAppStore.selectedApp != nil {
                 AppWindowView(
                     selectedTab: $navigationState.selectedTab,
-                    refPopup: $refPopup,
                     hasVisitedResumeTab: $hasVisitedResumeTab,
                     tabRefresh: $tabRefresh,
-                    showSlidingList: $showSlidingList,
                     sheets: $sheets
                 )
                 .background {
