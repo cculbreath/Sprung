@@ -3,19 +3,19 @@ import Observation
 import SwiftData
 @MainActor
 @Observable
-final class TemplateStore {
-    private let context: ModelContext
+final class TemplateStore: SwiftDataStore {
+    let modelContext: ModelContext
     init(context: ModelContext) {
-        self.context = context
+        self.modelContext = context
     }
     func templates() -> [Template] {
         let descriptor = FetchDescriptor<Template>(sortBy: [SortDescriptor(\Template.name, order: .forward)])
-        return (try? context.fetch(descriptor)) ?? []
+        return (try? modelContext.fetch(descriptor)) ?? []
     }
     func template(slug: String) -> Template? {
         let normalized = slug.lowercased()
         let descriptor = FetchDescriptor<Template>(predicate: #Predicate { $0.slug == normalized })
-        return try? context.fetch(descriptor).first
+        return try? modelContext.fetch(descriptor).first
     }
     func htmlTemplateContent(slug: String) -> String? {
         template(slug: slug)?.htmlContent
@@ -31,13 +31,13 @@ final class TemplateStore {
             predicate: #Predicate { $0.isDefault == true },
             sortBy: [SortDescriptor(\Template.updatedAt, order: .reverse)]
         )
-        if let match = try? context.fetch(descriptor).first {
+        if let match = try? modelContext.fetch(descriptor).first {
             return match
         }
         let fallbackDescriptor = FetchDescriptor<Template>(
             sortBy: [SortDescriptor(\Template.createdAt, order: .forward)]
         )
-        return try? context.fetch(fallbackDescriptor).first
+        return try? modelContext.fetch(fallbackDescriptor).first
     }
     @discardableResult
     func upsertTemplate(
@@ -61,7 +61,7 @@ final class TemplateStore {
             if markAsDefault {
                 setDefault(existing)
             }
-            try? context.save()
+            saveContext()
             return existing
         } else {
             let hadTemplates = !templates().isEmpty
@@ -76,23 +76,23 @@ final class TemplateStore {
                 createdAt: now,
                 updatedAt: now
             )
-            context.insert(template)
+            modelContext.insert(template)
             if markAsDefault || !hadTemplates {
                 setDefault(template)
             }
-            try? context.save()
+            saveContext()
             return template
         }
     }
     func setDefault(_ template: Template) {
         guard template.isDefault == false else { return }
         let descriptor = FetchDescriptor<Template>(predicate: #Predicate { $0.isDefault == true })
-        if let currentDefaults = try? context.fetch(descriptor) {
+        if let currentDefaults = try? modelContext.fetch(descriptor) {
             currentDefaults.forEach { $0.isDefault = false }
         }
         template.isDefault = true
         template.updatedAt = Date()
-        try? context.save()
+        saveContext()
     }
     func updateManifest(slug: String, manifestData: Data?) throws {
         guard let template = template(slug: slug) else {
@@ -100,13 +100,13 @@ final class TemplateStore {
         }
         template.manifestData = manifestData
         template.updatedAt = Date()
-        try context.save()
+        try modelContext.save()
     }
     func deleteTemplate(slug: String) {
         guard let template = template(slug: slug) else { return }
         let wasDefault = template.isDefault
-        context.delete(template)
-        try? context.save()
+        modelContext.delete(template)
+        saveContext()
         if wasDefault {
             if let fallback = defaultTemplate() {
                 setDefault(fallback)
