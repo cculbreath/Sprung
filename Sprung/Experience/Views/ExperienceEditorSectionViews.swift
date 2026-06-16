@@ -1,23 +1,5 @@
 import SwiftUI
-struct WorkExperienceSectionView: View {
-    @Binding var items: [WorkExperienceDraft]
-    let callbacks: ExperienceSectionViewCallbacks
-    var body: some View {
-        GenericExperienceSectionView(
-            items: $items,
-            metadata: ExperienceSectionKey.work.metadata,
-            callbacks: callbacks,
-            newItem: WorkExperienceDraft.init,
-            title: Self.title(for:),
-            subtitle: Self.subtitle(for:),
-            editorBuilder: { item, callbacks in
-                WorkExperienceEditor(item: item, onChange: callbacks.onChange)
-            },
-            summaryBuilder: { entry in
-                WorkExperienceSummaryView(entry: entry)
-            }
-        )
-    }
+struct WorkExperienceSectionView {
     private static func title(for entry: WorkExperienceDraft) -> String {
         if entry.position.trimmed().isEmpty == false { return entry.position.trimmed() }
         if entry.name.trimmed().isEmpty == false { return entry.name.trimmed() }
@@ -29,25 +11,7 @@ struct WorkExperienceSectionView: View {
         return summarySubtitle(primary: company, secondary: range)
     }
 }
-struct VolunteerExperienceSectionView: View {
-    @Binding var items: [VolunteerExperienceDraft]
-    let callbacks: ExperienceSectionViewCallbacks
-    var body: some View {
-        GenericExperienceSectionView(
-            items: $items,
-            metadata: ExperienceSectionKey.volunteer.metadata,
-            callbacks: callbacks,
-            newItem: VolunteerExperienceDraft.init,
-            title: Self.title(for:),
-            subtitle: Self.subtitle(for:),
-            editorBuilder: { item, callbacks in
-                VolunteerExperienceEditor(item: item, onChange: callbacks.onChange)
-            },
-            summaryBuilder: { entry in
-                VolunteerExperienceSummaryView(entry: entry)
-            }
-        )
-    }
+struct VolunteerExperienceSectionView {
     private static func title(for entry: VolunteerExperienceDraft) -> String {
         if entry.position.trimmed().isEmpty == false { return entry.position.trimmed() }
         if entry.organization.trimmed().isEmpty == false { return entry.organization.trimmed() }
@@ -59,25 +23,7 @@ struct VolunteerExperienceSectionView: View {
         return summarySubtitle(primary: organization, secondary: range)
     }
 }
-struct EducationExperienceSectionView: View {
-    @Binding var items: [EducationExperienceDraft]
-    let callbacks: ExperienceSectionViewCallbacks
-    var body: some View {
-        GenericExperienceSectionView(
-            items: $items,
-            metadata: ExperienceSectionKey.education.metadata,
-            callbacks: callbacks,
-            newItem: EducationExperienceDraft.init,
-            title: Self.title(for:),
-            subtitle: Self.subtitle(for:),
-            editorBuilder: { item, callbacks in
-                EducationExperienceEditor(item: item, onChange: callbacks.onChange)
-            },
-            summaryBuilder: { entry in
-                EducationExperienceSummaryView(entry: entry)
-            }
-        )
-    }
+struct EducationExperienceSectionView {
     private static func title(for entry: EducationExperienceDraft) -> String {
         let study = entry.studyType.trimmed()
         let area = entry.area.trimmed()
@@ -93,25 +39,7 @@ struct EducationExperienceSectionView: View {
         return summarySubtitle(primary: institution, secondary: range)
     }
 }
-struct ProjectExperienceSectionView: View {
-    @Binding var items: [ProjectExperienceDraft]
-    let callbacks: ExperienceSectionViewCallbacks
-    var body: some View {
-        GenericExperienceSectionView(
-            items: $items,
-            metadata: ExperienceSectionKey.projects.metadata,
-            callbacks: callbacks,
-            newItem: ProjectExperienceDraft.init,
-            title: Self.title(for:),
-            subtitle: Self.subtitle(for:),
-            editorBuilder: { item, callbacks in
-                ProjectExperienceEditor(item: item, onChange: callbacks.onChange)
-            },
-            summaryBuilder: { entry in
-                ProjectExperienceSummaryView(entry: entry)
-            }
-        )
-    }
+struct ProjectExperienceSectionView {
     private static func title(for entry: ProjectExperienceDraft) -> String {
         let name = entry.name.trimmed()
         return name.isEmpty ? "Project" : name
@@ -122,25 +50,7 @@ struct ProjectExperienceSectionView: View {
         return summarySubtitle(primary: organization, secondary: range)
     }
 }
-struct SkillExperienceSectionView: View {
-    @Binding var items: [SkillExperienceDraft]
-    let callbacks: ExperienceSectionViewCallbacks
-    var body: some View {
-        GenericExperienceSectionView(
-            items: $items,
-            metadata: ExperienceSectionKey.skills.metadata,
-            callbacks: callbacks,
-            newItem: SkillExperienceDraft.init,
-            title: Self.title(for:),
-            subtitle: Self.subtitle(for:),
-            editorBuilder: { item, callbacks in
-                SkillExperienceEditor(item: item, onChange: callbacks.onChange)
-            },
-            summaryBuilder: { entry in
-                SkillExperienceSummaryView(entry: entry)
-            }
-        )
-    }
+struct SkillExperienceSectionView {
     private static func title(for entry: SkillExperienceDraft) -> String {
         let name = entry.name.trimmed()
         return name.isEmpty ? "Skill" : name
@@ -150,25 +60,7 @@ struct SkillExperienceSectionView: View {
         return level.isEmpty ? nil : level
     }
 }
-struct AwardExperienceSectionView: View {
-    @Binding var items: [AwardExperienceDraft]
-    let callbacks: ExperienceSectionViewCallbacks
-    var body: some View {
-        GenericExperienceSectionView(
-            items: $items,
-            metadata: ExperienceSectionKey.awards.metadata,
-            callbacks: callbacks,
-            newItem: AwardExperienceDraft.init,
-            title: Self.title(for:),
-            subtitle: Self.subtitle(for:),
-            editorBuilder: { item, callbacks in
-                AwardExperienceEditor(item: item, onChange: callbacks.onChange)
-            },
-            summaryBuilder: { entry in
-                AwardExperienceSummaryView(entry: entry)
-            }
-        )
-    }
+struct AwardExperienceSectionView {
     private static func title(for entry: AwardExperienceDraft) -> String {
         let title = entry.title.trimmed()
         return title.isEmpty ? "Award" : title
@@ -177,25 +69,7 @@ struct AwardExperienceSectionView: View {
         summarySubtitle(primary: entry.awarder.trimmed(), secondary: entry.date.trimmed())
     }
 }
-struct CertificateExperienceSectionView: View {
-    @Binding var items: [CertificateExperienceDraft]
-    let callbacks: ExperienceSectionViewCallbacks
-    var body: some View {
-        GenericExperienceSectionView(
-            items: $items,
-            metadata: ExperienceSectionKey.certificates.metadata,
-            callbacks: callbacks,
-            newItem: CertificateExperienceDraft.init,
-            title: Self.title(for:),
-            subtitle: Self.subtitle(for:),
-            editorBuilder: { item, callbacks in
-                CertificateExperienceEditor(item: item, onChange: callbacks.onChange)
-            },
-            summaryBuilder: { entry in
-                CertificateExperienceSummaryView(entry: entry)
-            }
-        )
-    }
+struct CertificateExperienceSectionView {
     private static func title(for entry: CertificateExperienceDraft) -> String {
         let name = entry.name.trimmed()
         return name.isEmpty ? "Certificate" : name
@@ -204,25 +78,7 @@ struct CertificateExperienceSectionView: View {
         summarySubtitle(primary: entry.issuer.trimmed(), secondary: entry.date.trimmed())
     }
 }
-struct PublicationExperienceSectionView: View {
-    @Binding var items: [PublicationExperienceDraft]
-    let callbacks: ExperienceSectionViewCallbacks
-    var body: some View {
-        GenericExperienceSectionView(
-            items: $items,
-            metadata: ExperienceSectionKey.publications.metadata,
-            callbacks: callbacks,
-            newItem: PublicationExperienceDraft.init,
-            title: Self.title(for:),
-            subtitle: Self.subtitle(for:),
-            editorBuilder: { item, callbacks in
-                PublicationExperienceEditor(item: item, onChange: callbacks.onChange)
-            },
-            summaryBuilder: { entry in
-                PublicationExperienceSummaryView(entry: entry)
-            }
-        )
-    }
+struct PublicationExperienceSectionView {
     private static func title(for entry: PublicationExperienceDraft) -> String {
         let name = entry.name.trimmed()
         return name.isEmpty ? "Publication" : name
@@ -231,25 +87,7 @@ struct PublicationExperienceSectionView: View {
         summarySubtitle(primary: entry.publisher.trimmed(), secondary: entry.releaseDate.trimmed())
     }
 }
-struct LanguageExperienceSectionView: View {
-    @Binding var items: [LanguageExperienceDraft]
-    let callbacks: ExperienceSectionViewCallbacks
-    var body: some View {
-        GenericExperienceSectionView(
-            items: $items,
-            metadata: ExperienceSectionKey.languages.metadata,
-            callbacks: callbacks,
-            newItem: LanguageExperienceDraft.init,
-            title: Self.title(for:),
-            subtitle: Self.subtitle(for:),
-            editorBuilder: { item, callbacks in
-                LanguageExperienceEditor(item: item, onChange: callbacks.onChange)
-            },
-            summaryBuilder: { entry in
-                LanguageExperienceSummaryView(entry: entry)
-            }
-        )
-    }
+struct LanguageExperienceSectionView {
     private static func title(for entry: LanguageExperienceDraft) -> String {
         let language = entry.language.trimmed()
         return language.isEmpty ? "Language" : language
@@ -259,49 +97,13 @@ struct LanguageExperienceSectionView: View {
         return fluency.isEmpty ? nil : fluency
     }
 }
-struct InterestExperienceSectionView: View {
-    @Binding var items: [InterestExperienceDraft]
-    let callbacks: ExperienceSectionViewCallbacks
-    var body: some View {
-        GenericExperienceSectionView(
-            items: $items,
-            metadata: ExperienceSectionKey.interests.metadata,
-            callbacks: callbacks,
-            newItem: InterestExperienceDraft.init,
-            title: Self.title(for:),
-            subtitle: { _ in nil },
-            editorBuilder: { item, callbacks in
-                InterestExperienceEditor(item: item, onChange: callbacks.onChange)
-            },
-            summaryBuilder: { entry in
-                InterestExperienceSummaryView(entry: entry)
-            }
-        )
-    }
+struct InterestExperienceSectionView {
     private static func title(for entry: InterestExperienceDraft) -> String {
         let name = entry.name.trimmed()
         return name.isEmpty ? "Interest" : name
     }
 }
-struct ReferenceExperienceSectionView: View {
-    @Binding var items: [ReferenceExperienceDraft]
-    let callbacks: ExperienceSectionViewCallbacks
-    var body: some View {
-        GenericExperienceSectionView(
-            items: $items,
-            metadata: ExperienceSectionKey.references.metadata,
-            callbacks: callbacks,
-            newItem: ReferenceExperienceDraft.init,
-            title: Self.title(for:),
-            subtitle: { _ in nil },
-            editorBuilder: { item, callbacks in
-                ReferenceExperienceEditor(item: item, onChange: callbacks.onChange)
-            },
-            summaryBuilder: { entry in
-                ReferenceExperienceSummaryView(entry: entry)
-            }
-        )
-    }
+struct ReferenceExperienceSectionView {
     private static func title(for entry: ReferenceExperienceDraft) -> String {
         let name = entry.name.trimmed()
         return name.isEmpty ? "Reference" : name
