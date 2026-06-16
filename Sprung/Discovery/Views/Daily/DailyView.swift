@@ -261,9 +261,7 @@ struct DailyView: View {
     // MARK: - Task Sections
 
     private var hasNetworkingTasks: Bool {
-        !coordinator.dailyTaskStore.tasks(ofType: .networking).isEmpty ||
-        !coordinator.dailyTaskStore.tasks(ofType: .eventPrep).isEmpty ||
-        !coordinator.dailyTaskStore.tasks(ofType: .eventDebrief).isEmpty
+        !coordinator.dailyTaskStore.tasks(in: .networking).isEmpty
     }
 
     private var networkingTasksSection: some View {
@@ -271,9 +269,7 @@ struct DailyView: View {
             title: "NETWORKING",
             icon: "person.2",
             iconColor: .orange,
-            tasks: coordinator.dailyTaskStore.tasks(ofType: .networking) +
-                   coordinator.dailyTaskStore.tasks(ofType: .eventPrep) +
-                   coordinator.dailyTaskStore.tasks(ofType: .eventDebrief),
+            tasks: coordinator.dailyTaskStore.tasks(in: .networking),
             category: .networking,
             isRegenerating: regeneratingCategory == .networking,
             onComplete: { task in
@@ -300,8 +296,7 @@ struct DailyView: View {
     }
 
     private var hasApplicationTasks: Bool {
-        !coordinator.dailyTaskStore.tasks(ofType: .submitApplication).isEmpty ||
-        !coordinator.dailyTaskStore.tasks(ofType: .customizeMaterials).isEmpty
+        !coordinator.dailyTaskStore.tasks(in: .apply).isEmpty
     }
 
     private var applicationTasksSection: some View {
@@ -309,8 +304,7 @@ struct DailyView: View {
             title: "APPLY",
             icon: "paperplane",
             iconColor: .blue,
-            tasks: coordinator.dailyTaskStore.tasks(ofType: .submitApplication) +
-                   coordinator.dailyTaskStore.tasks(ofType: .customizeMaterials),
+            tasks: coordinator.dailyTaskStore.tasks(in: .apply),
             category: .apply,
             isRegenerating: regeneratingCategory == .apply,
             onComplete: { task in
@@ -321,7 +315,7 @@ struct DailyView: View {
     }
 
     private var hasGatherTasks: Bool {
-        !coordinator.dailyTaskStore.tasks(ofType: .gatherLeads).isEmpty
+        !coordinator.dailyTaskStore.tasks(in: .gather).isEmpty
     }
 
     private var gatherTasksSection: some View {
@@ -329,7 +323,7 @@ struct DailyView: View {
             title: "GATHER",
             icon: "magnifyingglass",
             iconColor: .green,
-            tasks: coordinator.dailyTaskStore.tasks(ofType: .gatherLeads),
+            tasks: coordinator.dailyTaskStore.tasks(in: .gather),
             category: .gather,
             isRegenerating: regeneratingCategory == .gather,
             onComplete: { task in

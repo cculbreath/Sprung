@@ -37,6 +37,13 @@ final class DailyTaskStore: EntityStore {
         todaysTasks.filter { $0.taskType == type }
     }
 
+    /// Today's tasks belonging to a section category, grouped in the category's
+    /// declared type order (each type's tasks stay priority-sorted). Owns the
+    /// "which task types compose this section" mapping so views don't re-spell it.
+    func tasks(in category: TaskCategory) -> [DailyTask] {
+        category.dailyTaskTypes.flatMap { tasks(ofType: $0) }
+    }
+
     func complete(_ task: DailyTask) {
         task.isCompleted = true
         task.completedAt = Date()
