@@ -401,29 +401,13 @@ struct DebriefView: View {
     // MARK: - Submit Section
 
     private var submitSection: some View {
-        HStack {
-            Button("Cancel") {
-                dismiss()
-            }
-            .keyboardShortcut(.cancelAction)
-
-            Spacer()
-
-            Button {
-                Task { await submitDebrief() }
-            } label: {
-                if isSaving {
-                    ProgressView()
-                        .controlSize(.small)
-                } else {
-                    Label("Complete Debrief", systemImage: "checkmark.circle.fill")
-                }
-            }
-            .buttonStyle(.borderedProminent)
-            .disabled(isSaving)
-            .keyboardShortcut(.defaultAction)
-        }
-        .padding(.top)
+        ModalFooterView(
+            primaryLabel: "Complete Debrief",
+            primaryIcon: "checkmark.circle.fill",
+            isProcessing: isSaving,
+            onCancel: { dismiss() },
+            onPrimary: { Task { await submitDebrief() } }
+        )
     }
 
     // MARK: - Actions

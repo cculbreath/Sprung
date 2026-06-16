@@ -276,25 +276,13 @@ struct BatchCoverLetterView: View {
                         .foregroundColor(.secondary)
                 }
             }
-            // Error Message
-            if let errorMessage = errorMessage {
-                Text(errorMessage)
-                    .foregroundColor(.red)
-                    .font(.caption)
-            }
-            // Buttons
-            HStack {
-                Button("Cancel") {
-                    dismiss()
-                }
-                .keyboardShortcut(.escape)
-                Spacer()
-                Button(mode == .generate ? "Start Generation" : "Start Revisions") {
-                    startBatchGeneration()
-                }
-                .keyboardShortcut(.return)
-                .disabled(isGenerating || !canStartGeneration())
-            }
+            ModalFooterView(
+                primaryLabel: mode == .generate ? "Start Generation" : "Start Revisions",
+                isDisabled: isGenerating || !canStartGeneration(),
+                error: errorMessage,
+                onCancel: { dismiss() },
+                onPrimary: { startBatchGeneration() }
+            )
         }
     }
     private func calculateTotalLetters() -> Int {

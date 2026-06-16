@@ -295,23 +295,12 @@ struct AddLeadView: View {
             }
             .formStyle(.grouped)
 
-            HStack {
-                Button("Cancel") {
-                    dismiss()
-                }
-                .keyboardShortcut(.cancelAction)
-
-                Spacer()
-
-                Button("Add Lead") {
-                    addLead()
-                    dismiss()
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(company.isEmpty)
-                .keyboardShortcut(.defaultAction)
-            }
-            .padding(.horizontal)
+            ModalFooterView(
+                primaryLabel: "Add Lead",
+                isDisabled: company.isEmpty,
+                onCancel: { dismiss() },
+                onPrimary: { addLead(); dismiss() }
+            )
         }
         .padding()
         .frame(width: 400, height: 400)

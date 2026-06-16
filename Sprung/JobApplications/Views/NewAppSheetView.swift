@@ -106,27 +106,19 @@ struct NewAppSheetView: View {
                             }
                         }
                     }
-                    HStack(spacing: 12) {
-                        Button("Cancel") {
-                            isPresented = false
-                        }
-                        .buttonStyle(.bordered)
-                        Spacer()
-                        Button("Manual Entry") {
+                    ModalFooterView(
+                        primaryLabel: "Import Job",
+                        isDisabled: urlText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                        secondaryLabel: "Manual Entry",
+                        onSecondary: {
                             _ = jobAppStore.createManualEntry()
                             isPresented = false
                             // Switch to listing tab for editing
                             NotificationCenter.default.post(name: .manualJobAppCreated, object: nil)
-                        }
-                        .buttonStyle(.bordered)
-                        Button("Import Job") {
-                            Task {
-                                await handleNewApp()
-                            }
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .disabled(urlText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                    }
+                        },
+                        onCancel: { isPresented = false },
+                        onPrimary: { Task { await handleNewApp() } }
+                    )
                 }
             }
         }

@@ -341,29 +341,17 @@ struct DocumentIngestionSheet: View {
     // MARK: - Footer
 
     private var footerSection: some View {
-        HStack {
-            if let coordinator = coordinator, case .failed(let error) = coordinator.status {
-                Text(error)
-                    .font(.caption)
-                    .foregroundStyle(.red)
-                    .lineLimit(2)
-            }
-
-            Spacer()
-
-            Button("Cancel") {
-                dismiss()
-            }
-            .keyboardShortcut(.cancelAction)
-
-            Button("Analyze") {
-                analyzeDocuments()
-            }
-            .buttonStyle(.borderedProminent)
-            .disabled(!hasAnySources || coordinator?.status.isProcessing == true)
-            .keyboardShortcut(.defaultAction)
+        var errorText: String? {
+            if let coordinator, case .failed(let error) = coordinator.status { return error }
+            return nil
         }
-        .padding()
+        return ModalFooterView(
+            primaryLabel: "Analyze",
+            isDisabled: !hasAnySources || coordinator?.status.isProcessing == true,
+            error: errorText,
+            onCancel: { dismiss() },
+            onPrimary: { analyzeDocuments() }
+        )
     }
 
     // MARK: - Helpers

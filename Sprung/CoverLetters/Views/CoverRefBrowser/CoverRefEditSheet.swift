@@ -67,23 +67,12 @@ struct CoverRefEditSheet: View {
 
             Divider()
 
-            // Actions
-            HStack {
-                Button("Cancel") {
-                    onCancel()
-                }
-                .keyboardShortcut(.escape, modifiers: [])
-
-                Spacer()
-
-                Button(card == nil ? "Add" : "Save") {
-                    saveCard()
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(name.isEmpty || content.isEmpty)
-                .keyboardShortcut(.return, modifiers: .command)
-            }
-            .padding(20)
+            ModalFooterView(
+                primaryLabel: card == nil ? "Add" : "Save",
+                isDisabled: name.isEmpty || content.isEmpty,
+                onCancel: { onCancel() },
+                onPrimary: { saveCard() }
+            )
         }
         .frame(width: 500, height: 550)
         .onAppear {
