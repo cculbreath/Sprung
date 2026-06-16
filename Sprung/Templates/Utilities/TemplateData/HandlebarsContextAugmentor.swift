@@ -57,14 +57,14 @@ enum HandlebarsContextAugmentor {
         }
         // Root-level toggles expected by common themes
         let basicsPicture = basics["picture"] ?? basics["image"]
-        context["pictureBool"] = truthy(basicsPicture)
-        context["emailBool"] = truthy(basics["email"])
-        context["phoneBool"] = truthy(basics["phone"])
-        context["websiteBool"] = truthy(basics["website"])
-        context["profilesBool"] = truthy(basics["profiles"])
-        context["aboutBool"] = truthy(basics["summary"])
+        context["pictureBool"] = JSONContextCoercion.truthy(basicsPicture)
+        context["emailBool"] = JSONContextCoercion.truthy(basics["email"])
+        context["phoneBool"] = JSONContextCoercion.truthy(basics["phone"])
+        context["websiteBool"] = JSONContextCoercion.truthy(basics["website"])
+        context["profilesBool"] = JSONContextCoercion.truthy(basics["profiles"])
+        context["aboutBool"] = JSONContextCoercion.truthy(basics["summary"])
         if let location = basics["location"] as? [String: Any] {
-            context["locationBool"] = truthy(location)
+            context["locationBool"] = JSONContextCoercion.truthy(location)
         }
     }
     private static func buildContactPieces(from basics: [String: Any]) -> [String] {
@@ -112,7 +112,7 @@ enum HandlebarsContextAugmentor {
         // set these flags for configured sections; recomputing them here would
         // clobber the user's hide/show choices.
         for section in sections where context[section.flag] == nil {
-            context[section.flag] = truthy(context[section.key])
+            context[section.flag] = JSONContextCoercion.truthy(context[section.key])
         }
     }
     // MARK: - Work
@@ -122,10 +122,10 @@ enum HandlebarsContextAugmentor {
             var item = work[index]
             applyMonthYearFields(to: &item, startKey: "startDate", endKey: "endDate")
             if let endDate = stringValue(item["endDate"]), endDate.isEmpty,
-               truthy(item["current"] ?? item["isCurrent"]) {
+               JSONContextCoercion.truthy(item["current"] ?? item["isCurrent"]) {
                 item["endDateYear"] = "Present"
             }
-            item["workHighlights"] = truthy(item["highlights"])
+            item["workHighlights"] = JSONContextCoercion.truthy(item["highlights"])
             work[index] = item
         }
         context["work"] = work
@@ -135,7 +135,7 @@ enum HandlebarsContextAugmentor {
         for index in volunteer.indices {
             var item = volunteer[index]
             applyMonthYearFields(to: &item, startKey: "startDate", endKey: "endDate")
-            item["volunteerHighlights"] = truthy(item["highlights"])
+            item["volunteerHighlights"] = JSONContextCoercion.truthy(item["highlights"])
             volunteer[index] = item
         }
         context["volunteer"] = volunteer
@@ -144,7 +144,7 @@ enum HandlebarsContextAugmentor {
         guard var skills = dictionaryArray(from: context["skills"]) else { return }
         for index in skills.indices {
             var item = skills[index]
-            item["keywordsBool"] = truthy(item["keywords"])
+            item["keywordsBool"] = JSONContextCoercion.truthy(item["keywords"])
             skills[index] = item
         }
         context["skills"] = skills
@@ -154,8 +154,8 @@ enum HandlebarsContextAugmentor {
         for index in education.indices {
             var item = education[index]
             applyMonthYearFields(to: &item, startKey: "startDate", endKey: "endDate")
-            item["gpaBool"] = truthy(item["gpa"])
-            item["educationCourses"] = truthy(item["courses"])
+            item["gpaBool"] = JSONContextCoercion.truthy(item["gpa"])
+            item["educationCourses"] = JSONContextCoercion.truthy(item["courses"])
             education[index] = item
         }
         context["education"] = education
@@ -194,7 +194,7 @@ enum HandlebarsContextAugmentor {
             if !combined.isEmpty {
                 item["projectLine"] = combined
             }
-            item["projectKeywords"] = truthy(item["keywords"])
+            item["projectKeywords"] = JSONContextCoercion.truthy(item["keywords"])
             projects[index] = item
         }
         context["projects"] = projects
@@ -203,7 +203,7 @@ enum HandlebarsContextAugmentor {
         guard var interests = dictionaryArray(from: context["interests"]) else { return }
         for index in interests.indices {
             var item = interests[index]
-            item["keywordsBool"] = truthy(item["keywords"])
+            item["keywordsBool"] = JSONContextCoercion.truthy(item["keywords"])
             interests[index] = item
         }
         context["interests"] = interests
@@ -232,22 +232,6 @@ enum HandlebarsContextAugmentor {
         context["references"] = references
     }
     // MARK: - Helpers
-    private static func truthy(_ value: Any?) -> Bool {
-        guard let value else { return false }
-        if let string = value as? String {
-            return string.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
-        }
-        if let array = value as? [Any] {
-            return array.isEmpty == false
-        }
-        if let dict = value as? [String: Any] {
-            return dict.isEmpty == false
-        }
-        if let number = value as? NSNumber {
-            return number.boolValue
-        }
-        return true
-    }
     private static func stringValue(_ value: Any?) -> String? {
         guard let value else { return nil }
         if let string = value as? String {
@@ -298,7 +282,7 @@ enum HandlebarsContextAugmentor {
                 if let year = parts.year {
                     item["endDateYear"] = year
                 }
-            } else if truthy(item[endKey]) == false {
+            } else if JSONContextCoercion.truthy(item[endKey]) == false {
                 item["endDateYear"] = "Present"
             }
         }

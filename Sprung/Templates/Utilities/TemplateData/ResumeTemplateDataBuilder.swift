@@ -195,7 +195,7 @@ private final class Implementation {
             } else if let flag = context[boolKey] as? Bool {
                 baseVisible = flag
             } else if let value = context[sectionKey] {
-                baseVisible = truthy(value)
+                baseVisible = JSONContextCoercion.truthy(value)
             } else {
                 baseVisible = false
             }
@@ -256,21 +256,5 @@ private final class Implementation {
             ordered.append(key)
         }
         return ordered
-    }
-    private func truthy(_ value: Any) -> Bool {
-        switch value {
-        case let number as NSNumber:
-            return number.boolValue
-        case let string as String:
-            return string.isEmpty == false
-        case let array as [Any]:
-            return array.isEmpty == false
-        case let dict as [String: Any]:
-            return dict.isEmpty == false
-        case let ordered as OrderedDictionary<String, Any>:
-            return ordered.isEmpty == false
-        default:
-            return true
-        }
     }
 }
