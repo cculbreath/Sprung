@@ -232,7 +232,9 @@ final class LLMFacadeSpecializedAPIs {
     }
 
     /// Decodes accumulated Anthropic response text into the requested Codable type.
-    private func decodeAnthropicResponse<T: Codable>(_ resultText: String, as type: T.Type) throws -> T {
+    /// `internal` (not `private`) so the pure response-parse half can be unit-tested
+    /// directly without constructing the facade or hitting the network.
+    func decodeAnthropicResponse<T: Codable>(_ resultText: String, as type: T.Type) throws -> T {
         guard let data = resultText.data(using: .utf8) else {
             throw LLMError.clientError("Failed to convert Anthropic response to data")
         }

@@ -157,8 +157,12 @@ final class UIResponseCoordinator {
         )))
     }
     // MARK: - Upload Handling
-    func completeUploadAndResume(id: UUID, fileURLs: [URL], coordinator: OnboardingInterviewCoordinator) async {
-        guard await coordinator.completeUpload(id: id, fileURLs: fileURLs) != nil else { return }
+    func completeUploadAndResume(id: UUID, fileURLs: [URL]) async {
+        let uploadResult = await toolRouter.completeUpload(id: id, fileURLs: fileURLs)
+        Task {
+            await eventBus.publish(.toolpane(.uploadRequestCancelled(id: id)))
+        }
+        guard uploadResult != nil else { return }
 
         // Check if any uploaded files require async extraction (PDF, DOCX, HTML, etc.)
         let requiresAsyncExtraction = fileURLs.contains { url in
@@ -190,8 +194,12 @@ final class UIResponseCoordinator {
 
         completeUITool(toolName: OnboardingToolName.getUserUpload.rawValue, result: result)
     }
-    func skipUploadAndResume(id: UUID, coordinator: OnboardingInterviewCoordinator) async {
-        guard await coordinator.skipUpload(id: id) != nil else { return }
+    func skipUploadAndResume(id: UUID) async {
+        let skipResult = await toolRouter.skipUpload(id: id)
+        Task {
+            await eventBus.publish(.toolpane(.uploadRequestCancelled(id: id)))
+        }
+        guard skipResult != nil else { return }
 
         // Complete the UI tool with skip status
         let result = buildCompletionResult(

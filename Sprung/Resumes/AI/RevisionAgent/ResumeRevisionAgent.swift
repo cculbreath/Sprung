@@ -560,7 +560,7 @@ class ResumeRevisionAgent {
                 if let streamErrorMessage = streamResult.streamErrors.first {
                     try await backOffOrAbort(
                         message: streamErrorMessage,
-                        isFatal: Self.isFatalStreamErrorEvent(streamErrorMessage)
+                        isFatal: RevisionStreamFailureClassifier.isFatalStreamErrorEvent(streamErrorMessage)
                     )
                     continue
                 }
@@ -701,7 +701,7 @@ class ResumeRevisionAgent {
 
                     // A tool call whose input JSON was truncated at the output
                     // limit cannot be executed — tell the model to split it.
-                    if streamResult.stopReason == "max_tokens", !Self.isCompleteJSONObject(toolCall.arguments) {
+                    if streamResult.stopReason == "max_tokens", !RevisionStreamFailureClassifier.isCompleteJSONObject(toolCall.arguments) {
                         Logger.warning("RevisionAgent: Tool call \(toolCall.name) truncated at max_tokens — asking model to split", category: .ai)
                         toolResultBlocks.append(.toolResult(AnthropicToolResultBlock(
                             toolUseId: toolCall.id,
@@ -1133,7 +1133,7 @@ class ResumeRevisionAgent {
     /// Classify a thrown stream failure, then back off (transient) or abort
     /// the session (fatal / too many consecutive failures).
     private func backOffOrAbort(after error: Error) async throws {
-        let classification = Self.classifyStreamFailure(error)
+        let classification = RevisionStreamFailureClassifier.classifyStreamFailure(error)
         try await backOffOrAbort(message: classification.message, isFatal: classification.isFatal)
     }
 
@@ -1151,46 +1151,6 @@ class ResumeRevisionAgent {
         Logger.warning("RevisionAgent: Transient stream failure (\(message)) — retrying in \(Int(delaySeconds))s", category: .ai)
         currentAction = "Connection issue — retrying in \(Int(delaySeconds))s..."
         try await Task.sleep(for: .seconds(delaySeconds))
-    }
-
-    /// Fatal = configuration/auth/request problems that retrying cannot heal.
-    /// Transient = rate limits, overload, server errors, network drops.
-    private static func classifyStreamFailure(_ error: Error) -> (isFatal: Bool, message: String) {
-        if let apiError = error as? APIError {
-            if case .responseUnsuccessful(_, let statusCode, _) = apiError {
-                let transientCodes: Set<Int> = [408, 429, 500, 502, 503, 504, 529]
-                return (isFatal: !transientCodes.contains(statusCode), message: apiError.displayDescription)
-            }
-            return (isFatal: false, message: apiError.displayDescription)
-        }
-        if let llmError = error as? LLMError {
-            switch llmError {
-            case .clientError, .unauthorized, .invalidModelId:
-                return (isFatal: true, message: llmError.localizedDescription)
-            case .decodingFailed, .unexpectedResponseFormat, .rateLimited, .timeout, .insufficientCredits:
-                return (isFatal: false, message: llmError.localizedDescription)
-            }
-        }
-        return (isFatal: false, message: error.localizedDescription)
-    }
-
-    /// Classify an in-stream `error` event by its Anthropic error type.
-    private static func isFatalStreamErrorEvent(_ message: String) -> Bool {
-        let fatalTypes = [
-            "authentication_error",
-            "permission_error",
-            "invalid_request_error",
-            "not_found_error",
-            "request_too_large"
-        ]
-        return fatalTypes.contains { message.contains($0) }
-    }
-
-    /// True when `raw` parses as a complete JSON value — used to detect tool
-    /// inputs truncated by a max_tokens stop.
-    private static func isCompleteJSONObject(_ raw: String) -> Bool {
-        guard let data = raw.data(using: .utf8), !data.isEmpty else { return false }
-        return (try? JSONSerialization.jsonObject(with: data)) != nil
     }
 
     // MARK: - Tool Building

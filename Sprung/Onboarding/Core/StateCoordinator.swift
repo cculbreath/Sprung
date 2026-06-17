@@ -26,7 +26,7 @@ actor StateCoordinator: OnboardingEventEmitter {
     private let operationTracker: OperationTracker
 
     // MARK: - Agent Activity Tracking
-    private var agentActivityTracker: AgentActivityTracker?
+    private let agentActivityReporter = AgentActivityReporter()
     // MARK: - Phase Policy
     private let phasePolicy: PhasePolicy
     // Runtime tool exclusions (e.g., one-time bootstrap tools)
@@ -97,53 +97,26 @@ actor StateCoordinator: OnboardingEventEmitter {
         Logger.info("🎯 StateCoordinator initialized (orchestrator mode with injected services)", category: .ai)
     }
 
-    // MARK: - Agent Activity Tracking
+    // MARK: - Agent Activity Tracking (Delegated to AgentActivityReporter)
 
     /// Set the agent activity tracker for status reporting
-    func setAgentActivityTracker(_ tracker: AgentActivityTracker) {
-        self.agentActivityTracker = tracker
+    func setAgentActivityTracker(_ tracker: AgentActivityTracker) async {
+        await agentActivityReporter.setAgentActivityTracker(tracker)
     }
 
     /// Get running agent status for inclusion in interview context
     func getRunningAgentStatus() async -> [(type: String, name: String, status: String)]? {
-        guard let tracker = agentActivityTracker else { return nil }
-
-        // Access MainActor-isolated tracker
-        let runningAgents = await MainActor.run { tracker.runningAgents }
-        guard !runningAgents.isEmpty else { return nil }
-
-        return runningAgents.map { agent in
-            (type: agent.agentType.displayName,
-             name: agent.name,
-             status: agent.statusMessage ?? "Running...")
-        }
+        await agentActivityReporter.getRunningAgentStatus()
     }
 
     /// Get count of running agents
     func getRunningAgentCount() async -> Int {
-        guard let tracker = agentActivityTracker else { return 0 }
-        return await MainActor.run { tracker.runningAgentCount }
+        await agentActivityReporter.getRunningAgentCount()
     }
 
     /// Get recently completed agents (within last 30 seconds) for inclusion in interview context
     func getRecentlyCompletedAgents() async -> [(type: String, name: String, succeeded: Bool, duration: String)]? {
-        guard let tracker = agentActivityTracker else { return nil }
-
-        let cutoff = Date().addingTimeInterval(-30) // Last 30 seconds
-        let recentAgents = await MainActor.run {
-            tracker.agents.filter { agent in
-                guard let endTime = agent.endTime else { return false }
-                return endTime > cutoff && (agent.status == .completed || agent.status == .failed)
-            }
-        }
-        guard !recentAgents.isEmpty else { return nil }
-
-        return recentAgents.map { agent in
-            (type: agent.agentType.displayName,
-             name: agent.name,
-             succeeded: agent.status == .completed,
-             duration: agent.durationString)
-        }
+        await agentActivityReporter.getRecentlyCompletedAgents()
     }
 
     // MARK: - Phase Management

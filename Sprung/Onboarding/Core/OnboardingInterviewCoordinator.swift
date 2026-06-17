@@ -516,22 +516,6 @@ final class OnboardingInterviewCoordinator {
         }
     }
 
-    func completeUpload(id: UUID, fileURLs: [URL]) async -> JSON? {
-        let result = await toolRouter.completeUpload(id: id, fileURLs: fileURLs)
-        Task {
-            await eventBus.publish(.toolpane(.uploadRequestCancelled(id: id)))
-        }
-        return result
-    }
-
-    func skipUpload(id: UUID) async -> JSON? {
-        let result = await toolRouter.skipUpload(id: id)
-        Task {
-            await eventBus.publish(.toolpane(.uploadRequestCancelled(id: id)))
-        }
-        return result
-    }
-
     func submitValidationResponse(
         status: String,
         updatedData: JSON?,
@@ -620,10 +604,10 @@ final class OnboardingInterviewCoordinator {
         await uiResponseCoordinator.cancelChoiceSelection()
     }
     func completeUploadAndResume(id: UUID, fileURLs: [URL]) async {
-        await uiResponseCoordinator.completeUploadAndResume(id: id, fileURLs: fileURLs, coordinator: self)
+        await uiResponseCoordinator.completeUploadAndResume(id: id, fileURLs: fileURLs)
     }
     func skipUploadAndResume(id: UUID) async {
-        await uiResponseCoordinator.skipUploadAndResume(id: id, coordinator: self)
+        await uiResponseCoordinator.skipUploadAndResume(id: id)
     }
 
     /// Uploads files directly (from persistent drop zone, no pending request needed)
