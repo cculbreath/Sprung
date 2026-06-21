@@ -146,6 +146,11 @@ final class OnboardingInterviewCoordinator {
     var pendingSectionToggleRequest: OnboardingSectionToggleRequest? {
         toolRouter.pendingSectionToggleRequest
     }
+    /// Non-nil while the interview is paused on an exhausted API balance. Drives
+    /// the insufficient-balance top-up modal.
+    var pendingBudgetPause: BudgetPauseInfo? {
+        container.budgetPauseGate.pendingPause
+    }
     // MARK: - Initialization
     init(
         llmFacade: LLMFacade?,
@@ -269,7 +274,40 @@ final class OnboardingInterviewCoordinator {
     /// Clear all onboarding data: session, knowledge cards, skills, CoverRefs, ExperienceDefaults, and ApplicantProfile
     /// Used when user chooses "Start Over" to begin fresh
     func clearAllOnboardingData() {
+        container.budgetPauseGate.reset()
+        container.budgetFailedExtractionRegistry.reset()
         container.dataResetService.clearAllOnboardingData()
+    }
+
+    // MARK: - Budget Pause (insufficient API balance)
+
+    /// Resolve the insufficient-balance modal. On resume, the paused LLM turn
+    /// retries itself (via the gate's continuation) and any extraction passes that
+    /// failed on budget are re-run. On cancel, the turn aborts and the registry is
+    /// left intact (a later resume can still re-run those passes).
+    func resolveBudgetPause(_ resolution: BudgetPauseResolution) {
+        container.budgetPauseGate.resolve(resolution)
+        guard case .resume = resolution else { return }
+        Task { await retryBudgetFailedExtractions() }
+    }
+
+    /// Re-run extraction passes that failed because the API balance was exhausted,
+    /// against each artifact's stored intermediate representation (cheap — no source
+    /// re-read). The normal card-merge step then incorporates the restored
+    /// summaries/skills/cards.
+    private func retryBudgetFailedExtractions() async {
+        let entries = container.budgetFailedExtractionRegistry.drain()
+        guard !entries.isEmpty else { return }
+        let artifacts = sessionArtifacts
+        for entry in entries where !entry.passes.isEmpty {
+            guard let artifact = artifacts.first(where: { $0.filename == entry.filename }) else {
+                Logger.warning("💳 No artifact named \(entry.filename) to re-run failed passes against", category: .ai)
+                continue
+            }
+            Logger.info("💳 Re-running budget-failed extraction passes for \(entry.filename)", category: .ai)
+            await container.documentProcessingService.regeneratePasses(artifact, passes: entry.passes)
+            artifactRecordStore.updateArtifact(artifact)
+        }
     }
     /// Called when user is done with the interview - triggers finalization flow
     func endInterview() async {

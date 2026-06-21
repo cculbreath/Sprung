@@ -25,6 +25,7 @@ final class InterviewLifecycleService {
     private let knowledgeCardStore: KnowledgeCardStore
     private let skillStore: SkillStore
     private let todoStore: InterviewTodoStore
+    private let budgetPauseGate: BudgetPauseGate
 
     // MARK: - Lifecycle State
     private(set) var orchestrator: InterviewOrchestrator?
@@ -68,7 +69,8 @@ final class InterviewLifecycleService {
         sessionPersistenceHandler: SessionPersistenceService,
         knowledgeCardStore: KnowledgeCardStore,
         skillStore: SkillStore,
-        todoStore: InterviewTodoStore
+        todoStore: InterviewTodoStore,
+        budgetPauseGate: BudgetPauseGate
     ) {
         self.state = state
         self.eventBus = eventBus
@@ -87,6 +89,7 @@ final class InterviewLifecycleService {
         self.knowledgeCardStore = knowledgeCardStore
         self.skillStore = skillStore
         self.todoStore = todoStore
+        self.budgetPauseGate = budgetPauseGate
     }
 
     // MARK: - Configuration
@@ -560,7 +563,8 @@ final class InterviewLifecycleService {
             eventBus: eventBus,
             toolRegistry: toolRegistry,
             state: state,
-            todoStore: todoStore
+            todoStore: todoStore,
+            budgetPauseGate: budgetPauseGate
         )
     }
 }

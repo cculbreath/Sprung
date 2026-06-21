@@ -25,7 +25,8 @@ actor InterviewOrchestrator: OnboardingEventEmitter {
         eventBus: EventBus,
         toolRegistry: ToolRegistry,
         state: StateCoordinator,
-        todoStore: InterviewTodoStore
+        todoStore: InterviewTodoStore,
+        budgetPauseGate: BudgetPauseGate
     ) {
         self.eventBus = eventBus
         self.state = state
@@ -37,7 +38,8 @@ actor InterviewOrchestrator: OnboardingEventEmitter {
             networkRouter: networkRouter,
             toolRegistry: toolRegistry,
             state: state,
-            todoStore: todoStore
+            todoStore: todoStore,
+            budgetPauseGate: budgetPauseGate
         )
         Logger.info("🎯 InterviewOrchestrator initialized (using LLMFacade)", category: .ai)
     }

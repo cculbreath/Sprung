@@ -141,6 +141,10 @@ final class OnboardingDependencyContainer {
     // MARK: - UI Tool Continuation Manager
     let uiToolContinuationManager: UIToolContinuationRegistry
 
+    // MARK: - Budget Pause (insufficient API balance)
+    let budgetPauseGate: BudgetPauseGate
+    let budgetFailedExtractionRegistry: BudgetFailedExtractionRegistry
+
     // MARK: - User Action Queue Infrastructure
     let userActionQueue: UserActionQueue
     let drainGate: DrainGate
@@ -207,6 +211,8 @@ final class OnboardingDependencyContainer {
         self.todoStore = InterviewTodoStore(eventBus: core.eventBus)
         self.artifactFilesystemContext = ArtifactFilesystemContext()
         self.uiToolContinuationManager = UIToolContinuationRegistry()
+        self.budgetPauseGate = BudgetPauseGate()
+        self.budgetFailedExtractionRegistry = BudgetFailedExtractionRegistry()
 
         // 2b. Initialize user action queue infrastructure
         self.userActionQueue = UserActionQueue()
@@ -279,7 +285,8 @@ final class OnboardingDependencyContainer {
         // 5. Initialize document services
         let docs = Self.createDocumentComponents(
             eventBus: core.eventBus, documentExtractionService: documentExtractionService, dataStore: dataStore,
-            stateCoordinator: state, agentTracker: agentActivityTracker, llmFacade: llmFacade
+            stateCoordinator: state, agentTracker: agentActivityTracker, llmFacade: llmFacade,
+            budgetPauseGate: budgetPauseGate, budgetFailedExtractionRegistry: budgetFailedExtractionRegistry
         )
         self.uploadStorage = docs.uploadStorage
         self.documentProcessingService = docs.documentProcessingService
@@ -383,7 +390,8 @@ final class OnboardingDependencyContainer {
             sessionPersistenceHandler: sessionPersistenceHandler,
             knowledgeCardStore: knowledgeCardStore,
             skillStore: skillStore,
-            todoStore: todoStore
+            todoStore: todoStore,
+            budgetPauseGate: budgetPauseGate
         )
         self.uiStateUpdateHandler = UIStateUpdateHandler(ui: ui, state: state, wizardTracker: wizardTracker)
 
@@ -568,7 +576,8 @@ final class OnboardingDependencyContainer {
 
     private static func createDocumentComponents(
         eventBus: EventBus, documentExtractionService: DocumentExtractionService, dataStore: InterviewDataStore,
-        stateCoordinator: StateCoordinator, agentTracker: AgentActivityTracker, llmFacade: LLMFacade?
+        stateCoordinator: StateCoordinator, agentTracker: AgentActivityTracker, llmFacade: LLMFacade?,
+        budgetPauseGate: BudgetPauseGate, budgetFailedExtractionRegistry: BudgetFailedExtractionRegistry
     ) -> DocumentComponents {
         let uploadStorage = OnboardingUploadStorage()
         let documentProcessingService = DocumentProcessingService(
@@ -580,7 +589,9 @@ final class OnboardingDependencyContainer {
             documentArtifactHandler: DocumentArtifactHandler(eventBus: eventBus,
                                                              documentProcessingService: documentProcessingService,
                                                              agentTracker: agentTracker,
-                                                             stateCoordinator: stateCoordinator),
+                                                             stateCoordinator: stateCoordinator,
+                                                             budgetPauseGate: budgetPauseGate,
+                                                             budgetFailedExtractionRegistry: budgetFailedExtractionRegistry),
             documentArtifactMessenger: DocumentArtifactMessenger(eventBus: eventBus, stateCoordinator: stateCoordinator)
         )
     }

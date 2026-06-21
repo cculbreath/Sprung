@@ -25,6 +25,7 @@ actor LLMMessenger: OnboardingEventEmitter {
     private let stateCoordinator: StateCoordinator
     private let anthropicRequestBuilder: AnthropicRequestBuilder
     private let toolRegistry: ToolRegistry
+    private let budgetPauseGate: BudgetPauseGate
     private var isActive = false
 
     // Extracted components
@@ -41,13 +42,15 @@ actor LLMMessenger: OnboardingEventEmitter {
         networkRouter: NetworkRouter,
         toolRegistry: ToolRegistry,
         state: StateCoordinator,
-        todoStore: InterviewTodoStore
+        todoStore: InterviewTodoStore,
+        budgetPauseGate: BudgetPauseGate
     ) {
         self.llmFacade = llmFacade
         self.eventBus = eventBus
         self.networkRouter = networkRouter
         self.stateCoordinator = state
         self.toolRegistry = toolRegistry
+        self.budgetPauseGate = budgetPauseGate
         self.anthropicRequestBuilder = AnthropicRequestBuilder(
             baseSystemPrompt: baseSystemPrompt,
             toolRegistry: toolRegistry,
@@ -143,6 +146,9 @@ actor LLMMessenger: OnboardingEventEmitter {
         }
         Logger.info("🛑 Cancelling LLM stream...", category: .ai)
         task.cancel()
+        // A budget pause suspends on a (cancellation-unaware) continuation, so a plain
+        // task.cancel() can't unblock it — interrupt the gate to resolve it as .cancel.
+        await budgetPauseGate.interrupt()
         currentStreamTask = nil
         await networkRouter.cancelPendingStreams()
         await emit(.llm(.status( .idle)))
@@ -151,16 +157,8 @@ actor LLMMessenger: OnboardingEventEmitter {
     // MARK: - Error Handling (Delegated to LLMErrorHandler)
 
     private func surfaceErrorToUI(error: Error) async {
-        // Check for insufficient credits error - show popup alert
-        if errorHandler.isInsufficientCreditsError(error) {
-            let creditInfo = errorHandler.extractCreditInfo(from: error)
-            await errorHandler.showInsufficientCreditsAlert(
-                requested: creditInfo?.requested ?? 0,
-                available: creditInfo?.available ?? 0
-            )
-            return
-        }
-
+        // Insufficient-balance errors never reach here — they are intercepted in
+        // executeAnthropicStream's retry loop (pause/resume modal) before propagating.
         let errorMessage = errorHandler.buildUserFriendlyMessage(from: error)
         let payload = JSON(["text": errorMessage])
         await emit(.llm(.userMessageSent(messageId: UUID().uuidString, payload: payload, isSystemGenerated: true)))
@@ -206,6 +204,31 @@ actor LLMMessenger: OnboardingEventEmitter {
                     return
                 } catch {
                     lastError = error
+                    if errorHandler.isInsufficientBalanceError(error) {
+                        // Exhausted balance: pause the interview and wait for the user to
+                        // top up (resume → retry the SAME request) or abort (cancel). Every
+                        // Anthropic dispatch path funnels through this loop, so this one
+                        // interception point covers user/coordinator/tool/batched-tool sends.
+                        let creditInfo = errorHandler.extractCreditInfo(from: error)
+                        let info = BudgetPauseInfo.anthropic(
+                            requested: creditInfo?.requested,
+                            available: creditInfo?.available
+                        )
+                        await emit(.processing(.stateChanged(
+                            isProcessing: true,
+                            statusMessage: "Paused — \(info.providerName) balance exhausted"
+                        )))
+                        switch await budgetPauseGate.awaitResolution(info) {
+                        case .resume:
+                            Logger.info("💳 Resuming after top-up — retrying \(errorContext) request", category: .ai)
+                            continue  // retry the same request: no backoff, no retry-count bump
+                        case .cancel:
+                            Logger.info("💳 Budget pause cancelled — aborting \(errorContext)", category: .ai)
+                            let payload = JSON(["text": "Interview paused — your \(info.providerName) balance is exhausted. Add credits and try again when you're ready to continue."])
+                            await emit(.llm(.userMessageSent(messageId: UUID().uuidString, payload: payload, isSystemGenerated: true)))
+                            throw CancellationError()
+                        }
+                    }
                     if retryPolicy.isRetriable(error) && retryPolicy.shouldRetry(attempt: retryCount) {
                         retryCount += 1
                         let delay = retryPolicy.retryDelay(for: retryCount)

@@ -178,6 +178,19 @@ struct OnboardingInterviewView: View {
                     )
                 }
             }
+            // Insufficient API balance — pause/top-up/resume modal
+            .sheet(isPresented: Binding(
+                get: { coordinator.pendingBudgetPause != nil },
+                set: { _ in }
+            )) {
+                if let pause = coordinator.pendingBudgetPause {
+                    InsufficientBalanceSheet(
+                        info: pause,
+                        onResume: { coordinator.resolveBudgetPause(.resume) },
+                        onCancel: { coordinator.resolveBudgetPause(.cancel) }
+                    )
+                }
+            }
             // Setup wizard for missing API keys
             .sheet(isPresented: $showSetupWizard) {
                 SetupWizardView {

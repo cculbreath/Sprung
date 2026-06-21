@@ -31,16 +31,35 @@ struct LLMErrorHandler {
         }
     }
 
-    /// Check if error is an insufficient credits error
-    func isInsufficientCreditsError(_ error: Error) -> Bool {
-        if let llmError = error as? LLMError {
-            if case .insufficientCredits = llmError {
+    /// Check if an error is an exhausted-balance / insufficient-credits error.
+    ///
+    /// Covers both the OpenRouter-style 402 (mapped to `LLMError.insufficientCredits`,
+    /// or carrying "402"/"insufficient credits") AND Anthropic's raw HTTP 400 whose
+    /// body reads "Your credit balance is too low … Please go to Plans & Billing …".
+    /// Onboarding talks to Anthropic directly via `AnthropicMessagesService`, so that
+    /// 400 never passes through `LLMRequestExecutor` and never becomes an `LLMError`.
+    func isInsufficientBalanceError(_ error: Error) -> Bool {
+        if let llmError = error as? LLMError, case .insufficientCredits = llmError {
+            return true
+        }
+        if let apiError = error as? APIError,
+           case .responseUnsuccessful(_, let statusCode, let responseBody) = apiError {
+            if statusCode == 402 { return true }
+            if let body = responseBody, Self.descriptionIndicatesInsufficientBalance(body) {
                 return true
             }
         }
+        return Self.descriptionIndicatesInsufficientBalance(error.localizedDescription)
+    }
 
-        let errorDescription = error.localizedDescription
-        return errorDescription.contains("402") || errorDescription.lowercased().contains("insufficient credits")
+    /// String predicate shared by the `Error` overload and the extraction-pass
+    /// failure-label check (which only has the stringified failure in hand).
+    static func descriptionIndicatesInsufficientBalance(_ text: String) -> Bool {
+        let lowered = text.lowercased()
+        return lowered.contains("402")
+            || lowered.contains("insufficient")
+            || lowered.contains("credit balance")
+            || lowered.contains("plans & billing")
     }
 
     /// Extract credit info from insufficient credits error
@@ -51,43 +70,6 @@ struct LLMErrorHandler {
             }
         }
         return nil
-    }
-
-    /// Show a popup alert for insufficient OpenRouter credits
-    @MainActor
-    func showInsufficientCreditsAlert(requested: Int, available: Int) {
-        let alert = NSAlert()
-        alert.alertStyle = .warning
-        alert.messageText = "Insufficient OpenRouter Credits"
-
-        if requested > 0 && available > 0 {
-            alert.informativeText = """
-            This request requires more credits than available.
-
-            Requested: \(requested.formatted()) tokens
-            Available: \(available.formatted()) tokens
-
-            Please add credits at OpenRouter to continue using the AI features.
-            """
-        } else {
-            alert.informativeText = """
-            Your OpenRouter account has insufficient credits to complete this request.
-
-            Please add credits at OpenRouter to continue using the AI features.
-            """
-        }
-
-        alert.addButton(withTitle: "Add Credits")
-        alert.addButton(withTitle: "OK")
-
-        let response = alert.runModal()
-        if response == .alertFirstButtonReturn {
-            if let url = URL(string: "https://openrouter.ai/settings/credits") {
-                NSWorkspace.shared.open(url)
-            }
-        }
-
-        Logger.warning("💳 Insufficient credits alert shown to user (requested: \(requested), available: \(available))", category: .ai)
     }
 
     /// Show alert for conversation sync error when auto-recovery fails

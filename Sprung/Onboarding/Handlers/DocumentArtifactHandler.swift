@@ -14,6 +14,8 @@ actor DocumentArtifactHandler: OnboardingEventEmitter {
     private let documentProcessingService: DocumentProcessingService
     private let agentTracker: AgentActivityTracker
     private let stateCoordinator: StateCoordinator
+    private let budgetPauseGate: BudgetPauseGate
+    private let budgetFailedExtractionRegistry: BudgetFailedExtractionRegistry
 
     // MARK: - Configuration
 
@@ -45,12 +47,16 @@ actor DocumentArtifactHandler: OnboardingEventEmitter {
         eventBus: EventBus,
         documentProcessingService: DocumentProcessingService,
         agentTracker: AgentActivityTracker,
-        stateCoordinator: StateCoordinator
+        stateCoordinator: StateCoordinator,
+        budgetPauseGate: BudgetPauseGate,
+        budgetFailedExtractionRegistry: BudgetFailedExtractionRegistry
     ) {
         self.eventBus = eventBus
         self.documentProcessingService = documentProcessingService
         self.agentTracker = agentTracker
         self.stateCoordinator = stateCoordinator
+        self.budgetPauseGate = budgetPauseGate
+        self.budgetFailedExtractionRegistry = budgetFailedExtractionRegistry
         Logger.info("📄 DocumentArtifactHandler initialized", category: .ai)
     }
     // MARK: - Lifecycle
@@ -232,6 +238,10 @@ actor DocumentArtifactHandler: OnboardingEventEmitter {
 
             // Mark agent as completed, noting any analysis passes that failed
             let extractionFailures = artifactRecord["extractionFailures"].arrayValue.map(\.stringValue)
+            // Of those, isolate passes that failed because the API balance was
+            // exhausted — they're recorded so they can be re-run after the user tops
+            // up (otherwise budget outages silently degrade knowledge-card quality).
+            let budgetFailedPasses = Self.budgetFailedPassSelection(from: extractionFailures)
             await MainActor.run {
                 for failure in extractionFailures {
                     agentTracker.appendTranscript(
@@ -240,6 +250,10 @@ actor DocumentArtifactHandler: OnboardingEventEmitter {
                         content: "Analysis pass failed",
                         details: failure
                     )
+                }
+                if let passes = budgetFailedPasses {
+                    budgetFailedExtractionRegistry.record(filename: filename, passes: passes)
+                    budgetPauseGate.surface(.anthropic())
                 }
                 agentTracker.appendTranscript(
                     agentId: agentId,
@@ -280,6 +294,23 @@ actor DocumentArtifactHandler: OnboardingEventEmitter {
             try? await Task.sleep(for: .seconds(2))
         }
         // Note: activeProcessingCount is managed by pumpQueue()/extractionSlotFreed()
+    }
+
+    // MARK: - Budget-Failed Pass Detection
+
+    /// Reduce a document's extraction-failure labels to the set of passes that
+    /// failed specifically because the API balance was exhausted, or nil if none
+    /// did. Non-budget failures (e.g. a malformed-response retry exhaustion) are
+    /// ignored here — they aren't fixed by topping up.
+    static func budgetFailedPassSelection(
+        from failures: [String]
+    ) -> AnthropicDocumentAnalysisService.PassSelection? {
+        var accumulated: AnthropicDocumentAnalysisService.PassSelection?
+        for failure in failures where LLMErrorHandler.descriptionIndicatesInsufficientBalance(failure) {
+            guard let passes = BudgetFailedExtractionRegistry.passSelection(forFailureLabel: failure) else { continue }
+            accumulated = accumulated?.merged(with: passes) ?? passes
+        }
+        return accumulated
     }
 
     // MARK: - Image Artifact Helpers

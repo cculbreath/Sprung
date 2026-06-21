@@ -538,6 +538,20 @@ actor DocumentProcessingService {
         Logger.info("✅ Summary + knowledge extraction regeneration complete for: \(artifact.filename)", category: .ai)
     }
 
+    /// Re-run an arbitrary set of analysis passes for an existing artifact and
+    /// write the results back. Used to recover passes that failed when the API
+    /// balance was exhausted, once the user tops up.
+    func regeneratePasses(
+        _ artifact: ArtifactRecord,
+        passes: AnthropicDocumentAnalysisService.PassSelection
+    ) async {
+        guard !passes.isEmpty else { return }
+        Logger.info("Re-running extraction passes for: \(artifact.filename)", category: .ai)
+        let result = await regenerate(artifact, passes: passes)
+        await applyRegenerationResults(result, to: artifact)
+        Logger.info("✅ Pass re-run complete for: \(artifact.filename)", category: .ai)
+    }
+
     // MARK: - Writing Sample Naming
 
     /// Generate a descriptive name for a writing sample using a quick LLM call.
