@@ -294,7 +294,7 @@ actor NetworkRouter: OnboardingEventEmitter {
         // (Process from end to start so indices remain valid during replacement)
         let urlCitations = annotations
             .filter { $0.isURLCitation }
-            .sorted { $0.startIndex > $1.startIndex }
+            .sorted { ($0.startIndex ?? 0) > ($1.startIndex ?? 0) }
 
         guard !urlCitations.isEmpty else { return text }
 
@@ -302,8 +302,9 @@ actor NetworkRouter: OnboardingEventEmitter {
         for citation in urlCitations {
             guard let url = citation.url else { continue }
 
-            let startIndex = citation.startIndex
-            let endIndex = citation.endIndex
+            // url_citations always carry start/end indices; skip defensively if absent.
+            guard let startIndex = citation.startIndex,
+                  let endIndex = citation.endIndex else { continue }
 
             // Validate indices are within bounds
             guard startIndex >= 0,

@@ -54,10 +54,11 @@ struct RepositoryDigestTool: AgentTool {
                         "description": ["type": "string", "description": "What it is and what it accomplishes"],
                         "verbatimExcerpt": ["type": "string", "description": "Code copied EXACTLY from the file (no paraphrase)"],
                         "path": ["type": "string", "description": "Repo-relative file path"],
-                        "lineRange": ["type": "string", "description": "Line range, e.g. '45-120'"],
+                        "lineRange": ["type": ["string", "null"], "description": "Line range, e.g. '45-120' (null if not applicable)"],
                         "whyNotable": ["type": "string", "description": "Why this is non-obvious / sophisticated"]
                     ],
-                    "required": ["title", "description", "verbatimExcerpt", "path", "whyNotable"],
+                    // Strict tool use requires every property in `required`; `lineRange` is nullable.
+                    "required": ["title", "description", "verbatimExcerpt", "path", "lineRange", "whyNotable"],
                     "additionalProperties": false
                 ]
             ],
@@ -69,11 +70,12 @@ struct RepositoryDigestTool: AgentTool {
                     "properties": [
                         "purpose": ["type": "string", "description": "What this excerpt is meant to demonstrate"],
                         "path": ["type": "string", "description": "Repo-relative file path"],
-                        "lineRange": ["type": "string", "description": "Line range, e.g. '12-40'"],
+                        "lineRange": ["type": ["string", "null"], "description": "Line range, e.g. '12-40' (null if not applicable)"],
                         "excerpt": ["type": "string", "description": "Code copied EXACTLY from the file (no paraphrase)"],
-                        "tiedToClaim": ["type": "string", "description": "The claim this excerpt supports"]
+                        "tiedToClaim": ["type": ["string", "null"], "description": "The claim this excerpt supports (null if none)"]
                     ],
-                    "required": ["purpose", "path", "excerpt"],
+                    // Strict tool use requires every property in `required`; `lineRange`/`tiedToClaim` are nullable.
+                    "required": ["purpose", "path", "lineRange", "excerpt", "tiedToClaim"],
                     "additionalProperties": false
                 ]
             ],

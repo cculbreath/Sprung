@@ -598,16 +598,22 @@ class GitAnalysisAgent: AnthropicToolLoopDelegate {
             functionTool(ListDirectoryTool.self),
             functionTool(GlobSearchTool.self),
             functionTool(GrepSearchTool.self),
-            functionTool(RepositoryDigestTool.self, cached: true)
+            // complete_analysis is the terminal submit tool: enforce its schema
+            // server-side (strict tool use) so a missing/mistyped field can't throw
+            // a client-side DecodingError and spin the agent loop.
+            functionTool(RepositoryDigestTool.self, cached: true, strict: true)
         ]
     }
 
-    private static func functionTool<T: AgentTool>(_ tool: T.Type, cached: Bool = false) -> AnthropicTool {
+    private static func functionTool<T: AgentTool>(_ tool: T.Type, cached: Bool = false, strict: Bool = false) -> AnthropicTool {
         .function(AnthropicFunctionTool(
             name: tool.name,
             description: tool.description,
             inputSchema: tool.parametersSchema,
-            cacheControl: cached ? .ephemeral : nil
+            cacheControl: cached ? .ephemeral : nil,
+            // Pass nil (not false) for non-strict tools so their wire bytes are
+            // unchanged — the prompt-cache prefix stays stable.
+            strict: strict ? true : nil
         ))
     }
 
