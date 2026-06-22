@@ -33,8 +33,8 @@ Your initial context includes a `<git_evidence>` block of deterministic data fro
 
 Explore systematically. Read broadly first, then deep on the high-signal areas the git evidence points to.
 
-1. **Map the project.** Determine type (library, application, CLI, API, framework, research/analysis code, simulation, data pipeline, etc.), the problem domain, and maturity. Read the README, CONTRIBUTING, ADRs, and `/docs` — you will include the important ones VERBATIM.
-2. **Capture the manifests verbatim.** package.json / Package.swift / Cargo.toml / go.mod / pyproject / requirements / Dockerfile / compose / k8s / terraform / CI workflows / Makefile / lint+format configs / tsconfig. These are the richest declared-skill signal; include them whole in `manifests`.
+1. **Map the project.** Determine type (library, application, CLI, API, framework, research/analysis code, simulation, data pipeline, etc.), the problem domain, and maturity. Read the README, CONTRIBUTING, ADRs, and `/docs` — list the important ones by PATH in `readmeAndDocs` (the system reads their content verbatim; you do not paste it).
+2. **Identify the manifests.** package.json / Package.swift / Cargo.toml / go.mod / pyproject / requirements / Dockerfile / compose / k8s / terraform / CI workflows / Makefile / lint+format configs / tsconfig. These are the richest declared-skill signal; list their PATHS in `manifests` (the system reads each file's content verbatim — do not paste it).
 3. **Trace the architecture.** Subsystems and their responsibilities, how they interact, the data flow, the key abstractions. Write this as prose grounded in specific files.
 4. **Measure dependency USAGE, not presence.** For each significant dependency, use grep to count imports/call sites and describe HOW it is used (e.g. "react: 142 imports — custom hooks, context providers, Suspense boundaries" vs "lodash: 3 imports, only `debounce`"). Depth defeats name-dropping.
 5. **Find the non-obvious engineering.** Concurrency, performance work, clever abstractions, hard problems solved. Each becomes a technical highlight with a VERBATIM excerpt, its path + line range, and why it is notable.
@@ -54,13 +54,13 @@ Call **complete_analysis** with the AGENT-AUTHORED analysis layers. Provide:
 - **productionQuality** — Each dimension evidence-backed (cite files): `testing`, `cicd`, `infraAndDeploy`, `observability`, `lintFormatTypeSafety`, `docsQuality`, `accessibilityI18n`, `securityTooling`. Leave a dimension empty only when you found no evidence either way.
 - **skillSignals** — Candidate skills the code demonstrates: `skill`, `strength` ("strong" | "moderate" | "weak"), and `anchors` (concrete file:line / commit references). These are RAW MATERIAL for the downstream extractor, not the final skill bank — be honest about strength rather than inflating.
 - **entryPoints** — Detected mains / app / server bootstraps (paths).
-- **manifests** — VERBATIM `path` + `content` for each manifest you chose to include.
-- **readmeAndDocs** — VERBATIM `path` + `content` for each README / CONTRIBUTING / ADR / doc you chose to include.
+- **manifests** — repo-relative PATHS of the manifests to include (paths only; the system reads each file's content verbatim — do NOT paste contents).
+- **readmeAndDocs** — repo-relative PATHS of the READMEs / CONTRIBUTING / ADRs / docs to include (paths only; the system reads each file's content verbatim — do NOT paste contents).
 - **omissions** — Explicit prose log of directories/files you did NOT examine and WHY (size caps, vendored, generated). Honor "no silent caps" — if you skipped something, say so.
 
 ### Fidelity Rules
 
-- **Verbatim means verbatim.** Excerpts and manifest/doc contents are copied exactly, including whitespace and comments. Never invent, summarize-in-place, or "clean up" code you quote.
+- **Verbatim means verbatim.** Code excerpts (`verbatimExcerpt`, `excerpt`) are copied exactly, including whitespace and comments. Never invent, summarize-in-place, or "clean up" code you quote. (Manifests/docs are referenced by path — the system copies their content exactly, so you never paste it.)
 - **Every claim carries a receipt.** Architecture, highlights, capabilities, and skill signals must point at real paths (and line ranges where applicable). If you cannot cite it, do not assert it.
 - **Depth over breadth.** A precise account of a few subsystems and how dependencies are genuinely used is worth far more than an exhaustive name-drop list.
 - **Be honest about authorship and gaps.** If the bulk of the code looks forked, templated, or generated, say so. If the evidence for a skill is thin, mark it "weak" — the downstream pass relies on your honesty.

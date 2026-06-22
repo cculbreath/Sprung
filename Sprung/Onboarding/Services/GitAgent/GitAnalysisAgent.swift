@@ -20,7 +20,7 @@
 //
 //  The model authors the analysis layers (architecture, capabilities, technical
 //  highlights, code excerpts, dependency usage, production quality, skill
-//  signals, entry points, verbatim manifests/docs, omissions) via the
+//  signals, entry points, manifest/doc paths, omissions) via the
 //  `complete_analysis` tool. The MECHANICAL layers (repo name, file tree,
 //  language stats, git history, authorship) are assembled here from the
 //  deterministic `GitEvidenceCollector` data — never re-emitted by the model.
@@ -109,7 +109,12 @@ class GitAnalysisAgent: AnthropicToolLoopDelegate {
     let timeoutSeconds: TimeInterval = 600  // 10 minutes
     /// Output ceiling per turn. The final complete_analysis digest is the
     /// largest response; 16K keeps the non-streaming call under HTTP timeouts.
-    private let maxResponseTokens = 16384
+    /// Max output tokens per turn. Set to Claude Haiku 4.5's full output ceiling
+    /// (64K); the prior 16384 was an arbitrary quarter of it, against which the
+    /// complete_analysis digest truncated mid-JSON → dataCorrupted → infinite
+    /// retry loop → wall-clock timeout. With manifests/docs now kernel-read (the
+    /// model emits paths, not file bytes), real output stays well under this.
+    private let maxResponseTokens = 65536
     /// Consecutive text-only turns tolerated (with a tool nudge) before aborting.
     private static let maxConsecutiveNoToolTurns = 2
 
@@ -221,7 +226,7 @@ class GitAnalysisAgent: AnthropicToolLoopDelegate {
 
     func completionRetryContent(for error: Error) -> String {
         // Send detailed decoding error back so the model can retry with corrected JSON.
-        Logger.warning("⚠️ GitAgent: complete_analysis parsing failed, asking LLM to retry: \(error.localizedDescription)", category: .ai)
+        Logger.warning("⚠️ GitAgent: complete_analysis parsing failed, asking LLM to retry: \(specificDecodingDetail(for: error))", category: .ai)
         return parsingErrorMessage(for: error)
     }
 
@@ -387,7 +392,8 @@ class GitAnalysisAgent: AnthropicToolLoopDelegate {
             You MUST call the complete_analysis tool NOW with the repository digest from your
             findings so far. Provide the analysis layers (architecture, capabilities, technical
             highlights, code excerpts, dependency usage, production quality, skill signals, entry
-            points, verbatim manifests/docs, omissions) — keep claims grounded in what you saw.
+            points, manifest/doc PATHS (paths only — the system reads their content), omissions) —
+            keep claims grounded in what you saw.
             Do NOT call any other tools - only call complete_analysis immediately.
             </coordinator>
             """, to: &messages)
@@ -607,23 +613,27 @@ class GitAnalysisAgent: AnthropicToolLoopDelegate {
 
     // MARK: - Digest Building
 
-    private func parsingErrorMessage(for error: Error) -> String {
-        // Extract specific decoding error details if available
-        var specificError = error.localizedDescription
-        if let decodingError = error as? DecodingError {
-            switch decodingError {
-            case .keyNotFound(let key, let context):
-                specificError = "Missing required field '\(key.stringValue)' at path: \(context.codingPath.map(\.stringValue).joined(separator: "."))"
-            case .typeMismatch(let type, let context):
-                specificError = "Type mismatch for '\(context.codingPath.map(\.stringValue).joined(separator: "."))': expected \(type)"
-            case .valueNotFound(let type, let context):
-                specificError = "Missing value for '\(context.codingPath.map(\.stringValue).joined(separator: "."))': expected \(type)"
-            case .dataCorrupted(let context):
-                specificError = "Data corrupted at '\(context.codingPath.map(\.stringValue).joined(separator: "."))': \(context.debugDescription)"
-            @unknown default:
-                break
-            }
+    /// One-line specific cause of a decode failure — the coding path + reason that
+    /// `DecodingError.localizedDescription` hides ("isn't in the correct format").
+    /// Used both in the log and in the model-facing retry message.
+    private func specificDecodingDetail(for error: Error) -> String {
+        guard let decodingError = error as? DecodingError else { return error.localizedDescription }
+        switch decodingError {
+        case .keyNotFound(let key, let context):
+            return "Missing required field '\(key.stringValue)' at path: \(context.codingPath.map(\.stringValue).joined(separator: "."))"
+        case .typeMismatch(let type, let context):
+            return "Type mismatch for '\(context.codingPath.map(\.stringValue).joined(separator: "."))': expected \(type)"
+        case .valueNotFound(let type, let context):
+            return "Missing value for '\(context.codingPath.map(\.stringValue).joined(separator: "."))': expected \(type)"
+        case .dataCorrupted(let context):
+            return "Data corrupted at '\(context.codingPath.map(\.stringValue).joined(separator: "."))': \(context.debugDescription)"
+        @unknown default:
+            return error.localizedDescription
         }
+    }
+
+    private func parsingErrorMessage(for error: Error) -> String {
+        let specificError = specificDecodingDetail(for: error)
 
         return """
         ERROR: Failed to parse complete_analysis arguments.
@@ -655,8 +665,8 @@ class GitAnalysisAgent: AnthropicToolLoopDelegate {
             { "skill": "string", "strength": "strong|moderate|weak", "anchors": ["string"] }
           ],
           "entryPoints": ["string"],
-          "manifests": [ { "path": "string", "content": "string" } ],
-          "readmeAndDocs": [ { "path": "string", "content": "string" } ],
+          "manifests": ["repo-relative path string"],
+          "readmeAndDocs": ["repo-relative path string"],
           "omissions": "string"
         }
 
@@ -699,8 +709,8 @@ class GitAnalysisAgent: AnthropicToolLoopDelegate {
             repoName: repoName,
             fileTree: mechanical.fileTree,
             languageStats: mechanical.languageStats,
-            manifests: params.manifests,
-            readmeAndDocs: params.readmeAndDocs,
+            manifests: readRepoFiles(paths: params.manifests),
+            readmeAndDocs: readRepoFiles(paths: params.readmeAndDocs),
             entryPoints: params.entryPoints,
             gitHistory: mechanical.gitHistory,
             authorship: mechanical.authorship,
@@ -714,6 +724,32 @@ class GitAnalysisAgent: AnthropicToolLoopDelegate {
             omissions: params.omissions,
             provenance: provenance
         )
+    }
+
+    /// Read the verbatim content of the model-curated manifest/doc PATHS from disk.
+    /// The model returns repo-relative paths (cheap — no whole-file regurgitation in
+    /// its output, which is what truncated the digest); the kernel reads exact bytes
+    /// here, which is higher-fidelity than model-pasted content and never counts
+    /// against the model's output-token budget. Unreadable/oversized files are
+    /// skipped best-effort (the digest's `omissions` records what was left out).
+    private func readRepoFiles(paths: [String]) -> [RepoFile] {
+        let maxBytes = 256 * 1024  // generous per-file cap; guards a pathological vendored/generated file
+        var files: [RepoFile] = []
+        var seen = Set<String>()
+        for rawPath in paths {
+            guard seen.insert(rawPath).inserted else { continue }
+            guard let resolved = try? FilesystemToolUtilities.resolveAndValidatePath(rawPath, repoRoot: repoPath),
+                  FileManager.default.fileExists(atPath: resolved),
+                  let content = try? String(contentsOfFile: resolved, encoding: .utf8) else {
+                Logger.warning("⚠️ GitAgent: digest file unreadable/missing, skipping: \(rawPath)", category: .ai)
+                continue
+            }
+            let capped = content.count > maxBytes
+                ? String(content.prefix(maxBytes)) + "\n…[truncated: file exceeds \(maxBytes / 1024)KB]"
+                : content
+            files.append(RepoFile(path: rawPath, content: capped))
+        }
+        return files
     }
 
     // MARK: - Mechanical Layers (deterministic git evidence → IR types)

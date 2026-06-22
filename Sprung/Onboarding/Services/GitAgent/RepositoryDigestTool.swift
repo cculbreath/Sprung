@@ -139,29 +139,13 @@ struct RepositoryDigestTool: AgentTool {
             ],
             "manifests": [
                 "type": "array",
-                "description": "Package manifests / Dockerfile / CI / lint configs included VERBATIM — richest declared-skill signal.",
-                "items": [
-                    "type": "object",
-                    "properties": [
-                        "path": ["type": "string", "description": "Repo-relative file path"],
-                        "content": ["type": "string", "description": "File content copied EXACTLY"]
-                    ],
-                    "required": ["path", "content"],
-                    "additionalProperties": false
-                ]
+                "items": ["type": "string"],
+                "description": "Repo-relative PATHS of package manifests / Dockerfile / CI / lint configs to include (package.json, Package.swift, Cargo.toml, go.mod, pyproject, Dockerfile, compose, k8s, terraform, CI workflows, Makefile, lint/format configs, tsconfig). The system reads each file's content VERBATIM — list paths only, do NOT paste contents. Richest declared-skill signal."
             ],
             "readmeAndDocs": [
                 "type": "array",
-                "description": "README / CONTRIBUTING / ADRs / docs included VERBATIM.",
-                "items": [
-                    "type": "object",
-                    "properties": [
-                        "path": ["type": "string", "description": "Repo-relative file path"],
-                        "content": ["type": "string", "description": "File content copied EXACTLY"]
-                    ],
-                    "required": ["path", "content"],
-                    "additionalProperties": false
-                ]
+                "items": ["type": "string"],
+                "description": "Repo-relative PATHS of README / CONTRIBUTING / ADRs / docs to include. The system reads each file's content VERBATIM — list paths only, do NOT paste contents."
             ],
             "omissions": [
                 "type": "string",
@@ -189,8 +173,8 @@ struct RepositoryDigestTool: AgentTool {
         let productionQuality: RepoProductionQuality
         let skillSignals: [SkillSignal]
         let entryPoints: [String]
-        let manifests: [RepoFile]
-        let readmeAndDocs: [RepoFile]
+        let manifests: [String]        // repo-relative paths; kernel reads each file's content
+        let readmeAndDocs: [String]    // repo-relative paths; kernel reads each file's content
         let omissions: String
     }
 }
