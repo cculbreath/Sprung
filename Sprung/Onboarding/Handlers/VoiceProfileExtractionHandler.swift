@@ -91,6 +91,9 @@ final class VoiceProfileExtractionHandler {
             task: nil as Task<Void, Never>?
         )
         agentId = trackerId
+        agentActivityTracker.setRetryHandler(agentId: trackerId) { [weak self] in
+            await self?.triggerExtraction()
+        }
         agentActivityTracker.updateStatusMessage(
             agentId: trackerId,
             message: "Analyzing \(samples.count) writing sample(s)"

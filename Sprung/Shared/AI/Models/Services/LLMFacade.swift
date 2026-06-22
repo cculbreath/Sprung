@@ -340,12 +340,20 @@ final class LLMFacade {
     }
     // MARK: - Conversation Streaming
 
+    /// The provider-reported maximum output (completion) token limit for a model,
+    /// or `nil` when OpenRouter doesn't expose one. Used to give structured-output
+    /// requests full headroom instead of relying on a small provider default.
+    func maxOutputTokens(forModel modelId: String) -> Int? {
+        openRouterService.findModel(id: modelId)?.maxOutputTokens
+    }
+
     func startConversationStreaming(
         systemPrompt: String? = nil,
         userMessage: String,
         modelId: String,
         reasoning: OpenRouterReasoning? = nil,
-        jsonSchema: JSONSchema? = nil
+        jsonSchema: JSONSchema? = nil,
+        maxTokens: Int? = nil
     ) async throws -> LLMStreamingHandle {
         try await startConversationStreaming(
             systemPrompt: systemPrompt,
@@ -353,7 +361,8 @@ final class LLMFacade {
             modelId: modelId,
             reasoning: reasoning,
             jsonSchema: jsonSchema,
-            backend: .openRouter
+            backend: .openRouter,
+            maxTokens: maxTokens
         )
     }
 
@@ -364,7 +373,8 @@ final class LLMFacade {
         reasoning: OpenRouterReasoning? = nil,
         jsonSchema: JSONSchema? = nil,
         backend: Backend,
-        images: [Data] = []
+        images: [Data] = [],
+        maxTokens: Int? = nil
     ) async throws -> LLMStreamingHandle {
         let handle: LLMStreamingHandle
         if backend == .openRouter {
@@ -377,7 +387,8 @@ final class LLMFacade {
                 userMessage: userMessage,
                 modelId: modelId,
                 reasoning: reasoning,
-                jsonSchema: jsonSchema
+                jsonSchema: jsonSchema,
+                maxTokens: maxTokens
             )
             handle = streamingManager.makeStreamingHandle(conversationId: conversationId, sourceStream: sourceStream)
         } else if backend == .openAI {

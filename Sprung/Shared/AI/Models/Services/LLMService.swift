@@ -177,7 +177,8 @@ final class OpenRouterServiceBackend: LLMConversationService {
         userMessage: String,
         modelId: String,
         reasoning: OpenRouterReasoning? = nil,
-        jsonSchema: JSONSchema? = nil
+        jsonSchema: JSONSchema? = nil,
+        maxTokens: Int? = nil
     ) async throws -> (conversationId: UUID, stream: AsyncThrowingStream<LLMStreamChunkDTO, Error>) {
         try await ensureInitialized()
         let conversationId = UUID()
@@ -191,6 +192,9 @@ final class OpenRouterServiceBackend: LLMConversationService {
             messages: messages,
             modelId: modelId
         )
+        if let maxTokens = maxTokens {
+            parameters.maxTokens = maxTokens
+        }
         if let jsonSchema = jsonSchema {
             let responseFormatSchema = JSONSchemaResponseFormat(
                 name: "structured_response",

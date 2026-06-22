@@ -269,10 +269,14 @@ struct AgentTranscriptView: View {
                 }
             }
 
-            // Footer with status and kill button
+            // Footer: kill button while running, retry button when a failed
+            // agent has a registered retry handler.
             if agent.status == .running {
                 Divider()
                 agentFooter
+            } else if agent.status == .failed, tracker.canRetry(agentId: agent.id) {
+                Divider()
+                retryFooter
             }
         }
         .background(Color(nsColor: .textBackgroundColor))
@@ -373,6 +377,36 @@ struct AgentTranscriptView: View {
             }
             .buttonStyle(.bordered)
             .tint(.red)
+        }
+        .padding(12)
+        .background(Color(nsColor: .controlBackgroundColor))
+    }
+
+    private var retryFooter: some View {
+        HStack {
+            HStack(spacing: 6) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.red)
+                    .font(.caption)
+                Text(agent.error ?? "Agent failed")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
+
+            Spacer()
+
+            Button {
+                Task {
+                    await tracker.retry(agentId: agent.id)
+                }
+            } label: {
+                Label("Retry", systemImage: "arrow.clockwise")
+                    .font(.caption)
+            }
+            .buttonStyle(.bordered)
+            .tint(.accentColor)
         }
         .padding(12)
         .background(Color(nsColor: .controlBackgroundColor))

@@ -8,6 +8,15 @@ struct OpenRouterModel: Codable, Identifiable, Hashable, Equatable {
     let pricing: Pricing?
     let supportedParameters: [String]? // Legacy field, may be nil
     let endpoints: [Endpoint]?
+    let topProvider: TopProvider?
+    struct TopProvider: Codable, Hashable {
+        let contextLength: Int?
+        let maxCompletionTokens: Int?
+        enum CodingKeys: String, CodingKey {
+            case contextLength = "context_length"
+            case maxCompletionTokens = "max_completion_tokens"
+        }
+    }
     struct Architecture: Codable, Hashable {
         let modality: String
         let inputModalities: [String]
@@ -56,6 +65,7 @@ struct OpenRouterModel: Codable, Identifiable, Hashable, Equatable {
         case id, name, description, architecture, pricing, endpoints
         case contextLength = "context_length"
         case supportedParameters = "supported_parameters"
+        case topProvider = "top_provider"
     }
 }
 extension OpenRouterModel {
@@ -75,6 +85,11 @@ extension OpenRouterModel {
             return true
         }
         return false
+    }
+    /// The model's maximum completion (output) token limit, as reported by the
+    /// provider. `nil` when OpenRouter doesn't expose one for this model.
+    var maxOutputTokens: Int? {
+        topProvider?.maxCompletionTokens
     }
     var supportsImages: Bool {
         architecture?.inputModalities.contains("image") ?? false

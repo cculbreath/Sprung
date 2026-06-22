@@ -52,69 +52,69 @@ final class VoiceProfileService {
         let userEffort = UserDefaults.standard.string(forKey: "reasoningEffort") ?? "medium"
         let reasoning = OpenRouterReasoning(effort: userEffort, includeReasoning: true)
 
-        let maxAttempts = 3
-        for attempt in 1...maxAttempts {
-            Logger.info("🎤 Voice profile extraction attempt \(attempt)/\(maxAttempts)", category: .ai)
+        // Give the response the model's full output budget. On Anthropic, max_tokens
+        // bounds thinking + output together, so a small provider default truncates
+        // the JSON after thinking. Use the model's reported max; fall back large.
+        let maxOutputTokens = facade.maxOutputTokens(forModel: modelId) ?? 128_000
+        Logger.info("🎤 Voice profile max output tokens: \(maxOutputTokens)", category: .ai)
 
-            activeStreamingHandle?.cancel()
-            reasoningStreamManager.clear()
-            reasoningStreamManager.startReasoning(modelName: modelId)
+        // Single attempt, no retries. The structured-output schema is the
+        // contract; a failure here is surfaced to the agent pane, where the
+        // user can re-run it deliberately via the Retry button.
+        Logger.info("🎤 Voice profile extraction starting", category: .ai)
 
+        activeStreamingHandle?.cancel()
+        reasoningStreamManager.clear()
+        reasoningStreamManager.startReasoning(modelName: modelId)
+
+        do {
+            let handle = try await facade.startConversationStreaming(
+                userMessage: prompt,
+                modelId: modelId,
+                reasoning: reasoning,
+                jsonSchema: jsonSchema,
+                maxTokens: maxOutputTokens
+            )
+            activeStreamingHandle = handle
+
+            var fullResponse = ""
+
+            for try await chunk in handle.stream {
+                if let reasoningContent = chunk.allReasoningText {
+                    reasoningStreamManager.reasoningText += reasoningContent
+                }
+                if let content = chunk.content {
+                    fullResponse += content
+                }
+                if chunk.isFinished {
+                    reasoningStreamManager.isStreaming = false
+                    reasoningStreamManager.isVisible = false
+                }
+            }
+
+            activeStreamingHandle = nil
+
+            // The parser handles fenced/embedded JSON, so feed it the full
+            // response rather than a chunk-boundary-dependent slice.
             do {
-                let handle = try await facade.startConversationStreaming(
-                    userMessage: prompt,
-                    modelId: modelId,
-                    reasoning: reasoning,
-                    jsonSchema: jsonSchema
+                let profile: VoiceProfile = try JSONResponseParser.parseText(fullResponse, as: VoiceProfile.self)
+                Logger.info(
+                    "🎤 Extracted voice profile: \(profile.enthusiasm.displayName), first person: \(profile.useFirstPerson)",
+                    category: .ai
                 )
-                activeStreamingHandle = handle
-
-                var fullResponse = ""
-
-                for try await chunk in handle.stream {
-                    if let reasoningContent = chunk.allReasoningText {
-                        reasoningStreamManager.reasoningText += reasoningContent
-                    }
-                    if let content = chunk.content {
-                        fullResponse += content
-                    }
-                    if chunk.isFinished {
-                        reasoningStreamManager.isStreaming = false
-                        reasoningStreamManager.isVisible = false
-                    }
-                }
-
-                activeStreamingHandle = nil
-
-                // The parser handles fenced/embedded JSON, so feed it the full
-                // response rather than a chunk-boundary-dependent slice.
-                do {
-                    let profile: VoiceProfile = try JSONResponseParser.parseText(fullResponse, as: VoiceProfile.self)
-                    Logger.info(
-                        "🎤 Extracted voice profile: \(profile.enthusiasm.displayName), first person: \(profile.useFirstPerson)",
-                        category: .ai
-                    )
-                    return profile
-                } catch {
-                    // Keep the unparseable response diagnosable from the console log.
-                    Logger.warning(
-                        "🎤 Voice profile response failed to parse (attempt \(attempt)/\(maxAttempts), \(fullResponse.count) chars): \(fullResponse.prefix(2000))",
-                        category: .ai
-                    )
-                    throw error
-                }
-            } catch let error as ModelConfigurationError {
-                cleanUpAfterFailure()
-                throw error
+                return profile
             } catch {
-                cleanUpAfterFailure()
-                if attempt < maxAttempts { continue }
+                // Keep the unparseable response diagnosable from the console log.
+                Logger.warning(
+                    "🎤 Voice profile response failed to parse (\(fullResponse.count) chars): \(fullResponse.prefix(2000))",
+                    category: .ai
+                )
                 throw error
             }
+        } catch {
+            cleanUpAfterFailure()
+            throw error
         }
-
-        // Unreachable: the loop either returns a profile or throws on the last attempt.
-        throw VoiceProfileError.extractionFailed
     }
 
     private func cleanUpAfterFailure() {
@@ -199,7 +199,6 @@ final class VoiceProfileService {
     enum VoiceProfileError: Error, LocalizedError {
         case llmNotConfigured
         case noWritingSamples
-        case extractionFailed
 
         var errorDescription: String? {
             switch self {
@@ -207,8 +206,6 @@ final class VoiceProfileService {
                 return "LLM facade not configured"
             case .noWritingSamples:
                 return "No writing samples available for voice profile extraction"
-            case .extractionFailed:
-                return "Voice profile extraction failed"
             }
         }
     }

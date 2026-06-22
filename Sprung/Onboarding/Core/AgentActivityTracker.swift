@@ -221,6 +221,11 @@ class AgentActivityTracker {
     /// Active task handles for cancellation (type-erased to support any Task type)
     private var activeTasks: [String: AnyCancellableTask] = [:]
 
+    /// Retry closures for agents that support being re-run after a failure.
+    /// Registered by whoever owns the agent's work; surfaced as a Retry button
+    /// in the agent pane. Not persisted (closures aren't Codable).
+    private var retryHandlers: [String: () async -> Void] = [:]
+
     /// Set of agent IDs that have been cancelled. Agents can check this flag to stop work.
     /// This provides cancellation support even when the Task reference isn't stored.
     private var cancelledAgentIds: Set<String> = []
@@ -343,6 +348,27 @@ class AgentActivityTracker {
         activeTasks[agentId] = AnyCancellableTask(task)
     }
 
+    /// Register a closure that re-runs this agent's work, enabling a Retry
+    /// button in the agent pane once the agent has failed.
+    func setRetryHandler(agentId: String, _ handler: @escaping () async -> Void) {
+        retryHandlers[agentId] = handler
+    }
+
+    /// Whether a failed agent can be retried (i.e. a retry handler is registered).
+    func canRetry(agentId: String) -> Bool {
+        retryHandlers[agentId] != nil
+    }
+
+    /// Re-run a failed agent's work via its registered retry handler.
+    func retry(agentId: String) async {
+        guard let handler = retryHandlers[agentId] else {
+            Logger.warning("⚠️ Cannot retry: no retry handler for agent (id: \(agentId.prefix(8)))", category: .ai)
+            return
+        }
+        Logger.info("🔁 Retrying agent (id: \(agentId.prefix(8)))", category: .ai)
+        await handler()
+    }
+
     /// Append a transcript entry to an agent
     func appendTranscript(
         agentId: String,
@@ -374,6 +400,7 @@ class AgentActivityTracker {
         agents[index].status = .completed
         agents[index].endTime = Date()
         activeTasks[agentId] = nil
+        retryHandlers[agentId] = nil
         recentlyCompletedAgentIds.insert(agentId)
 
         Logger.info("✅ Agent completed: \(agents[index].name) (\(agents[index].durationString))", category: .ai)
@@ -460,6 +487,7 @@ class AgentActivityTracker {
 
         agents[index].status = .killed
         agents[index].endTime = Date()
+        retryHandlers[agentId] = nil
 
         // Add kill notice to transcript
         appendTranscript(

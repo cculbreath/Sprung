@@ -69,30 +69,6 @@ Pull 3-5 verbatim excerpts (20-50 words) that capture the authentic voice. Choos
 ### 11. Voice Summary (write this LAST)
 Synthesize everything above into a 150-300 word impersonation brief: what makes this voice immediately recognizable, the two or three habits an imitator must get right, and the tells that would expose a fake (e.g. "never opens with a question", "would not write 'utilize'", "always earns abstractions with a concrete example first"). Write it as direct instruction to the impersonating writer.
 
-## Output
-
-Return JSON with exactly this structure:
-
-```json
-{
-  "enthusiasm": "moderate",
-  "useFirstPerson": true,
-  "connectiveStyle": "causal",
-  "aspirationalPhrases": ["What excites me", "I want to build"],
-  "avoidPhrases": ["leverage", "utilize", "synergy"],
-  "sampleExcerpts": ["I've amended my design philosophy over the years..."],
-  "vocabularyRegister": "Anglo-Saxon core (build, work, fix) with Latinate vocabulary reserved for design claims; Greek-derived terms appear only as physics domain vocabulary",
-  "registerModulation": "Rises to Latinate when framing a formal argument, then deliberately drops to plain Anglo-Saxon for the concluding point; technical Greek-derived terms stay confined to methods passages",
-  "voiceSummary": "This writer leads with earnest, unguarded enthusiasm and earns it with evidence...",
-  "sentenceRhythm": "Long multi-clause sentences elaborated with em-dash appositives, resolved by short plain declaratives at paragraph ends...",
-  "rhetoricalMoves": ["anaphora for conviction (\"I love… I know…\")", "concrete anecdote escalated into thesis"],
-  "openingStyle": "Direct declaration of intent in the first sentence (\"Enclosed are my application materials for...\")",
-  "closingStyle": "Plain-register conviction statement (\"This is a place I can thrive\")"
-}
-```
-
-Return ONLY the JSON object — no surrounding prose, no markdown fences, and use exactly the camelCase key names shown above.
-
 ## Notes
 
 - If no clear pattern, default to moderate enthusiasm and causal style
