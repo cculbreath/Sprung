@@ -210,24 +210,28 @@ struct OnboardingInterviewToolPane: View {
                 coordinator: coordinator
             )
         } else if let prompt = coordinator.pendingChoicePrompt {
-            InterviewChoicePromptCard(
-                prompt: prompt,
-                onSubmit: { selection in
-                    Task {
-                        await coordinator.submitChoiceSelection(selection)
+            ScrollView {
+                InterviewChoicePromptCard(
+                    prompt: prompt,
+                    onSubmit: { selection in
+                        Task {
+                            await coordinator.submitChoiceSelection(selection)
+                        }
+                    },
+                    onSubmitOther: { otherText in
+                        Task {
+                            await coordinator.submitChoiceSelectionWithOther(otherText)
+                        }
+                    },
+                    onCancel: {
+                        Task {
+                            await coordinator.cancelChoiceSelection()
+                        }
                     }
-                },
-                onSubmitOther: { otherText in
-                    Task {
-                        await coordinator.submitChoiceSelectionWithOther(otherText)
-                    }
-                },
-                onCancel: {
-                    Task {
-                        await coordinator.cancelChoiceSelection()
-                    }
-                }
-            )
+                )
+                // Keep the card's drop shadow from clipping at the scroll edges
+                .padding(.vertical, 4)
+            }
         } else if let validation = coordinator.pendingValidationPrompt, validation.mode == .editor {
             // Only show editor mode validations in tool pane
             // Validation mode prompts are shown as modal sheets

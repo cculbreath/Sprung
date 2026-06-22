@@ -37,8 +37,14 @@ final class UIResponseCoordinator {
     }
     // MARK: - Choice Selection
     func submitChoiceSelection(_ selectionIds: [String]) async {
+        // Capture human-readable labels BEFORE resolveChoice clears the prompt — the
+        // resume fallback delivers them as a user message (the option ids are
+        // meaningless to the model once the tool_use args are stripped on restore).
+        let selectedLabels: [String] = toolRouter.pendingChoicePrompt.map { prompt in
+            selectionIds.compactMap { id in prompt.options.first(where: { $0.id == id })?.title }
+        } ?? []
         guard let result = toolRouter.resolveChoice(selectionIds: selectionIds) else { return }
-        await submitChoiceSelectionInternal(selectionIds: selectionIds, result: result)
+        await submitChoiceSelectionInternal(selectionIds: selectionIds, selectedLabels: selectedLabels, result: result)
     }
 
     /// Submit a choice selection with custom free-form text (for "Other" option)
@@ -53,7 +59,11 @@ final class UIResponseCoordinator {
             message: "User selected 'Other' and provided: \(otherText)",
             data: JSON(["otherResponse": otherText])
         )
-        completeUITool(toolName: OnboardingToolName.getUserOption.rawValue, result: result)
+        let completed = completeUITool(toolName: OnboardingToolName.getUserOption.rawValue, result: result)
+        // Resumed session: no blocked tool to receive it — deliver as a user turn.
+        if !completed {
+            await deliverChoiceAnswerAsUserMessage(labels: ["Other — \(otherText)"])
+        }
         Logger.info("✅ Choice selection (Other) completed", category: .ai)
     }
 
@@ -72,7 +82,7 @@ final class UIResponseCoordinator {
         Logger.info("✅ Choice selection cancelled", category: .ai)
     }
 
-    private func submitChoiceSelectionInternal(selectionIds: [String], result: (payload: JSON, source: String?)) async {
+    private func submitChoiceSelectionInternal(selectionIds: [String], selectedLabels: [String], result: (payload: JSON, source: String?)) async {
         // Determine the tool name based on source
         let toolName: String
         if result.source == "skip_phase_approval" {
@@ -123,8 +133,26 @@ final class UIResponseCoordinator {
             )
         }
 
-        completeUITool(toolName: toolName, result: completionResult)
+        let completed = completeUITool(toolName: toolName, result: completionResult)
+        // No blocked tool received the selection (resumed session): the original
+        // get_user_option tool_use was stripped from history on restore, so deliver
+        // the answer as a normal user turn. Skip-phase approvals already act directly
+        // (forcePhaseTransition above) and need no message.
+        if !completed && result.source != "skip_phase_approval" {
+            await deliverChoiceAnswerAsUserMessage(labels: selectedLabels.isEmpty ? selectionIds : selectedLabels)
+        }
         Logger.info("✅ Choice selection completed", category: .ai)
+    }
+
+    /// Deliver a resumed choice selection to the LLM as a normal user message.
+    /// Used only when no blocked tool continuation exists to receive it.
+    private func deliverChoiceAnswerAsUserMessage(labels: [String]) async {
+        let answer = labels.isEmpty ? "(no selection)" : labels.joined(separator: ", ")
+        var payload = JSON()
+        payload["role"].string = "user"
+        payload["content"].string = "I selected: \(answer)"
+        await eventBus.publish(.llm(.enqueueUserMessage(payload: payload, isSystemGenerated: true)))
+        Logger.info("📨 Delivered resumed choice answer as user message: \(answer)", category: .ai)
     }
 
     // MARK: - Forced Phase Transition
@@ -911,7 +939,11 @@ final class UIResponseCoordinator {
     /// - Parameters:
     ///   - toolName: The name of the tool that presented the UI
     ///   - result: The result data from the user action
-    private func completeUITool(toolName: String, result: UIToolCompletionResult) {
+    /// - Returns: True if a blocked continuation was found and resumed. False means
+    ///   no tool was awaiting (e.g. a resumed session, where the tool_use was stripped
+    ///   from history) — callers should deliver the answer as a normal user turn instead.
+    @discardableResult
+    private func completeUITool(toolName: String, result: UIToolCompletionResult) -> Bool {
         let completed = continuationManager.complete(toolName: toolName, result: result)
         if completed {
             Logger.info("✅ UI tool continuation completed: \(toolName)", category: .ai)
@@ -919,6 +951,7 @@ final class UIResponseCoordinator {
             // No pending continuation - tool may have timed out or been interrupted
             Logger.warning("⚠️ No pending continuation for \(toolName) - may have been interrupted", category: .ai)
         }
+        return completed
     }
 
     /// Build a completion result for UI action

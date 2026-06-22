@@ -39,6 +39,7 @@ struct InterviewChoicePromptCard: View {
         VStack(alignment: .leading, spacing: 16) {
             Text(prompt.prompt)
                 .font(.headline)
+                .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
             VStack(alignment: .leading, spacing: 8) {
                 ForEach(prompt.options) { option in
@@ -116,12 +117,12 @@ struct InterviewChoicePromptCard: View {
             .padding(.vertical, 10)
             .padding(.horizontal, 12)
             .background(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
                     .fill(Color(nsColor: .controlBackgroundColor))
             )
         }
         .buttonStyle(.plain)
-        .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         .accessibilityAddTraits(.isButton)
     }
     @ViewBuilder
@@ -150,12 +151,12 @@ struct InterviewChoicePromptCard: View {
             .padding(.vertical, 10)
             .padding(.horizontal, 12)
             .background(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
                     .fill(Color(nsColor: .controlBackgroundColor))
             )
         }
         .buttonStyle(.plain)
-        .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         .accessibilityAddTraits(.isButton)
     }
     private func selectionState(for optionId: String) -> Bool {

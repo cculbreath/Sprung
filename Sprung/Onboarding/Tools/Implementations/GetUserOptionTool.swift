@@ -42,7 +42,7 @@ struct GetUserOptionTool: InterviewTool {
         guard let coordinator else {
             return .error(ToolError.executionFailed("Coordinator unavailable"))
         }
-        let payload = try OptionPromptPayload(json: params)
+        let payload = try GetUserOptionArguments(json: params)
         // Emit UI request to show the choice prompt
         await coordinator.eventBus.publish(.toolpane(.choicePromptRequested(prompt: payload.toChoicePrompt())))
         // Block until user completes the action or interrupts
@@ -50,7 +50,10 @@ struct GetUserOptionTool: InterviewTool {
         return .immediate(result.toJSON())
     }
 }
-private struct OptionPromptPayload {
+/// Parses `get_user_option` tool arguments into a choice prompt.
+/// Shared by the live tool and session-resume re-surfacing (InterviewLifecycleService)
+/// so both reconstruct the card from identical bytes — single parser, no fork.
+struct GetUserOptionArguments {
     struct Option {
         let id: String
         let label: String

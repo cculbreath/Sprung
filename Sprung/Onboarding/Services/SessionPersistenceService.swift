@@ -548,6 +548,41 @@ final class SessionPersistenceService {
         Logger.info("📥 Restored \(entries.count) conversation entries to ConversationLog", category: .ai)
     }
 
+    /// Find a `get_user_option` choice prompt that was still awaiting the user when
+    /// the session was last closed, reconstructed from the persisted tool arguments.
+    ///
+    /// On restore the conversation log strips the unresolved tool_use to satisfy the
+    /// Anthropic "every tool_use needs a tool_result" invariant (see
+    /// `ConversationLog.removeOrphanedToolCalls`), so the card would otherwise vanish.
+    /// We read the *raw* persisted entries (pre-strip) here so resume can re-surface it.
+    /// Returns nil when no choice prompt was pending.
+    func findUnresolvedChoicePrompt(in session: OnboardingSession) -> OnboardingChoicePrompt? {
+        let entries = session.conversationEntries
+            .sorted { $0.sequenceIndex < $1.sequenceIndex }
+            .compactMap { $0.toConversationEntry() }
+
+        // Inspect ONLY the most recent conversational turn (skipping trailing UI-only
+        // system notes). A choice prompt is still awaiting the user only if its tool_use
+        // is the last thing that happened. After resume, the answer comes back as a new
+        // user turn — it never back-fills the stripped slot — so the persisted slot stays
+        // "unresolved" permanently. Scanning all of history would re-surface a prompt the
+        // user already answered on a later turn.
+        guard let lastEntry = entries.last(where: { !$0.isSystemNote }),
+              case .assistant(_, _, let toolCalls?, _) = lastEntry,
+              let slot = toolCalls.first(where: {
+                  $0.name == OnboardingToolName.getUserOption.rawValue && !$0.isResolved
+              }) else {
+            return nil
+        }
+        guard let data = slot.arguments.data(using: .utf8),
+              let json = try? JSON(data: data),
+              let prompt = try? GetUserOptionArguments(json: json).toChoicePrompt() else {
+            Logger.warning("⚠️ Unresolved get_user_option found on resume but its arguments could not be parsed", category: .ai)
+            return nil
+        }
+        return prompt
+    }
+
     // MARK: - Archived Artifacts
 
     /// Get archived artifacts count (for UI visibility decisions)

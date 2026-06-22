@@ -230,6 +230,17 @@ final class InterviewLifecycleService {
         if success {
             ui.isActive = await state.isActive
             Logger.info("🎛️ Resumed session isActive synced: \(ui.isActive)", category: .ai)
+
+            // Re-surface a multiple-choice prompt that was awaiting the user when the
+            // session was last closed. Its tool_use was stripped from history on restore
+            // (Anthropic invariant), so we rebuild the card from the persisted arguments
+            // and re-publish the same event the live tool does. The user's answer returns
+            // as a normal user turn (UIResponseCoordinator handles the missing continuation).
+            // Published after startLLM so ToolInteractionRouter's subscription is active.
+            if let pendingPrompt = sessionPersistenceHandler.findUnresolvedChoicePrompt(in: session) {
+                await eventBus.publish(.toolpane(.choicePromptRequested(prompt: pendingPrompt)))
+                Logger.info("📥 Re-surfaced pending choice prompt on resume (id: \(pendingPrompt.id))", category: .ai)
+            }
         }
 
         Logger.info("✅ Session resumed: \(session.id), phase=\(phase.rawValue)", category: .ai)

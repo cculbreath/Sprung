@@ -61,8 +61,16 @@ struct EventDumpView: View {
                 await loadRecordings()
             }
             .task {
-                // Live update todo list when events fire
+                // Live-refresh the metrics/events panel and todo list as events
+                // fire. Throttled (~2.5 Hz) so a burst of events in one turn doesn't
+                // re-format the 1000-event list on every single publish.
+                var lastEventRefresh = Date.distantPast
                 for await event in await coordinator.eventBus.streamAll() {
+                    let now = Date()
+                    if now.timeIntervalSince(lastEventRefresh) > 0.4 {
+                        lastEventRefresh = now
+                        await refreshEvents()
+                    }
                     if case .tool(.todoListUpdated) = event {
                         await loadTodoItems()
                     }
@@ -766,12 +774,19 @@ struct EventDumpView: View {
         )
     }
     private func loadEvents() {
-        Task {
-            let recentEvents = await coordinator.getRecentEvents(count: 1000)
-            events = recentEvents.map { formatEvent($0) }
-            let metrics = await coordinator.getEventMetrics()
-            metricsText = formatMetrics(metrics)
-        }
+        Task { await refreshEvents() }
+    }
+
+    /// Snapshot the event metrics + recent history. Driven both once on appear and
+    /// live off the event stream — a one-shot load froze at window-open (showing
+    /// "0 / never" on a resumed session, where the window opens before publishing
+    /// resumes). Awaited from the stream loop so bursts serialize rather than spawn
+    /// a Task per event.
+    private func refreshEvents() async {
+        let recentEvents = await coordinator.getRecentEvents(count: 1000)
+        events = recentEvents.map { formatEvent($0) }
+        let metrics = await coordinator.getEventMetrics()
+        metricsText = formatMetrics(metrics)
     }
     private func formatEvent(_ event: OnboardingEvent) -> String {
         // Simple format - just use the enum case name and basic info
