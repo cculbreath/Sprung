@@ -125,7 +125,11 @@ struct LLMFacadeFactory {
         debugEnabled: Bool
     ) -> AnthropicService {
         let configuration = URLSessionConfiguration.default
-        configuration.timeoutIntervalForRequest = 180
+        // SSE per-packet idle timeout. Large-PDF transcription chunks (100+ pages)
+        // can take >180s to first byte, tripping URLError.timedOut even though the
+        // request is fine; match the overall resource budget so only true stalls
+        // abort. Requests already stream (the fork force-sets stream:true).
+        configuration.timeoutIntervalForRequest = 600
         configuration.timeoutIntervalForResource = 600
         configuration.waitsForConnectivity = true
         let session = URLSession(configuration: configuration)

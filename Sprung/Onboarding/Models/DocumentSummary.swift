@@ -38,21 +38,4 @@ struct DocumentSummary: Codable {
 
     /// Hints about what types of knowledge cards this doc could support
     let relevanceHints: String
-
-    /// Create a fallback summary when parsing fails
-    static func fallback(from text: String, filename: String) -> DocumentSummary {
-        // Extract a simple summary from the first portion of text
-        let truncated = String(text.prefix(1000))
-        return DocumentSummary(
-            documentType: "other",
-            briefDescription: "Uploaded document: \(filename)",
-            summary: "Document: \(filename). Content preview: \(truncated)...",
-            timePeriod: nil,
-            companies: [],
-            roles: [],
-            skills: [],
-            achievements: [],
-            relevanceHints: "Unable to fully analyze document structure."
-        )
-    }
 }

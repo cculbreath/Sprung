@@ -176,7 +176,10 @@ actor DocumentProcessingService {
                 passes: .all,
                 statusCallback: statusCallback
             )
-            documentSummary = analysis?.summary ?? DocumentSummary.fallback(from: extractedText, filename: filename)
+            // No fabricated stub on summary-pass failure: leave the summary nil. A
+            // failed summary pass already records a passFailures entry, so the doc is
+            // surfaced as incomplete + retryable rather than confidently wrong.
+            documentSummary = analysis?.summary
             skills = analysis?.skills
             narrativeCards = analysis?.narrativeCards
             passFailures = analysis?.passFailures ?? []
@@ -408,8 +411,17 @@ actor DocumentProcessingService {
         } catch let error as PDFPreflightError {
             throw error
         } catch {
+            // Do NOT swallow to nil — that erases the failure and lets a fabricated
+            // stub summary masquerade as success (failedPasses=0). Record the whole-
+            // document failure so it surfaces as an extractionFailure (→ completed_with_
+            // errors + per-doc ⚠️ + re-upload prompt) while the already-extracted text
+            // stays on the artifact. The "document analysis" label prefix is recognized
+            // by BudgetFailedExtractionRegistry so a budget-driven total failure re-runs
+            // every pass on top-up.
             Logger.warning("⚠️ Document analysis failed for \(filename): \(error.localizedDescription)", category: .ai)
-            return nil
+            var failed = AnthropicDocumentAnalysisService.AnalysisResult()
+            failed.passFailures.append("document analysis — \(filename): \(error.localizedDescription)")
+            return failed
         }
     }
 

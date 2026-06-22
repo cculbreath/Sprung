@@ -69,6 +69,12 @@ final class BudgetFailedExtractionRegistry {
         if head.hasPrefix("narrative") {
             return .init(summary: false, skills: false, narrativeCards: true, enrichment: true)
         }
+        // Whole-document failure (e.g. transcription stage threw, or a total
+        // analysis failure recorded by DocumentProcessingService.runAnalysis) —
+        // re-run EVERY pass on budget top-up.
+        if head.hasPrefix("document analysis") {
+            return .init(summary: true, skills: true, narrativeCards: true, enrichment: true)
+        }
         return nil
     }
 }
