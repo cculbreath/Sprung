@@ -51,7 +51,7 @@ struct AnthropicRequestBuilder {
     /// Per-request prefix fingerprinting — logs the first divergent block when
     /// the byte-stability invariant breaks (see CachePrefixAuditor).
     private let cacheAuditor = CachePrefixAuditor()
-    /// Shared message-tier breakpoint placement: tail + last-document + >20-block
+    /// Shared message-tier breakpoint placement: the moving tail + >20-block
     /// lookback, .ephemeral TTL, reserving the system block (0 or 1). The full
     /// onboarding policy — see AnthropicCacheBreakpointPlanner.
     private let breakpointPlanner: AnthropicCacheBreakpointPlanner
@@ -70,7 +70,6 @@ struct AnthropicRequestBuilder {
         self.workingMemoryBuilder = WorkingMemoryBuilder(stateCoordinator: stateCoordinator, todoStore: todoStore)
         self.breakpointPlanner = AnthropicCacheBreakpointPlanner(
             cacheControl: .ephemeral,
-            includeDocumentBreakpoint: true,
             reservedBreakpointCount: baseSystemPrompt.isEmpty ? 0 : 1
         )
     }

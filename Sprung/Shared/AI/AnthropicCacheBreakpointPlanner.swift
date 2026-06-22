@@ -19,18 +19,24 @@
 //  prompt content and ignores cache_control placement for prefix matching, so
 //  moving breakpoints between turns does not invalidate earlier cache entries.
 //
-//  The two callers differ in exactly three parameters, captured by this value
+//  The two callers differ in exactly two parameters, captured by this value
 //  type:
 //  - cacheControl: TTL — .ephemeral (5m default) for onboarding; 1h for the
 //    human-in-the-loop revision session (idle review gaps exceed 5m).
-//  - includeDocumentBreakpoint: onboarding plants a breakpoint on the last
-//    document block (caching through the largest payload covers all earlier
-//    blocks); revision keeps its single PDF in the front-loaded prefix and does
-//    not need one.
 //  - reservedBreakpointCount: breakpoints consumed OUTSIDE the message tier,
 //    against Anthropic's hard limit of 4 cache_control blocks per request.
 //    Onboarding reserves the system block (0 or 1); revision reserves the
 //    last-tool breakpoint plus the system block (2).
+//
+//  Both callers place ONLY the moving tail + >20-block lookback breakpoints, which
+//  advance with the conversation every turn. A large early payload (the onboarding
+//  resume PDF, the revision cover-letter PDF) rides inside the cached prefix the
+//  moving chain extends over — it does NOT get its own breakpoint. An early FIXED
+//  breakpoint actively strands the cache: once the moving breakpoints drift >20
+//  blocks past it, Anthropic's ~20-block lookback can no longer bridge the gap, so
+//  the read pins at the payload while the entire growing tail re-writes every turn.
+//  (Onboarding previously planted a fixed breakpoint on the last document block;
+//  removing it is what lets the read track the conversation instead of pinning.)
 //
 
 import Foundation
@@ -48,8 +54,6 @@ struct AnthropicCacheBreakpointPlanner {
 
     /// Cache-control directive attached to every breakpoint this planner plants.
     let cacheControl: AnthropicCacheControl
-    /// Whether to plant a breakpoint on the last document block in the array.
-    let includeDocumentBreakpoint: Bool
     /// Breakpoints consumed before the message tier (system, tools) — counted
     /// against Anthropic's hard limit of 4 cache_control blocks per request.
     let reservedBreakpointCount: Int
@@ -62,8 +66,7 @@ struct AnthropicCacheBreakpointPlanner {
     /// Candidates, in priority order:
     /// 1. Tail — last markable block of the final message (incremental
     ///    conversation caching: the prefix the previous turn wrote).
-    /// 2. Document (conditional) — last document block in the array.
-    /// 3. Lookback (conditional, totalBlocks > 20) — last markable block of the
+    /// 2. Lookback (conditional, totalBlocks > 20) — last markable block of the
     ///    latest message that ends ≥20 blocks before the end, so the next turn's
     ///    tail breakpoint always finds a prior cache entry inside Anthropic's
     ///    ~20-block lookback window after tool-heavy turns.
@@ -102,21 +105,6 @@ struct AnthropicCacheBreakpointPlanner {
             }
         }
 
-        // Document (conditional) — the LAST document block in the array: caching
-        // through it covers all earlier blocks, including the document payloads
-        // themselves. Collapses into the tail when they coincide.
-        var document: BlockPosition?
-        if includeDocumentBreakpoint {
-            outer: for messageIndex in blocksByMessage.indices.reversed() {
-                for blockIndex in blocksByMessage[messageIndex].indices.reversed() {
-                    if case .document = blocksByMessage[messageIndex][blockIndex] {
-                        document = BlockPosition(messageIndex: messageIndex, blockIndex: blockIndex)
-                        break outer
-                    }
-                }
-            }
-        }
-
         // Lookback (conditional) — Anthropic's cache lookback walks at most 20
         // content blocks back from a breakpoint. After tool-heavy turns a single
         // turn can add >20 blocks, so plant one boundary on the last markable
@@ -135,9 +123,7 @@ struct AnthropicCacheBreakpointPlanner {
         }
 
         let kept = Self.clampBreakpointCandidates(
-            tail: tail,
-            document: document,
-            lookback: lookback,
+            [tail, lookback],
             reservedBreakpointCount: reservedBreakpointCount
         )
         guard !kept.isEmpty else { return messages }
@@ -160,7 +146,7 @@ struct AnthropicCacheBreakpointPlanner {
 
         Logger.debug(
             "📍 Cache breakpoints: reserved=\(reservedBreakpointCount), message=\(kept.count) " +
-            "(tail=\(tail != nil), document=\(document != nil), lookback=\(lookback != nil)), " +
+            "(tail=\(tail != nil), lookback=\(lookback != nil)), " +
             "blocks=\(totalBlocks)",
             category: .ai
         )
@@ -182,20 +168,20 @@ struct AnthropicCacheBreakpointPlanner {
 
     /// HARD CLAMP — Anthropic allows at most 4 cache_control blocks per request,
     /// INCLUDING reserved (system / tool) breakpoints. With `reservedBreakpointCount`
-    /// counted, at most (4 - reserved) message breakpoints may survive. Candidates
-    /// are supplied in priority order (tail, document, lookback), so on overflow the
-    /// lookback breakpoint is dropped first, then the document breakpoint; the tail
-    /// breakpoint always survives. Duplicate positions collapse. Pure function so
-    /// the invariant is inspectable in isolation.
+    /// counted, at most (4 - reserved) message breakpoints may survive. `candidates`
+    /// are supplied in priority order (tail, then lookback), so on overflow the
+    /// lowest-priority breakpoint is dropped first; the first (tail) breakpoint
+    /// always survives. Nil candidates are skipped and duplicate positions collapse.
+    /// Taking an ordered array (rather than fixed named slots) keeps the now-free
+    /// 4th breakpoint addable without a signature change. Pure function so the
+    /// invariant is inspectable in isolation.
     static func clampBreakpointCandidates(
-        tail: BlockPosition?,
-        document: BlockPosition?,
-        lookback: BlockPosition?,
+        _ candidates: [BlockPosition?],
         reservedBreakpointCount: Int
     ) -> [BlockPosition] {
         let budget = max(0, 4 - reservedBreakpointCount)
         var kept: [BlockPosition] = []
-        for candidate in [tail, document, lookback] {
+        for candidate in candidates {
             guard let candidate, !kept.contains(candidate) else { continue }
             guard kept.count < budget else { break }
             kept.append(candidate)

@@ -163,27 +163,20 @@ struct AnthropicHistoryBuilder {
 
     // MARK: - Deterministic Tool Input
 
-    /// Parse a recorded tool_use arguments string into the input dictionary,
-    /// deterministically.
+    /// Parse a recorded tool_use arguments string into the input dictionary.
     ///
     /// PROMPT-CACHE INVARIANT: identical recorded arguments must yield identical
-    /// wire bytes on every rebuild. The recorded string never changes for a turn;
-    /// we additionally round-trip through JSONSerialization with .sortedKeys so
-    /// the dictionary is always constructed from the same canonical bytes in the
-    /// same insertion order, making the encoded key order stable across rebuilds
-    /// within a process. (Cross-process order may differ with Swift's per-process
-    /// hash seed, but the wire side tables — and the 5-minute prompt cache — never
-    /// survive a restart, so only within-process stability matters.)
+    /// wire bytes on every rebuild. The recorded string never changes for a turn,
+    /// and tool_use `input` is a JSON object in the request structure, so the
+    /// fork's sorted-key body serializer (`AnthropicRequestBody.encode`) canonicalizes
+    /// its key order on the wire unconditionally. No app-side pre-sorting is needed —
+    /// the dict's in-memory iteration order can't reach the wire.
     static func deterministicToolInput(fromArgumentsJSON argumentsJSON: String) -> [String: Any] {
         guard let argsData = argumentsJSON.data(using: .utf8),
               let parsed = try? JSONSerialization.jsonObject(with: argsData) as? [String: Any] else {
             return [:]
         }
-        guard let canonicalData = try? JSONSerialization.data(withJSONObject: parsed, options: [.sortedKeys]),
-              let canonical = try? JSONSerialization.jsonObject(with: canonicalData) as? [String: Any] else {
-            return parsed
-        }
-        return canonical
+        return parsed
     }
 
     // MARK: - Message Merging

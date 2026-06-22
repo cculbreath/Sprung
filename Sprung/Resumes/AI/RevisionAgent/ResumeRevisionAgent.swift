@@ -136,14 +136,13 @@ class ResumeRevisionAgent {
     /// over by 0.1x reads across a multi-turn session).
     private static let oneHourCacheControl = AnthropicCacheControl(type: "ephemeral", ttl: "1h")
 
-    /// Shared message-tier breakpoint placement for this agent: 1-hour TTL, no
-    /// document breakpoint (the single PDF stays in the front-loaded prefix), and
-    /// a reserved budget of 2 (the last-tool breakpoint + the system block). Only
-    /// the tail and >20-block lookback candidates remain in the message tier — see
+    /// Shared message-tier breakpoint placement for this agent: 1-hour TTL and a
+    /// reserved budget of 2 (the last-tool breakpoint + the system block). The
+    /// moving tail and >20-block lookback are the only message-tier candidates; the
+    /// single PDF rides inside the cached prefix the chain extends over — see
     /// AnthropicCacheBreakpointPlanner.
     private static let breakpointPlanner = AnthropicCacheBreakpointPlanner(
         cacheControl: oneHourCacheControl,
-        includeDocumentBreakpoint: false,
         reservedBreakpointCount: 2
     )
 

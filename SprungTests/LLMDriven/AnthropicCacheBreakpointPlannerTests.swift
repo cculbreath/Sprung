@@ -9,15 +9,18 @@
 //  (onboarding) and ResumeRevisionAgent (revision). It is BYTE-SENSITIVE — the
 //  prompt-cache replay surface — and explicitly written "so the invariant is
 //  inspectable in isolation". This suite locks:
-//    - clampBreakpointCandidates(...)   — the HARD CLAMP (≤4 cache_control blocks
-//      INCLUDING reserved system/tool breakpoints; drop lookback first, then
-//      document; tail always survives)
+//    - clampBreakpointCandidates(_:reservedBreakpointCount:) — the HARD CLAMP
+//      (≤4 cache_control blocks INCLUDING reserved system/tool breakpoints; the
+//      lowest-priority candidate is dropped first; the first/tail always survives)
 //    - addingCacheControl(to:cacheControl:) — per-block-kind cache_control
 //      attachment, returning nil for tool_use (cannot carry cache_control)
 //    - BlockPosition value semantics
 //    - plan(messages:)                  — the assembled placement for BOTH real
-//      configs: onboarding (document breakpoint on, reserve the system block) and
-//      revision (document off, 1h TTL, reserve tool + system = 2).
+//      configs: onboarding (reserve the system block, .ephemeral) and revision
+//      (1h TTL, reserve tool + system = 2). Both place only the moving tail +
+//      >20-block lookback; large early payloads ride inside the cached prefix and
+//      get NO fixed breakpoint of their own (a fixed early breakpoint strands the
+//      cache once the moving breakpoints drift >20 blocks past it).
 //  The end-to-end byte stability of the live onboarding path is additionally
 //  gated by the replay suite + CachePrefixAuditor.
 //
@@ -64,75 +67,74 @@ final class AnthropicCacheBreakpointPlannerTests: XCTestCase {
 
     // MARK: - clampBreakpointCandidates: budget = 4 - reservedBreakpointCount
 
-    func testKeepsAllThreeWhenNothingReserved() {
+    func testKeepsAllCandidatesWhenUnderBudget() {
         let tail = Pos(messageIndex: 5, blockIndex: 0)
-        let document = Pos(messageIndex: 2, blockIndex: 1)
         let lookback = Pos(messageIndex: 1, blockIndex: 0)
-        // budget = 4 - 0 = 4 -> all three survive, in priority order.
+        let extra = Pos(messageIndex: 2, blockIndex: 1)
+        // budget = 4 - 0 = 4 -> all supplied candidates survive, in priority order.
         let kept = Planner.clampBreakpointCandidates(
-            tail: tail, document: document, lookback: lookback, reservedBreakpointCount: 0)
-        XCTAssertEqual(kept, [tail, document, lookback])
+            [tail, lookback, extra], reservedBreakpointCount: 0)
+        XCTAssertEqual(kept, [tail, lookback, extra])
     }
 
-    func testWithSystemReservedBudgetIsThree() {
+    func testRealConfigsKeepTailAndLookback() {
         let tail = Pos(messageIndex: 5, blockIndex: 0)
-        let document = Pos(messageIndex: 2, blockIndex: 1)
         let lookback = Pos(messageIndex: 1, blockIndex: 0)
-        // Onboarding with a system breakpoint: budget = 4 - 1 = 3 -> all three fit.
-        let kept = Planner.clampBreakpointCandidates(
-            tail: tail, document: document, lookback: lookback, reservedBreakpointCount: 1)
-        XCTAssertEqual(kept, [tail, document, lookback])
+        // Onboarding (system reserved): budget = 4 - 1 = 3 -> both fit, one slot free.
+        XCTAssertEqual(
+            Planner.clampBreakpointCandidates([tail, lookback], reservedBreakpointCount: 1),
+            [tail, lookback], "onboarding keeps tail + lookback with a slot to spare")
+        // Revision (tool + system reserved): budget = 4 - 2 = 2 -> both fit exactly.
+        XCTAssertEqual(
+            Planner.clampBreakpointCandidates([tail, lookback], reservedBreakpointCount: 2),
+            [tail, lookback], "revision keeps tail + lookback at exactly budget")
     }
 
-    func testDropsLookbackFirstThenDocumentOnOverflow() {
+    func testDropsLowestPriorityOnOverflow() {
         let tail = Pos(messageIndex: 5, blockIndex: 0)
-        let document = Pos(messageIndex: 2, blockIndex: 1)
         let lookback = Pos(messageIndex: 1, blockIndex: 0)
+        let extra = Pos(messageIndex: 2, blockIndex: 1)
 
-        // Revision (tool + system reserved): budget = 4 - 2 = 2 -> lookback dropped first.
-        let twoKept = Planner.clampBreakpointCandidates(
-            tail: tail, document: document, lookback: lookback, reservedBreakpointCount: 2)
-        XCTAssertEqual(twoKept, [tail, document], "lookback dropped first on overflow")
+        // budget = 4 - 2 = 2 -> the third (lowest-priority) candidate is dropped.
+        XCTAssertEqual(
+            Planner.clampBreakpointCandidates([tail, lookback, extra], reservedBreakpointCount: 2),
+            [tail, lookback], "lowest-priority candidate dropped first on overflow")
 
-        // budget = 4 - 3 = 1 -> document dropped next; the tail always survives.
-        let oneKept = Planner.clampBreakpointCandidates(
-            tail: tail, document: document, lookback: lookback, reservedBreakpointCount: 3)
-        XCTAssertEqual(oneKept, [tail], "document dropped next; tail breakpoint always survives")
+        // budget = 4 - 3 = 1 -> only the first (tail) survives.
+        XCTAssertEqual(
+            Planner.clampBreakpointCandidates([tail, lookback, extra], reservedBreakpointCount: 3),
+            [tail], "the first/tail breakpoint always survives")
     }
 
     func testZeroBudgetKeepsNothing() {
         let tail = Pos(messageIndex: 5, blockIndex: 0)
         // budget = max(0, 4 - 4) = 0
-        let kept = Planner.clampBreakpointCandidates(
-            tail: tail, document: nil, lookback: nil, reservedBreakpointCount: 4)
+        let kept = Planner.clampBreakpointCandidates([tail], reservedBreakpointCount: 4)
         XCTAssertTrue(kept.isEmpty)
     }
 
     func testOverlargeReservedCountClampsBudgetToZero() {
         // Defensive: a reservedBreakpointCount > 4 must not yield a negative budget.
         let tail = Pos(messageIndex: 0, blockIndex: 0)
-        let kept = Planner.clampBreakpointCandidates(
-            tail: tail, document: nil, lookback: nil, reservedBreakpointCount: 9)
+        let kept = Planner.clampBreakpointCandidates([tail], reservedBreakpointCount: 9)
         XCTAssertTrue(kept.isEmpty, "budget is floored at zero, never negative")
     }
 
     func testNilCandidatesAreSkipped() {
         let lookback = Pos(messageIndex: 1, blockIndex: 0)
-        // Only lookback is non-nil; it is kept even though tail/document are absent.
-        let kept = Planner.clampBreakpointCandidates(
-            tail: nil, document: nil, lookback: lookback, reservedBreakpointCount: 0)
+        // Only lookback is non-nil; it is kept even though the tail slot is absent.
+        let kept = Planner.clampBreakpointCandidates([nil, lookback], reservedBreakpointCount: 0)
         XCTAssertEqual(kept, [lookback])
     }
 
     func testDuplicatePositionsCollapse() {
-        // tail and document resolve to the same block -> the duplicate is not
-        // double-counted, freeing budget for the distinct lookback.
+        // tail and lookback resolve to the same block -> the duplicate is not
+        // double-counted, freeing budget for the distinct third candidate.
         let shared = Pos(messageIndex: 3, blockIndex: 2)
-        let lookback = Pos(messageIndex: 1, blockIndex: 0)
-        let kept = Planner.clampBreakpointCandidates(
-            tail: shared, document: shared, lookback: lookback, reservedBreakpointCount: 2)
-        // budget = 2: [shared, (dup shared skipped), lookback] -> two distinct.
-        XCTAssertEqual(kept, [shared, lookback], "duplicate positions collapse to one")
+        let other = Pos(messageIndex: 1, blockIndex: 0)
+        let kept = Planner.clampBreakpointCandidates([shared, shared, other], reservedBreakpointCount: 2)
+        // budget = 2: [shared, (dup shared skipped), other] -> two distinct.
+        XCTAssertEqual(kept, [shared, other], "duplicate positions collapse to one")
     }
 
     // MARK: - addingCacheControl: per-kind behavior
@@ -190,13 +192,13 @@ final class AnthropicCacheBreakpointPlannerTests: XCTestCase {
     // MARK: - plan(messages:) — assembled placement for both real configs
 
     func testPlanReturnsInputUnchangedWhenEmpty() {
-        let planner = Planner(cacheControl: .ephemeral, includeDocumentBreakpoint: true, reservedBreakpointCount: 1)
+        let planner = Planner(cacheControl: .ephemeral, reservedBreakpointCount: 1)
         XCTAssertTrue(planner.plan(messages: []).isEmpty)
     }
 
     func testPlanMarksTailWithConfiguredTTL() {
         // Revision config: a single short message -> only the tail breakpoint, 1h TTL.
-        let planner = Planner(cacheControl: oneHour, includeDocumentBreakpoint: false, reservedBreakpointCount: 2)
+        let planner = Planner(cacheControl: oneHour, reservedBreakpointCount: 2)
         let planned = planner.plan(messages: [
             AnthropicMessage(role: "user", content: .blocks([.text(AnthropicTextBlock(text: "hello"))]))
         ])
@@ -207,7 +209,7 @@ final class AnthropicCacheBreakpointPlannerTests: XCTestCase {
     func testPlanTailWalksBackOverToolUse() {
         // tool_use is the last block of the final message; the tail breakpoint must
         // walk back to the preceding markable (text) block.
-        let planner = Planner(cacheControl: .ephemeral, includeDocumentBreakpoint: false, reservedBreakpointCount: 2)
+        let planner = Planner(cacheControl: .ephemeral, reservedBreakpointCount: 2)
         let planned = planner.plan(messages: [
             AnthropicMessage(role: "assistant", content: .blocks([
                 .text(AnthropicTextBlock(text: "thinking")),
@@ -219,38 +221,27 @@ final class AnthropicCacheBreakpointPlannerTests: XCTestCase {
         XCTAssertNil(cacheControl(of: b[1]), "tool_use cannot carry cache_control")
     }
 
-    func testPlanMarksDocumentBreakpointWhenEnabled() {
-        // Onboarding config: document breakpoint ON. The last document block is
-        // marked in addition to the moving tail; the text between them is not.
-        let planner = Planner(cacheControl: .ephemeral, includeDocumentBreakpoint: true, reservedBreakpointCount: 1)
+    func testPlanNeverMarksDocumentAsItsOwnBreakpoint() {
+        // A document block is NEVER a breakpoint — the PDF rides inside the cached
+        // prefix the moving tail/lookback chain extends over. A fixed breakpoint on
+        // the early document would strand the read once the moving breakpoints drift
+        // >20 blocks past it (the bug this placement removes).
+        let planner = Planner(cacheControl: .ephemeral, reservedBreakpointCount: 1)
         let planned = planner.plan(messages: [
             AnthropicMessage(role: "user", content: .blocks([documentBlock(), .text(AnthropicTextBlock(text: "context"))])),
             AnthropicMessage(role: "assistant", content: .blocks([.text(AnthropicTextBlock(text: "reply"))]))
         ])
         let m0 = blocks(of: planned[0])
         let m1 = blocks(of: planned[1])
-        XCTAssertNotNil(cacheControl(of: m0[0]), "the document block carries the document breakpoint")
-        XCTAssertNil(cacheControl(of: m0[1]), "the text between document and tail is not marked")
-        XCTAssertNotNil(cacheControl(of: m1[0]), "the final message carries the tail breakpoint")
-    }
-
-    func testPlanIgnoresDocumentBreakpointWhenDisabled() {
-        // Revision config: document breakpoint OFF -> a document block is NOT a
-        // breakpoint even though one is present (the PDF rides in the cached prefix).
-        let planner = Planner(cacheControl: oneHour, includeDocumentBreakpoint: false, reservedBreakpointCount: 2)
-        let planned = planner.plan(messages: [
-            AnthropicMessage(role: "user", content: .blocks([documentBlock()])),
-            AnthropicMessage(role: "assistant", content: .blocks([.text(AnthropicTextBlock(text: "reply"))]))
-        ])
-        XCTAssertNil(cacheControl(of: blocks(of: planned[0])[0]),
-                     "the document is not a breakpoint when includeDocumentBreakpoint is false")
-        XCTAssertNotNil(cacheControl(of: blocks(of: planned[1])[0]), "only the tail breakpoint is planted")
+        XCTAssertNil(cacheControl(of: m0[0]), "the document block is not a breakpoint")
+        XCTAssertNil(cacheControl(of: m0[1]), "the text after the document is not a breakpoint")
+        XCTAssertNotNil(cacheControl(of: m1[0]), "only the moving tail breakpoint is planted")
     }
 
     func testPlanPlantsLookbackOnLargeConversation() {
         // >20 content blocks -> the lookback anchor fires, landing on the last
         // markable block ending at least 20 blocks before the end of the array.
-        let planner = Planner(cacheControl: .ephemeral, includeDocumentBreakpoint: false, reservedBreakpointCount: 2)
+        let planner = Planner(cacheControl: .ephemeral, reservedBreakpointCount: 2)
         let bulk = (0..<25).map { AnthropicContentBlock.text(AnthropicTextBlock(text: "b\($0)")) }
         let planned = planner.plan(messages: [
             AnthropicMessage(role: "user", content: .blocks([.text(AnthropicTextBlock(text: "head"))])),
