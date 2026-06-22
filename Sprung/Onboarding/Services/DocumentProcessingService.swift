@@ -25,17 +25,24 @@ actor DocumentProcessingService {
     // container wiring; the analysis service resolves and memoizes it.
     private var voiceAnchorProvider: (@Sendable () async -> String?)?
 
+    // Persists per-chunk PDF transcriptions so a later-chunk failure resumes
+    // instead of re-transcribing the whole document. Threaded into the analysis
+    // service. Nil disables transcription resume.
+    private let checkpointStore: TranscriptionCheckpointStore?
+
     // MARK: - Initialization
     init(
         documentExtractionService: DocumentExtractionService,
         llmFacade: LLMFacade? = nil,
         skillBankService: SkillBankService? = nil,
-        kcExtractionService: KnowledgeCardExtractionService? = nil
+        kcExtractionService: KnowledgeCardExtractionService? = nil,
+        checkpointStore: TranscriptionCheckpointStore? = nil
     ) {
         self.documentExtractionService = documentExtractionService
         self.llmFacade = llmFacade
         self.skillBankService = skillBankService ?? SkillBankService(llmFacade: llmFacade)
         self.kcExtractionService = kcExtractionService ?? KnowledgeCardExtractionService(llmFacade: llmFacade)
+        self.checkpointStore = checkpointStore
         Logger.info("📄 DocumentProcessingService initialized", category: .ai)
     }
 
@@ -352,7 +359,8 @@ actor DocumentProcessingService {
             llmFacade: facade,
             skillBankService: skillBankService,
             kcExtractionService: kcExtractionService,
-            voiceAnchorProvider: voiceAnchorProvider
+            voiceAnchorProvider: voiceAnchorProvider,
+            checkpointStore: checkpointStore
         )
         documentAnalysisService = service
         return service

@@ -62,6 +62,38 @@ struct LLMErrorHandler {
             || lowered.contains("plans & billing")
     }
 
+    /// Check if an error is a request-timeout — a large PDF chunk whose
+    /// time-to-first-byte exceeded `URLSession.timeoutIntervalForRequest`, or a
+    /// pass that timed out mid-stream. Disjoint from the budget predicate: a
+    /// timeout is recovered by waiting/retrying, not by topping up.
+    ///
+    /// Onboarding streams to Anthropic directly, so a timeout surfaces either as a
+    /// `URLError.timedOut` or the fork's `APIError.timeOutError` — never an
+    /// `LLMError` (that path is the OpenRouter executor, which onboarding bypasses).
+    func isTimeoutError(_ error: Error) -> Bool {
+        if let urlError = error as? URLError, urlError.code == .timedOut {
+            return true
+        }
+        if let apiError = error as? APIError, case .timeOutError = apiError {
+            return true
+        }
+        return Self.descriptionIndicatesTimeout(error.localizedDescription)
+    }
+
+    /// String predicate shared by the `Error` overload and the extraction-pass
+    /// failure-label check. Kept DISJOINT from the budget predicate so a timed-out
+    /// pass never routes to the top-up modal and vice versa.
+    ///
+    /// Covers `URLError.timedOut` ("the request timed out") and the fork's
+    /// `APIError.timeOutError`, whose `localizedDescription` is "Time Out Error."
+    /// (so a pass-failure label built from it is still recognized).
+    static func descriptionIndicatesTimeout(_ text: String) -> Bool {
+        let lowered = text.lowercased()
+        return lowered.contains("timed out")
+            || lowered.contains("timeout")
+            || lowered.contains("time out")
+    }
+
     /// Extract credit info from insufficient credits error
     func extractCreditInfo(from error: Error) -> (requested: Int, available: Int)? {
         if let llmError = error as? LLMError {

@@ -14,6 +14,22 @@
 import Foundation
 import SwiftOpenAI
 
+// MARK: - TranscriptionResumeError
+
+/// Raised when the merged set of transcribed chunks does not contiguously cover
+/// the whole document. Surfacing this (rather than persisting a partial IR) keeps
+/// an incomplete transcription from masquerading as the complete document.
+enum TranscriptionResumeError: LocalizedError {
+    case incompleteCoverage(filename: String, missing: String)
+
+    var errorDescription: String? {
+        switch self {
+        case let .incompleteCoverage(filename, missing):
+            return "Transcription of \(filename) is incomplete — missing \(missing). Re-upload the document to retry."
+        }
+    }
+}
+
 // MARK: - DocumentAnalysisSource
 
 /// Source content for an Anthropic document-analysis pass.
@@ -260,11 +276,17 @@ actor AnthropicDocumentAnalysisService {
     private var voiceAnchorResolved = false
     private var voiceAnchorCache: String?
 
+    /// Checkpoints each transcribed chunk by its absolute page range so a
+    /// later-chunk failure does not discard the chunks already done. Nil disables
+    /// checkpointing (the transcription still works, it just cannot resume).
+    private let checkpointStore: TranscriptionCheckpointStore?
+
     init(
         llmFacade: LLMFacade,
         skillBankService: SkillBankService,
         kcExtractionService: KnowledgeCardExtractionService,
-        voiceAnchorProvider: (@Sendable () async -> String?)? = nil
+        voiceAnchorProvider: (@Sendable () async -> String?)? = nil,
+        checkpointStore: TranscriptionCheckpointStore? = nil
     ) {
         self.llmFacade = llmFacade
         self.preflightService = PDFPreflightService(llmFacade: llmFacade)
@@ -272,6 +294,7 @@ actor AnthropicDocumentAnalysisService {
         self.kcExtractionService = kcExtractionService
         self.enrichmentService = CardEnrichmentService(llmFacade: llmFacade)
         self.voiceAnchorProvider = voiceAnchorProvider
+        self.checkpointStore = checkpointStore
     }
 
     /// Resolve (and memoize) the voice anchor for this service instance.
@@ -405,12 +428,31 @@ actor AnthropicDocumentAnalysisService {
         let totalPages = chunks.map { $0.pageRange.upperBound }.max() ?? 0
         let maxTokens = 32_768
 
+        // Seed already-completed chunks from a prior (failed) run of THIS document
+        // so a later-chunk failure does not force re-transcribing the whole PDF.
+        // Identity is the absolute page range; a fresh re-upload has a new
+        // documentId and therefore starts clean.
         var payloads: [(pageRange: ClosedRange<Int>, payload: TranscriptionPayload)] = []
+        var savedRanges: Set<ClosedRange<Int>> = []
+        if let checkpointStore {
+            let saved = await checkpointStore.savedChunks(documentId: documentId)
+            payloads = saved
+            savedRanges = Set(saved.map(\.pageRange))
+        }
 
         for chunk in chunks {
             let chunkLabel = chunks.count > 1
                 ? "\(filename) (pages \(chunk.pageRange.lowerBound)–\(chunk.pageRange.upperBound))"
                 : filename
+
+            // Resume: skip any chunk whose absolute page range we already have.
+            if savedRanges.contains(chunk.pageRange) {
+                statusCallback?(
+                    "Resuming \(filename), skipping pages \(chunk.pageRange.lowerBound)–\(chunk.pageRange.upperBound)..."
+                )
+                Logger.info("⏭️ Resuming \(chunkLabel) from checkpoint — skipping re-transcription", category: .ai)
+                continue
+            }
 
             statusCallback?("Uploading \(chunkLabel) for transcription...")
             let file = try await llmFacade.anthropicUploadFile(
@@ -454,7 +496,19 @@ actor AnthropicDocumentAnalysisService {
                 category: .ai
             )
             payloads.append((chunk.pageRange, payload))
+            // Checkpoint immediately so a throw on a LATER chunk keeps this one.
+            await checkpointStore?.saveChunk(documentId: documentId, pageRange: chunk.pageRange, payload: payload)
         }
+
+        // Order is load-bearing for the merge (absolute page sequence) and for the
+        // gap check below; seeded checkpoints + freshly-transcribed chunks can
+        // interleave out of order.
+        payloads.sort { $0.pageRange.lowerBound < $1.pageRange.lowerBound }
+
+        // Gap check: the union of chunk ranges must cover 1...totalPages with no
+        // missing pages. A gap means a chunk silently dropped — refuse to persist a
+        // partial IR that would masquerade as the whole document.
+        try assertContiguousCoverage(payloads.map(\.pageRange), totalPages: totalPages, filename: filename)
 
         let provenance = IRProvenance(
             sourceArtifactId: documentId,
@@ -464,7 +518,44 @@ actor AnthropicDocumentAnalysisService {
             createdAt: Date()
         )
 
-        return mergeTranscriptions(payloads, totalPages: totalPages, provenance: provenance)
+        let merged = mergeTranscriptions(payloads, totalPages: totalPages, provenance: provenance)
+
+        // Whole document transcribed successfully — the checkpoints have served
+        // their purpose and the IR is persisted by the caller.
+        await checkpointStore?.clear(documentId: documentId)
+
+        return merged
+    }
+
+    /// Verify the sorted chunk page ranges cover `1...totalPages` contiguously with
+    /// no gap. Throws `TranscriptionResumeError.incompleteCoverage` otherwise so the
+    /// caller never persists a partial transcription as if it were whole.
+    private func assertContiguousCoverage(
+        _ ranges: [ClosedRange<Int>],
+        totalPages: Int,
+        filename: String
+    ) throws {
+        guard totalPages > 0 else { return }
+        guard let first = ranges.first, first.lowerBound == 1 else {
+            throw TranscriptionResumeError.incompleteCoverage(filename: filename, missing: "page 1 onward")
+        }
+        var nextExpected = 1
+        for range in ranges {
+            if range.lowerBound > nextExpected {
+                throw TranscriptionResumeError.incompleteCoverage(
+                    filename: filename,
+                    missing: "pages \(nextExpected)–\(range.lowerBound - 1)"
+                )
+            }
+            // Overlap is harmless for coverage; advance past the furthest page seen.
+            nextExpected = max(nextExpected, range.upperBound + 1)
+        }
+        if nextExpected <= totalPages {
+            throw TranscriptionResumeError.incompleteCoverage(
+                filename: filename,
+                missing: "pages \(nextExpected)–\(totalPages)"
+            )
+        }
     }
 
     /// Wrap raw document text in a stable header so the cached source block is
@@ -820,10 +911,15 @@ actor AnthropicDocumentAnalysisService {
     /// values; `docMeta.pageCount` is the document's true total page count. A
     /// single-chunk document passes through unchanged (no marker, first == only).
     private func mergeTranscriptions(
-        _ parts: [(pageRange: ClosedRange<Int>, payload: TranscriptionPayload)],
+        _ unsortedParts: [(pageRange: ClosedRange<Int>, payload: TranscriptionPayload)],
         totalPages: Int,
         provenance: IRProvenance
     ) -> DocumentTranscription {
+        // Defensive sort: callers seed checkpoints + freshly-transcribed chunks
+        // that can interleave, and the merge concatenates `fullText` in chunk
+        // order with absolute page-break markers — order must be ascending.
+        let parts = unsortedParts.sorted { $0.pageRange.lowerBound < $1.pageRange.lowerBound }
+
         // makeChunks always yields ≥ 1 chunk; fall back to an empty transcription
         // rather than crash if that invariant ever changes.
         guard let first = parts.first else {

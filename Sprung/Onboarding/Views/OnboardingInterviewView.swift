@@ -191,6 +191,21 @@ struct OnboardingInterviewView: View {
                     )
                 }
             }
+            // Slow document analysis — keep-waiting / abort modal. Gated so the
+            // budget modal wins when both could be showing (a timed-out doc on an
+            // exhausted balance should top up first).
+            .sheet(isPresented: Binding(
+                get: { coordinator.pendingTimeoutPause != nil && coordinator.pendingBudgetPause == nil },
+                set: { _ in }
+            )) {
+                if let pause = coordinator.pendingTimeoutPause {
+                    InterviewTimeoutSheet(
+                        info: pause,
+                        onKeepWaiting: { coordinator.resolveTimeoutPause(.keepWaiting) },
+                        onAbort: { coordinator.resolveTimeoutPause(.abort) }
+                    )
+                }
+            }
             // Setup wizard for missing API keys
             .sheet(isPresented: $showSetupWizard) {
                 SetupWizardView {

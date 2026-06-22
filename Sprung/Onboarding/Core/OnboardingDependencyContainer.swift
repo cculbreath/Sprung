@@ -101,6 +101,8 @@ final class OnboardingDependencyContainer {
     let toolExecutor: ToolExecutor
     // MARK: - Artifact Store (SwiftData)
     let artifactRecordStore: ArtifactRecordStore
+    // MARK: - Transcription Checkpoint Store (SwiftData)
+    let transcriptionCheckpointStore: TranscriptionCheckpointStore
     // MARK: - External Dependencies (Passed In)
     private let applicantProfileStore: ApplicantProfileStore
     private let knowledgeCardStore: KnowledgeCardStore
@@ -144,6 +146,9 @@ final class OnboardingDependencyContainer {
     // MARK: - Budget Pause (insufficient API balance)
     let budgetPauseGate: BudgetPauseGate
     let budgetFailedExtractionRegistry: BudgetFailedExtractionRegistry
+
+    // MARK: - Timeout Pause (slow document analysis)
+    let timeoutPauseGate: TimeoutPauseGate
 
     // MARK: - User Action Queue Infrastructure
     let userActionQueue: UserActionQueue
@@ -195,6 +200,7 @@ final class OnboardingDependencyContainer {
                        "Ensure SessionStore has initialized its model context before creating the container.")
         }
         self.artifactRecordStore = ArtifactRecordStore(context: context)
+        self.transcriptionCheckpointStore = TranscriptionCheckpointStore(context: context)
 
         // 1. Initialize core infrastructure
         let core = Self.createCoreInfrastructure()
@@ -213,6 +219,7 @@ final class OnboardingDependencyContainer {
         self.uiToolContinuationManager = UIToolContinuationRegistry()
         self.budgetPauseGate = BudgetPauseGate()
         self.budgetFailedExtractionRegistry = BudgetFailedExtractionRegistry()
+        self.timeoutPauseGate = TimeoutPauseGate()
 
         // 2b. Initialize user action queue infrastructure
         self.userActionQueue = UserActionQueue()
@@ -286,7 +293,8 @@ final class OnboardingDependencyContainer {
         let docs = Self.createDocumentComponents(
             eventBus: core.eventBus, documentExtractionService: documentExtractionService, dataStore: dataStore,
             stateCoordinator: state, agentTracker: agentActivityTracker, llmFacade: llmFacade,
-            budgetPauseGate: budgetPauseGate, budgetFailedExtractionRegistry: budgetFailedExtractionRegistry
+            budgetPauseGate: budgetPauseGate, budgetFailedExtractionRegistry: budgetFailedExtractionRegistry,
+            timeoutPauseGate: timeoutPauseGate, checkpointStore: transcriptionCheckpointStore
         )
         self.uploadStorage = docs.uploadStorage
         self.documentProcessingService = docs.documentProcessingService
@@ -542,6 +550,9 @@ final class OnboardingDependencyContainer {
             await gateHandler.startListening()
         }
 
+        // 17. GC stale transcription checkpoints from abandoned prior sessions
+        transcriptionCheckpointStore.sweepOrphans()
+
         Logger.info("🏗️ OnboardingDependencyContainer initialized", category: .ai)
     }
 
@@ -577,12 +588,14 @@ final class OnboardingDependencyContainer {
     private static func createDocumentComponents(
         eventBus: EventBus, documentExtractionService: DocumentExtractionService, dataStore: InterviewDataStore,
         stateCoordinator: StateCoordinator, agentTracker: AgentActivityTracker, llmFacade: LLMFacade?,
-        budgetPauseGate: BudgetPauseGate, budgetFailedExtractionRegistry: BudgetFailedExtractionRegistry
+        budgetPauseGate: BudgetPauseGate, budgetFailedExtractionRegistry: BudgetFailedExtractionRegistry,
+        timeoutPauseGate: TimeoutPauseGate, checkpointStore: TranscriptionCheckpointStore
     ) -> DocumentComponents {
         let uploadStorage = OnboardingUploadStorage()
         let documentProcessingService = DocumentProcessingService(
             documentExtractionService: documentExtractionService,
-            llmFacade: llmFacade
+            llmFacade: llmFacade,
+            checkpointStore: checkpointStore
         )
         return DocumentComponents(
             uploadStorage: uploadStorage, documentProcessingService: documentProcessingService,
@@ -591,7 +604,8 @@ final class OnboardingDependencyContainer {
                                                              agentTracker: agentTracker,
                                                              stateCoordinator: stateCoordinator,
                                                              budgetPauseGate: budgetPauseGate,
-                                                             budgetFailedExtractionRegistry: budgetFailedExtractionRegistry),
+                                                             budgetFailedExtractionRegistry: budgetFailedExtractionRegistry,
+                                                             timeoutPauseGate: timeoutPauseGate),
             documentArtifactMessenger: DocumentArtifactMessenger(eventBus: eventBus, stateCoordinator: stateCoordinator)
         )
     }

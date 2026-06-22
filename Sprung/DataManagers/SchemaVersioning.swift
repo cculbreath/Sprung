@@ -35,6 +35,7 @@ enum SprungSchema {
         ConversationEntryRecord.self,
         PendingToolResponseRecord.self,
         PendingUserMessageRecord.self,
+        TranscriptionChunkCheckpoint.self,
         // Discovery Models (SearchPreferences and DiscoverySettings moved to UserDefaults)
         CandidateDossier.self,
         JobSource.self,

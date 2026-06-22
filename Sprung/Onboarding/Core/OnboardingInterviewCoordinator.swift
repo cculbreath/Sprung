@@ -151,6 +151,12 @@ final class OnboardingInterviewCoordinator {
     var pendingBudgetPause: BudgetPauseInfo? {
         container.budgetPauseGate.pendingPause
     }
+    /// Non-nil while a document's analysis is paused on a request-timeout. Drives
+    /// the keep-waiting / abort modal (the budget modal takes precedence in the view
+    /// when both could be showing).
+    var pendingTimeoutPause: TimeoutPauseInfo? {
+        container.timeoutPauseGate.pendingPause
+    }
     // MARK: - Initialization
     init(
         llmFacade: LLMFacade?,
@@ -275,6 +281,7 @@ final class OnboardingInterviewCoordinator {
     /// Used when user chooses "Start Over" to begin fresh
     func clearAllOnboardingData() {
         container.budgetPauseGate.reset()
+        container.timeoutPauseGate.reset()
         container.budgetFailedExtractionRegistry.reset()
         container.dataResetService.clearAllOnboardingData()
     }
@@ -289,6 +296,15 @@ final class OnboardingInterviewCoordinator {
         container.budgetPauseGate.resolve(resolution)
         guard case .resume = resolution else { return }
         Task { await retryBudgetFailedExtractions() }
+    }
+
+    // MARK: - Timeout Pause (slow document analysis)
+
+    /// Resolve the timeout modal. The suspended document-processing task resumes via
+    /// the gate's continuation: Keep Waiting re-runs the analysis, Abort keeps the
+    /// already-extracted text and skips AI analysis.
+    func resolveTimeoutPause(_ resolution: TimeoutPauseResolution) {
+        container.timeoutPauseGate.resolve(resolution)
     }
 
     /// Re-run extraction passes that failed because the API balance was exhausted,

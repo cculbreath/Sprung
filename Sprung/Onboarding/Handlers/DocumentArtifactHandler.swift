@@ -16,6 +16,11 @@ actor DocumentArtifactHandler: OnboardingEventEmitter {
     private let stateCoordinator: StateCoordinator
     private let budgetPauseGate: BudgetPauseGate
     private let budgetFailedExtractionRegistry: BudgetFailedExtractionRegistry
+    private let timeoutPauseGate: TimeoutPauseGate
+
+    /// Soft cap: after this many Keep-Waiting retries for one document we force an
+    /// abort so a stuck analysis can never trap the interview indefinitely.
+    private static let maxTimeoutRetries = 3
 
     // MARK: - Configuration
 
@@ -49,7 +54,8 @@ actor DocumentArtifactHandler: OnboardingEventEmitter {
         agentTracker: AgentActivityTracker,
         stateCoordinator: StateCoordinator,
         budgetPauseGate: BudgetPauseGate,
-        budgetFailedExtractionRegistry: BudgetFailedExtractionRegistry
+        budgetFailedExtractionRegistry: BudgetFailedExtractionRegistry,
+        timeoutPauseGate: TimeoutPauseGate
     ) {
         self.eventBus = eventBus
         self.documentProcessingService = documentProcessingService
@@ -57,6 +63,7 @@ actor DocumentArtifactHandler: OnboardingEventEmitter {
         self.stateCoordinator = stateCoordinator
         self.budgetPauseGate = budgetPauseGate
         self.budgetFailedExtractionRegistry = budgetFailedExtractionRegistry
+        self.timeoutPauseGate = timeoutPauseGate
         Logger.info("📄 DocumentArtifactHandler initialized", category: .ai)
     }
     // MARK: - Lifecycle
@@ -77,6 +84,10 @@ actor DocumentArtifactHandler: OnboardingEventEmitter {
         isActive = false
         subscriptionTask?.cancel()
         subscriptionTask = nil
+        // A timeout pause suspends on a (cancellation-unaware) continuation, so a
+        // plain task cancel can't unblock it — interrupt the gate to resolve .abort.
+        let gate = timeoutPauseGate
+        Task { @MainActor in gate.interrupt() }
         Logger.info("⏹️ DocumentArtifactHandler stopped", category: .ai)
     }
     // MARK: - Event Handling
@@ -208,68 +219,117 @@ actor DocumentArtifactHandler: OnboardingEventEmitter {
 
         Logger.info("📄 Processing document: \(filename)", category: .ai)
 
-        do {
-            // Call service to perform business logic with status callback
-            let artifactRecord = try await documentProcessingService.processDocument(
-                fileURL: file.storageURL,
-                documentType: queuedFile.requestKind,
-                callId: queuedFile.callId,
-                metadata: queuedFile.metadata,
-                displayFilename: filename,
-                statusCallback: { [weak self, agentId, filename] statusMsg in
-                    guard let self else { return }
-                    Task {
-                        // Update extraction status
-                        let pending = await self.pendingFiles.count
-                        let queueInfo = pending > 0 ? " (+\(pending) queued)" : ""
-                        await self.emit(.processing(.extractionStateChanged(inProgress: true, statusMessage: "\(filename): \(statusMsg)\(queueInfo)")))
+        // Keep-Waiting retry loop. A timeout (transcription stage → thrown; pass
+        // stage → recorded as an extractionFailure) suspends on the timeout gate;
+        // Keep Waiting re-runs the whole document (cheap once Step 4's transcription
+        // checkpoint exists — it resumes from the last saved chunk). A soft cap of
+        // `maxTimeoutRetries` forces an abort so a stuck doc can't trap the interview.
+        // Exactly one `recordProduced` is emitted, after the loop resolves.
+        var timeoutAttempts = 0
+        while true {
+            do {
+                // Call service to perform business logic with status callback
+                let artifactRecord = try await documentProcessingService.processDocument(
+                    fileURL: file.storageURL,
+                    documentType: queuedFile.requestKind,
+                    callId: queuedFile.callId,
+                    metadata: queuedFile.metadata,
+                    displayFilename: filename,
+                    statusCallback: { [weak self, agentId, filename] statusMsg in
+                        guard let self else { return }
+                        Task {
+                            // Update extraction status
+                            let pending = await self.pendingFiles.count
+                            let queueInfo = pending > 0 ? " (+\(pending) queued)" : ""
+                            await self.emit(.processing(.extractionStateChanged(inProgress: true, statusMessage: "\(filename): \(statusMsg)\(queueInfo)")))
 
-                        // Log to agent transcript
-                        await MainActor.run {
-                            self.agentTracker.appendTranscript(
-                                agentId: agentId,
-                                entryType: .system,
-                                content: statusMsg
-                            )
+                            // Log to agent transcript
+                            await MainActor.run {
+                                self.agentTracker.appendTranscript(
+                                    agentId: agentId,
+                                    entryType: .system,
+                                    content: statusMsg
+                                )
+                            }
                         }
                     }
-                }
-            )
+                )
 
-            // Mark agent as completed, noting any analysis passes that failed
-            let extractionFailures = artifactRecord["extractionFailures"].arrayValue.map(\.stringValue)
-            // Of those, isolate passes that failed because the API balance was
-            // exhausted — they're recorded so they can be re-run after the user tops
-            // up (otherwise budget outages silently degrade knowledge-card quality).
-            let budgetFailedPasses = Self.budgetFailedPassSelection(from: extractionFailures)
-            await MainActor.run {
-                for failure in extractionFailures {
+                let extractionFailures = artifactRecord["extractionFailures"].arrayValue.map(\.stringValue)
+
+                // Pass-stage timeout: a pass failed specifically on a timeout (the
+                // no-silent-fallback foundation records it rather than fabricating a
+                // stub). Offer Keep Waiting / Abort before finalizing the record.
+                if Self.timeoutFailedPassSelection(from: extractionFailures) != nil {
+                    timeoutAttempts += 1
+                    let resolution: TimeoutPauseResolution
+                    if timeoutAttempts >= Self.maxTimeoutRetries {
+                        Logger.warning("⏱️ Timeout retry cap reached for \(filename) — keeping partial analysis", category: .ai)
+                        resolution = .abort
+                    } else {
+                        resolution = await timeoutPauseGate.awaitResolution(
+                            TimeoutPauseInfo(filename: filename, attempt: timeoutAttempts)
+                        )
+                    }
+                    if case .keepWaiting = resolution { continue }
+                    // .abort → fall through and finalize the partial record as-is.
+                }
+
+                // Mark agent as completed, noting any analysis passes that failed
+                // Of those, isolate passes that failed because the API balance was
+                // exhausted — they're recorded so they can be re-run after the user tops
+                // up (otherwise budget outages silently degrade knowledge-card quality).
+                let budgetFailedPasses = Self.budgetFailedPassSelection(from: extractionFailures)
+                await MainActor.run {
+                    for failure in extractionFailures {
+                        agentTracker.appendTranscript(
+                            agentId: agentId,
+                            entryType: .error,
+                            content: "Analysis pass failed",
+                            details: failure
+                        )
+                    }
+                    if let passes = budgetFailedPasses {
+                        budgetFailedExtractionRegistry.record(filename: filename, passes: passes)
+                        budgetPauseGate.surface(.anthropic())
+                    }
                     agentTracker.appendTranscript(
                         agentId: agentId,
-                        entryType: .error,
-                        content: "Analysis pass failed",
-                        details: failure
+                        entryType: .system,
+                        content: extractionFailures.isEmpty
+                            ? "Extraction completed"
+                            : "Extraction completed with \(extractionFailures.count) failed analysis pass(es)",
+                        details: "Artifact ID: \(artifactRecord["id"].stringValue)"
                     )
+                    agentTracker.markCompleted(agentId: agentId)
                 }
-                if let passes = budgetFailedPasses {
-                    budgetFailedExtractionRegistry.record(filename: filename, passes: passes)
-                    budgetPauseGate.surface(.anthropic())
+
+                await emit(.artifact(.recordProduced(record: artifactRecord)))
+                Logger.info("✅ Document processed: \(filename)", category: .ai)
+                break
+
+            } catch {
+                // Transcription-stage timeout (or any timeout that propagated):
+                // suspend on the gate; Keep Waiting re-runs the whole document.
+                if LLMErrorHandler().isTimeoutError(error) && timeoutAttempts < Self.maxTimeoutRetries {
+                    timeoutAttempts += 1
+                    let resolution = await timeoutPauseGate.awaitResolution(
+                        TimeoutPauseInfo(filename: filename, attempt: timeoutAttempts)
+                    )
+                    if case .keepWaiting = resolution { continue }
+                    // .abort → keep the already-extracted text; report as a failure.
                 }
-                agentTracker.appendTranscript(
-                    agentId: agentId,
-                    entryType: .system,
-                    content: extractionFailures.isEmpty
-                        ? "Extraction completed"
-                        : "Extraction completed with \(extractionFailures.count) failed analysis pass(es)",
-                    details: "Artifact ID: \(artifactRecord["id"].stringValue)"
-                )
-                agentTracker.markCompleted(agentId: agentId)
+                await handleProcessingFailure(error, filename: filename, agentId: agentId)
+                break
             }
+        }
+        // Note: activeProcessingCount is managed by pumpQueue()/extractionSlotFreed()
+    }
 
-            await emit(.artifact(.recordProduced(record: artifactRecord)))
-            Logger.info("✅ Document processed: \(filename)", category: .ai)
-
-        } catch {
+    /// Report a terminal document-processing failure: mark the agent failed and
+    /// surface a brief user-facing message. The already-extracted text/transcription
+    /// is preserved upstream; this never marks the artifact "complete".
+    private func handleProcessingFailure(_ error: Error, filename: String, agentId: String) async {
             Logger.error("❌ Document processing failed: \(error.localizedDescription)", category: .ai)
 
             // Mark agent as failed
@@ -292,8 +352,6 @@ actor DocumentArtifactHandler: OnboardingEventEmitter {
             }
             await emit(.processing(.extractionStateChanged(inProgress: true, statusMessage: userMessage)))
             try? await Task.sleep(for: .seconds(2))
-        }
-        // Note: activeProcessingCount is managed by pumpQueue()/extractionSlotFreed()
     }
 
     // MARK: - Budget-Failed Pass Detection
@@ -307,6 +365,23 @@ actor DocumentArtifactHandler: OnboardingEventEmitter {
     ) -> AnthropicDocumentAnalysisService.PassSelection? {
         var accumulated: AnthropicDocumentAnalysisService.PassSelection?
         for failure in failures where LLMErrorHandler.descriptionIndicatesInsufficientBalance(failure) {
+            guard let passes = BudgetFailedExtractionRegistry.passSelection(forFailureLabel: failure) else { continue }
+            accumulated = accumulated?.merged(with: passes) ?? passes
+        }
+        return accumulated
+    }
+
+    // MARK: - Timeout-Failed Pass Detection
+
+    /// Reduce a document's extraction-failure labels to the set of passes that
+    /// failed specifically because the request timed out, or nil if none did.
+    /// Mirrors `budgetFailedPassSelection` but on the disjoint timeout predicate so
+    /// the two recovery modals never fire for the same failure.
+    static func timeoutFailedPassSelection(
+        from failures: [String]
+    ) -> AnthropicDocumentAnalysisService.PassSelection? {
+        var accumulated: AnthropicDocumentAnalysisService.PassSelection?
+        for failure in failures where LLMErrorHandler.descriptionIndicatesTimeout(failure) {
             guard let passes = BudgetFailedExtractionRegistry.passSelection(forFailureLabel: failure) else { continue }
             accumulated = accumulated?.merged(with: passes) ?? passes
         }
