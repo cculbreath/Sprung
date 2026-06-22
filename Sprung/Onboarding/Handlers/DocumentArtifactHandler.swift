@@ -219,48 +219,74 @@ actor DocumentArtifactHandler: OnboardingEventEmitter {
 
         Logger.info("📄 Processing document: \(filename)", category: .ai)
 
-        // Keep-Waiting retry loop. A timeout (transcription stage → thrown; pass
-        // stage → recorded as an extractionFailure) suspends on the timeout gate;
-        // Keep Waiting re-runs the whole document (cheap once Step 4's transcription
-        // checkpoint exists — it resumes from the last saved chunk). A soft cap of
-        // `maxTimeoutRetries` forces an abort so a stuck doc can't trap the interview.
-        // Exactly one `recordProduced` is emitted, after the loop resolves.
+        // Status callback shared by the first ingest and any IR-based resume.
+        let statusCallback: @Sendable (String) -> Void = { [weak self, agentId, filename] statusMsg in
+            guard let self else { return }
+            Task {
+                // Update extraction status
+                let pending = await self.pendingFiles.count
+                let queueInfo = pending > 0 ? " (+\(pending) queued)" : ""
+                await self.emit(.processing(.extractionStateChanged(inProgress: true, statusMessage: "\(filename): \(statusMsg)\(queueInfo)")))
+
+                // Log to agent transcript
+                await MainActor.run {
+                    self.agentTracker.appendTranscript(
+                        agentId: agentId,
+                        entryType: .system,
+                        content: statusMsg
+                    )
+                }
+            }
+        }
+
+        // Keep-Waiting retry loop. On a timeout, Keep Waiting resumes:
+        //  • pass-stage (transcription succeeded → an IR is on the record): re-run
+        //    ONLY the timed-out passes against the saved IR — no re-transcription.
+        //  • transcription-stage (no IR yet): re-ingest the whole document (Step 4's
+        //    checkpoint resumes transcription from the last saved chunk).
+        // A soft cap of `maxTimeoutRetries` forces an abort so a stuck doc can't trap
+        // the interview. Exactly one `recordProduced` is emitted, after the loop resolves.
         var timeoutAttempts = 0
+        var pendingPassRetry: (record: JSON, passes: AnthropicDocumentAnalysisService.PassSelection)? = nil
         while true {
             do {
-                // Call service to perform business logic with status callback
-                let artifactRecord = try await documentProcessingService.processDocument(
-                    fileURL: file.storageURL,
-                    documentType: queuedFile.requestKind,
-                    callId: queuedFile.callId,
-                    metadata: queuedFile.metadata,
-                    displayFilename: filename,
-                    statusCallback: { [weak self, agentId, filename] statusMsg in
-                        guard let self else { return }
-                        Task {
-                            // Update extraction status
-                            let pending = await self.pendingFiles.count
-                            let queueInfo = pending > 0 ? " (+\(pending) queued)" : ""
-                            await self.emit(.processing(.extractionStateChanged(inProgress: true, statusMessage: "\(filename): \(statusMsg)\(queueInfo)")))
-
-                            // Log to agent transcript
-                            await MainActor.run {
-                                self.agentTracker.appendTranscript(
-                                    agentId: agentId,
-                                    entryType: .system,
-                                    content: statusMsg
-                                )
-                            }
-                        }
+                let artifactRecord: JSON
+                if let retry = pendingPassRetry {
+                    pendingPassRetry = nil
+                    if let resumed = await documentProcessingService.reanalyzeFromIR(
+                        record: retry.record,
+                        passes: retry.passes,
+                        statusCallback: statusCallback
+                    ) {
+                        artifactRecord = resumed
+                    } else {
+                        // IR vanished — fall back to a full re-ingest.
+                        artifactRecord = try await documentProcessingService.processDocument(
+                            fileURL: file.storageURL,
+                            documentType: queuedFile.requestKind,
+                            callId: queuedFile.callId,
+                            metadata: queuedFile.metadata,
+                            displayFilename: filename,
+                            statusCallback: statusCallback
+                        )
                     }
-                )
+                } else {
+                    artifactRecord = try await documentProcessingService.processDocument(
+                        fileURL: file.storageURL,
+                        documentType: queuedFile.requestKind,
+                        callId: queuedFile.callId,
+                        metadata: queuedFile.metadata,
+                        displayFilename: filename,
+                        statusCallback: statusCallback
+                    )
+                }
 
                 let extractionFailures = artifactRecord["extractionFailures"].arrayValue.map(\.stringValue)
 
-                // Pass-stage timeout: a pass failed specifically on a timeout (the
-                // no-silent-fallback foundation records it rather than fabricating a
-                // stub). Offer Keep Waiting / Abort before finalizing the record.
-                if Self.timeoutFailedPassSelection(from: extractionFailures) != nil {
+                // Timeout failure: a pass (or the whole document) failed specifically
+                // on a timeout (the no-silent-fallback foundation records it rather
+                // than fabricating a stub). Offer Keep Waiting / Abort before finalizing.
+                if let failedPasses = Self.timeoutFailedPassSelection(from: extractionFailures) {
                     timeoutAttempts += 1
                     let resolution: TimeoutPauseResolution
                     if timeoutAttempts >= Self.maxTimeoutRetries {
@@ -271,7 +297,14 @@ actor DocumentArtifactHandler: OnboardingEventEmitter {
                             TimeoutPauseInfo(filename: filename, attempt: timeoutAttempts)
                         )
                     }
-                    if case .keepWaiting = resolution { continue }
+                    if case .keepWaiting = resolution {
+                        // Transcription IR present → resume cheaply (rerun only the failed
+                        // passes against it); absent → full re-ingest on the next pass.
+                        if artifactRecord["intermediateRepresentation"].string != nil {
+                            pendingPassRetry = (artifactRecord, failedPasses)
+                        }
+                        continue
+                    }
                     // .abort → fall through and finalize the partial record as-is.
                 }
 

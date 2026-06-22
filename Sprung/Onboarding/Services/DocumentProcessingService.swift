@@ -236,65 +236,11 @@ actor DocumentProcessingService {
         if let callId = callId {
             artifactRecord["originatingCallId"].string = callId
         }
-        // Add summary if generated
-        if let summary = documentSummary {
-            artifactRecord["summary"].string = summary.summary
-            artifactRecord["briefDescription"].string = summary.briefDescription
-            artifactRecord["summaryGeneratedAt"].string = ISO8601DateFormatter().string(from: Date())
-            // Store structured summary fields in metadata
-            var summaryMeta = JSON()
-            summaryMeta["documentType"].string = summary.documentType
-            summaryMeta["briefDescription"].string = summary.briefDescription
-            summaryMeta["timePeriod"].string = summary.timePeriod
-            summaryMeta["companies"].arrayObject = summary.companies
-            summaryMeta["roles"].arrayObject = summary.roles
-            summaryMeta["skills"].arrayObject = summary.skills
-            summaryMeta["achievements"].arrayObject = summary.achievements
-            summaryMeta["relevanceHints"].string = summary.relevanceHints
-            artifactRecord["summaryMetadata"] = summaryMeta
-        }
-
-        // Store skill bank extraction
-        if let skillsResult = skills {
-            let encoder = JSONEncoder()
-            // Note: Skill model has explicit CodingKeys for snake_case - no conversion needed
-            encoder.dateEncodingStrategy = .iso8601
-            if let skillsData = try? encoder.encode(skillsResult),
-               let skillsString = String(data: skillsData, encoding: .utf8) {
-                artifactRecord["skills"].string = skillsString
-            }
-
-            // Add skills stats
-            var skillsStats = JSON()
-            skillsStats["total"].int = skillsResult.count
-            var byCategory: [String: Int] = [:]
-            for skill in skillsResult {
-                byCategory[skill.category, default: 0] += 1
-            }
-            skillsStats["byCategory"].dictionaryObject = byCategory as [String: Any]
-            artifactRecord["skillsStats"] = skillsStats
-        }
-
-        // Store narrative knowledge cards
-        if let cardsResult = narrativeCards {
-            let encoder = JSONEncoder()
-            // Note: KnowledgeCard model has explicit CodingKeys for snake_case - no conversion needed
-            encoder.dateEncodingStrategy = .iso8601
-            if let cardsData = try? encoder.encode(cardsResult),
-               let cardsString = String(data: cardsData, encoding: .utf8) {
-                artifactRecord["narrativeCards"].string = cardsString
-            }
-
-            // Add narrative cards stats
-            var kcStats = JSON()
-            kcStats["total"].int = cardsResult.count
-            var byType: [String: Int] = [:]
-            for card in cardsResult {
-                byType[card.cardType?.rawValue ?? "other", default: 0] += 1
-            }
-            kcStats["byType"].dictionaryObject = byType as [String: Any]
-            artifactRecord["narrativeCards_stats"] = kcStats
-        }
+        // Add summary, skills, and narrative cards (shared writers so a resumed
+        // IR-based pass produces an identical record — see reanalyzeFromIR).
+        Self.writeSummary(documentSummary, into: &artifactRecord)
+        Self.writeSkills(skills, into: &artifactRecord)
+        Self.writeNarrativeCards(narrativeCards, into: &artifactRecord)
 
         // Persist the intermediate representation (PDF transcription) so extraction
         // can be re-run later for $0 without re-reading the source. The faithful
@@ -431,6 +377,136 @@ actor DocumentProcessingService {
             failed.passFailures.append("document analysis — \(filename): \(error.localizedDescription)")
             return failed
         }
+    }
+
+    // MARK: - Record Section Writers
+    //
+    // Shared by the initial `processDocument` build and `reanalyzeFromIR` so a
+    // resumed (IR-based) pass writes the summary/skills/cards sections exactly like
+    // a first-pass run. Pure functions over the in-flight JSON record.
+
+    private static func writeSummary(_ summary: DocumentSummary?, into record: inout JSON) {
+        guard let summary else { return }
+        record["summary"].string = summary.summary
+        record["briefDescription"].string = summary.briefDescription
+        record["summaryGeneratedAt"].string = ISO8601DateFormatter().string(from: Date())
+        // Store structured summary fields in metadata
+        var summaryMeta = JSON()
+        summaryMeta["documentType"].string = summary.documentType
+        summaryMeta["briefDescription"].string = summary.briefDescription
+        summaryMeta["timePeriod"].string = summary.timePeriod
+        summaryMeta["companies"].arrayObject = summary.companies
+        summaryMeta["roles"].arrayObject = summary.roles
+        summaryMeta["skills"].arrayObject = summary.skills
+        summaryMeta["achievements"].arrayObject = summary.achievements
+        summaryMeta["relevanceHints"].string = summary.relevanceHints
+        record["summaryMetadata"] = summaryMeta
+    }
+
+    private static func writeSkills(_ skills: [Skill]?, into record: inout JSON) {
+        guard let skillsResult = skills else { return }
+        let encoder = JSONEncoder()
+        // Note: Skill model has explicit CodingKeys for snake_case - no conversion needed
+        encoder.dateEncodingStrategy = .iso8601
+        if let skillsData = try? encoder.encode(skillsResult),
+           let skillsString = String(data: skillsData, encoding: .utf8) {
+            record["skills"].string = skillsString
+        }
+        // Add skills stats
+        var skillsStats = JSON()
+        skillsStats["total"].int = skillsResult.count
+        var byCategory: [String: Int] = [:]
+        for skill in skillsResult {
+            byCategory[skill.category, default: 0] += 1
+        }
+        skillsStats["byCategory"].dictionaryObject = byCategory as [String: Any]
+        record["skillsStats"] = skillsStats
+    }
+
+    private static func writeNarrativeCards(_ cards: [KnowledgeCard]?, into record: inout JSON) {
+        guard let cardsResult = cards else { return }
+        let encoder = JSONEncoder()
+        // Note: KnowledgeCard model has explicit CodingKeys for snake_case - no conversion needed
+        encoder.dateEncodingStrategy = .iso8601
+        if let cardsData = try? encoder.encode(cardsResult),
+           let cardsString = String(data: cardsData, encoding: .utf8) {
+            record["narrativeCards"].string = cardsString
+        }
+        // Add narrative cards stats
+        var kcStats = JSON()
+        kcStats["total"].int = cardsResult.count
+        var byType: [String: Int] = [:]
+        for card in cardsResult {
+            byType[card.cardType?.rawValue ?? "other", default: 0] += 1
+        }
+        kcStats["byType"].dictionaryObject = byType as [String: Any]
+        record["narrativeCards_stats"] = kcStats
+    }
+
+    // MARK: - Timeout Resume (IR-based)
+
+    /// Recompute a record's extraction failures after re-running its timed-out
+    /// passes against the saved IR. The retried timeout failures are dropped (their
+    /// fresh outcome is in `reran`); unrelated failures (e.g. a budget outage on a
+    /// different pass) are KEPT so a resume can't silently erase them. Pure.
+    static func mergedFailures(prior: [String], reran: [String]) -> [String] {
+        let surviving = prior.filter { !LLMErrorHandler.descriptionIndicatesTimeout($0) }
+        return surviving + reran
+    }
+
+    /// Re-run a subset of analysis passes against an artifact's already-computed
+    /// intermediate representation — the resume path for a pass that timed out.
+    /// Costs only the rerun passes: NO source re-read and NO re-transcription (the
+    /// IR *is* the transcription). Returns the record with the regenerated sections
+    /// merged in and the resolved timeout failures cleared; returns `nil` when the
+    /// record carries no IR (transcription never finished) so the caller falls back
+    /// to a full re-ingest.
+    func reanalyzeFromIR(
+        record: JSON,
+        passes: AnthropicDocumentAnalysisService.PassSelection,
+        statusCallback: (@Sendable (String) -> Void)? = nil
+    ) async -> JSON? {
+        guard let ir = IntermediateRepresentation.decode(fromJSONString: record["intermediateRepresentation"].string) else {
+            return nil
+        }
+        guard let analysisService = getOrCreateAnalysisService() else { return nil }
+
+        let documentId = record["id"].stringValue
+        let filename = record["filename"].stringValue
+        statusCallback?("Re-running analysis for \(filename) from saved transcription…")
+
+        let result: AnthropicDocumentAnalysisService.AnalysisResult
+        do {
+            result = try await analysisService.analyzeIntermediateRepresentation(
+                documentId: documentId,
+                filename: filename,
+                ir: ir,
+                passes: passes,
+                statusCallback: statusCallback
+            )
+        } catch {
+            // Leave the record (and its prior timeout failure) intact so the caller
+            // can offer another Keep-Waiting / Abort round rather than losing it.
+            Logger.warning("⚠️ IR re-analysis failed for \(filename): \(error.localizedDescription)", category: .ai)
+            return record
+        }
+
+        var merged = record
+        Self.writeSummary(result.summary, into: &merged)
+        Self.writeSkills(result.skills, into: &merged)
+        Self.writeNarrativeCards(result.narrativeCards, into: &merged)
+
+        // Recompute failures: drop the timeout failures we just re-ran, KEEP any
+        // unrelated (e.g. budget) failures, and fold in whatever the rerun reported.
+        let priorFailures = record["extractionFailures"].arrayValue.map(\.stringValue)
+        let newFailures = Self.mergedFailures(prior: priorFailures, reran: result.passFailures)
+        if newFailures.isEmpty {
+            merged["extractionFailures"] = JSON.null
+        } else {
+            merged["extractionFailures"].arrayObject = newFailures
+        }
+        Logger.info("♻️ IR re-analysis complete for \(filename): \(newFailures.count) remaining failure(s)", category: .ai)
+        return merged
     }
 
     // MARK: - Regeneration Methods
