@@ -21,6 +21,7 @@ struct KnowledgeCardsBrowserTab: View {
     @State private var showAddSheet = false
     @State private var showIngestionSheet = false
     @State private var refiningCard: KnowledgeCard?
+    @State private var reviewContext: RefinementReviewContext?
     @State private var pipelineCoordinator: StandaloneKCCoordinator?
 
     enum CardTypeFilter: String, CaseIterable {
@@ -142,6 +143,21 @@ struct KnowledgeCardsBrowserTab: View {
                     runRefinement(card: card, instructions: instructions, modelId: modelId)
                 },
                 onCancel: { refiningCard = nil }
+            )
+        }
+        .sheet(item: $reviewContext) { context in
+            KCRefinementReviewSheet(
+                cardTitle: context.card.title,
+                diffs: context.diffs,
+                onRetry: { field, feedback in
+                    await retryField(card: context.card, field: field, feedback: feedback, modelId: context.modelId)
+                },
+                onApply: { reviewedDiffs in
+                    KCFieldDiff.applyAccepted(reviewedDiffs, to: context.card)
+                    onCardUpdated(context.card)
+                    reviewContext = nil
+                },
+                onCancel: { reviewContext = nil }
             )
         }
         .alert("Delete Card?", isPresented: $showDeleteConfirmation, presenting: cardToDelete) { card in
@@ -268,12 +284,30 @@ struct KnowledgeCardsBrowserTab: View {
                     instructions: instructions,
                     modelId: modelId
                 )
-                service.apply(refined, to: card)
-                onCardUpdated(card)
+                // Present the diff for field-by-field review rather than applying
+                // blindly — accepted fields only are written, on the user's say-so.
+                let diffs = KCFieldDiff.changedFields(before: card, after: refined)
+                reviewContext = RefinementReviewContext(card: card, modelId: modelId, diffs: diffs)
             } catch {
                 reasoningStreamManager.showError(error.localizedDescription)
                 Logger.error("KC Refinement failed: \(error.localizedDescription)", category: .ai)
             }
+        }
+    }
+
+    /// Re-refine a single field with feedback for the review sheet's Retry. Returns
+    /// the new value, or nil on failure (logged; the sheet surfaces a retry prompt).
+    private func retryField(card: KnowledgeCard, field: KCField, feedback: String, modelId: String) async -> KCFieldValue? {
+        guard let llmFacade else { return nil }
+        let service = KCRefinementService(
+            llmFacade: llmFacade,
+            reasoningStreamManager: reasoningStreamManager
+        )
+        do {
+            return try await service.refineField(card: card, field: field, feedback: feedback, modelId: modelId)
+        } catch {
+            Logger.error("KC field retry failed: \(error.localizedDescription)", category: .ai)
+            return nil
         }
     }
 
@@ -359,4 +393,13 @@ struct KnowledgeCardsBrowserTab: View {
             return cards.filter { $0.cardType == filterType }.count
         }
     }
+}
+
+/// Holds the in-flight refinement under review: the card, the model used (for
+/// per-field retry), and the changed-field diff the sheet renders.
+private struct RefinementReviewContext: Identifiable {
+    let id = UUID()
+    let card: KnowledgeCard
+    let modelId: String
+    let diffs: [KCFieldDiff]
 }

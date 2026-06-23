@@ -21,6 +21,16 @@
 
 import Foundation
 
+// MARK: - ExtractionSourceKind
+
+/// What kind of source the extraction passes are reading. Drives code-aware
+/// framing so the shared extractor treats a code repository's domain content as
+/// context (engineering signal only) rather than as the applicant's biography.
+enum ExtractionSourceKind: Sendable {
+    case document        // résumé / PDF transcript — content IS the applicant's record
+    case codeRepository  // git digest — value is the engineering demonstrated, not the content's claims
+}
+
 // MARK: - IntermediateRepresentation
 
 /// The unified ingestion intermediate representation feeding extraction.
@@ -68,6 +78,17 @@ enum IntermediateRepresentation: Codable, Sendable {
             return t.renderedForExtraction()
         case .git(let d):
             return d.renderedForExtraction()
+        }
+    }
+
+    /// Whether extraction should treat this source as a personal document
+    /// (résumé/PDF transcript) or a code repository. Drives code-aware extraction
+    /// framing: a repo's value is the engineering it demonstrates, not the
+    /// domain content it happens to contain.
+    var sourceKind: ExtractionSourceKind {
+        switch self {
+        case .pdf: return .document
+        case .git: return .codeRepository
         }
     }
 
@@ -186,6 +207,18 @@ struct DocumentTranscription: Codable, Sendable {
     var structure: String
     var docMeta: DocMeta
     var provenance: IRProvenance
+    /// Per-chunk transcription record — the AUTHORITATIVE completeness log.
+    /// One entry per planned page-range chunk; a `.completed` entry carries its
+    /// `TranscriptionPayload` so a later run (even in another session) can resume
+    /// ONLY the chunks that are still missing instead of re-transcribing the whole
+    /// PDF. Completeness is read from this log directly — never inferred from the
+    /// transcript text. Empty for IRs produced before the log existed (treated as
+    /// not-verifiably-complete) and for non-chunked sources.
+    ///
+    /// NOTE: deliberately NOT included in `renderedForExtraction()` — it is
+    /// structural/provenance-like, so it never perturbs the prompt-cache byte
+    /// invariant (see CACHE INVARIANT at the top of the file).
+    var transcriptionLog: [TranscribedChunk]
 
     init(
         fullText: String,
@@ -194,7 +227,8 @@ struct DocumentTranscription: Codable, Sendable {
         productionQuality: TranscriptionProductionQuality,
         structure: String = "",
         docMeta: DocMeta,
-        provenance: IRProvenance
+        provenance: IRProvenance,
+        transcriptionLog: [TranscribedChunk] = []
     ) {
         self.fullText = fullText
         self.visualElements = visualElements
@@ -203,6 +237,40 @@ struct DocumentTranscription: Codable, Sendable {
         self.structure = structure
         self.docMeta = docMeta
         self.provenance = provenance
+        self.transcriptionLog = transcriptionLog
+    }
+
+    // Custom decode so IRs persisted BEFORE `transcriptionLog` existed still decode
+    // (the key is simply absent → empty log). Swift's synthesized Decodable would
+    // instead throw on the missing key, which would make every pre-existing
+    // artifact's IR unreadable and break `$0` re-extraction. Encodable stays
+    // synthesized — new IRs always persist the log (with its payloads).
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        fullText = try c.decode(String.self, forKey: .fullText)
+        visualElements = try c.decode([VisualElement].self, forKey: .visualElements)
+        tables = try c.decode([TranscribedTable].self, forKey: .tables)
+        productionQuality = try c.decode(TranscriptionProductionQuality.self, forKey: .productionQuality)
+        structure = try c.decode(String.self, forKey: .structure)
+        docMeta = try c.decode(DocMeta.self, forKey: .docMeta)
+        provenance = try c.decode(IRProvenance.self, forKey: .provenance)
+        transcriptionLog = try c.decodeIfPresent([TranscribedChunk].self, forKey: .transcriptionLog) ?? []
+    }
+
+    /// True when the log accounts for the whole document and every chunk
+    /// transcribed successfully. An empty log (pre-log IR, or no chunks) is NOT
+    /// complete — we never assume completeness we did not record.
+    var isComplete: Bool {
+        !transcriptionLog.isEmpty && transcriptionLog.allSatisfy { $0.status == .completed }
+    }
+
+    /// Human-readable page ranges still missing a successful transcription
+    /// (e.g. "21–40, 81–100"); empty string when complete.
+    var missingPagesDescription: String {
+        transcriptionLog
+            .filter { $0.status != .completed }
+            .map { "\($0.lowerPage)–\($0.upperPage)" }
+            .joined(separator: ", ")
     }
 
     /// Deterministic Markdown for the extraction source block. Page-ordered
@@ -259,6 +327,54 @@ struct DocumentTranscription: Codable, Sendable {
 
         return lines.joined(separator: "\n")
     }
+}
+
+/// The transcription of a single PDF chunk, returned by the per-chunk multimodal
+/// pass. Stored verbatim inside a `.completed` `TranscribedChunk` so the chunk
+/// never needs re-transcribing. (Lives here, next to its component types, rather
+/// than with the prompts that request it.)
+struct TranscriptionPayload: Codable, Sendable {
+    var fullText: String
+    var visualElements: [VisualElement]
+    var tables: [TranscribedTable]
+    var productionQuality: TranscriptionProductionQuality
+    var structure: String
+    var docMeta: DocMeta
+}
+
+/// One planned page-range chunk and its transcription outcome. `.completed`
+/// carries the payload so resume can splice it back in for free; `.failed`
+/// carries none and marks the range for re-transcription.
+struct TranscribedChunk: Codable, Sendable {
+    /// 1-based inclusive absolute page range — the chunk's identity.
+    var lowerPage: Int
+    var upperPage: Int
+    var status: ChunkTranscriptionStatus
+    /// The transcription, present iff `status == .completed`.
+    var payload: TranscriptionPayload?
+    /// Why the chunk failed (for `.failed`), surfaced so an incomplete IR explains
+    /// itself instead of silently dropping pages. Nil when completed.
+    var failureReason: String?
+
+    var pageRange: ClosedRange<Int> { lowerPage...upperPage }
+
+    init(
+        pageRange: ClosedRange<Int>,
+        status: ChunkTranscriptionStatus,
+        payload: TranscriptionPayload? = nil,
+        failureReason: String? = nil
+    ) {
+        self.lowerPage = pageRange.lowerBound
+        self.upperPage = pageRange.upperBound
+        self.status = status
+        self.payload = payload
+        self.failureReason = failureReason
+    }
+}
+
+enum ChunkTranscriptionStatus: String, Codable, Sendable {
+    case completed
+    case failed
 }
 
 /// A described visual on a page. `dataPoints` carries the actual values a chart
@@ -446,11 +562,39 @@ struct RepositoryDigest: Codable, Sendable {
         self.provenance = provenance
     }
 
+    /// Code-aware framing prepended to every git extraction source block. Keeps
+    /// the downstream extractor (shared with résumé/PDF documents) from mistaking
+    /// the repository's domain content for the applicant's personal experience.
+    /// A constant string so `renderedForExtraction()` stays byte-stable for the cache.
+    static let extractionScopeFraming = """
+    This is a digest of SOURCE CODE the applicant authored. Extract the applicant's \
+    technical SKILLS and the ENGINEERING they demonstrated by building this software — \
+    architecture, implementation depth, dependency mastery, the hard problems solved, \
+    and their authorship of the code.
+
+    The repository exists to serve some purpose or domain — a product, a business, a \
+    research field, a client, or even the applicant's own portfolio site. Everything \
+    under Documentation and any in-repo prose, marketing copy, page text, or sample \
+    data describes WHAT THE SOFTWARE IS AND DOES and the domain it serves. Treat all of \
+    it as CONTEXT for understanding the engineering — NOT as a record of the applicant's \
+    personal experience. Do NOT attribute the domain's activities, claims, credentials, \
+    audiences, or operational metrics to the applicant; only the engineering and \
+    authorship are theirs. Building a brain-surgery clinic's website demonstrates \
+    web-engineering skill, not surgical experience — and a portfolio site's own copy is \
+    context describing the work, not a list of accomplishments to restate as fact. When \
+    in doubt, ask "does the CODE demonstrate this, or does the CONTENT merely claim it?" \
+    and keep only what the code demonstrates.
+    """
+
     /// Deterministic Markdown for the extraction source block. No provenance.
     /// Empty sections omitted.
     func renderedForExtraction() -> String {
         var lines: [String] = []
         lines.append("# Repository Digest: \(repoName)")
+        lines.append("")
+        lines.append("## How To Read This Digest (Extraction Scope)")
+        lines.append("")
+        lines.append(Self.extractionScopeFraming)
 
         if !architecture.isEmpty {
             lines.append("")
@@ -558,7 +702,7 @@ struct RepositoryDigest: Codable, Sendable {
 
         if !readmeAndDocs.isEmpty {
             lines.append("")
-            lines.append("## Documentation")
+            lines.append("## Documentation (project/domain context — describes the software and its domain, NOT the applicant's personal experience)")
             for doc in readmeAndDocs {
                 lines.append("")
                 lines.append("### \(doc.path)")

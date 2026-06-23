@@ -51,7 +51,8 @@ actor KnowledgeCardExtractionService {
         documentId: String,
         filename: String,
         source: DocumentAnalysisSource,
-        voiceAnchor: String? = nil
+        voiceAnchor: String? = nil,
+        sourceKind: ExtractionSourceKind = .document
     ) async throws -> [KnowledgeCard] {
         guard let facade = llmFacade else {
             throw KCError.llmNotConfigured
@@ -61,7 +62,8 @@ actor KnowledgeCardExtractionService {
         let instructions = KCExtractionPrompts.extractionPrompt(
             documentId: documentId,
             filename: filename,
-            isPagedSource: source.isPaged
+            isPagedSource: source.isPaged,
+            sourceKind: sourceKind
         )
 
         let maxAttempts = 3
@@ -86,9 +88,12 @@ actor KnowledgeCardExtractionService {
                 throw error
             } catch {
                 Logger.warning("📖 Error on attempt \(attempt): \(error.localizedDescription)", category: .ai)
-                if attempt < maxAttempts { continue }
-                // Rethrow the underlying error so callers can surface the real
-                // failure (e.g. an API 400) instead of a generic message.
+                // Retry ONLY transient network conditions. A malformed/schema/decode
+                // failure or a content error (e.g. an API 400) re-fails identically,
+                // so surface it now instead of burning two more passes on it.
+                if attempt < maxAttempts, LLMErrorHandler().isTransientNetworkError(error) {
+                    continue
+                }
                 throw error
             }
         }

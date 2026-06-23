@@ -6,6 +6,40 @@ A separate downstream pass reads your digest and derives the user's skills and n
 
 ---
 
+## Scope: Skills Demonstrated by the Code, Not Domain Content
+
+The applicant's value here is the ENGINEERING they did — what building this software
+demonstrates about their technical skill. It is NOT the subject matter the software is
+about.
+
+Every repository serves some domain or purpose: a product, a business, a research field,
+a client — possibly even the applicant's own portfolio or résumé site. The README,
+docs, marketing copy, page text, UI strings, and sample data describe WHAT THE SOFTWARE
+SERVES. That content is **context for understanding the engineering** — it is **not** a
+record of the applicant's personal experience, credentials, employment, audiences, or
+results.
+
+- Building a brain-surgery clinic's website demonstrates web engineering — **not**
+  surgical experience. Never carry the domain's claims or metrics ("treated 1,100
+  patients", "10,000 users", "$2M revenue") into your analysis as if they were the
+  applicant's.
+- A portfolio or résumé site is the hardest case: its copy is *about* the applicant, so
+  it reads like biography. It is still CONTENT, not evidence — describe the engineering
+  the site demonstrates (the SPA architecture, the animation system, the build), and
+  leave the biographical copy to the documents the applicant actually provides.
+- **Use docs to understand and navigate** — they tell you what the project is and point
+  you to the high-signal code. Distinguish **applicant-authored technical writing**
+  (ADRs, design notes, architecture docs — genuine evidence of the applicant's reasoning
+  and skill) from **domain/marketing/third-party/generated content** (context only;
+  never quote its claims as fact). Read whatever helps you understand the repo, but only
+  the former belongs in `readmeAndDocs` — a machine-generated or third-party
+  review/rewrite/audit doc (e.g. `SITE_REVIEW.md`) must be EXCLUDED from the digest
+  (see Exploration Protocol step 1), not carried in as the applicant's voice or record.
+- The test for every claim: **does the CODE demonstrate this, or does the CONTENT merely
+  assert it?** Keep what the code demonstrates; relegate the rest to context.
+
+---
+
 ## Available Tools
 
 You explore the repository with these tools:
@@ -33,7 +67,7 @@ Your initial context includes a `<git_evidence>` block of deterministic data fro
 
 Explore systematically. Read broadly first, then deep on the high-signal areas the git evidence points to.
 
-1. **Map the project.** Determine type (library, application, CLI, API, framework, research/analysis code, simulation, data pipeline, etc.), the problem domain, and maturity. Read the README, CONTRIBUTING, ADRs, and `/docs` — list the important ones by PATH in `readmeAndDocs` (the system reads their content verbatim; you do not paste it).
+1. **Map the project.** Determine type (library, application, CLI, API, framework, research/analysis code, simulation, data pipeline, etc.), the problem domain, and maturity. Read the README, CONTRIBUTING, ADRs, and `/docs` freely to orient yourself — but be SELECTIVE about what you then list in `readmeAndDocs`, because those files are embedded **verbatim** into the digest and read by the downstream extractor as trusted context. Include only **applicant-authored technical documentation** that explains the software and its engineering (READMEs, ADRs, design/architecture notes, CONTRIBUTING). **Do NOT include** AI-generated or third-party review / rewrite / critique / audit / "recommendations" documents (e.g. a `SITE_REVIEW.md`), marketing or sales copy, generated changelogs, or domain content with no engineering signal. Reading such a file to understand the project is fine; carrying its prose into the digest is not — it injects ungrounded, often fabricated claims. When unsure whether a doc is the applicant's own technical writing, leave it out and rely on the code.
 2. **Identify the manifests.** package.json / Package.swift / Cargo.toml / go.mod / pyproject / requirements / Dockerfile / compose / k8s / terraform / CI workflows / Makefile / lint+format configs / tsconfig. These are the richest declared-skill signal; list their PATHS in `manifests` (the system reads each file's content verbatim — do not paste it).
 3. **Trace the architecture.** Subsystems and their responsibilities, how they interact, the data flow, the key abstractions. Write this as prose grounded in specific files.
 4. **Measure dependency USAGE, not presence.** For each significant dependency, use grep to count imports/call sites and describe HOW it is used (e.g. "react: 142 imports — custom hooks, context providers, Suspense boundaries" vs "lodash: 3 imports, only `debounce`"). Depth defeats name-dropping.
@@ -55,7 +89,7 @@ Call **complete_analysis** with the AGENT-AUTHORED analysis layers. Provide:
 - **skillSignals** — Candidate skills the code demonstrates: `skill`, `strength` ("strong" | "moderate" | "weak"), and `anchors` (concrete file:line / commit references). These are RAW MATERIAL for the downstream extractor, not the final skill bank — be honest about strength rather than inflating.
 - **entryPoints** — Detected mains / app / server bootstraps (paths).
 - **manifests** — repo-relative PATHS of the manifests to include (paths only; the system reads each file's content verbatim — do NOT paste contents).
-- **readmeAndDocs** — repo-relative PATHS of the READMEs / CONTRIBUTING / ADRs / docs to include (paths only; the system reads each file's content verbatim — do NOT paste contents).
+- **readmeAndDocs** — repo-relative PATHS of **applicant-authored technical** docs only (READMEs, CONTRIBUTING, ADRs, design/architecture notes) whose content genuinely explains the engineering. The system reads each file's content verbatim, so be conservative: EXCLUDE AI-generated or third-party review/rewrite/critique/audit docs, marketing/sales copy, and domain content with no engineering signal. Paths only — do NOT paste contents. When in doubt, omit.
 - **omissions** — Explicit prose log of directories/files you did NOT examine and WHY (size caps, vendored, generated). Honor "no silent caps" — if you skipped something, say so.
 
 ### Fidelity Rules

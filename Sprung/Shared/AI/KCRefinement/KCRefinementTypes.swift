@@ -22,13 +22,13 @@ struct RefinedKnowledgeCard: Codable, Sendable {
     let verbatimExcerpts: [RefinedExcerpt]?
 }
 
-struct RefinedFact: Codable, Sendable {
+struct RefinedFact: Codable, Sendable, Equatable {
     let category: String
     let statement: String
     let confidence: String?
 }
 
-struct RefinedExcerpt: Codable, Sendable {
+struct RefinedExcerpt: Codable, Sendable, Equatable {
     let context: String
     let location: String
     let text: String
@@ -39,30 +39,48 @@ struct RefinedExcerpt: Codable, Sendable {
 
 enum KCRefinementSchema {
 
+    /// Per-field schema fragments, keyed by the JSON property name. Shared between
+    /// the whole-card schema and the single-field retry schema.
+    static var properties: [String: Any] {
+        [
+            "title": ["type": "string", "description": "Card title"],
+            "narrative": ["type": "string", "description": "The narrative content (500-2000 words)"],
+            "cardType": cardTypeSchema,
+            "dateRange": nullableString("Date range, e.g. '2020-09 to 2024-06'"),
+            "organization": nullableString("Company, university, or organization"),
+            "location": nullableString("City, State or 'Remote'"),
+            "domains": stringArray("Fields of expertise for job matching"),
+            "scale": stringArray("Quantified elements: numbers, metrics, scope"),
+            "keywords": stringArray("High-level terms for job matching"),
+            "technologies": stringArray("Technologies, tools, and frameworks"),
+            "outcomes": stringArray("Quantified outcomes"),
+            "suggestedBullets": stringArray("Draft resume bullets in the author's natural register — concrete and specific, not formulaic templates"),
+            "evidenceQuality": nullableString("Evidence quality: 'strong', 'moderate', or 'weak'"),
+            "facts": factsSchema,
+            "verbatimExcerpts": excerptsSchema
+        ]
+    }
+
     static var schema: [String: Any] {
         [
             "type": "object",
-            "properties": [
-                "title": ["type": "string", "description": "Card title"],
-                "narrative": ["type": "string", "description": "The narrative content (500-2000 words)"],
-                "cardType": cardTypeSchema,
-                "dateRange": nullableString("Date range, e.g. '2020-09 to 2024-06'"),
-                "organization": nullableString("Company, university, or organization"),
-                "location": nullableString("City, State or 'Remote'"),
-                "domains": stringArray("Fields of expertise for job matching"),
-                "scale": stringArray("Quantified elements: numbers, metrics, scope"),
-                "keywords": stringArray("High-level terms for job matching"),
-                "technologies": stringArray("Technologies, tools, and frameworks"),
-                "outcomes": stringArray("Quantified outcomes"),
-                "suggestedBullets": stringArray("Draft resume bullets in the author's natural register — concrete and specific, not formulaic templates"),
-                "evidenceQuality": nullableString("Evidence quality: 'strong', 'moderate', or 'weak'"),
-                "facts": factsSchema,
-                "verbatimExcerpts": excerptsSchema
-            ] as [String: Any],
+            "properties": properties,
             "required": [
                 "title", "narrative", "domains", "scale", "keywords",
                 "technologies", "outcomes", "suggestedBullets"
             ],
+            "additionalProperties": false
+        ]
+    }
+
+    /// A schema constraining the model to return a single named field. Used for
+    /// per-field retry, where only one field is being re-refined with feedback.
+    static func singleFieldSchema(key: String) -> [String: Any] {
+        let fragment = (properties[key] as? [String: Any]) ?? ["type": "string"]
+        return [
+            "type": "object",
+            "properties": [key: fragment] as [String: Any],
+            "required": [key],
             "additionalProperties": false
         ]
     }

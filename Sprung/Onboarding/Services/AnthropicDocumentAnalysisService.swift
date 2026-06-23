@@ -14,22 +14,6 @@
 import Foundation
 import SwiftOpenAI
 
-// MARK: - TranscriptionResumeError
-
-/// Raised when the merged set of transcribed chunks does not contiguously cover
-/// the whole document. Surfacing this (rather than persisting a partial IR) keeps
-/// an incomplete transcription from masquerading as the complete document.
-enum TranscriptionResumeError: LocalizedError {
-    case incompleteCoverage(filename: String, missing: String)
-
-    var errorDescription: String? {
-        switch self {
-        case let .incompleteCoverage(filename, missing):
-            return "Transcription of \(filename) is incomplete — missing \(missing). Re-upload the document to retry."
-        }
-    }
-}
-
 // MARK: - DocumentAnalysisSource
 
 /// Source content for an Anthropic document-analysis pass.
@@ -55,16 +39,22 @@ enum DocumentAnalysisSource {
         }
     }
 
-    /// The cached source block. Placed FIRST in every pass's user content so all
-    /// passes share one prompt prefix (system + source) and reuse the prompt cache
-    /// warmed by the first pass.
-    var cachedContentBlock: AnthropicContentBlock {
+    /// The source block, placed FIRST in every pass's user content.
+    ///
+    /// Caching is per-case, by reuse profile:
+    /// - `.transcript` / `.text` are read by EVERY extraction pass (summary, skills,
+    ///   cards, verification, enrichment), so they carry a cache breakpoint — the
+    ///   first pass writes the prefix (1.25x) and the rest read it (0.1x). This is
+    ///   the warm-then-fan-out win.
+    /// - `.pdfFile` is the SINGLE-SHOT transcription input: each chunk is uploaded,
+    ///   transcribed once, then deleted and never re-read (downstream extraction
+    ///   uses `.transcript`). Caching it would pay the 1.25x write premium on the
+    ///   document's largest token component with zero subsequent reads to amortize
+    ///   it, so it is sent as a standard (uncached) block at the 1.0x input rate.
+    var sourceContentBlock: AnthropicContentBlock {
         switch self {
         case .pdfFile(let id):
-            return .document(AnthropicDocumentBlock(
-                source: .file(id: id),
-                cacheControl: .ephemeral
-            ))
+            return .document(AnthropicDocumentBlock(source: .file(id: id)))
         case .text(let text):
             return .text(AnthropicTextBlock(text: text, cacheControl: .ephemeral))
         case .transcript(let text, _):
@@ -108,7 +98,7 @@ enum DocumentAnalysisPrompts {
         voiceAnchor: String? = nil,
         instructions: String
     ) -> [AnthropicContentBlock] {
-        var blocks: [AnthropicContentBlock] = [source.cachedContentBlock]
+        var blocks: [AnthropicContentBlock] = [source.sourceContentBlock]
         if let voiceAnchor, !voiceAnchor.isEmpty {
             blocks.append(.text(AnthropicTextBlock(text: voiceAnchor, cacheControl: .ephemeral)))
         }
@@ -325,36 +315,66 @@ actor AnthropicDocumentAnalysisService {
     /// a single cached `.transcript` source block. The PDF is never re-uploaded for
     /// extraction; the returned `AnalysisResult` carries the IR for persistence so
     /// extraction can be re-run later for $0.
+    /// - Parameter resumeFrom: a prior transcription of the SAME content (matched
+    ///   by the caller via sha256). Its `.completed` chunks are reused so only the
+    ///   still-missing pages are transcribed — even across sessions.
     func analyzePDF(
         documentId: String,
         filename: String,
         pdfData: Data,
+        resumeFrom: DocumentTranscription? = nil,
         passes: PassSelection = .all,
         statusCallback: (@Sendable (String) -> Void)? = nil
     ) async throws -> AnalysisResult {
         let modelId = try Self.configuredModelId()
 
-        // Stage 1: transcribe the actual PDF once (the only PDF re-read).
-        let transcription = try await transcribePDF(
-            documentId: documentId,
-            filename: filename,
-            pdfData: pdfData,
-            statusCallback: statusCallback
-        )
-        let ir = IntermediateRepresentation.pdf(transcription)
+        // Tag every LLM pass in this document's pipeline (transcription + the
+        // summary/skills/cards/verify/enrich passes) for token-usage attribution.
+        // `runPasses` overrides the tag for the summary and enrichment sub-passes.
+        return try await OnboardingUsageReporting.$source.withValue(.documentExtraction) {
+            // Stage 1: transcribe the actual PDF, reusing any prior completed chunks.
+            let transcription = try await transcribePDF(
+                documentId: documentId,
+                filename: filename,
+                pdfData: pdfData,
+                resumeFrom: resumeFrom,
+                statusCallback: statusCallback
+            )
+            let ir = IntermediateRepresentation.pdf(transcription)
 
-        // Stage 2: run the extraction pass set ONCE over the rendered transcription.
-        // Page anchors survive (isPaged: true) so evidence still resolves to pages.
-        var result = await runPasses(
-            documentId: documentId,
-            filename: filename,
-            source: .transcript(text: ir.renderedForExtraction(), isPaged: true),
-            passes: passes,
-            modelId: modelId,
-            statusCallback: statusCallback
-        )
-        result.intermediateRepresentation = ir
-        return result
+            // An incomplete transcription is PERSISTED (carrying its log + the
+            // chunks that did succeed) so a later run resumes only the gaps — but
+            // extraction is skipped: running it on a partial document would mint
+            // cards/skills from a document missing pages. Surface it as a
+            // resumable failure, never a silent partial.
+            guard transcription.isComplete else {
+                var result = AnalysisResult()
+                result.intermediateRepresentation = ir
+                let missing = transcription.missingPagesDescription
+                Logger.warning(
+                    "⚠️ Transcription incomplete for \(filename) — missing pages \(missing). Persisting partial IR for resume; skipping extraction.",
+                    category: .ai
+                )
+                result.passFailures.append(
+                    "document analysis — \(filename): transcription incomplete (missing pages \(missing)); re-run to resume the missing chunks"
+                )
+                return result
+            }
+
+            // Stage 2: run the extraction pass set ONCE over the rendered transcription.
+            // Page anchors survive (isPaged: true) so evidence still resolves to pages.
+            var result = await runPasses(
+                documentId: documentId,
+                filename: filename,
+                source: .transcript(text: ir.renderedForExtraction(), isPaged: true),
+                passes: passes,
+                modelId: modelId,
+                sourceKind: ir.sourceKind,
+                statusCallback: statusCallback
+            )
+            result.intermediateRepresentation = ir
+            return result
+        }
     }
 
     /// Analyze a text-based source (txt/docx/rtf/html native extraction, or stored
@@ -364,18 +384,22 @@ actor AnthropicDocumentAnalysisService {
         filename: String,
         text: String,
         passes: PassSelection = .all,
+        sourceKind: ExtractionSourceKind = .document,
         statusCallback: (@Sendable (String) -> Void)? = nil
     ) async throws -> AnalysisResult {
         let modelId = try Self.configuredModelId()
         let source = DocumentAnalysisSource.text(Self.sourceTextBlock(filename: filename, text: text))
-        return await runPasses(
-            documentId: documentId,
-            filename: filename,
-            source: source,
-            passes: passes,
-            modelId: modelId,
-            statusCallback: statusCallback
-        )
+        return await OnboardingUsageReporting.$source.withValue(.documentExtraction) {
+            await runPasses(
+                documentId: documentId,
+                filename: filename,
+                source: source,
+                passes: passes,
+                modelId: modelId,
+                sourceKind: sourceKind,
+                statusCallback: statusCallback
+            )
+        }
     }
 
     /// Re-run the extraction pass set against a STORED intermediate representation
@@ -391,14 +415,17 @@ actor AnthropicDocumentAnalysisService {
         statusCallback: (@Sendable (String) -> Void)? = nil
     ) async throws -> AnalysisResult {
         let modelId = try Self.configuredModelId()
-        var result = await runPasses(
-            documentId: documentId,
-            filename: filename,
-            source: .transcript(text: ir.renderedForExtraction(), isPaged: ir.isPaged),
-            passes: passes,
-            modelId: modelId,
-            statusCallback: statusCallback
-        )
+        var result = await OnboardingUsageReporting.$source.withValue(.documentExtraction) {
+            await runPasses(
+                documentId: documentId,
+                filename: filename,
+                source: .transcript(text: ir.renderedForExtraction(), isPaged: ir.isPaged),
+                passes: passes,
+                modelId: modelId,
+                sourceKind: ir.sourceKind,
+                statusCallback: statusCallback
+            )
+        }
         result.intermediateRepresentation = ir
         return result
     }
@@ -415,6 +442,7 @@ actor AnthropicDocumentAnalysisService {
         documentId: String,
         filename: String,
         pdfData: Data,
+        resumeFrom: DocumentTranscription? = nil,
         statusCallback: (@Sendable (String) -> Void)? = nil
     ) async throws -> DocumentTranscription {
         let modelId = try Self.configuredModelId(operationName: "PDF Transcription")
@@ -428,87 +456,88 @@ actor AnthropicDocumentAnalysisService {
         let totalPages = chunks.map { $0.pageRange.upperBound }.max() ?? 0
         let maxTokens = 32_768
 
-        // Seed already-completed chunks from a prior (failed) run of THIS document
-        // so a later-chunk failure does not force re-transcribing the whole PDF.
-        // Identity is the absolute page range; a fresh re-upload has a new
-        // documentId and therefore starts clean.
-        var payloads: [(pageRange: ClosedRange<Int>, payload: TranscriptionPayload)] = []
-        var savedRanges: Set<ClosedRange<Int>> = []
+        // Seed already-transcribed chunks so resume re-does ONLY what's missing.
+        // Two sources, keyed by absolute page range:
+        //   • a prior IR for the SAME content (cross-session reuse) — its log's
+        //     `.completed` chunks carry their payloads;
+        //   • this run's checkpoint store (within-attempt crash recovery).
+        // Checkpoint wins on overlap (same content, freshest).
+        var completedByRange: [ClosedRange<Int>: TranscriptionPayload] = [:]
+        for chunk in resumeFrom?.transcriptionLog ?? [] where chunk.status == .completed {
+            if let payload = chunk.payload { completedByRange[chunk.pageRange] = payload }
+        }
         if let checkpointStore {
-            let saved = await checkpointStore.savedChunks(documentId: documentId)
-            payloads = saved
-            savedRanges = Set(saved.map(\.pageRange))
+            for saved in await checkpointStore.savedChunks(documentId: documentId) {
+                completedByRange[saved.pageRange] = saved.payload
+            }
         }
 
-        for chunk in chunks {
-            let chunkLabel = chunks.count > 1
-                ? "\(filename) (pages \(chunk.pageRange.lowerBound)–\(chunk.pageRange.upperBound))"
-                : filename
-
-            // Resume: skip any chunk whose absolute page range we already have.
-            if savedRanges.contains(chunk.pageRange) {
-                statusCallback?(
-                    "Resuming \(filename), skipping pages \(chunk.pageRange.lowerBound)–\(chunk.pageRange.upperBound)..."
-                )
-                Logger.info("⏭️ Resuming \(chunkLabel) from checkpoint — skipping re-transcription", category: .ai)
-                continue
-            }
-
-            statusCallback?("Uploading \(chunkLabel) for transcription...")
-            let file = try await llmFacade.anthropicUploadFile(
-                data: chunk.data,
-                filename: chunkFilename(filename, chunk: chunk, totalChunks: chunks.count),
-                mimeType: "application/pdf"
+        for chunk in chunks where completedByRange[chunk.pageRange] != nil {
+            statusCallback?(
+                "Reusing \(filename) pages \(chunk.pageRange.lowerBound)–\(chunk.pageRange.upperBound)..."
             )
-            Logger.info("📄 Uploaded \(chunkLabel) to Anthropic Files API for transcription: \(file.id)", category: .ai)
-
-            statusCallback?("Transcribing \(chunkLabel)...")
-            let payload: TranscriptionPayload
-            do {
-                payload = try await llmFacade.executeStructuredWithAnthropicBlocks(
-                    systemContent: DocumentAnalysisPrompts.systemBlocks,
-                    userBlocks: DocumentAnalysisPrompts.userBlocks(
-                        source: .pdfFile(id: file.id),
-                        instructions: DocumentTranscriptionPrompts.transcriptionInstructions(
-                            filename: filename,
-                            pageRange: chunk.pageRange,
-                            totalPages: totalPages
-                        )
-                    ),
-                    modelId: modelId,
-                    responseType: TranscriptionPayload.self,
-                    schema: DocumentTranscriptionPrompts.transcriptionJsonSchema,
-                    maxTokens: maxTokens
-                )
-            } catch {
-                deleteFileBestEffort(file.id)
-                throw error
-            }
-
-            deleteFileBestEffort(file.id)
-
-            // No silent caps: a transcription crowding the output ceiling was
-            // likely cut mid-document. Warn rather than pretend it is complete.
-            warnIfTruncated(payload: payload, chunkLabel: chunkLabel, maxTokens: maxTokens)
-
             Logger.info(
-                "📝 Transcribed \(chunkLabel): \(payload.fullText.count) chars, \(payload.visualElements.count) visuals, \(payload.tables.count) tables",
+                "⏭️ Reusing transcribed \(chunkLabel(filename: filename, chunk: chunk, totalChunks: chunks.count)) — skipping re-transcription",
                 category: .ai
             )
-            payloads.append((chunk.pageRange, payload))
-            // Checkpoint immediately so a throw on a LATER chunk keeps this one.
-            await checkpointStore?.saveChunk(documentId: documentId, pageRange: chunk.pageRange, payload: payload)
+        }
+        let pending = chunks.filter { completedByRange[$0.pageRange] == nil }
+
+        // Fan out the missing chunks, capped so a large document (or several in
+        // flight) doesn't storm the rate limiter. A per-chunk content/transient
+        // failure is RECORDED (the chunk stays `.failed` for a later resume)
+        // rather than aborting the whole document; a `ModelConfigurationError` is
+        // fatal and propagates so the UI surfaces the model picker. Each task
+        // checkpoints its own success for within-attempt recovery.
+        let limit = max(1, maxConcurrentChunkTranscriptions)
+        let totalChunks = chunks.count
+        var failureReasons: [ClosedRange<Int>: String] = [:]
+        try await withThrowingTaskGroup(
+            of: (pageRange: ClosedRange<Int>, payload: TranscriptionPayload?, failureReason: String?).self
+        ) { group in
+            var remaining = pending.makeIterator()
+            func schedule(_ chunk: PDFChunk) {
+                group.addTask {
+                    do {
+                        let transcribed = try await self.transcribeChunk(
+                            chunk, documentId: documentId, filename: filename,
+                            totalChunks: totalChunks, totalPages: totalPages,
+                            modelId: modelId, maxTokens: maxTokens, statusCallback: statusCallback
+                        )
+                        return (chunk.pageRange, transcribed.payload, nil)
+                    } catch let error as ModelConfigurationError {
+                        throw error
+                    } catch {
+                        Logger.warning(
+                            "⚠️ Transcription failed for \(self.chunkLabel(filename: filename, chunk: chunk, totalChunks: totalChunks)): \(error.localizedDescription) — marking chunk for resume",
+                            category: .ai
+                        )
+                        return (chunk.pageRange, nil, error.localizedDescription)
+                    }
+                }
+            }
+            var scheduled = 0
+            while scheduled < limit, let chunk = remaining.next() { schedule(chunk); scheduled += 1 }
+            while let outcome = try await group.next() {
+                if let payload = outcome.payload {
+                    completedByRange[outcome.pageRange] = payload
+                } else {
+                    failureReasons[outcome.pageRange] = outcome.failureReason
+                }
+                if let chunk = remaining.next() { schedule(chunk) }
+            }
         }
 
-        // Order is load-bearing for the merge (absolute page sequence) and for the
-        // gap check below; seeded checkpoints + freshly-transcribed chunks can
-        // interleave out of order.
-        payloads.sort { $0.pageRange.lowerBound < $1.pageRange.lowerBound }
-
-        // Gap check: the union of chunk ranges must cover 1...totalPages with no
-        // missing pages. A gap means a chunk silently dropped — refuse to persist a
-        // partial IR that would masquerade as the whole document.
-        try assertContiguousCoverage(payloads.map(\.pageRange), totalPages: totalPages, filename: filename)
+        // Authoritative per-chunk log over the full plan, in absolute page order.
+        let log: [TranscribedChunk] = chunks.map { chunk in
+            if let payload = completedByRange[chunk.pageRange] {
+                return TranscribedChunk(pageRange: chunk.pageRange, status: .completed, payload: payload)
+            }
+            return TranscribedChunk(
+                pageRange: chunk.pageRange, status: .failed,
+                payload: nil, failureReason: failureReasons[chunk.pageRange]
+            )
+        }
 
         let provenance = IRProvenance(
             sourceArtifactId: documentId,
@@ -518,44 +547,104 @@ actor AnthropicDocumentAnalysisService {
             createdAt: Date()
         )
 
-        let merged = mergeTranscriptions(payloads, totalPages: totalPages, provenance: provenance)
+        // Merge only completed chunks (page-ordered) into the extraction view; the
+        // log records every chunk's status (incl. the failed ones excluded here).
+        let completedParts = chunks.compactMap { chunk -> (pageRange: ClosedRange<Int>, payload: TranscriptionPayload)? in
+            completedByRange[chunk.pageRange].map { (chunk.pageRange, $0) }
+        }
+        var merged = mergeTranscriptions(completedParts, totalPages: totalPages, provenance: provenance)
+        merged.transcriptionLog = log
 
-        // Whole document transcribed successfully — the checkpoints have served
-        // their purpose and the IR is persisted by the caller.
-        await checkpointStore?.clear(documentId: documentId)
+        // The IR now carries every completed payload, so the within-attempt
+        // scratchpad is only useful while chunks are still missing. Clear it once
+        // the document is whole.
+        if log.allSatisfy({ $0.status == .completed }) {
+            await checkpointStore?.clear(documentId: documentId)
+        }
 
         return merged
     }
 
-    /// Verify the sorted chunk page ranges cover `1...totalPages` contiguously with
-    /// no gap. Throws `TranscriptionResumeError.incompleteCoverage` otherwise so the
-    /// caller never persists a partial transcription as if it were whole.
-    private func assertContiguousCoverage(
-        _ ranges: [ClosedRange<Int>],
+    /// Max chunks of a single document transcribed concurrently. Fan-out replaces one
+    /// slow, truncation-prone transcription call with many small parallel ones; this
+    /// caps peak request concurrency (multiplied by the document-level extraction cap)
+    /// so large uploads don't storm the rate limiter — 429s back off and retry anyway.
+    /// Override via the `onboardingMaxConcurrentChunkTranscriptions` default; else 4.
+    private var maxConcurrentChunkTranscriptions: Int {
+        let configured = UserDefaults.standard.integer(forKey: "onboardingMaxConcurrentChunkTranscriptions")
+        return configured > 0 ? configured : 4
+    }
+
+    /// Human-readable label for a chunk: the bare filename for single-chunk documents,
+    /// filename + absolute page range otherwise. `nonisolated` (pure formatting, no
+    /// actor state) so the concurrent transcription tasks can label without hopping.
+    private nonisolated func chunkLabel(filename: String, chunk: PDFChunk, totalChunks: Int) -> String {
+        totalChunks > 1
+            ? "\(filename) (pages \(chunk.pageRange.lowerBound)–\(chunk.pageRange.upperBound))"
+            : filename
+    }
+
+    /// Transcribe a single PDF chunk: upload it, run the multimodal transcription pass,
+    /// delete the uploaded file, checkpoint the result, and return it. Safe to run
+    /// concurrently — it touches no shared `transcribePDF` state, and the checkpoint
+    /// store serializes its own writes on the main actor.
+    private func transcribeChunk(
+        _ chunk: PDFChunk,
+        documentId: String,
+        filename: String,
+        totalChunks: Int,
         totalPages: Int,
-        filename: String
-    ) throws {
-        guard totalPages > 0 else { return }
-        guard let first = ranges.first, first.lowerBound == 1 else {
-            throw TranscriptionResumeError.incompleteCoverage(filename: filename, missing: "page 1 onward")
-        }
-        var nextExpected = 1
-        for range in ranges {
-            if range.lowerBound > nextExpected {
-                throw TranscriptionResumeError.incompleteCoverage(
-                    filename: filename,
-                    missing: "pages \(nextExpected)–\(range.lowerBound - 1)"
-                )
-            }
-            // Overlap is harmless for coverage; advance past the furthest page seen.
-            nextExpected = max(nextExpected, range.upperBound + 1)
-        }
-        if nextExpected <= totalPages {
-            throw TranscriptionResumeError.incompleteCoverage(
-                filename: filename,
-                missing: "pages \(nextExpected)–\(totalPages)"
+        modelId: String,
+        maxTokens: Int,
+        statusCallback: (@Sendable (String) -> Void)?
+    ) async throws -> (pageRange: ClosedRange<Int>, payload: TranscriptionPayload) {
+        let label = chunkLabel(filename: filename, chunk: chunk, totalChunks: totalChunks)
+
+        statusCallback?("Uploading \(label) for transcription...")
+        let file = try await llmFacade.anthropicUploadFile(
+            data: chunk.data,
+            filename: chunkFilename(filename, chunk: chunk, totalChunks: totalChunks),
+            mimeType: "application/pdf"
+        )
+        Logger.info("📄 Uploaded \(label) to Anthropic Files API for transcription: \(file.id)", category: .ai)
+
+        statusCallback?("Transcribing \(label)...")
+        let payload: TranscriptionPayload
+        do {
+            payload = try await llmFacade.executeStructuredWithAnthropicBlocks(
+                systemContent: DocumentAnalysisPrompts.systemBlocks,
+                userBlocks: DocumentAnalysisPrompts.userBlocks(
+                    source: .pdfFile(id: file.id),
+                    instructions: DocumentTranscriptionPrompts.transcriptionInstructions(
+                        filename: filename,
+                        pageRange: chunk.pageRange,
+                        totalPages: totalPages
+                    )
+                ),
+                modelId: modelId,
+                responseType: TranscriptionPayload.self,
+                schema: DocumentTranscriptionPrompts.transcriptionJsonSchema,
+                maxTokens: maxTokens
             )
+        } catch {
+            deleteFileBestEffort(file.id)
+            throw error
         }
+
+        deleteFileBestEffort(file.id)
+
+        // No silent caps: a transcription crowding the output ceiling was likely cut
+        // mid-document. Warn rather than pretend it is complete.
+        warnIfTruncated(payload: payload, chunkLabel: label, maxTokens: maxTokens)
+
+        Logger.info(
+            "📝 Transcribed \(label): \(payload.fullText.count) chars, \(payload.visualElements.count) visuals, \(payload.tables.count) tables",
+            category: .ai
+        )
+
+        // Checkpoint immediately so a sibling chunk's failure keeps this one.
+        await checkpointStore?.saveChunk(documentId: documentId, pageRange: chunk.pageRange, payload: payload)
+        return (chunk.pageRange, payload)
     }
 
     /// Wrap raw document text in a stable header so the cached source block is
@@ -577,6 +666,7 @@ actor AnthropicDocumentAnalysisService {
         source: DocumentAnalysisSource,
         passes: PassSelection,
         modelId: String,
+        sourceKind: ExtractionSourceKind,
         statusCallback: (@Sendable (String) -> Void)?
     ) async -> AnalysisResult {
         var result = AnalysisResult()
@@ -590,7 +680,9 @@ actor AnthropicDocumentAnalysisService {
         if passes.summary {
             statusCallback?("Summarizing \(filename)...")
             do {
-                result.summary = try await generateSummary(filename: filename, source: source, modelId: modelId)
+                result.summary = try await OnboardingUsageReporting.$source.withValue(.documentSummarization) {
+                    try await generateSummary(filename: filename, source: source, modelId: modelId)
+                }
                 Logger.info("✅ Summary generated for \(filename) (\(result.summary?.summary.count ?? 0) chars)", category: .ai)
             } catch {
                 Logger.warning("⚠️ Summary pass failed for \(filename): \(error.localizedDescription)", category: .ai)
@@ -609,16 +701,16 @@ actor AnthropicDocumentAnalysisService {
             let skillsOutcome: Result<[Skill], Error>?
             let cardsOutcome: Result<[KnowledgeCard], Error>?
             if passes.skills && passes.narrativeCards && !passes.summary {
-                skillsOutcome = await extractSkills(documentId: documentId, filename: filename, source: source)
+                skillsOutcome = await extractSkills(documentId: documentId, filename: filename, source: source, sourceKind: sourceKind)
                 cardsOutcome = await extractCards(
-                    documentId: documentId, filename: filename, source: source, voiceAnchor: voiceAnchor
+                    documentId: documentId, filename: filename, source: source, voiceAnchor: voiceAnchor, sourceKind: sourceKind
                 )
             } else {
                 async let skillsTask: Result<[Skill], Error>? = passes.skills
-                    ? extractSkills(documentId: documentId, filename: filename, source: source)
+                    ? extractSkills(documentId: documentId, filename: filename, source: source, sourceKind: sourceKind)
                     : nil
                 async let cardsTask: Result<[KnowledgeCard], Error>? = passes.narrativeCards
-                    ? extractCards(documentId: documentId, filename: filename, source: source, voiceAnchor: voiceAnchor)
+                    ? extractCards(documentId: documentId, filename: filename, source: source, voiceAnchor: voiceAnchor, sourceKind: sourceKind)
                     : nil
 
                 (skillsOutcome, cardsOutcome) = await (skillsTask, cardsTask)
@@ -658,7 +750,9 @@ actor AnthropicDocumentAnalysisService {
         // the same cached document plus the verified card it is enriching.
         if passes.enrichment, let cards = result.narrativeCards, !cards.isEmpty {
             statusCallback?("Enriching \(cards.count) cards from \(filename)...")
-            await enrichCards(cards, source: source, voiceAnchor: voiceAnchor)
+            await OnboardingUsageReporting.$source.withValue(.cardGeneration) {
+                await enrichCards(cards, source: source, voiceAnchor: voiceAnchor)
+            }
         }
 
         return result
@@ -685,13 +779,15 @@ actor AnthropicDocumentAnalysisService {
     private func extractSkills(
         documentId: String,
         filename: String,
-        source: DocumentAnalysisSource
+        source: DocumentAnalysisSource,
+        sourceKind: ExtractionSourceKind
     ) async -> Result<[Skill], Error> {
         do {
             return .success(try await skillBankService.extractSkills(
                 documentId: documentId,
                 filename: filename,
-                source: source
+                source: source,
+                sourceKind: sourceKind
             ))
         } catch {
             Logger.warning("🔧 Skill pass failed for \(filename): \(error.localizedDescription)", category: .ai)
@@ -703,14 +799,16 @@ actor AnthropicDocumentAnalysisService {
         documentId: String,
         filename: String,
         source: DocumentAnalysisSource,
-        voiceAnchor: String?
+        voiceAnchor: String?,
+        sourceKind: ExtractionSourceKind
     ) async -> Result<[KnowledgeCard], Error> {
         do {
             return .success(try await kcExtractionService.extractCards(
                 documentId: documentId,
                 filename: filename,
                 source: source,
-                voiceAnchor: voiceAnchor
+                voiceAnchor: voiceAnchor,
+                sourceKind: sourceKind
             ))
         } catch {
             Logger.warning("📖 Narrative-card pass failed for \(filename): \(error.localizedDescription)", category: .ai)

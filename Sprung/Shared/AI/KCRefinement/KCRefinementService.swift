@@ -4,6 +4,17 @@ import SwiftOpenAI
 /// Refines a single knowledge card using structured output from an LLM.
 @MainActor
 final class KCRefinementService {
+    enum KCRefinementError: LocalizedError {
+        case incompleteResponse
+
+        var errorDescription: String? {
+            switch self {
+            case .incompleteResponse:
+                return "The refinement response was incomplete (missing title or narrative). Your card was left unchanged — please try again."
+            }
+        }
+    }
+
     private let llmFacade: LLMFacade
     private let reasoningStreamManager: ReasoningStreamState
     private var activeStreamingHandle: LLMStreamingHandle?
@@ -58,6 +69,96 @@ final class KCRefinementService {
         )
     }
 
+    /// Re-refine a single field using the user's feedback, returning just that
+    /// field's new value. Backs the review screen's per-field Retry.
+    func refineField(
+        card: KnowledgeCard,
+        field: KCField,
+        feedback: String,
+        modelId: String
+    ) async throws -> KCFieldValue {
+        let cardJSON = try encodeCard(card)
+
+        let systemPrompt = """
+        You are refining a SINGLE field of a knowledge card based on the user's feedback.
+
+        A knowledge card is a structured narrative about a professional experience, project, \
+        achievement, or education credential.
+
+        ## Guidelines
+
+        - Refine ONLY the "\(field.jsonKey)" field (\(field.label)). Do not return any other field.
+        - Apply the user's feedback precisely.
+        - Preserve factual accuracy — do not fabricate experiences or credentials.
+        - Maintain the card's narrative voice and style.
+        - Return a JSON object containing only the "\(field.jsonKey)" field.
+        """
+
+        let userMessage = """
+        ## Current Card
+
+        ```json
+        \(cardJSON)
+        ```
+
+        ## Field to Refine
+
+        \(field.label) (`\(field.jsonKey)`)
+
+        ## Feedback
+
+        \(feedback)
+        """
+
+        let jsonSchema = try JSONSchema.from(dictionary: KCRefinementSchema.singleFieldSchema(key: field.jsonKey))
+        let userEffort = UserDefaults.standard.string(forKey: "reasoningEffort") ?? "medium"
+        let reasoning = OpenRouterReasoning(effort: userEffort, includeReasoning: true)
+        let maxOutputTokens = llmFacade.maxOutputTokens(forModel: modelId) ?? 128_000
+
+        cancelActiveStreaming()
+
+        let handle = try await llmFacade.startConversationStreaming(
+            systemPrompt: systemPrompt,
+            userMessage: userMessage,
+            modelId: modelId,
+            reasoning: reasoning,
+            jsonSchema: jsonSchema,
+            maxTokens: maxOutputTokens
+        )
+        activeStreamingHandle = handle
+
+        var fullResponse = ""
+        for try await chunk in handle.stream {
+            if let content = chunk.content {
+                fullResponse += content
+            }
+        }
+        cancelActiveStreaming()
+
+        let jsonText = JSONResponseParser.extractJSON(from: fullResponse)
+        guard let data = jsonText.data(using: .utf8),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              object[field.jsonKey] != nil else {
+            Logger.error(
+                "KC Refine field '\(field.jsonKey)' produced no value (\(fullResponse.count) chars): \(fullResponse.prefix(2000))",
+                category: .ai
+            )
+            throw KCRefinementError.incompleteResponse
+        }
+
+        let value = field.value(fromJSON: object[field.jsonKey])
+
+        // Never let an empty title/narrative retry wipe the field on accept.
+        if field == .title || field == .narrative,
+           case .text(let text) = value,
+           text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            Logger.error("KC Refine field '\(field.jsonKey)' returned empty text — rejecting", category: .ai)
+            throw KCRefinementError.incompleteResponse
+        }
+
+        return value
+    }
+
     /// Cancel any active streaming operation.
     func cancelActiveStreaming() {
         activeStreamingHandle?.cancel()
@@ -75,6 +176,13 @@ final class KCRefinementService {
         let userEffort = UserDefaults.standard.string(forKey: "reasoningEffort") ?? "medium"
         let reasoning = OpenRouterReasoning(effort: userEffort, includeReasoning: true)
 
+        // Give the response the model's full output budget. With extended thinking
+        // enabled, max_tokens bounds thinking + output together, so a small provider
+        // default clips the (500-2000 word) narrative mid-JSON. A truncated card then
+        // parses into empty/partial fields and wipes the user's content on apply.
+        let maxOutputTokens = llmFacade.maxOutputTokens(forModel: modelId) ?? 128_000
+        Logger.info("KC Refine max output tokens: \(maxOutputTokens)", category: .ai)
+
         cancelActiveStreaming()
 
         let handle = try await llmFacade.startConversationStreaming(
@@ -82,12 +190,27 @@ final class KCRefinementService {
             userMessage: userMessage,
             modelId: modelId,
             reasoning: reasoning,
-            jsonSchema: jsonSchema
+            jsonSchema: jsonSchema,
+            maxTokens: maxOutputTokens
         )
         activeStreamingHandle = handle
 
         let responseText = try await processStreamWithReasoning(handle: handle, modelName: modelId)
-        return try JSONResponseParser.parseText(responseText, as: RefinedKnowledgeCard.self)
+        let refined = try JSONResponseParser.parseText(responseText, as: RefinedKnowledgeCard.self)
+
+        // Defensively reject a refinement that dropped the card's core content. A
+        // truncated or malformed response can still decode with empty title/narrative;
+        // applying it would destroy the user's card, so fail loud and leave it intact.
+        guard !refined.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              !refined.narrative.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            Logger.error(
+                "KC Refine produced empty title/narrative (\(responseText.count) chars) — rejecting to preserve card: \(responseText.prefix(2000))",
+                category: .ai
+            )
+            throw KCRefinementError.incompleteResponse
+        }
+
+        return refined
     }
 
     // MARK: - Stream Processing
@@ -100,8 +223,6 @@ final class KCRefinementService {
         reasoningStreamManager.startReasoning(modelName: modelName)
 
         var fullResponse = ""
-        var collectingJSON = false
-        var jsonResponse = ""
         var chunkCount = 0
         var reasoningChunks = 0
         var contentChunks = 0
@@ -117,10 +238,6 @@ final class KCRefinementService {
             if let content = chunk.content {
                 contentChunks += 1
                 fullResponse += content
-                if content.contains("{") || collectingJSON {
-                    collectingJSON = true
-                    jsonResponse += content
-                }
             }
 
             if chunk.isFinished {
@@ -131,50 +248,9 @@ final class KCRefinementService {
         }
 
         cancelActiveStreaming()
-        return jsonResponse.isEmpty ? fullResponse : jsonResponse
-    }
-
-    /// Apply a refined card's fields onto an existing KnowledgeCard.
-    func apply(_ refined: RefinedKnowledgeCard, to card: KnowledgeCard) {
-        card.title = refined.title
-        card.narrative = refined.narrative
-        if let cardTypeStr = refined.cardType {
-            card.cardType = CardType(rawValue: cardTypeStr)
-        }
-        card.dateRange = refined.dateRange
-        card.organization = refined.organization
-        card.location = refined.location
-        card.extractable = ExtractableMetadata(
-            domains: refined.domains,
-            scale: refined.scale,
-            keywords: refined.keywords
-        )
-        card.technologies = refined.technologies
-        card.outcomes = refined.outcomes
-        card.suggestedBullets = refined.suggestedBullets
-        card.evidenceQuality = refined.evidenceQuality
-
-        if let refinedFacts = refined.facts {
-            card.facts = refinedFacts.map { fact in
-                KnowledgeCardFact(
-                    category: fact.category,
-                    statement: fact.statement,
-                    confidence: fact.confidence,
-                    source: nil
-                )
-            }
-        }
-
-        if let refinedExcerpts = refined.verbatimExcerpts {
-            card.verbatimExcerpts = refinedExcerpts.map { excerpt in
-                VerbatimExcerpt(
-                    context: excerpt.context,
-                    location: excerpt.location,
-                    text: excerpt.text,
-                    preservationReason: excerpt.preservationReason
-                )
-            }
-        }
+        // Feed the parser the full response; it handles fenced/embedded JSON, so a
+        // chunk-boundary-dependent slice only risks dropping the leading brace.
+        return fullResponse
     }
 
     // MARK: - Private

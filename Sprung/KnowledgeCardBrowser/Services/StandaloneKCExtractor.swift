@@ -319,7 +319,8 @@ class StandaloneKCExtractor {
         let analysis = try await analysisService.analyzeText(
             documentId: artifactId,
             filename: repoName,
-            text: digest.renderedForExtraction()
+            text: digest.renderedForExtraction(),
+            sourceKind: .codeRepository
         )
         let skills = analysis.skills ?? []
         let narrativeCards = analysis.narrativeCards ?? []

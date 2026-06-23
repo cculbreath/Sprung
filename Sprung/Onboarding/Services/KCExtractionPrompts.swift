@@ -20,7 +20,8 @@ enum KCExtractionPrompts {
     static func extractionPrompt(
         documentId: String,
         filename: String,
-        isPagedSource: Bool
+        isPagedSource: Bool,
+        sourceKind: ExtractionSourceKind = .document
     ) -> String {
         let locationGuidance = isPagedSource
             ? """
@@ -28,7 +29,7 @@ enum KCExtractionPrompts {
             - Every verbatim excerpt must cite the page it appears on
             """
             : "- Page numbers or section references"
-        return PromptLibrary.substitute(
+        let base = PromptLibrary.substitute(
             template: PromptLibrary.kcExtractionTemplate,
             replacements: [
                 "DOC_ID": documentId,
@@ -36,7 +37,39 @@ enum KCExtractionPrompts {
                 "LOCATION_GUIDANCE": locationGuidance
             ]
         )
+        guard sourceKind == .codeRepository else { return base }
+        return base + "\n\n" + codeRepositoryScope
     }
+
+    /// Appended to the card-extraction instructions when the source is a code
+    /// repository digest. Cards must describe what the applicant BUILT and the
+    /// engineering it demonstrates — never biographical claims lifted from the
+    /// repository's domain content. (Instructions are the uncached trailing
+    /// block, so this never perturbs the prompt-cache prefix.)
+    private static let codeRepositoryScope = """
+    ## Code Repository Scope (overrides the generic framing above)
+
+    This source is a digest of SOURCE CODE the applicant authored — not their personal
+    document. Extract cards for what the applicant BUILT and the engineering it
+    demonstrates:
+
+    - Prefer `project` cards describing the software, its architecture, the hard
+      problems solved, and the applicant's authorship — grounded in the code,
+      architecture, dependency usage, technical highlights, and skill signals.
+    - The repository serves a domain (a business, a field, a client, or the applicant's
+      own portfolio). Its README/docs/marketing copy/page text/sample data describe WHAT
+      THE SOFTWARE SERVES — that is context, NOT the applicant's experience. Never create
+      employment/achievement cards from it, and never restate its claims, audiences,
+      credentials, or operational metrics (users served, patients treated, revenue,
+      enrollment) as the applicant's own.
+    - Building software for a domain demonstrates engineering skill, not domain
+      experience: a clinic's website is web engineering, not surgery; a portfolio site's
+      copy is context describing the work, not accomplishments to assert as fact.
+    - `scale` metadata must reflect the CODEBASE (LOC, modules, dependencies, sustained
+      authorship), not domain figures from the content.
+    - If a number or claim is only asserted in prose and not demonstrated by the code,
+      leave it out.
+    """
 
     /// JSON Schema for narrative KC extraction - enforced via Anthropic structured output (output_config)
     static let jsonSchema: [String: Any] = [

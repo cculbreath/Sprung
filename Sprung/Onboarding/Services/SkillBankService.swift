@@ -45,7 +45,8 @@ actor SkillBankService {
     func extractSkills(
         documentId: String,
         filename: String,
-        source: DocumentAnalysisSource
+        source: DocumentAnalysisSource,
+        sourceKind: ExtractionSourceKind = .document
     ) async throws -> [Skill] {
         guard let facade = llmFacade else {
             throw SkillBankError.llmNotConfigured
@@ -55,7 +56,8 @@ actor SkillBankService {
         let instructions = SkillBankPrompts.extractionPrompt(
             documentId: documentId,
             filename: filename,
-            isPagedSource: source.isPaged
+            isPagedSource: source.isPaged,
+            sourceKind: sourceKind
         )
 
         let maxAttempts = 3
@@ -78,9 +80,12 @@ actor SkillBankService {
                 throw error
             } catch {
                 Logger.warning("🔧 Error on attempt \(attempt): \(error.localizedDescription)", category: .ai)
-                if attempt < maxAttempts { continue }
-                // Rethrow the underlying error so callers can surface the real
-                // failure (e.g. an API 400) instead of a generic message.
+                // Retry ONLY transient network conditions. A malformed/schema/decode
+                // failure or a content error (e.g. an API 400) re-fails identically,
+                // so surface it now instead of burning two more passes on it.
+                if attempt < maxAttempts, LLMErrorHandler().isTransientNetworkError(error) {
+                    continue
+                }
                 throw error
             }
         }
@@ -183,14 +188,16 @@ actor SkillBankService {
 
         let prompt = SkillBankPrompts.curationPrompt(skillsJSON: curationInputJSON(for: skills))
 
-        let decisions: CurationDecisions = try await facade.executeStructuredWithAnthropicBlocks(
-            systemContent: [AnthropicSystemBlock(text: SkillBankPrompts.curationSystemPrompt)],
-            userBlocks: [.text(AnthropicTextBlock(text: prompt))],
-            modelId: modelId,
-            responseType: CurationDecisions.self,
-            schema: SkillBankPrompts.curationSchema,
-            maxTokens: 16384
-        )
+        let decisions: CurationDecisions = try await OnboardingUsageReporting.$source.withValue(.documentExtraction) {
+            try await facade.executeStructuredWithAnthropicBlocks(
+                systemContent: [AnthropicSystemBlock(text: SkillBankPrompts.curationSystemPrompt)],
+                userBlocks: [.text(AnthropicTextBlock(text: prompt))],
+                modelId: modelId,
+                responseType: CurationDecisions.self,
+                schema: SkillBankPrompts.curationSchema,
+                maxTokens: 16384
+            )
+        }
 
         return apply(decisions: decisions, to: skills)
     }

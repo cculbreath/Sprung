@@ -317,7 +317,8 @@ actor GitIngestionKernel {
         return try await analysisService.analyzeText(
             documentId: documentId,
             filename: repoName,
-            text: digest.renderedForExtraction()
+            text: digest.renderedForExtraction(),
+            sourceKind: .codeRepository
         )
     }
 

@@ -20,12 +20,13 @@ enum SkillBankPrompts {
     static func extractionPrompt(
         documentId: String,
         filename: String,
-        isPagedSource: Bool
+        isPagedSource: Bool,
+        sourceKind: ExtractionSourceKind = .document
     ) -> String {
         let locationGuidance = isPagedSource
             ? "Page-anchored reference — every location MUST cite its page (\"p. 14\", \"p. 3, Fig. 2\"), and quoted evidence cites the page it appears on"
             : "Where in document (page, section, or general area)"
-        return PromptLibrary.substitute(
+        let base = PromptLibrary.substitute(
             template: PromptLibrary.skillBankExtractionTemplate,
             replacements: [
                 "DOC_ID": documentId,
@@ -33,7 +34,28 @@ enum SkillBankPrompts {
                 "LOCATION_GUIDANCE": locationGuidance
             ]
         )
+        guard sourceKind == .codeRepository else { return base }
+        return base + "\n\n" + codeRepositoryScope
     }
+
+    /// Appended to skill-extraction instructions when the source is a code
+    /// repository digest. Skills must be the TECHNICAL skills the code
+    /// demonstrates, never the domain the software serves. (Trailing uncached
+    /// block — does not perturb the prompt-cache prefix.)
+    private static let codeRepositoryScope = """
+    ## Code Repository Scope
+
+    This source is a digest of SOURCE CODE the applicant authored. Extract only the
+    TECHNICAL skills the code itself demonstrates — languages, frameworks, libraries,
+    tooling, architecture and engineering practices — anchored in real code, manifests,
+    dependency usage, and authorship.
+
+    The software serves a domain (a business, a field, a client, or the applicant's own
+    portfolio). Do NOT extract that domain as a skill: a medical-clinic site is not
+    evidence of medical skill; an e-commerce build is not retail expertise. Subject-matter
+    terms that appear only in page copy, docs, or sample data are NOT the applicant's
+    skills unless the code shows genuine engineering for them.
+    """
 
     /// JSON Schema for skill extraction - enforced via Anthropic structured output (output_config).
     /// Category is a free-form string. Universal anchors and LLM-proposed categories
