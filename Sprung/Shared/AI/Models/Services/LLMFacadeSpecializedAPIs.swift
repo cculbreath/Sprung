@@ -9,11 +9,29 @@
 import Foundation
 import SwiftOpenAI
 
+/// Provider-agnostic per-request token usage surfaced by the Anthropic
+/// structured/text execution chokepoint (`runAnthropicRequest`). The facade
+/// reports it to an optional observer so a host (e.g. onboarding) can aggregate
+/// cost WITHOUT the facade depending on any host-specific usage taxonomy.
+struct LLMRequestUsage: Sendable {
+    let modelId: String
+    let inputTokens: Int
+    let outputTokens: Int
+    let cacheReadTokens: Int
+    let cacheCreationTokens: Int
+}
+
 /// Handles specialized API operations (Anthropic streams/files, OpenAI Responses, TTS)
 @MainActor
 final class LLMFacadeSpecializedAPIs {
     private var openAIService: OpenAIService?
     private var anthropicService: AnthropicService?
+
+    /// Optional sink for per-request token usage from the Anthropic structured/text
+    /// execution path (everything that funnels through `runAnthropicRequest`). Set
+    /// by the host; nil disables reporting. The streaming interview and the git
+    /// agent use different code paths that self-report, so this never double-counts.
+    var anthropicUsageObserver: (@Sendable (LLMRequestUsage) -> Void)?
 
     // MARK: - Service Registration
 
@@ -228,6 +246,13 @@ final class LLMFacadeSpecializedAPIs {
             "Anthropic usage (\(parameters.model)): input=\(inputTokens) cache_read=\(cacheRead) cache_create=\(cacheCreation) output=\(outputTokens)",
             category: .ai
         )
+        anthropicUsageObserver?(LLMRequestUsage(
+            modelId: parameters.model,
+            inputTokens: inputTokens,
+            outputTokens: outputTokens,
+            cacheReadTokens: cacheRead,
+            cacheCreationTokens: cacheCreation
+        ))
         return resultText
     }
 

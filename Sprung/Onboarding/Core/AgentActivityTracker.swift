@@ -332,7 +332,10 @@ class AgentActivityTracker {
         childAgents(for: agentId).contains { $0.status == .running }
     }
 
-    /// Mark an agent as running (transitions from pending)
+    /// Mark an agent as running — transitions from pending on first start, or flips a
+    /// failed agent back to running for an in-place resume (reusing the same panel
+    /// entry). Clears any prior error/end time and drops it from the recently-completed
+    /// set; the retry handler is preserved so a repeat failure can be resumed again.
     func markRunning(agentId: String) {
         guard let index = agents.firstIndex(where: { $0.id == agentId }) else {
             Logger.warning("⚠️ Cannot mark running: agent not found (id: \(agentId.prefix(8)))", category: .ai)
@@ -340,7 +343,12 @@ class AgentActivityTracker {
         }
 
         agents[index].status = .running
-        Logger.info("🚀 Agent started: \(agents[index].name) (id: \(agentId.prefix(8)))", category: .ai)
+        agents[index].error = nil
+        agents[index].endTime = nil
+        agents[index].statusMessage = nil
+        recentlyCompletedAgentIds.remove(agentId)
+        cancelledAgentIds.remove(agentId)
+        Logger.info("🚀 Agent running: \(agents[index].name) (id: \(agentId.prefix(8)))", category: .ai)
     }
 
     /// Associate a task with an already-tracked agent

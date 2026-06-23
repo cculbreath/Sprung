@@ -302,7 +302,10 @@ final class SessionPersistenceService {
         let sourceType = record["sourceType"].stringValue
         let filename = record["filename"].stringValue
         let extractedContent = record["extractedText"].stringValue
-        let sha256 = record["sourceHash"].string
+        // `processDocument` writes the content hash under "sha256"; reading the wrong
+        // key here disabled hash dedup entirely (the cause of duplicate rows on
+        // re-ingest), so resumes must match by it to replace rather than duplicate.
+        let sha256 = record["sha256"].string
         let contentType = record["contentType"].string
         let sizeInBytes = record["sizeBytes"].intValue
         let summary = record["summary"].string
@@ -330,10 +333,25 @@ final class SessionPersistenceService {
             return
         }
 
-        // Check if artifact already exists in this session by hash
+        // Re-ingest / resume: an artifact with this content already exists in the
+        // session. Update it in place so a more-complete re-run REPLACES the prior
+        // partial record instead of inserting a duplicate (which would double-count
+        // knowledge cards). reanalyzeFromIR already merged prior + reran passes, so
+        // the incoming record is the authoritative, most-complete version.
         if let hash = sha256,
-           artifactRecordStore.existingArtifact(in: session, filename: filename, sha256: hash) != nil {
-            Logger.debug("Artifact already exists in session, skipping: \(filename)", category: .ai)
+           let existing = artifactRecordStore.existingArtifact(in: session, filename: filename, sha256: hash) {
+            artifactRecordStore.updateArtifactContent(
+                existing,
+                extractedContent: extractedContent,
+                summary: summary,
+                briefDescription: briefDescription,
+                title: title,
+                skillsJSON: skillsJSON,
+                narrativeCardsJSON: narrativeCardsJSON,
+                intermediateRepresentationJSON: intermediateRepresentationJSON,
+                metadataJSON: metadataJSON
+            )
+            Logger.info("Artifact re-processed, updated in place: \(filename)", category: .ai)
             return
         }
 

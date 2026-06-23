@@ -155,6 +155,10 @@ class ResumeRevisionAgent {
     /// Phrases the user has explicitly banned (VoiceProfile.avoidPhrases),
     /// surfaced as a NEVER-use list in the system prompt.
     private let avoidPhrases: [String]
+    /// Strategic positioning from the candidate dossier (strengths to
+    /// emphasize, pitfalls to avoid), inlined into the system prompt. Static
+    /// for the session; empty when no dossier exists.
+    private let strategicGuidance: String
 
     init(
         resume: Resume,
@@ -164,7 +168,8 @@ class ResumeRevisionAgent {
         modelContext: ModelContext,
         titleSets: [TitleSetRecord] = [],
         writersVoice: String = "",
-        avoidPhrases: [String] = []
+        avoidPhrases: [String] = [],
+        strategicGuidance: String = ""
     ) {
         self.resume = resume
         self.llmFacade = llmFacade
@@ -175,6 +180,7 @@ class ResumeRevisionAgent {
         self.titleSets = titleSets
         self.writersVoice = writersVoice
         self.avoidPhrases = avoidPhrases
+        self.strategicGuidance = strategicGuidance
         // LD-1: both toggles are read once here and frozen for the session.
         // `object(forKey:) == nil ? true : bool(forKey:)` matches @AppStorage
         // defaulting (default true when the key has never been written).
@@ -257,6 +263,7 @@ class ResumeRevisionAgent {
                 hasTitleSets: !titleSets.isEmpty,
                 writersVoice: writersVoice,
                 avoidPhrases: avoidPhrases,
+                strategicGuidance: strategicGuidance,
                 askUserEnabled: askUserToolEnabled
             )
             let systemContent: AnthropicSystemContent = .blocks([

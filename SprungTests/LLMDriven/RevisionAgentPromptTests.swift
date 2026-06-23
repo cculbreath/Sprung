@@ -22,6 +22,7 @@ final class RevisionAgentPromptTests: XCTestCase {
         hasTitleSets: Bool = false,
         writersVoice: String = "",
         avoidPhrases: [String] = [],
+        strategicGuidance: String = "",
         askUserEnabled: Bool = false
     ) -> String {
         ResumeRevisionAgentPrompts.systemPrompt(
@@ -29,6 +30,7 @@ final class RevisionAgentPromptTests: XCTestCase {
             hasTitleSets: hasTitleSets,
             writersVoice: writersVoice,
             avoidPhrases: avoidPhrases,
+            strategicGuidance: strategicGuidance,
             askUserEnabled: askUserEnabled)
     }
 
@@ -114,6 +116,23 @@ final class RevisionAgentPromptTests: XCTestCase {
         let prompt = systemPrompt(writersVoice: "")
         XCTAssertTrue(prompt.contains("## Visual Balance & Layout"),
                       "the section following the optional voice block still renders")
+    }
+
+    // MARK: - Strategic positioning (candidate dossier)
+
+    func testStrategicGuidanceOmittedWhenEmpty() {
+        let prompt = systemPrompt(strategicGuidance: "")
+        XCTAssertFalse(prompt.contains("## Strategic Positioning"),
+                       "no strategic positioning section without dossier guidance")
+    }
+
+    func testStrategicGuidanceInjectedWhenPresent() {
+        let prompt = systemPrompt(strategicGuidance: "STRATEGY-MARKER-42")
+        XCTAssertTrue(prompt.contains("## Strategic Positioning"))
+        XCTAssertTrue(prompt.contains("STRATEGY-MARKER-42"))
+        // Positioning is direction, not new facts — the evidence rule must remain.
+        XCTAssertTrue(prompt.contains("must still trace to a knowledge card"),
+                      "the strategic block must reassert the evidence-grounding rule")
     }
 
     // MARK: - initialUserMessage

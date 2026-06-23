@@ -1013,6 +1013,12 @@ final class OnboardingInterviewCoordinator {
         await container.voiceProfileExtractionHandler.triggerExtraction()
     }
 
+    /// Regenerate the career through-lines synthesis from existing cards + skills
+    /// + dossier (no document re-ingest). Persists onto the dossier.
+    func regenerateCareerSynthesis() async {
+        await container.debugRegenerationService.regenerateCareerSynthesis()
+    }
+
     /// Run LLM-powered skill deduplication manually
     func deduplicateSkills() async {
         guard let facade = llmFacade else {

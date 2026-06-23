@@ -102,6 +102,13 @@ final class LLMFacade {
         specializedAPIs.currentAnthropicService()
     }
 
+    /// Observer for per-request token usage from the Anthropic structured/text
+    /// execution path. A host installs this to aggregate cost; see `LLMRequestUsage`.
+    var anthropicUsageObserver: (@Sendable (LLMRequestUsage) -> Void)? {
+        get { specializedAPIs.anthropicUsageObserver }
+        set { specializedAPIs.anthropicUsageObserver = newValue }
+    }
+
     private func resolveClient(for backend: Backend) throws -> LLMClient {
         guard let resolved = backendClients[backend] else {
             throw LLMError.clientError("Backend \(backend.displayName) is not configured")
@@ -344,7 +351,7 @@ final class LLMFacade {
     /// or `nil` when OpenRouter doesn't expose one. Used to give structured-output
     /// requests full headroom instead of relying on a small provider default.
     func maxOutputTokens(forModel modelId: String) -> Int? {
-        openRouterService.findModel(id: modelId)?.maxOutputTokens
+        openRouterService.resolveModel(id: modelId)?.maxOutputTokens
     }
 
     func startConversationStreaming(

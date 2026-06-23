@@ -18,6 +18,7 @@ struct EventDumpView: View {
     @State private var showRegenDialog = false
     @State private var isDeduping = false
     @State private var isDedupingSkills = false
+    @State private var isSynthesizing = false
     @State private var isExpandingATS = false
 
     // Recordings (session tape recorder)
@@ -684,6 +685,28 @@ struct EventDumpView: View {
                 }
             }
             .help("Re-extract voice profile from writing samples")
+        }
+        ToolbarItem(placement: .automatic) {
+            Button {
+                Task {
+                    isSynthesizing = true
+                    await coordinator.regenerateCareerSynthesis()
+                    isSynthesizing = false
+                }
+            } label: {
+                if isSynthesizing {
+                    HStack(spacing: 4) {
+                        ProgressView()
+                            .scaleEffect(0.6)
+                            .frame(width: 12, height: 12)
+                        Text("Synthesizing...")
+                    }
+                } else {
+                    Text("Synthesize Through-Lines")
+                }
+            }
+            .disabled(isSynthesizing)
+            .help("Generate the career through-lines synthesis from existing cards + skills (no re-ingest)")
         }
         ToolbarItem(placement: .automatic) {
             Button {

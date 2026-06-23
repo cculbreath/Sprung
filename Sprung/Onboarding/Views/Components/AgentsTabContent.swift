@@ -402,8 +402,13 @@ struct AgentTranscriptView: View {
                     await tracker.retry(agentId: agent.id)
                 }
             } label: {
-                Label("Retry", systemImage: "arrow.clockwise")
-                    .font(.caption)
+                // Document ingestion resumes from saved transcription chunks / IR;
+                // other agents re-run from scratch.
+                Label(
+                    agent.agentType == .documentIngestion ? "Resume" : "Retry",
+                    systemImage: "arrow.clockwise"
+                )
+                .font(.caption)
             }
             .buttonStyle(.bordered)
             .tint(.accentColor)

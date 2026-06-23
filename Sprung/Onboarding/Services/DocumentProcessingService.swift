@@ -30,19 +30,27 @@ actor DocumentProcessingService {
     // service. Nil disables transcription resume.
     private let checkpointStore: TranscriptionCheckpointStore?
 
+    // Looks up a prior artifact by content hash (sha256) so a re-upload of the
+    // same file reuses its stored transcription IR — skipping transcription
+    // entirely when complete, or resuming only the missing chunks when partial.
+    // Nil disables cross-session transcription reuse.
+    private let artifactRecordStore: ArtifactRecordStore?
+
     // MARK: - Initialization
     init(
         documentExtractionService: DocumentExtractionService,
         llmFacade: LLMFacade? = nil,
         skillBankService: SkillBankService? = nil,
         kcExtractionService: KnowledgeCardExtractionService? = nil,
-        checkpointStore: TranscriptionCheckpointStore? = nil
+        checkpointStore: TranscriptionCheckpointStore? = nil,
+        artifactRecordStore: ArtifactRecordStore? = nil
     ) {
         self.documentExtractionService = documentExtractionService
         self.llmFacade = llmFacade
         self.skillBankService = skillBankService ?? SkillBankService(llmFacade: llmFacade)
         self.kcExtractionService = kcExtractionService ?? KnowledgeCardExtractionService(llmFacade: llmFacade)
         self.checkpointStore = checkpointStore
+        self.artifactRecordStore = artifactRecordStore
         Logger.info("📄 DocumentProcessingService initialized", category: .ai)
     }
 
@@ -56,6 +64,7 @@ actor DocumentProcessingService {
         callId: String?,
         metadata: JSON,
         displayFilename: String? = nil,
+        checkpointId: String? = nil,
         statusCallback: (@Sendable (String) -> Void)? = nil
     ) async throws -> JSON {
         // Use displayFilename if provided, otherwise fall back to URL's lastPathComponent
@@ -101,6 +110,11 @@ actor DocumentProcessingService {
         let extractedText = artifact.extractedContent
         let extractedTitle = artifact.title
         let artifactId = artifact.id
+        // The transcription checkpoint key. Caller-supplied on a resume so a re-run
+        // restores the chunks the prior attempt saved instead of re-transcribing;
+        // falls back to the fresh extraction id on a first pass. Kept distinct from
+        // the artifact record id so persistence dedup stays keyed by content, not run.
+        let checkpointDocumentId = checkpointId ?? artifactId
         Logger.info("✅ Text extraction completed: \(artifactId)", category: .ai)
 
         // Determine which post-processing steps to run based on document type
@@ -151,10 +165,11 @@ actor DocumentProcessingService {
             documentSummary = nil
 
             let analysis = try await runAnalysis(
-                documentId: artifactId,
+                documentId: checkpointDocumentId,
                 filename: filename,
                 fileURL: fileURL,
                 extractedText: extractedText,
+                sha256: artifact.sha256,
                 passes: .knowledgeOnly,
                 statusCallback: statusCallback
             )
@@ -176,10 +191,11 @@ actor DocumentProcessingService {
             statusCallback?("Running document analysis (summary, skills, narrative cards)...")
 
             let analysis = try await runAnalysis(
-                documentId: artifactId,
+                documentId: checkpointDocumentId,
                 filename: filename,
                 fileURL: fileURL,
                 extractedText: extractedText,
+                sha256: artifact.sha256,
                 passes: .all,
                 statusCallback: statusCallback
             )
@@ -334,6 +350,7 @@ actor DocumentProcessingService {
         filename: String,
         fileURL: URL?,
         extractedText: String,
+        sha256: String?,
         passes: AnthropicDocumentAnalysisService.PassSelection,
         statusCallback: (@Sendable (String) -> Void)? = nil
     ) async throws -> AnthropicDocumentAnalysisService.AnalysisResult? {
@@ -344,11 +361,29 @@ actor DocumentProcessingService {
 
         do {
             if let fileURL, fileURL.pathExtension.lowercased() == "pdf" {
+                // Content-addressed transcription reuse: a prior IR for the SAME
+                // bytes (any past session) skips transcription when complete, or
+                // seeds resume of only the missing chunks when partial. Transcription
+                // is the run's dominant output cost; this makes it pay once per
+                // document. Opt out by deleting the artifact from the library.
+                let priorTranscription = await reusablePriorTranscription(sha256: sha256)
+                if let priorTranscription, priorTranscription.isComplete {
+                    Logger.info("♻️ Reusing complete transcription for \(filename) (content match) — skipping transcription", category: .ai)
+                    statusCallback?("Reusing prior transcription of \(filename)...")
+                    return try await analysisService.analyzeIntermediateRepresentation(
+                        documentId: documentId,
+                        filename: filename,
+                        ir: .pdf(priorTranscription),
+                        passes: passes,
+                        statusCallback: statusCallback
+                    )
+                }
                 let pdfData = try Data(contentsOf: fileURL)
                 return try await analysisService.analyzePDF(
                     documentId: documentId,
                     filename: filename,
                     pdfData: pdfData,
+                    resumeFrom: priorTranscription,
                     passes: passes,
                     statusCallback: statusCallback
                 )
@@ -377,6 +412,19 @@ actor DocumentProcessingService {
             failed.passFailures.append("document analysis — \(filename): \(error.localizedDescription)")
             return failed
         }
+    }
+
+    /// The stored PDF transcription for a prior artifact with this exact content
+    /// hash (any session), if one exists. `nil` when there is no hash, no store, no
+    /// match, no IR, or the IR is a git digest rather than a PDF transcription —
+    /// in every case the caller transcribes fresh.
+    private func reusablePriorTranscription(sha256: String?) async -> DocumentTranscription? {
+        guard let sha256, let store = artifactRecordStore else { return nil }
+        let json = await store.intermediateRepresentationJSON(forSha256: sha256)
+        guard case .pdf(let transcription)? = IntermediateRepresentation.decode(fromJSONString: json) else {
+            return nil
+        }
+        return transcription
     }
 
     // MARK: - Record Section Writers
@@ -541,6 +589,7 @@ actor DocumentProcessingService {
                 filename: filename,
                 fileURL: nil,
                 extractedText: artifact.extractedContent,
+                sha256: nil,
                 passes: passes
             )
         } catch {

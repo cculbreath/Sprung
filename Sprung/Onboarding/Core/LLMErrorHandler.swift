@@ -94,6 +94,50 @@ struct LLMErrorHandler {
             || lowered.contains("time out")
     }
 
+    /// True ONLY for transient conditions worth an automatic retry — a dropped or
+    /// unreachable connection, a timeout, a rate-limit, or a 5xx/overloaded server.
+    /// Everything else (malformed/schema responses, decode failures, 400/402/403
+    /// content errors, model-config errors) is NON-transient: an extraction pass
+    /// must NOT blanket-retry those — a retry re-fails identically and just re-burns
+    /// tokens, so the pass should surface the failure and stop.
+    ///
+    /// Note: a connection dropped MID-STREAM can surface as a decode error
+    /// ("unexpected end of file"), not a `URLError` — that is deliberately NOT
+    /// treated as transient here. Recovery for it is resume, not a pass retry.
+    func isTransientNetworkError(_ error: Error) -> Bool {
+        if isTimeoutError(error) { return true }
+        if let urlError = error as? URLError {
+            switch urlError.code {
+            case .networkConnectionLost, .notConnectedToInternet, .cannotConnectToHost,
+                 .cannotFindHost, .dnsLookupFailed, .resourceUnavailable,
+                 .secureConnectionFailed, .cannotLoadFromNetwork:
+                return true
+            default:
+                return false
+            }
+        }
+        if let apiError = error as? APIError,
+           case .responseUnsuccessful(_, let statusCode, _) = apiError {
+            // 408 request-timeout, 429 rate-limit, 529 overloaded, any 5xx server error.
+            return statusCode == 408 || statusCode == 429 || statusCode == 529
+                || (500...599).contains(statusCode)
+        }
+        return Self.descriptionIndicatesTransientNetwork(error.localizedDescription)
+    }
+
+    /// String predicate mirroring `isTransientNetworkError` for callers that only
+    /// hold a stringified failure. Matches the common URLError drop/offline phrasings.
+    static func descriptionIndicatesTransientNetwork(_ text: String) -> Bool {
+        let lowered = text.lowercased()
+        if descriptionIndicatesTimeout(lowered) { return true }
+        return lowered.contains("network connection was lost")
+            || lowered.contains("connection was lost")
+            || lowered.contains("not connected to the internet")
+            || lowered.contains("cannot connect to host")
+            || lowered.contains("network connection")
+            || lowered.contains("appears to be offline")
+    }
+
     /// Extract credit info from insufficient credits error
     func extractCreditInfo(from error: Error) -> (requested: Int, available: Int)? {
         if let llmError = error as? LLMError {

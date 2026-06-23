@@ -12,6 +12,7 @@ enum ResumeRevisionAgentPrompts {
         hasTitleSets: Bool,
         writersVoice: String,
         avoidPhrases: [String],
+        strategicGuidance: String,
         askUserEnabled: Bool
     ) -> String {
         // ask_user is only offered when the user has enabled AI follow-up
@@ -184,10 +185,14 @@ enum ResumeRevisionAgentPrompts {
 
         ## Role-Appropriate Framing
 
-        The candidate's background is fundamental research. Business-metric formula bullets \
-        ("[Verb] [thing] resulting in [X]% improvement") are the WRONG register for that \
-        work — do not force research accomplishments into that mold. Tailor bullet structure \
-        to the position type:
+        Match what each bullet *emphasizes* to the candidate's actual background and the \
+        target role — infer it from their knowledge cards, skill bank, and existing resume. \
+        This is about which dimensions to foreground, NOT about switching formats: the \
+        business-metric formula ("[Verb] [thing] resulting in [X]% improvement") is slop in \
+        every register — forbidden above, for every role — and a percentage bolted onto an \
+        accomplishment that wasn't actually measured that way fools no one and reads as \
+        LinkedIn filler. Always write narratively, in the candidate's voice. Tailor what \
+        each bullet foregrounds to the position type:
 
         **For R&D / Academic / Research positions:**
         - What problem or gap existed?
@@ -224,6 +229,23 @@ enum ResumeRevisionAgentPrompts {
 
 
             \(writersVoice)
+            """
+        }
+
+        if !strategicGuidance.isEmpty {
+            prompt += """
+
+
+            ## Strategic Positioning
+
+            This candidate's job search has an agreed strategy, distilled during onboarding. \
+            Let it guide WHICH evidence you foreground and HOW you frame this candidate — \
+            which strengths to lead with, and which pitfalls to steer around — while you \
+            tailor to the specific job. It is positioning direction, not new facts: every \
+            factual claim you write must still trace to a knowledge card, skill-bank entry, \
+            or the existing resume.
+
+            \(strategicGuidance)
             """
         }
 

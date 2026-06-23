@@ -131,6 +131,26 @@ final class CandidateDossierStore: SwiftDataStore {
         }
     }
 
+    /// Set the generated career through-lines synthesis, upserting the dossier
+    /// if none exists yet. Not a `DossierSection` — it is produced by
+    /// `CareerSynthesisService` (cross-card synthesis), not the Phase-4 dossier
+    /// tools, and carries no validation minimums.
+    @discardableResult
+    func setCareerThroughLines(_ content: String) -> CandidateDossier {
+        if let existing = dossier {
+            existing.careerThroughLines = content
+            existing.updatedAt = Date()
+            saveContext()
+            Logger.info("Updated dossier career through-lines (\(content.count) chars)", category: .storage)
+            return existing
+        }
+        let newDossier = CandidateDossier(careerThroughLines: content)
+        modelContext.insert(newDossier)
+        saveContext()
+        Logger.info("Created dossier with career through-lines (\(content.count) chars)", category: .storage)
+        return newDossier
+    }
+
     /// Get current content for a section (for validation/review)
     func sectionContent(_ section: DossierSection) -> String? {
         guard let existing = dossier else { return nil }
@@ -205,6 +225,13 @@ final class CandidateDossierStore: SwiftDataStore {
     /// Export dossier for cover letter generation
     func exportForCoverLetter() -> String? {
         dossier?.exportForCoverLetter()
+    }
+
+    /// Export dossier strategic positioning for resume customization.
+    /// Includes strengths-to-emphasize and pitfalls-to-avoid; excludes private
+    /// fields (unique circumstances, interviewer notes).
+    func exportForResumeCustomization() -> String? {
+        dossier?.exportForResumeCustomization()
     }
 
     /// Export full dossier including private fields

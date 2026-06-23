@@ -32,7 +32,6 @@ enum CardMergeAgentError: LocalizedError {
     case agentDidNotComplete
     case invalidToolCall(String)
     case toolExecutionFailed(String)
-    case timeout
     case workspaceError(String)
 
     var errorDescription: String? {
@@ -47,8 +46,6 @@ enum CardMergeAgentError: LocalizedError {
             return "Invalid tool call: \(msg)"
         case .toolExecutionFailed(let msg):
             return "Tool execution failed: \(msg)"
-        case .timeout:
-            return "Agent timed out"
         case .workspaceError(let msg):
             return "Workspace error: \(msg)"
         }
@@ -86,9 +83,9 @@ class CardMergeAgent: AnthropicToolLoopDelegate {
     private(set) var progress: [String] = []
     private(set) var turnCount: Int = 0
 
-    // Limits (maxTurns/timeoutSeconds internal so they witness AnthropicToolLoopDelegate)
+    // Limits (maxTurns internal so it witnesses AnthropicToolLoopDelegate). No
+    // wall-clock timeout — maxTurns bounds the loop.
     let maxTurns = 100  // More turns allowed for thorough merging
-    let timeoutSeconds: TimeInterval = 900  // 15 minutes
     private let maxResponseTokens = 8192
 
     // Context pruning (0 = disabled, uses full context).
@@ -176,7 +173,6 @@ class CardMergeAgent: AnthropicToolLoopDelegate {
     /// their side effects before completing (preserves pre-runner behavior).
     var executesPendingToolsOnCompletion: Bool { true }
 
-    func timeoutError() -> Error { CardMergeAgentError.timeout }
     func maxTurnsError() -> Error { CardMergeAgentError.maxTurnsExceeded }
 
     func initialMessages() -> [AnthropicMessage] {
@@ -314,7 +310,7 @@ class CardMergeAgent: AnthropicToolLoopDelegate {
     }
 
     func onMaxTurnsReached(messages: [AnthropicMessage]) async throws -> CardMergeResult? {
-        Logger.warning("CardMergeAgent: Max turns reached, forcing completion", category: .ai)
+        Logger.warning("CardMergeAgent: max turns reached", category: .ai)
         return nil  // → runner throws maxTurnsError()
     }
 

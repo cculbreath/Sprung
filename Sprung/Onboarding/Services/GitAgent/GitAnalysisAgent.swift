@@ -48,7 +48,6 @@ enum GitAgentError: LocalizedError {
     case agentDidNotComplete
     case invalidToolCall(String)
     case toolExecutionFailed(String)
-    case timeout
 
     var errorDescription: String? {
         switch self {
@@ -62,8 +61,6 @@ enum GitAgentError: LocalizedError {
             return "Invalid tool call: \(msg)"
         case .toolExecutionFailed(let msg):
             return "Tool execution failed: \(msg)"
-        case .timeout:
-            return "Agent timed out"
         }
     }
 }
@@ -104,17 +101,21 @@ class GitAnalysisAgent: AnthropicToolLoopDelegate {
     /// External callback for turn-by-turn progress updates (turn, maxTurns, action)
     var onTurnUpdate: (@Sendable (Int, Int, String) async -> Void)?
 
-    // Limits (internal so they witness AnthropicToolLoopDelegate)
+    // Limits (internal so they witness AnthropicToolLoopDelegate). No wall-clock
+    // timeout — `maxTurns` bounds the loop; a large repo is allowed to take its time
+    // rather than have a finished digest discarded by a deadline.
     let maxTurns = 50
-    let timeoutSeconds: TimeInterval = 600  // 10 minutes
-    /// Output ceiling per turn. The final complete_analysis digest is the
-    /// largest response; 16K keeps the non-streaming call under HTTP timeouts.
-    /// Max output tokens per turn. Set to Claude Haiku 4.5's full output ceiling
-    /// (64K); the prior 16384 was an arbitrary quarter of it, against which the
-    /// complete_analysis digest truncated mid-JSON → dataCorrupted → infinite
-    /// retry loop → wall-clock timeout. With manifests/docs now kernel-read (the
-    /// model emits paths, not file bytes), real output stays well under this.
-    private let maxResponseTokens = 65536
+    /// Max output tokens per turn — resolved from the model's provider-reported
+    /// output ceiling (OpenRouter `top_provider.max_completion_tokens`) in `run()`,
+    /// so it tracks whatever Anthropic model the user assigns to git ingest instead
+    /// of a hardcoded literal. Requesting more than a model allows 400s up front
+    /// (e.g. "max_tokens: 65536 > 64000" for Haiku 4.5), killing the agent on turn 1.
+    /// The 32000 default is a conservative floor (safe across every current
+    /// Anthropic tier, including Opus) used only when the catalog hasn't loaded;
+    /// the prior 16384 truncated the complete_analysis digest mid-JSON. With
+    /// manifests/docs now kernel-read (the model emits paths, not file bytes), real
+    /// output stays well under any of these.
+    private var maxResponseTokens = 32000
     /// Consecutive text-only turns tolerated (with a tool nudge) before aborting.
     private static let maxConsecutiveNoToolTurns = 2
 
@@ -152,8 +153,15 @@ class GitAnalysisAgent: AnthropicToolLoopDelegate {
 
     /// Run the agent to explore the repository and produce a `RepositoryDigest`.
     func run() async throws -> RepositoryDigest {
-        guard facade != nil else {
+        guard let facade else {
             throw GitAgentError.noLLMFacade
+        }
+
+        // Track the assigned model's actual output ceiling (e.g. 64000 for Haiku
+        // 4.5) so per-turn requests never exceed it; falls back to the conservative
+        // default when the OpenRouter catalog hasn't loaded.
+        if let cap = facade.maxOutputTokens(forModel: modelId) {
+            maxResponseTokens = cap
         }
 
         status = .running
@@ -172,7 +180,6 @@ class GitAnalysisAgent: AnthropicToolLoopDelegate {
 
     var completionToolName: String { RepositoryDigestTool.name }
 
-    func timeoutError() -> Error { GitAgentError.timeout }
     func maxTurnsError() -> Error { GitAgentError.maxTurnsExceeded }
 
     func initialMessages() -> [AnthropicMessage] {
@@ -291,7 +298,7 @@ class GitAnalysisAgent: AnthropicToolLoopDelegate {
     }
 
     func onMaxTurnsReached(messages: [AnthropicMessage]) async throws -> RepositoryDigest? {
-        Logger.warning("⚠️ GitAgent: Max turns (\(maxTurns)) reached, forcing completion...", category: .ai)
+        Logger.warning("⚠️ GitAgent: max turns (\(maxTurns)) reached, forcing completion to salvage the digest...", category: .ai)
         await updateProgress("(Turn \(turnCount + 1)) Forcing completion...")
         guard let facade = facade else { throw GitAgentError.noLLMFacade }
         guard let forcedDigest = try await forceCompletion(facade: facade, messages: messages) else {

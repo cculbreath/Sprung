@@ -28,6 +28,9 @@ final class DebugRegenerationService {
     private let agentActivityTracker: AgentActivityTracker
     private let cardMergeService: CardMergeService
     private let knowledgeCardStore: KnowledgeCardStore
+    private let skillStore: SkillStore
+    private let candidateDossierStore: CandidateDossierStore
+    private let llmFacade: LLMFacade?
     private let eventBus: EventBus
 
     /// Provider for getting current session artifacts (avoids circular dependency with coordinator)
@@ -38,12 +41,18 @@ final class DebugRegenerationService {
         agentActivityTracker: AgentActivityTracker,
         cardMergeService: CardMergeService,
         knowledgeCardStore: KnowledgeCardStore,
+        skillStore: SkillStore,
+        candidateDossierStore: CandidateDossierStore,
+        llmFacade: LLMFacade?,
         eventBus: EventBus
     ) {
         self.documentProcessingService = documentProcessingService
         self.agentActivityTracker = agentActivityTracker
         self.cardMergeService = cardMergeService
         self.knowledgeCardStore = knowledgeCardStore
+        self.skillStore = skillStore
+        self.candidateDossierStore = candidateDossierStore
+        self.llmFacade = llmFacade
         self.eventBus = eventBus
     }
 
@@ -53,6 +62,56 @@ final class DebugRegenerationService {
     }
 
     // MARK: - Regeneration Methods
+
+    /// Regenerate the candidate's career through-lines synthesis from the
+    /// existing knowledge cards + skill bank + dossier strategic notes, and
+    /// persist it onto the dossier. Read-over-existing-artifacts: no document
+    /// re-ingest, no re-transcription — cheap to re-run. Returns the synthesized
+    /// text on success (nil on skip/failure) so callers can surface it.
+    @discardableResult
+    func regenerateCareerSynthesis() async -> String? {
+        guard let llmFacade else {
+            Logger.warning("Career synthesis skipped: LLM facade unavailable", category: .ai)
+            return nil
+        }
+        let cards = knowledgeCardStore.knowledgeCards
+        guard !cards.isEmpty else {
+            Logger.warning("Career synthesis skipped: no knowledge cards available", category: .ai)
+            return nil
+        }
+
+        // Orientation only: job-search context + strengths + pitfalls. Excludes
+        // private circumstances and the prior synthesis (no self-feedback loop).
+        let strategicNotes: String? = candidateDossierStore.dossier.map { dossier in
+            var parts: [String] = []
+            if !dossier.jobSearchContext.isEmpty {
+                parts.append("Job search context: \(dossier.jobSearchContext)")
+            }
+            if let strengths = dossier.strengthsToEmphasize, !strengths.isEmpty {
+                parts.append("Strengths to emphasize: \(strengths)")
+            }
+            if let pitfalls = dossier.pitfallsToAvoid, !pitfalls.isEmpty {
+                parts.append("Pitfalls to avoid: \(pitfalls)")
+            }
+            return parts.joined(separator: "\n\n")
+        }
+
+        Logger.info("🔄 Regenerating career synthesis from \(cards.count) cards...", category: .ai)
+        do {
+            let service = CareerSynthesisService(llmFacade: llmFacade)
+            let text = try await service.generate(
+                cards: cards,
+                skills: skillStore.skills,
+                strategicNotes: strategicNotes
+            )
+            candidateDossierStore.setCareerThroughLines(text)
+            Logger.info("✅ Career synthesis regenerated (\(text.count) chars)", category: .ai)
+            return text
+        } catch {
+            Logger.error("❌ Career synthesis failed: \(error.localizedDescription)", category: .ai)
+            return nil
+        }
+    }
 
     /// Clear all summaries and card inventories and regenerate them, then trigger merge
     func regenerateCardInventoriesAndMerge() async {

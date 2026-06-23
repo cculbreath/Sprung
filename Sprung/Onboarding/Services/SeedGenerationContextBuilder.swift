@@ -6,6 +6,7 @@
 //  Extracted from AppDelegate to live alongside the seed-generation feature.
 //
 import Foundation
+import SwiftyJSON
 
 @MainActor
 enum SeedGenerationContextBuilder {
@@ -15,6 +16,7 @@ enum SeedGenerationContextBuilder {
         experienceDefaultsStore: ExperienceDefaultsStore,
         applicantProfileStore: ApplicantProfileStore?,
         coverRefStore: CoverRefStore?,
+        candidateDossierStore: CandidateDossierStore?,
         titleSetStore: TitleSetStore?
     ) async -> SeedGenerationContext? {
         let defaults = experienceDefaultsStore.currentDefaults()
@@ -33,6 +35,15 @@ enum SeedGenerationContextBuilder {
         // Get title sets from library for LLM selection
         let titleSets = titleSetStore?.allTitleSets ?? []
 
+        // Strategic dossier (job-search context, strengths/pitfalls, and the
+        // career through-lines synthesis) as JSON for the generators' role
+        // preamble. Encoded via the model's Codable (camelCase keys match what
+        // PromptCacheService.buildDossierSection reads).
+        let dossierJSON: JSON? = candidateDossierStore?.dossier.flatMap { dossier in
+            guard let data = try? JSONEncoder().encode(dossier) else { return nil }
+            return try? JSON(data: data)
+        }
+
         return SeedGenerationContext.build(
             from: defaults,
             applicantProfile: applicantProfile,
@@ -40,7 +51,7 @@ enum SeedGenerationContextBuilder {
             skills: skillStore.skills,
             writersVoice: coverRefStore?.writersVoice ?? "",
             voiceSummary: coverRefStore?.voiceSummary ?? "",
-            dossier: nil,
+            dossier: dossierJSON,
             titleSets: titleSets
         )
     }

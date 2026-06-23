@@ -49,6 +49,13 @@ actor StateCoordinator: OnboardingEventEmitter {
     /// Checked by phase 2→3 validation. Reset when entering new phase.
     private(set) var userApprovedKCSkip: Bool = false
 
+    /// Set to true when a UI action advances the phase directly with no other turn
+    /// driver (e.g. "Done with Section Cards"). Consumed in PhaseTransitionService
+    /// once the new phase's intro has been queued, to drive a single LLM turn so the
+    /// intro is delivered immediately instead of sitting queued until the next user
+    /// message. NOT reset by setPhase — it must survive the very transition it gates.
+    private(set) var pendingDirectAdvanceTurn: Bool = false
+
     // MARK: - Wizard Progress (Computed from ObjectiveStore)
     private(set) var currentWizardStep: OnboardingWizardStep = .voice
     private(set) var completedWizardSteps: Set<OnboardingWizardStep> = []
@@ -158,6 +165,19 @@ actor StateCoordinator: OnboardingEventEmitter {
         if approved {
             Logger.info("✅ User approved skipping KC generation", category: .ai)
         }
+    }
+
+    /// Flag that the upcoming phase transition was triggered by a direct UI action
+    /// and needs an LLM turn driven once it lands. See `pendingDirectAdvanceTurn`.
+    func setPendingDirectAdvanceTurn(_ pending: Bool) {
+        pendingDirectAdvanceTurn = pending
+    }
+
+    /// Returns whether a direct-advance turn is pending and clears the flag.
+    func consumePendingDirectAdvanceTurn() -> Bool {
+        let pending = pendingDirectAdvanceTurn
+        pendingDirectAdvanceTurn = false
+        return pending
     }
     // MARK: - Wizard Progress (Queries ObjectiveStore)
     private func updateWizardProgress() async {

@@ -91,6 +91,15 @@ final class ArtifactRecordStore {
         return (try? modelContext.fetch(descriptor))?.first
     }
 
+    /// The persisted intermediate-representation JSON for the first artifact whose
+    /// content hash matches — across ALL sessions, so a re-upload of the same file
+    /// reuses (or resumes) its prior transcription instead of re-transcribing.
+    /// Returns only the Sendable JSON string so callers off the main actor can
+    /// decode it without crossing a `@Model` across isolation boundaries.
+    func intermediateRepresentationJSON(forSha256 hash: String) -> String? {
+        artifact(bySha256: hash)?.intermediateRepresentationJSON
+    }
+
     /// Check if artifact exists for session by filename and optional hash
     func existingArtifact(
         in session: OnboardingSession,
@@ -152,6 +161,32 @@ final class ArtifactRecordStore {
         saveContext()
         Logger.info("Added artifact: \(filename) (\(sourceType))", category: .ai)
         return record
+    }
+
+    /// Replace a re-processed artifact's outputs in place (resume / re-ingest), so a
+    /// more-complete run updates the existing record instead of inserting a duplicate.
+    /// The caller passes the authoritative, already-merged values.
+    func updateArtifactContent(
+        _ record: ArtifactRecord,
+        extractedContent: String,
+        summary: String?,
+        briefDescription: String?,
+        title: String?,
+        skillsJSON: String?,
+        narrativeCardsJSON: String?,
+        intermediateRepresentationJSON: String?,
+        metadataJSON: String?
+    ) {
+        record.extractedContent = extractedContent
+        record.summary = summary
+        record.briefDescription = briefDescription
+        record.title = title
+        record.skillsJSON = skillsJSON
+        record.narrativeCardsJSON = narrativeCardsJSON
+        record.intermediateRepresentationJSON = intermediateRepresentationJSON
+        record.metadataJSON = metadataJSON
+        saveContext()
+        Logger.info("Updated artifact in place: \(record.filename)", category: .ai)
     }
 
     /// Add a standalone artifact (no session, immediately archived)

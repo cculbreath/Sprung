@@ -83,6 +83,18 @@ enum UsageSource: String, Codable, CaseIterable {
     }
 }
 
+// MARK: - Usage Source Tagging
+
+/// Dynamic per-task tag for token usage incurred by structured LLM passes that
+/// funnel through `LLMFacade.runAnthropicRequest` (document analysis, enrichment,
+/// skills, coverage planning, …). Bind it around a pass so the facade-installed
+/// usage observer can attribute the request to a source. Unbound → the observer
+/// skips reporting, so non-onboarding callers (resume generation, etc.) sharing
+/// the same app-wide facade are never miscounted.
+enum OnboardingUsageReporting {
+    @TaskLocal static var source: UsageSource?
+}
+
 // MARK: - Aggregated Stats
 
 /// Aggregated token statistics

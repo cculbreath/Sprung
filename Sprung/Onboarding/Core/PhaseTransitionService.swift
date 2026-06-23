@@ -107,6 +107,18 @@ final class PhaseTransitionService {
             Logger.info("📦 Surfaced \(targetedArtifacts.count) targeted artifacts for phase: \(phaseName)", category: .ai)
         }
         Logger.info("🔄 Phase introductory prompt sent as developer message for phase: \(phaseName)", category: .ai)
+
+        // If a direct UI action advanced the phase (e.g. "Done with Section Cards"),
+        // nothing else will drive an LLM turn — the intro above would sit queued until
+        // the next user message, leaving the interview visibly stalled. Drive one
+        // system-generated user turn now. Published AFTER the intro (same in-order .llm
+        // stream) so the queued coordinator message(s) bundle into this turn.
+        if await state.consumePendingDirectAdvanceTurn() {
+            var payload = JSON()
+            payload["text"].string = "I've finished with this step and I'm ready to continue."
+            await eventBus.publish(.llm(.sendUserMessage(payload: payload, isSystemGenerated: true)))
+            Logger.info("🚀 Drove user turn after UI-initiated phase advance: \(phaseName)", category: .ai)
+        }
     }
     // MARK: - Phase Transition Requests
     func requestPhaseTransition(from: String, to: String, reason: String?) async {

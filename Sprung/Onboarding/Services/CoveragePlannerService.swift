@@ -150,17 +150,19 @@ final class CoveragePlannerService {
         let digest = await buildDigest()
         Logger.info("🧭 Coverage planner running over digest (\(digest.count) chars) with model \(modelId)", category: .ai)
 
-        return try await facade.executeStructuredWithAnthropicBlocks(
-            systemContent: [AnthropicSystemBlock(text: Self.systemPrompt)],
-            userBlocks: [
-                .text(AnthropicTextBlock(text: digest)),
-                .text(AnthropicTextBlock(text: Self.instructions))
-            ],
-            modelId: modelId,
-            responseType: CoverageGapReport.self,
-            schema: Self.gapSchema,
-            maxTokens: 4096
-        )
+        return try await OnboardingUsageReporting.$source.withValue(.documentExtraction) {
+            try await facade.executeStructuredWithAnthropicBlocks(
+                systemContent: [AnthropicSystemBlock(text: Self.systemPrompt)],
+                userBlocks: [
+                    .text(AnthropicTextBlock(text: digest)),
+                    .text(AnthropicTextBlock(text: Self.instructions))
+                ],
+                modelId: modelId,
+                responseType: CoverageGapReport.self,
+                schema: Self.gapSchema,
+                maxTokens: 4096
+            )
+        }
     }
 
     // MARK: - Result Delivery

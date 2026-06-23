@@ -161,7 +161,11 @@ final class UIResponseCoordinator {
     /// Used when user action should directly advance the phase (section toggle, skip approval, etc.)
     /// Direct transitions are more reliable and eliminate LLM round trips.
     /// IDEMPOTENT: If already at or past target phase, this is a no-op.
-    private func forcePhaseTransition(to targetPhase: InterviewPhase, reason: String = "User action triggered phase advance") async {
+    /// - Parameter driveUserTurnAfter: when true, flags the transition so that once it
+    ///   lands a single LLM turn is driven (used when no other driver exists, e.g. the
+    ///   "Done with Section Cards" button — unlike skip-approval, which is driven by the
+    ///   UI tool's tool_result). Only set when the transition actually proceeds.
+    private func forcePhaseTransition(to targetPhase: InterviewPhase, reason: String = "User action triggered phase advance", driveUserTurnAfter: Bool = false) async {
         let currentPhase = await state.phase
 
         // Idempotent check: if already at or past target phase, do nothing
@@ -175,6 +179,12 @@ final class UIResponseCoordinator {
         }
 
         Logger.info("⚡ Forcing phase transition: \(currentPhase.rawValue) → \(targetPhase.rawValue)", category: .ai)
+
+        // Flag BEFORE publishing so the transition handler sees it. setPhase deliberately
+        // does not clear this flag, so it survives until consumed post-transition.
+        if driveUserTurnAfter {
+            await state.setPendingDirectAdvanceTurn(true)
+        }
 
         // Emit phase transition request - StateCoordinator will handle the actual transition
         // This triggers: setPhase() → phaseTransitionApplied → handlePhaseTransition (sends intro prompt)
@@ -461,8 +471,15 @@ final class UIResponseCoordinator {
             details: nil
         )))
 
-        // Force phase transition to Phase 3
-        await forcePhaseTransition(to: .phase3EvidenceCollection, reason: "Section cards collection completed by user")
+        // Force phase transition to Phase 3. driveUserTurnAfter: there is no tool_result
+        // or user message to drive the LLM here (the section-cards review tool already
+        // completed), so without this the Phase 3 intro sits queued and the interview
+        // appears stalled until the user types something.
+        await forcePhaseTransition(
+            to: .phase3EvidenceCollection,
+            reason: "Section cards collection completed by user",
+            driveUserTurnAfter: true
+        )
 
         Logger.info("✅ Section cards complete - advanced to Phase 3", category: .ai)
     }

@@ -453,6 +453,7 @@ final class SecondaryWindowService {
             .environment(deps.coverRefStore)
             .environment(deps.titleSetStore)
             .environment(deps.guidanceStore)
+            .environment(deps.candidateDossierStore)
 
         let window = makeWindow(
             WindowSpec(
@@ -536,6 +537,7 @@ final class SecondaryWindowService {
                 experienceDefaultsStore: deps.experienceDefaultsStore,
                 applicantProfileStore: deps.applicantProfileStore,
                 coverRefStore: deps.coverRefStore,
+                candidateDossierStore: deps.candidateDossierStore,
                 titleSetStore: deps.titleSetStore
             ) else {
                 Logger.error("Failed to build SeedGenerationContext", category: .ui)

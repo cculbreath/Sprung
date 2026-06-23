@@ -294,7 +294,8 @@ final class OnboardingDependencyContainer {
             eventBus: core.eventBus, documentExtractionService: documentExtractionService, dataStore: dataStore,
             stateCoordinator: state, agentTracker: agentActivityTracker, llmFacade: llmFacade,
             budgetPauseGate: budgetPauseGate, budgetFailedExtractionRegistry: budgetFailedExtractionRegistry,
-            timeoutPauseGate: timeoutPauseGate, checkpointStore: transcriptionCheckpointStore
+            timeoutPauseGate: timeoutPauseGate, checkpointStore: transcriptionCheckpointStore,
+            artifactRecordStore: artifactRecordStore
         )
         self.uploadStorage = docs.uploadStorage
         self.documentProcessingService = docs.documentProcessingService
@@ -346,6 +347,9 @@ final class OnboardingDependencyContainer {
             agentActivityTracker: agentActivityTracker,
             cardMergeService: cardMergeService,
             knowledgeCardStore: knowledgeCardStore,
+            skillStore: skillStore,
+            candidateDossierStore: candidateDossierStore,
+            llmFacade: llmFacade,
             eventBus: core.eventBus
         )
         #endif
@@ -589,13 +593,15 @@ final class OnboardingDependencyContainer {
         eventBus: EventBus, documentExtractionService: DocumentExtractionService, dataStore: InterviewDataStore,
         stateCoordinator: StateCoordinator, agentTracker: AgentActivityTracker, llmFacade: LLMFacade?,
         budgetPauseGate: BudgetPauseGate, budgetFailedExtractionRegistry: BudgetFailedExtractionRegistry,
-        timeoutPauseGate: TimeoutPauseGate, checkpointStore: TranscriptionCheckpointStore
+        timeoutPauseGate: TimeoutPauseGate, checkpointStore: TranscriptionCheckpointStore,
+        artifactRecordStore: ArtifactRecordStore
     ) -> DocumentComponents {
         let uploadStorage = OnboardingUploadStorage()
         let documentProcessingService = DocumentProcessingService(
             documentExtractionService: documentExtractionService,
             llmFacade: llmFacade,
-            checkpointStore: checkpointStore
+            checkpointStore: checkpointStore,
+            artifactRecordStore: artifactRecordStore
         )
         return DocumentComponents(
             uploadStorage: uploadStorage, documentProcessingService: documentProcessingService,
@@ -703,6 +709,31 @@ final class OnboardingDependencyContainer {
 
         // Start token usage tracking subscription
         tokenUsageTracker.startEventSubscription(eventBus: eventBus)
+
+        // Route structured-pass token usage (document analysis, enrichment, skills,
+        // coverage planning, …) into the same tracker. These funnel through
+        // LLMFacade.runAnthropicRequest, which previously discarded usage — so cost
+        // was understated ~10x. The interview stream and git agent self-report via
+        // their own paths, so this observer covers ONLY the structured chokepoint.
+        // It emits only when a pass has tagged itself via OnboardingUsageReporting,
+        // so non-onboarding work sharing the app-wide facade is never counted here.
+        if let facade = llmFacade {
+            let bus = eventBus
+            facade.anthropicUsageObserver = { [weak bus] usage in
+                guard let bus, let source = OnboardingUsageReporting.source else { return }
+                Task {
+                    await bus.publish(.llm(.tokenUsageReceived(
+                        modelId: usage.modelId,
+                        inputTokens: usage.inputTokens,
+                        outputTokens: usage.outputTokens,
+                        cacheReadTokens: usage.cacheReadTokens,
+                        cacheCreationTokens: usage.cacheCreationTokens,
+                        reasoningTokens: 0,
+                        source: source
+                    )))
+                }
+            }
+        }
 
         // Start coverage planner subscription (Phase 3 → Phase 4 boundary hook)
         coveragePlannerService.start()

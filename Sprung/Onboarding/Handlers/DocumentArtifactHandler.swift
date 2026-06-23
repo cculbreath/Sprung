@@ -44,6 +44,18 @@ actor DocumentArtifactHandler: OnboardingEventEmitter {
         let metadata: JSON
     }
 
+    /// Per-agent state retained so a failed/incomplete document can be resumed from
+    /// the agent panel: the queued file, a stable transcription checkpoint id (reused
+    /// across resumes so saved chunks are restored instead of re-transcribed), and the
+    /// last record produced (carries the IR + failed-pass labels for an IR-based,
+    /// $0 pass resume). Cleared once the document completes cleanly.
+    private struct ResumeState {
+        let queuedFile: QueuedFile
+        let checkpointId: String
+        var lastRecord: JSON?
+    }
+    private var resumeStates: [String: ResumeState] = [:]
+
     // MARK: - Lifecycle State
     private var subscriptionTask: Task<Void, Never>?
     private var isActive = false
@@ -195,13 +207,17 @@ actor DocumentArtifactHandler: OnboardingEventEmitter {
         pumpQueue()
     }
 
-    /// Process a single queued file
+    /// Process a single queued file: set up its agent + a stable checkpoint id, then
+    /// run the ingest pipeline. A resume handler is registered up front so a failed or
+    /// incomplete document can be re-run from the same panel entry — reusing the
+    /// checkpoint id (transcription resumes from saved chunks) and any saved IR
+    /// (re-runs only the failed analysis passes for $0).
     private func processQueuedFile(_ queuedFile: QueuedFile) async {
-        let file = queuedFile.file
-        let filename = file.filename
+        let filename = queuedFile.file.filename
         let agentId = UUID().uuidString
+        let checkpointId = UUID().uuidString
+        resumeStates[agentId] = ResumeState(queuedFile: queuedFile, checkpointId: checkpointId, lastRecord: nil)
 
-        // Track this document extraction in Agents tab
         await MainActor.run {
             agentTracker.trackAgent(
                 id: agentId,
@@ -215,9 +231,38 @@ actor DocumentArtifactHandler: OnboardingEventEmitter {
                 content: "Starting extraction",
                 details: "File: \(filename)"
             )
+            agentTracker.setRetryHandler(agentId: agentId) { [weak self] in
+                await self?.resumeDocument(agentId: agentId)
+            }
         }
 
         Logger.info("📄 Processing document: \(filename)", category: .ai)
+        await runDocumentPipeline(agentId: agentId)
+        // Note: activeProcessingCount is managed by pumpQueue()/extractionSlotFreed()
+    }
+
+    /// Resume a failed/incomplete document via its registered handler: flip the agent
+    /// back to running and re-enter the pipeline with the same checkpoint id + saved IR.
+    private func resumeDocument(agentId: String) async {
+        guard resumeStates[agentId] != nil else {
+            Logger.warning("⚠️ No resume state for agent \(agentId.prefix(8)) — cannot resume", category: .ai)
+            return
+        }
+        await MainActor.run { agentTracker.markRunning(agentId: agentId) }
+        await runDocumentPipeline(agentId: agentId)
+    }
+
+    /// The ingest pipeline for one document, re-runnable for resume. Reads the agent's
+    /// resume state, seeds a pass-stage resume from a saved IR when present, and
+    /// otherwise re-ingests (transcription resumes from saved chunks). A clean finish
+    /// completes the agent and clears the state; an incomplete finish marks it failed
+    /// but keeps the resume handler so the panel offers a Resume button.
+    private func runDocumentPipeline(agentId: String) async {
+        guard let state = resumeStates[agentId] else { return }
+        let queuedFile = state.queuedFile
+        let checkpointId = state.checkpointId
+        let file = queuedFile.file
+        let filename = file.filename
 
         // Status callback shared by the first ingest and any IR-based resume.
         let statusCallback: @Sendable (String) -> Void = { [weak self, agentId, filename] statusMsg in
@@ -248,6 +293,16 @@ actor DocumentArtifactHandler: OnboardingEventEmitter {
         // the interview. Exactly one `recordProduced` is emitted, after the loop resolves.
         var timeoutAttempts = 0
         var pendingPassRetry: (record: JSON, passes: AnthropicDocumentAnalysisService.PassSelection)? = nil
+
+        // Seed a pass-stage resume: if a prior attempt saved a complete IR and left
+        // failed analysis passes, re-run ONLY those against the IR ($0, no
+        // re-transcription). Otherwise fall through to a full (chunk-resuming) ingest.
+        if let prior = state.lastRecord,
+           prior["intermediateRepresentation"].string != nil,
+           let failed = Self.failedPassSelection(from: prior["extractionFailures"].arrayValue.map(\.stringValue)) {
+            pendingPassRetry = (prior, failed)
+        }
+
         while true {
             do {
                 let artifactRecord: JSON
@@ -267,6 +322,7 @@ actor DocumentArtifactHandler: OnboardingEventEmitter {
                             callId: queuedFile.callId,
                             metadata: queuedFile.metadata,
                             displayFilename: filename,
+                            checkpointId: checkpointId,
                             statusCallback: statusCallback
                         )
                     }
@@ -277,6 +333,7 @@ actor DocumentArtifactHandler: OnboardingEventEmitter {
                         callId: queuedFile.callId,
                         metadata: queuedFile.metadata,
                         displayFilename: filename,
+                        checkpointId: checkpointId,
                         statusCallback: statusCallback
                     )
                 }
@@ -308,11 +365,20 @@ actor DocumentArtifactHandler: OnboardingEventEmitter {
                     // .abort → fall through and finalize the partial record as-is.
                 }
 
-                // Mark agent as completed, noting any analysis passes that failed
-                // Of those, isolate passes that failed because the API balance was
-                // exhausted — they're recorded so they can be re-run after the user tops
-                // up (otherwise budget outages silently degrade knowledge-card quality).
+                // Finalize. A clean run completes the agent and drops its resume
+                // state. An incomplete run (any failed pass) is surfaced as a
+                // resumable failure — the partial record is still emitted, and the
+                // resume handler + state are kept so the panel offers a Resume button
+                // that re-runs only the failed passes (or resumes transcription).
+                // Budget-exhausted passes are additionally recorded so they re-run
+                // after a top-up (otherwise outages silently degrade card quality).
                 let budgetFailedPasses = Self.budgetFailedPassSelection(from: extractionFailures)
+                let incomplete = !extractionFailures.isEmpty
+                if incomplete {
+                    resumeStates[agentId]?.lastRecord = artifactRecord
+                } else {
+                    resumeStates[agentId] = nil
+                }
                 await MainActor.run {
                     for failure in extractionFailures {
                         agentTracker.appendTranscript(
@@ -326,19 +392,24 @@ actor DocumentArtifactHandler: OnboardingEventEmitter {
                         budgetFailedExtractionRegistry.record(filename: filename, passes: passes)
                         budgetPauseGate.surface(.anthropic())
                     }
-                    agentTracker.appendTranscript(
-                        agentId: agentId,
-                        entryType: .system,
-                        content: extractionFailures.isEmpty
-                            ? "Extraction completed"
-                            : "Extraction completed with \(extractionFailures.count) failed analysis pass(es)",
-                        details: "Artifact ID: \(artifactRecord["id"].stringValue)"
-                    )
-                    agentTracker.markCompleted(agentId: agentId)
+                    if incomplete {
+                        agentTracker.markFailed(
+                            agentId: agentId,
+                            error: "Extraction incomplete — \(extractionFailures.count) analysis pass(es) failed. Resume to retry."
+                        )
+                    } else {
+                        agentTracker.appendTranscript(
+                            agentId: agentId,
+                            entryType: .system,
+                            content: "Extraction completed",
+                            details: "Artifact ID: \(artifactRecord["id"].stringValue)"
+                        )
+                        agentTracker.markCompleted(agentId: agentId)
+                    }
                 }
 
                 await emit(.artifact(.recordProduced(record: artifactRecord)))
-                Logger.info("✅ Document processed: \(filename)", category: .ai)
+                Logger.info("✅ Document processed: \(filename)\(incomplete ? " (incomplete — resumable)" : "")", category: .ai)
                 break
 
             } catch {
@@ -415,6 +486,21 @@ actor DocumentArtifactHandler: OnboardingEventEmitter {
     ) -> AnthropicDocumentAnalysisService.PassSelection? {
         var accumulated: AnthropicDocumentAnalysisService.PassSelection?
         for failure in failures where LLMErrorHandler.descriptionIndicatesTimeout(failure) {
+            guard let passes = BudgetFailedExtractionRegistry.passSelection(forFailureLabel: failure) else { continue }
+            accumulated = accumulated?.merged(with: passes) ?? passes
+        }
+        return accumulated
+    }
+
+    /// Reduce a document's extraction-failure labels to the union of passes that
+    /// failed for ANY reason — used to seed a manual Resume so it re-runs only the
+    /// incomplete passes against the saved IR. Returns nil when no label maps to a
+    /// known pass (caller then re-ingests from scratch).
+    static func failedPassSelection(
+        from failures: [String]
+    ) -> AnthropicDocumentAnalysisService.PassSelection? {
+        var accumulated: AnthropicDocumentAnalysisService.PassSelection?
+        for failure in failures {
             guard let passes = BudgetFailedExtractionRegistry.passSelection(forFailureLabel: failure) else { continue }
             accumulated = accumulated?.merged(with: passes) ?? passes
         }

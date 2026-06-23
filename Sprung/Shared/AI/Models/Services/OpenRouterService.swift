@@ -101,6 +101,28 @@ final class OpenRouterService {
     func findModel(id: String) -> OpenRouterModel? {
         availableModels.first { $0.id == id }
     }
+
+    /// Resolve a model across the two naming schemes (OpenRouter slug
+    /// `anthropic/claude-haiku-4.5` vs Anthropic-direct `claude-haiku-4-5-20251001`).
+    /// Exact match first, then normalized, then family+version — mirrors
+    /// `ModelPricing.price(for:in:)` so catalog-backed lookups (max output tokens,
+    /// context length) work regardless of which scheme the caller holds. Skips
+    /// `:variant` endpoints so a canonical listing wins over `:beta`/`:free` aliases.
+    @MainActor
+    func resolveModel(id: String) -> OpenRouterModel? {
+        if let exact = availableModels.first(where: { $0.id == id }) { return exact }
+        let normalized = ModelPricing.normalize(id)
+        if let match = availableModels.first(where: {
+            !$0.id.contains(":") && ModelPricing.normalize($0.id) == normalized
+        }) { return match }
+        guard let target = ModelPricing.familyAndVersion(normalized) else { return nil }
+        return availableModels.first { model in
+            guard !model.id.contains(":"),
+                  let candidate = ModelPricing.familyAndVersion(ModelPricing.normalize(model.id))
+            else { return false }
+            return candidate.family == target.family && candidate.version == target.version
+        }
+    }
     /// Returns a friendly display name for a model ID
     /// - Parameter modelId: The model ID to look up
     /// - Returns: The display name if found, otherwise the original ID

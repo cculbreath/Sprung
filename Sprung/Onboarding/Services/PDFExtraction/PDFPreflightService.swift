@@ -13,7 +13,7 @@ import PDFKit
 import SwiftOpenAI
 
 /// A page-range slice of a PDF prepared for Anthropic document analysis.
-struct PDFChunk {
+struct PDFChunk: Sendable {
     /// Raw PDF bytes for this chunk (the original data when the document fits in one chunk).
     let data: Data
     /// 1-based inclusive page range within the original document.
@@ -42,12 +42,17 @@ enum PDFPreflightError: LocalizedError {
     }
 }
 
-/// Splits PDFs into Anthropic-compatible chunks. Most documents (under 100 pages
-/// and 20 MB) pass through as a single chunk after a token-budget verification.
+/// Splits PDFs into small page-range chunks (default `targetPagesPerChunk`) so each
+/// chunk's transcription stays well under the model's output ceiling and the chunks
+/// can be transcribed in parallel. A document at or under the target passes through
+/// as a single chunk; a token-budget verification still backstops every chunk.
 actor PDFPreflightService {
 
-    /// Anthropic Messages API limit: at most 100 pages per document block.
-    static let maxPagesPerChunk = 100
+    /// Target pages per transcription chunk. Small chunks bound each transcription's
+    /// OUTPUT size — a 100-page chunk overflowed the 32K-token ceiling and truncated
+    /// mid-JSON, and a whole-document chunk timed out — and let chunks transcribe
+    /// concurrently. Well under Anthropic's hard limit of 100 pages per document block.
+    static let targetPagesPerChunk = 10
 
     /// Anthropic Messages API limit: at most 20 MB of raw PDF data per document block.
     static let maxChunkBytes = 20 * 1024 * 1024
@@ -85,7 +90,7 @@ actor PDFPreflightService {
         var startPage = 0 // 0-based
 
         while startPage < pageCount {
-            var span = min(Self.maxPagesPerChunk, pageCount - startPage)
+            var span = min(Self.targetPagesPerChunk, pageCount - startPage)
 
             while true {
                 let candidateData: Data

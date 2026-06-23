@@ -102,12 +102,10 @@ protocol AnthropicToolLoopDelegate: AnyObject {
 
     // Configuration
     var maxTurns: Int { get }
-    var timeoutSeconds: TimeInterval { get }
     /// Name of the tool whose call terminates the loop.
     var completionToolName: String { get }
 
     // Terminal errors (so the runner throws agent-typed errors)
-    func timeoutError() -> Error
     func maxTurnsError() -> Error
 
     /// Seed conversation (must start with a user message per the Anthropic API).
@@ -188,14 +186,13 @@ final class AnthropicToolLoopRunner<Delegate: AnthropicToolLoopDelegate> {
 
     func run() async throws -> Delegate.Output {
         var messages = delegate.initialMessages()
-        let startTime = Date()
         var turnCount = 0
         var consecutiveNoTool = 0
 
+        // No wall-clock timeout: `maxTurns` is the bound. A slow-but-progressing
+        // agent (e.g. a large repo on a loaded machine) is allowed to finish rather
+        // than be killed mid-flight and have its exploration discarded.
         while turnCount < delegate.maxTurns {
-            if Date().timeIntervalSince(startTime) > delegate.timeoutSeconds {
-                throw delegate.timeoutError()
-            }
 
             turnCount += 1
             await delegate.willStartTurn(turnCount)

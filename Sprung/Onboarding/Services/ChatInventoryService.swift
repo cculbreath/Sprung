@@ -66,14 +66,16 @@ actor ChatInventoryService {
         // Extract skills
         let skills: [Skill]
         do {
-            let response: ChatSkillsResponse = try await llmFacade.executeStructuredWithAnthropicBlocks(
-                systemContent: systemBlocks,
-                userBlocks: [transcriptBlock, .text(AnthropicTextBlock(text: Self.skillsInstructions))],
-                modelId: modelId,
-                responseType: ChatSkillsResponse.self,
-                schema: SkillBankPrompts.jsonSchema,
-                maxTokens: 16384
-            )
+            let response: ChatSkillsResponse = try await OnboardingUsageReporting.$source.withValue(.documentExtraction) {
+                try await llmFacade.executeStructuredWithAnthropicBlocks(
+                    systemContent: systemBlocks,
+                    userBlocks: [transcriptBlock, .text(AnthropicTextBlock(text: Self.skillsInstructions))],
+                    modelId: modelId,
+                    responseType: ChatSkillsResponse.self,
+                    schema: SkillBankPrompts.jsonSchema,
+                    maxTokens: 16384
+                )
+            }
             skills = response.skills
         } catch let error as ModelConfigurationError {
             throw error
@@ -85,14 +87,16 @@ actor ChatInventoryService {
         // Extract narrative cards (reads the cache the skills call just wrote)
         let narrativeCards: [KnowledgeCard]
         do {
-            let response: ChatCardsResponse = try await llmFacade.executeStructuredWithAnthropicBlocks(
-                systemContent: systemBlocks,
-                userBlocks: [transcriptBlock, .text(AnthropicTextBlock(text: Self.narrativeCardsInstructions))],
-                modelId: modelId,
-                responseType: ChatCardsResponse.self,
-                schema: Self.narrativeCardsSchema,
-                maxTokens: 16384
-            )
+            let response: ChatCardsResponse = try await OnboardingUsageReporting.$source.withValue(.cardGeneration) {
+                try await llmFacade.executeStructuredWithAnthropicBlocks(
+                    systemContent: systemBlocks,
+                    userBlocks: [transcriptBlock, .text(AnthropicTextBlock(text: Self.narrativeCardsInstructions))],
+                    modelId: modelId,
+                    responseType: ChatCardsResponse.self,
+                    schema: Self.narrativeCardsSchema,
+                    maxTokens: 16384
+                )
+            }
             narrativeCards = response.cards
         } catch {
             // Don't discard skills the first call already produced — degrade to

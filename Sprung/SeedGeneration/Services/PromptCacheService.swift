@@ -249,6 +249,11 @@ final class PromptCacheService {
             lines.append(jobContext)
         }
 
+        if let throughLines = dossier["careerThroughLines"].string, !throughLines.isEmpty {
+            lines.append("\n### Career Through-Lines")
+            lines.append(throughLines)
+        }
+
         if let strengths = dossier["strengthsToEmphasize"].string, !strengths.isEmpty {
             lines.append("\n### Key Strengths to Emphasize")
             lines.append(strengths)

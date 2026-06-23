@@ -13,6 +13,7 @@ struct ResumeRevisionView: View {
     @Environment(CoverRefStore.self) private var coverRefStore
     @Environment(TitleSetStore.self) private var titleSetStore
     @Environment(InferenceGuidanceStore.self) private var guidanceStore
+    @Environment(CandidateDossierStore.self) private var candidateDossierStore
     @Environment(\.modelContext) private var modelContext
 
     let resume: Resume
@@ -211,6 +212,9 @@ struct ResumeRevisionView: View {
         let writersVoice = coverRefStore.writersVoice
         // Explicitly banned phrases from the onboarding voice profile.
         let avoidPhrases = guidanceStore.voiceProfile()?.avoidPhrases ?? []
+        // Strategic positioning (strengths/pitfalls) from the candidate dossier;
+        // empty string when no dossier exists. Private fields are not included.
+        let strategicGuidance = candidateDossierStore.exportForResumeCustomization() ?? ""
 
         let revisionAgent = ResumeRevisionAgent(
             resume: resume,
@@ -220,7 +224,8 @@ struct ResumeRevisionView: View {
             modelContext: modelContext,
             titleSets: titleSetStore.allTitleSets,
             writersVoice: writersVoice,
-            avoidPhrases: avoidPhrases
+            avoidPhrases: avoidPhrases,
+            strategicGuidance: strategicGuidance
         )
         agent = revisionAgent
         onAgentCreated(revisionAgent)

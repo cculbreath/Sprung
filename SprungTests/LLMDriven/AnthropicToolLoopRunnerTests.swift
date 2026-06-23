@@ -19,7 +19,6 @@ import SwiftOpenAI
 // MARK: - Fixtures
 
 private enum LoopTestError: Error, Equatable {
-    case timeout
     case maxTurns
     case aborted
     case badCompletion
@@ -54,7 +53,6 @@ private final class FakeLoopDelegate: AnthropicToolLoopDelegate {
     typealias Output = String
 
     var maxTurns = 10
-    var timeoutSeconds: TimeInterval = 60
     let completionToolName = "complete"
 
     private let turns: [AnthropicTurnResult]
@@ -82,7 +80,6 @@ private final class FakeLoopDelegate: AnthropicToolLoopDelegate {
 
     var executesPendingToolsOnCompletion: Bool { pendingOnCompletion }
 
-    func timeoutError() -> Error { LoopTestError.timeout }
     func maxTurnsError() -> Error { LoopTestError.maxTurns }
 
     func initialMessages() -> [AnthropicMessage] { [.user("start")] }
@@ -338,7 +335,6 @@ private final class OneShotFailDelegate: AnthropicToolLoopDelegate {
     typealias Output = String
 
     let maxTurns = 10
-    let timeoutSeconds: TimeInterval = 60
     let completionToolName = "complete"
 
     private let turns: [AnthropicTurnResult]
@@ -349,7 +345,6 @@ private final class OneShotFailDelegate: AnthropicToolLoopDelegate {
 
     init(turns: [AnthropicTurnResult]) { self.turns = turns }
 
-    func timeoutError() -> Error { LoopTestError.timeout }
     func maxTurnsError() -> Error { LoopTestError.maxTurns }
     func initialMessages() -> [AnthropicMessage] { [.user("start")] }
 

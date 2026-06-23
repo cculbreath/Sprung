@@ -222,17 +222,6 @@ enum DocumentTranscriptionPrompts {
     ]
 }
 
-// MARK: - TranscriptionPayload
-
-/// The model's per-chunk transcription output: a `DocumentTranscription` WITHOUT
-/// provenance (the service supplies provenance, not the model). The service maps
-/// payload + provenance → `DocumentTranscription`. Reuses the contract's value
-/// types verbatim so decoding lands directly on the shared shapes.
-struct TranscriptionPayload: Codable, Sendable {
-    var fullText: String
-    var visualElements: [VisualElement]
-    var tables: [TranscribedTable]
-    var productionQuality: TranscriptionProductionQuality
-    var structure: String
-    var docMeta: DocMeta
-}
+// `TranscriptionPayload` (the model's per-chunk transcription output) is defined
+// in `IntermediateRepresentation.swift`, co-located with the value types it reuses
+// and with `TranscribedChunk`, which stores a completed payload for resume.
