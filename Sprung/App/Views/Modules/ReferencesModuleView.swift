@@ -357,6 +357,11 @@ private struct DossierBrowserTabInline: View {
                 dossierField(title: "Pitfalls to Avoid", content: pitfalls, required: false)
             }
 
+            // Career through-lines (AI synthesis)
+            if let throughLines = dossier.careerThroughLines, !throughLines.isEmpty {
+                dossierField(title: "Career Through-Lines", content: throughLines, required: false)
+            }
+
             // Preferences
             if let prefs = dossier.workArrangementPreferences, !prefs.isEmpty {
                 dossierField(title: "Work Arrangement", content: prefs, required: false)
