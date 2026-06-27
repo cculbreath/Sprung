@@ -194,6 +194,11 @@ final class AnthropicToolLoopRunner<Delegate: AnthropicToolLoopDelegate> {
         // than be killed mid-flight and have its exploration discarded.
         while turnCount < delegate.maxTurns {
 
+            // Cooperative cancellation: if the owning task was cancelled (e.g. the
+            // user dismissed the ingestion sheet), stop before spending another
+            // turn instead of running the loop to completion in the background.
+            try Task.checkCancellation()
+
             turnCount += 1
             await delegate.willStartTurn(turnCount)
 

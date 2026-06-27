@@ -286,6 +286,19 @@ class AgentActivityTracker {
         return id
     }
 
+    /// Track an agent whose work isn't a single cancellable `Task` (e.g. one branch
+    /// of a task group). Cancellation is then driven by `killAgent` flipping the
+    /// `cancelledAgentIds` flag, which the agent polls via `isCancelled(agentId:)`.
+    @discardableResult
+    func trackAgent(
+        id: String = UUID().uuidString,
+        type: AgentType,
+        name: String,
+        status: AgentStatus = .running
+    ) -> String {
+        trackAgent(id: id, type: type, name: name, status: status, task: Task<Void, Never>?.none)
+    }
+
     /// Track a child agent nested under a parent
     /// - Returns: The child agent ID for later reference
     @discardableResult

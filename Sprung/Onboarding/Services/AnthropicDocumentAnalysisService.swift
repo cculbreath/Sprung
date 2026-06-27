@@ -671,6 +671,10 @@ actor AnthropicDocumentAnalysisService {
     ) async -> AnalysisResult {
         var result = AnalysisResult()
 
+        // Honor cancellation: a dismissed ingestion sheet should stop spending,
+        // not run the full pass set in the background and discard the result.
+        guard !Task.isCancelled else { return result }
+
         // Resolved once per service instance; nil when no voice profile or
         // writing samples exist. Used only by the narrative passes.
         let voiceAnchor = await resolveVoiceAnchor()
@@ -695,7 +699,7 @@ actor AnthropicDocumentAnalysisService {
         // streaming, so if no earlier pass warmed the cache (e.g. knowledgeOnly
         // skips the summary) two concurrent passes would EACH pay full document
         // input cost — run sequentially in that case (warm-then-continue).
-        if passes.skills || passes.narrativeCards {
+        if (passes.skills || passes.narrativeCards), !Task.isCancelled {
             statusCallback?("Extracting skills and narrative cards from \(filename)...")
 
             let skillsOutcome: Result<[Skill], Error>?
@@ -734,7 +738,7 @@ actor AnthropicDocumentAnalysisService {
         // check against the same cached source block. Runs BEFORE enrichment so
         // enrichment never elaborates on hallucinated claims. A verification
         // failure keeps the cards: it is a quality gate, not a point of failure.
-        if let cards = result.narrativeCards, !cards.isEmpty {
+        if !Task.isCancelled, let cards = result.narrativeCards, !cards.isEmpty {
             statusCallback?("Verifying \(cards.count) cards against \(filename)...")
             result.narrativeCards = await verifyCards(
                 cards,
@@ -748,7 +752,7 @@ actor AnthropicDocumentAnalysisService {
 
         // Pass 4: enrichment after verification — each enrichment request sees
         // the same cached document plus the verified card it is enriching.
-        if passes.enrichment, let cards = result.narrativeCards, !cards.isEmpty {
+        if passes.enrichment, !Task.isCancelled, let cards = result.narrativeCards, !cards.isEmpty {
             statusCallback?("Enriching \(cards.count) cards from \(filename)...")
             await OnboardingUsageReporting.$source.withValue(.cardGeneration) {
                 await enrichCards(cards, source: source, voiceAnchor: voiceAnchor)

@@ -204,6 +204,12 @@ class GitAnalysisAgent: AnthropicToolLoopDelegate {
 
     func runModelTurn(messages: [AnthropicMessage]) async throws -> AnthropicTurnResult {
         guard let facade = facade else { throw GitAgentError.noLLMFacade }
+        // Per-agent kill from the agent pane flips the tracker's cancelled flag;
+        // stop here so an individually-killed repo halts (the runner's
+        // Task.checkCancellation covers whole-sheet cancellation).
+        if let agentId, tracker?.isCancelled(agentId: agentId) == true {
+            throw CancellationError()
+        }
         let response = try await facade.anthropicMessages(
             parameters: buildParameters(messages: messages, toolChoice: .auto)
         )

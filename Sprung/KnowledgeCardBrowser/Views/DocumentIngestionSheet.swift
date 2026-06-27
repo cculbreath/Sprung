@@ -22,6 +22,11 @@ struct DocumentIngestionSheet: View {
     // MARK: - State
 
     @State private var coordinator: StandaloneKCCoordinator?
+    /// Per-source agent tracking, surfaced as the agent pane while ingesting —
+    /// one row per repo/document, like the onboarding interview's agent pane.
+    @State private var agentTracker: AgentActivityTracker?
+    /// The in-flight analysis task, retained so Cancel/dismiss can actually stop it.
+    @State private var analyzeTask: Task<Void, Never>?
     @State private var sources: [URL] = []
     @State private var showFileImporter = false
     @State private var showExistingArtifactsPicker = false
@@ -50,14 +55,26 @@ struct DocumentIngestionSheet: View {
             Divider()
             footerSection
         }
-        .frame(width: 550, height: 500)
+        .frame(
+            width: showsAgentPane ? 860 : 550,
+            height: showsAgentPane ? 640 : 500
+        )
         .onAppear {
+            let tracker = AgentActivityTracker()
+            agentTracker = tracker
             coordinator = StandaloneKCCoordinator(
                 llmFacade: llmFacade,
                 knowledgeCardStore: knowledgeCardStore,
                 artifactRecordStore: artifactRecordStore,
-                skillStore: skillStore
+                skillStore: skillStore,
+                agentActivityTracker: tracker
             )
+        }
+        .onDisappear {
+            // Catch-all: any dismissal (Cancel, close, Esc, swipe) stops in-flight
+            // analysis so git agents and extraction never keep spending in the
+            // background after the sheet is gone.
+            cancelWork()
         }
         .sheet(isPresented: $showExistingArtifactsPicker) {
             ExistingArtifactsPickerSheet(
@@ -120,7 +137,7 @@ struct DocumentIngestionSheet: View {
 
             Spacer()
 
-            Button(action: { dismiss() }) {
+            Button(action: { cancelWork(); dismiss() }) {
                 Image(systemName: "xmark.circle.fill")
                     .foregroundStyle(.secondary)
                     .font(.title2)
@@ -132,16 +149,32 @@ struct DocumentIngestionSheet: View {
 
     // MARK: - Content
 
+    /// True once any source agent has been registered — drives the swap to the
+    /// agent pane and the larger sheet size.
+    private var showsAgentPane: Bool { !(agentTracker?.agents.isEmpty ?? true) }
+
     private var contentSection: some View {
         VStack(spacing: 16) {
             // Add buttons
             addButtonsSection
 
-            // Sources list
-            sourcesListSection
+            if showsAgentPane, let agentTracker {
+                // One row per source (repo/document) with live status, transcript,
+                // and a kill button — the same pane the onboarding interview uses.
+                AgentsTabContent(tracker: agentTracker)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(Color(nsColor: .separatorColor), lineWidth: 1)
+                    )
+            } else {
+                // Sources list
+                sourcesListSection
 
-            // Options
-            optionsSection
+                // Options
+                optionsSection
+            }
 
             // Status display
             if let coordinator = coordinator, coordinator.status != .idle {
@@ -349,7 +382,7 @@ struct DocumentIngestionSheet: View {
             primaryLabel: "Analyze",
             isDisabled: !hasAnySources || coordinator?.status.isProcessing == true,
             error: errorText,
-            onCancel: { dismiss() },
+            onCancel: { cancelWork(); dismiss() },
             onPrimary: { analyzeDocuments() }
         )
     }
@@ -409,18 +442,31 @@ struct DocumentIngestionSheet: View {
     private func analyzeDocuments() {
         guard let coordinator = coordinator else { return }
 
-        Task {
+        analyzeTask = Task {
             do {
-                analysisResult = try await coordinator.analyzeDocuments(
+                let result = try await coordinator.analyzeDocuments(
                     from: sources,
                     existingArtifactIds: addedArchivedArtifactIds,
                     deduplicateNarratives: deduplicateNarratives
                 )
+                // If cancelled mid-analysis, don't surface the (discarded) result.
+                if Task.isCancelled { return }
+                analysisResult = result
                 showAnalysisSheet = true
             } catch {
-                // Error is displayed in status section
+                // Error (including cancellation) is reflected in coordinator status.
             }
         }
+    }
+
+    /// Stop in-flight analysis — the git agents and extraction passes — and clear
+    /// status. Cancelling the task propagates cooperative cancellation down through
+    /// the source task group, the tool-loop turns, and the extraction passes, so
+    /// nothing keeps running (or spending) in the background once the sheet closes.
+    private func cancelWork() {
+        analyzeTask?.cancel()
+        analyzeTask = nil
+        coordinator?.cancel()
     }
 }
 

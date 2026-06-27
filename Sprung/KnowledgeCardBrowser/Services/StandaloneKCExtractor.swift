@@ -17,6 +17,9 @@ class StandaloneKCExtractor {
     private var extractionService: DocumentExtractionService?
     private weak var llmFacade: LLMFacade?
     private weak var artifactRecordStore: ArtifactRecordStore?
+    /// Per-source agent tracking for the ingestion sheet's agent pane (one tracked
+    /// agent per repo/document, with live status, transcript, and a kill button).
+    private weak var agentActivityTracker: AgentActivityTracker?
 
     // MARK: - Pre-analyzed Results (from the git digest extraction path)
 
@@ -29,9 +32,10 @@ class StandaloneKCExtractor {
 
     // MARK: - Initialization
 
-    init(llmFacade: LLMFacade?, artifactRecordStore: ArtifactRecordStore?) {
+    init(llmFacade: LLMFacade?, artifactRecordStore: ArtifactRecordStore?, agentActivityTracker: AgentActivityTracker? = nil) {
         self.llmFacade = llmFacade
         self.artifactRecordStore = artifactRecordStore
+        self.agentActivityTracker = agentActivityTracker
         self.extractionService = DocumentExtractionService()
     }
 
@@ -71,6 +75,10 @@ class StandaloneKCExtractor {
             var inFlight = 0
 
             for (index, url) in sources.enumerated() {
+                // Stop dispatching new pipelines once cancelled (e.g. the sheet was
+                // dismissed). In-flight pipelines unwind on their own cancellation.
+                if Task.isCancelled { break }
+
                 // Bound concurrency: drain one finished pipeline before adding more
                 if inFlight >= Self.maxConcurrentSourcePipelines {
                     if let (finishedIndex, artifact) = await group.next() {
@@ -82,6 +90,12 @@ class StandaloneKCExtractor {
                 }
 
                 let filename = url.lastPathComponent
+                let isDir = isDirectory(url)
+                // One tracked agent per source, surfaced in the sheet's agent pane.
+                let agentId = agentActivityTracker?.trackAgent(
+                    type: isDir ? .gitIngestion : .documentIngestion,
+                    name: (isDir ? "Git: " : "Doc: ") + filename
+                )
                 dispatchedCount += 1
                 onProgress(dispatchedCount, total, filename)
 
@@ -89,15 +103,25 @@ class StandaloneKCExtractor {
                 group.addTask { [weak self] in
                     guard let self else { return (index, nil) }
                     do {
-                        if await self.isDirectory(url) {
+                        let artifact: JSON
+                        if isDir {
                             // Directories ingest as codebases — git history when
                             // usable, filesystem evidence otherwise.
-                            return (index, try await self.extractGitRepository(url, onGitProgress: onGitProgress))
+                            artifact = try await self.extractGitRepository(url, agentId: agentId, onGitProgress: onGitProgress)
                         } else {
-                            return (index, try await self.extractDocument(url))
+                            artifact = try await self.extractDocument(url, agentId: agentId)
                         }
+                        if let agentId { await self.agentActivityTracker?.markCompleted(agentId: agentId) }
+                        return (index, artifact)
                     } catch {
                         Logger.warning("StandaloneKCExtractor: Failed to extract \(filename): \(error.localizedDescription)", category: .ai)
+                        // A cancelled/killed source is not a failure — leave its
+                        // tracker state (killed) alone; only flag genuine errors.
+                        if let agentId,
+                           !Task.isCancelled,
+                           await self.agentActivityTracker?.isCancelled(agentId: agentId) != true {
+                            await self.agentActivityTracker?.markFailed(agentId: agentId, error: error.localizedDescription)
+                        }
                         // Continue with other sources even if one fails
                         return (index, nil)
                     }
@@ -173,9 +197,12 @@ class StandaloneKCExtractor {
 
     // MARK: - Private: Document Extraction
 
-    private func extractDocument(_ url: URL) async throws -> JSON {
+    private func extractDocument(_ url: URL, agentId: String?) async throws -> JSON {
         guard let service = extractionService else {
             throw StandaloneKCError.extractionServiceNotAvailable
+        }
+        if let agentId {
+            agentActivityTracker?.appendTranscript(agentId: agentId, entryType: .system, content: "Extracting \(url.lastPathComponent)")
         }
 
         let request = DocumentExtractionService.ExtractionRequest(
@@ -275,12 +302,16 @@ class StandaloneKCExtractor {
         return FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory) && isDirectory.boolValue
     }
 
-    private func extractGitRepository(_ url: URL, onGitProgress: @escaping (Int, Int, String) -> Void) async throws -> JSON {
+    private func extractGitRepository(_ url: URL, agentId: String?, onGitProgress: @escaping (Int, Int, String) -> Void) async throws -> JSON {
         guard let facade = llmFacade else {
             throw StandaloneKCError.llmNotConfigured
         }
 
         let repoName = url.lastPathComponent
+        let tracker = agentActivityTracker
+        if let agentId {
+            tracker?.appendTranscript(agentId: agentId, entryType: .system, content: "Starting repository analysis", details: url.path)
+        }
 
         // Validate model is configured
         let modelId = try ModelConfigResolver.resolve(key: "onboardingGitIngestModelId", operation: "Git Repository Analysis")
@@ -293,13 +324,17 @@ class StandaloneKCExtractor {
         let gitData = try await GitEvidenceCollector.gather(repoPath: url.path)
         let gitEvidence = GitEvidenceCollector.render(gitData)
 
-        // Run the multi-turn agent to produce the repository digest (IR)
+        // Run the multi-turn agent to produce the repository digest (IR). Passing
+        // agentId + tracker drives this source's row in the agent pane (per-turn
+        // transcript, live status message, and the pane's kill button).
         let agent = GitAnalysisAgent(
             repoPath: url,
             modelId: modelId,
             gitEvidence: gitEvidence,
             gitData: gitData,
-            facade: facade
+            facade: facade,
+            agentId: agentId,
+            tracker: tracker
         )
         agent.onTurnUpdate = { @Sendable turn, maxTurns, action in
             await MainActor.run {
@@ -307,6 +342,12 @@ class StandaloneKCExtractor {
             }
         }
         let digest = try await agent.run()
+
+        // Stop before the (paid) extraction passes if this source was killed.
+        if let agentId, tracker?.isCancelled(agentId: agentId) == true { throw CancellationError() }
+        if let agentId {
+            tracker?.appendTranscript(agentId: agentId, entryType: .system, content: "Extracting skills and cards from digest")
+        }
 
         // Derive skills + cards from the rendered digest via the SHARED
         // document-analysis path (the same passes a transcribed PDF runs).

@@ -122,14 +122,14 @@ class StandaloneKCCoordinator {
 
     // MARK: - Initialization
 
-    init(llmFacade: LLMFacade?, knowledgeCardStore: KnowledgeCardStore?, artifactRecordStore: ArtifactRecordStore?, skillStore: SkillStore? = nil) {
+    init(llmFacade: LLMFacade?, knowledgeCardStore: KnowledgeCardStore?, artifactRecordStore: ArtifactRecordStore?, skillStore: SkillStore? = nil, agentActivityTracker: AgentActivityTracker? = nil) {
         self.llmFacade = llmFacade
         self.knowledgeCardStore = knowledgeCardStore
         self.artifactRecordStore = artifactRecordStore
         self.skillStore = skillStore
 
         // Initialize sub-modules
-        self.extractor = StandaloneKCExtractor(llmFacade: llmFacade, artifactRecordStore: artifactRecordStore)
+        self.extractor = StandaloneKCExtractor(llmFacade: llmFacade, artifactRecordStore: artifactRecordStore, agentActivityTracker: agentActivityTracker)
         self.analyzer = StandaloneKCAnalyzer(llmFacade: llmFacade, knowledgeCardStore: knowledgeCardStore)
     }
 
@@ -222,6 +222,17 @@ class StandaloneKCCoordinator {
             enhancements: enhancements,
             artifacts: allArtifacts
         )
+    }
+
+    /// Reset to idle after the owning analysis Task has been cancelled by the view.
+    /// The Task cancellation is what actually stops the in-flight git agents and
+    /// extraction passes; this just clears observable status so the UI doesn't show
+    /// a stale "analyzing…" state.
+    func cancel() {
+        if status.isProcessing {
+            status = .idle
+            errorMessage = nil
+        }
     }
 
     /// Generate selected cards, apply enhancements, and optionally persist skills.
