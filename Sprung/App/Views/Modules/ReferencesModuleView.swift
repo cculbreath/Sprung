@@ -230,7 +230,7 @@ struct ReferencesModuleView: View {
             )
 
         case .dossier:
-            DossierBrowserTabInline(dossierStore: dossierStore)
+            DossierBrowserTabInline(dossierStore: dossierStore, coverRefStore: coverRefStore)
         }
     }
 }
@@ -270,6 +270,7 @@ private struct TabPill: View {
 
 private struct DossierBrowserTabInline: View {
     let dossierStore: CandidateDossierStore
+    let coverRefStore: CoverRefStore
 
     @State private var showEditor = false
 
@@ -300,6 +301,8 @@ private struct DossierBrowserTabInline: View {
                 } else {
                     emptyState
                 }
+
+                voiceProfileSection
             }
             .padding(20)
         }
@@ -378,6 +381,44 @@ private struct DossierBrowserTabInline: View {
 
             if let notes = dossier.interviewerNotes, !notes.isEmpty {
                 dossierField(title: "Interviewer Notes", content: notes, required: false, isPrivate: true)
+            }
+        }
+    }
+
+    // MARK: - Voice Profile
+
+    /// The candidate's voice profile lives separately (a `.voicePrimer` cover
+    /// ref), but it belongs to the same "who is this candidate" picture, so it is
+    /// surfaced here. Renders nothing when no voice profile has been extracted.
+    @ViewBuilder
+    private var voiceProfileSection: some View {
+        if let primer = coverRefStore.storedCoverRefs.first(where: { $0.type == .voicePrimer }),
+           let profile = primer.voiceProfile {
+            Divider()
+
+            HStack(spacing: 8) {
+                Image(systemName: "waveform")
+                    .font(.title2)
+                    .foregroundStyle(.blue)
+                Text("Voice Profile")
+                    .font(.title3.weight(.semibold))
+                Spacer()
+            }
+
+            VStack(alignment: .leading, spacing: 16) {
+                ForEach(Array(profile.characteristicPairs.enumerated()), id: \.offset) { _, pair in
+                    dossierField(title: pair.label, content: pair.value, required: false)
+                }
+
+                if !profile.sampleExcerpts.isEmpty {
+                    dossierField(
+                        title: "Voice Excerpts",
+                        content: profile.sampleExcerpts
+                            .map { "\u{201C}\($0)\u{201D}" }
+                            .joined(separator: "\n\n"),
+                        required: false
+                    )
+                }
             }
         }
     }
