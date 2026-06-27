@@ -127,6 +127,10 @@ final class CareerSynthesisService {
       metrics, dates, titles, employers, technologies, or accomplishments that are not in \
       the cards. If a pattern is real but thinly supported, say so plainly rather than \
       inflating it. A hallucination here silently poisons every downstream resume.
+    - Never fabricate quotes. Use quotation marks ONLY around wording that appears verbatim \
+      in the evidence (the cards' verbatim excerpts — the candidate's actual words). \
+      Paraphrase freely in your own voice WITHOUT quotation marks. Presenting a paraphrase \
+      as a direct quote is a fabrication and will mislead every downstream resume and letter.
 
     HOW TO WRITE IT:
     - Flowing analytical prose in clear, plain, specific English. This is analysis for a \

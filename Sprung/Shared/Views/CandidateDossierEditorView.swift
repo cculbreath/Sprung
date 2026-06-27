@@ -21,6 +21,7 @@ struct CandidateDossierEditorView: View {
     @State private var availability: String = ""
     @State private var uniqueCircumstances: String = ""
     @State private var interviewerNotes: String = ""
+    @State private var careerThroughLines: String = ""
 
     @State private var hasUnsavedChanges = false
     @State private var showingDiscardAlert = false
@@ -32,6 +33,7 @@ struct CandidateDossierEditorView: View {
         case context = "Context"
         case strengths = "Strengths"
         case pitfalls = "Pitfalls"
+        case throughLines = "Through-Lines"
         case preferences = "Preferences"
         case notes = "Notes"
     }
@@ -54,6 +56,8 @@ struct CandidateDossierEditorView: View {
                             strengthsSection
                         case .pitfalls:
                             pitfallsSection
+                        case .throughLines:
+                            throughLinesSection
                         case .preferences:
                             preferencesSection
                         case .notes:
@@ -177,6 +181,8 @@ struct CandidateDossierEditorView: View {
             return !strengthsToEmphasize.isEmpty && strengthsToEmphasize.count < CandidateDossier.FieldMinimums.strengthsToEmphasize
         case .pitfalls:
             return !pitfallsToAvoid.isEmpty && pitfallsToAvoid.count < CandidateDossier.FieldMinimums.pitfallsToAvoid
+        case .throughLines:
+            return false
         case .preferences:
             return false
         case .notes:
@@ -242,6 +248,32 @@ struct CandidateDossierEditorView: View {
                 text: $pitfallsToAvoid,
                 placeholder: "Example:\n\n**Career Gap (2022-2023)**: May raise questions about recent experience. Mitigation: Frame as intentional sabbatical for skill development. In interviews, address proactively...",
                 minChars: CandidateDossier.FieldMinimums.pitfallsToAvoid
+            )
+        }
+    }
+
+    // MARK: - Through-Lines Section
+
+    private var throughLinesSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            sectionHeader(
+                title: "Career Through-Lines",
+                subtitle: "Cross-cutting synthesis of recurring patterns across all knowledge cards",
+                required: false
+            )
+
+            HStack(spacing: 4) {
+                Image(systemName: "sparkles")
+                    .font(.caption2)
+                Text("AI-generated from your knowledge cards + skills + dossier. Regenerate from the onboarding debug panel (\u{201C}Synthesize Through-Lines\u{201D}). Edits here are saved and used in resume customization and seed generation.")
+                    .font(.caption)
+            }
+            .foregroundStyle(.secondary)
+
+            fieldEditor(
+                text: $careerThroughLines,
+                placeholder: "Not generated yet. Run \u{201C}Synthesize Through-Lines\u{201D} from the onboarding debug panel to produce this portrait, then refine it here.",
+                minChars: nil
             )
         }
     }
@@ -471,6 +503,7 @@ struct CandidateDossierEditorView: View {
         availability = dossier.availability ?? ""
         uniqueCircumstances = dossier.uniqueCircumstances ?? ""
         interviewerNotes = dossier.interviewerNotes ?? ""
+        careerThroughLines = dossier.careerThroughLines ?? ""
 
         hasUnsavedChanges = false
     }
@@ -485,6 +518,9 @@ struct CandidateDossierEditorView: View {
             uniqueCircumstances: uniqueCircumstances.isEmpty ? nil : uniqueCircumstances,
             interviewerNotes: interviewerNotes.isEmpty ? nil : interviewerNotes
         )
+        // Through-lines is preserved by upsertDossier (it never touches the
+        // field), so persist any edits separately via the dedicated mutator.
+        dossierStore.setCareerThroughLines(careerThroughLines)
         hasUnsavedChanges = false
     }
 }
