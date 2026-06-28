@@ -100,7 +100,7 @@ actor DocumentIngestionKernel {
             // 1. For batches, this would hide spinner before all files are done
             // 2. The coordinator or LLM response handler should manage the final state
 
-        } catch is ModelConfigurationError {
+        } catch let error as ModelConfigurationError {
             // Repo standard: missing model config surfaces the settings picker,
             // never a silent substitute. The upload can be retried after configuring.
             Logger.warning("Document ingestion blocked: document analysis model not configured", category: .ai)
@@ -109,7 +109,10 @@ actor DocumentIngestionKernel {
                 error: "Document analysis model not configured. Choose one in Settings → Models, then re-upload."
             )
             await MainActor.run {
-                NotificationCenter.default.post(name: .showSettings, object: nil)
+                NotificationCenter.default.post(
+                    name: .showModelSettings, object: nil,
+                    userInfo: ["settingKey": error.settingKey]
+                )
             }
         } catch {
             await ingestionCoordinator?.handleIngestionFailed(pendingId: pendingId, error: error.localizedDescription)

@@ -97,15 +97,30 @@ final class SecondaryWindowService {
     // MARK: - Settings Window
 
     func showSettings() {
+        presentSettings(initialCategory: nil, highlightModelKey: nil)
+    }
+
+    /// Open Settings on the Models tab with the row for `highlightKey` boxed in red.
+    /// `highlightKey` is a UserDefaults model-setting key (e.g. the value carried by
+    /// `ModelConfigurationError.settingKey`); pass nil to just land on the Models tab.
+    func showModelSettings(highlightKey: String?) {
+        presentSettings(initialCategory: .models, highlightModelKey: highlightKey)
+    }
+
+    private func presentSettings(initialCategory: SettingsCategory?, highlightModelKey: String?) {
         guard let deps else {
             Logger.warning("Settings window requested before app services were configured", category: .appLifecycle)
             return
         }
-        if settingsWindow == nil {
+        let isNewWindow = (settingsWindow == nil)
+        if isNewWindow {
             let appEnvironment = deps.appEnvironment
             let appState = appEnvironment.appState
             let debugSettingsStore = appState.debugSettingsStore ?? appEnvironment.debugSettingsStore
-            let root = SettingsView()
+            let root = SettingsView(
+                initialCategory: initialCategory ?? .apiKeys,
+                initialHighlightModelKey: highlightModelKey
+            )
                 .environment(appEnvironment)
                 .environment(appState)
                 .environment(appEnvironment.navigationState)
@@ -129,6 +144,16 @@ final class SecondaryWindowService {
             )
         }
         settingsWindow?.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+        // A freshly-built SettingsView receives its target via init; an existing one
+        // (window persists across close) is driven live with this notification.
+        if !isNewWindow, initialCategory != nil {
+            NotificationCenter.default.post(
+                name: .highlightModelSetting,
+                object: nil,
+                userInfo: highlightModelKey.map { ["settingKey": $0] }
+            )
+        }
     }
 
     // MARK: - Applicant Profile Window
@@ -530,9 +555,18 @@ final class SecondaryWindowService {
         if seedGenerationWindow == nil {
             let appEnvironment = deps.appEnvironment
 
+            // Prerequisite: at least one knowledge card to generate from. Without any,
+            // generation has no source material — surface the paths to create some
+            // instead of failing silently.
+            guard !deps.knowledgeCardStore.knowledgeCards.isEmpty else {
+                Logger.error("Cannot show seed generation: no knowledge cards exist.", category: .ui)
+                presentNoKnowledgeCardsAlert()
+                return
+            }
+
             // Build SeedGenerationContext from onboarding artifacts
             guard let context = await SeedGenerationContextBuilder.build(
-                coordinator: deps.onboardingCoordinator,
+                knowledgeCardStore: deps.knowledgeCardStore,
                 skillStore: deps.skillStore,
                 experienceDefaultsStore: deps.experienceDefaultsStore,
                 applicantProfileStore: deps.applicantProfileStore,
@@ -548,14 +582,22 @@ final class SecondaryWindowService {
             // No silent backend default — an unconfigured backend surfaces the picker.
             guard let backendString = UserDefaults.standard.string(forKey: "seedGenerationBackend"),
                   !backendString.isEmpty else {
-                Logger.error("Cannot show seed generation: no backend configured. Please select a backend in Settings > Models.", category: .ui)
+                Logger.error("Cannot show seed generation: no backend configured.", category: .ui)
+                presentSeedModelAlert(
+                    message: "Choose a backend and model for Experience Defaults generation before continuing.",
+                    highlightKey: "seedGenerationBackend"
+                )
                 return
             }
             let backend: LLMFacade.Backend = backendString == "anthropic" ? .anthropic : .openRouter
             let modelKey = backendString == "anthropic" ? "seedGenerationAnthropicModelId" : "seedGenerationOpenRouterModelId"
             guard let modelId = UserDefaults.standard.string(forKey: modelKey),
                   !modelId.isEmpty else {
-                Logger.error("Cannot show seed generation: no model configured. Please select a model in Settings > Models.", category: .ui)
+                Logger.error("Cannot show seed generation: no model configured.", category: .ui)
+                presentSeedModelAlert(
+                    message: "Select \(backend == .anthropic ? "an Anthropic" : "an OpenRouter") model for Experience Defaults generation before continuing.",
+                    highlightKey: modelKey
+                )
                 return
             }
 
@@ -586,6 +628,55 @@ final class SecondaryWindowService {
         }
 
         seedGenerationWindow?.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    /// Missing backend/model for Experience Defaults: explain, then route to the
+    /// Models settings tab with the unconfigured picker boxed in red.
+    private func presentSeedModelAlert(message: String, highlightKey: String) {
+        NSApp.activate(ignoringOtherApps: true)
+        let alert = NSAlert()
+        alert.messageText = "Model Required for Experience Defaults"
+        alert.informativeText = message
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "Open Model Settings")
+        alert.addButton(withTitle: "Cancel")
+        if alert.runModal() == .alertFirstButtonReturn {
+            showModelSettings(highlightKey: highlightKey)
+        }
+    }
+
+    /// No knowledge cards to generate from: offer the two ways to create some
+    /// (onboarding interview, or the Knowledge Card browser) or cancel.
+    private func presentNoKnowledgeCardsAlert() {
+        NSApp.activate(ignoringOtherApps: true)
+        let alert = NSAlert()
+        alert.messageText = "No Knowledge Cards Yet"
+        alert.informativeText = "Experience Defaults are generated from your knowledge cards, but none exist yet. Run the onboarding interview to build them from your documents, or add cards manually in the Knowledge Card browser."
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "Start Onboarding Interview")
+        alert.addButton(withTitle: "Open Knowledge Card Browser")
+        alert.addButton(withTitle: "Cancel")
+        switch alert.runModal() {
+        case .alertFirstButtonReturn:
+            showOnboardingInterview()
+        case .alertSecondButtonReturn:
+            openKnowledgeCardBrowser()
+        default:
+            break
+        }
+    }
+
+    /// Bring the main window's References module forward on the Knowledge tab.
+    private func openKnowledgeCardBrowser() {
+        NotificationCenter.default.post(
+            name: .navigateToModule, object: nil,
+            userInfo: ["module": AppModule.references.rawValue]
+        )
+        NotificationCenter.default.post(
+            name: .navigateToReferencesTab, object: nil,
+            userInfo: ["tab": ReferencesModuleView.Tab.knowledge.rawValue]
+        )
         NSApp.activate(ignoringOtherApps: true)
     }
 

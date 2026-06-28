@@ -30,8 +30,15 @@ enum SettingsCategory: String, CaseIterable, Identifiable {
 
 struct SettingsView: View {
     @Environment(DiscoveryCoordinator.self) private var searchOpsCoordinator
-    @State private var selectedCategory: SettingsCategory? = .apiKeys
+    @State private var selectedCategory: SettingsCategory?
     @State private var showSetupWizard = false
+    /// Model-setting key whose row should be boxed in red ("no model selected").
+    @State private var highlightedModelKey: String?
+
+    init(initialCategory: SettingsCategory = .apiKeys, initialHighlightModelKey: String? = nil) {
+        _selectedCategory = State(initialValue: initialCategory)
+        _highlightedModelKey = State(initialValue: initialHighlightModelKey)
+    }
 
     var body: some View {
         NavigationSplitView {
@@ -45,6 +52,12 @@ struct SettingsView: View {
             SetupWizardView {
                 showSetupWizard = false
             }
+        }
+        // Drive an already-open Settings window to the Models tab + highlight when a
+        // "no model configured" failure routes here.
+        .onReceive(NotificationCenter.default.publisher(for: .highlightModelSetting)) { note in
+            selectedCategory = .models
+            highlightedModelKey = note.userInfo?["settingKey"] as? String
         }
     }
 
@@ -71,7 +84,7 @@ struct SettingsView: View {
         case .apiKeys:
             apiKeysDetail
         case .models:
-            ModelsSettingsView()
+            ModelsSettingsView(highlightedKey: $highlightedModelKey)
         case .resume:
             ResumeSettingsSection()
         case .onboarding:

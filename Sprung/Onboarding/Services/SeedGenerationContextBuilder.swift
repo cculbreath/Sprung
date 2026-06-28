@@ -11,7 +11,7 @@ import SwiftyJSON
 @MainActor
 enum SeedGenerationContextBuilder {
     static func build(
-        coordinator: OnboardingInterviewCoordinator,
+        knowledgeCardStore: KnowledgeCardStore,
         skillStore: SkillStore,
         experienceDefaultsStore: ExperienceDefaultsStore,
         applicantProfileStore: ApplicantProfileStore?,
@@ -29,8 +29,9 @@ enum SeedGenerationContextBuilder {
             applicantProfile = ApplicantProfileDraft()
         }
 
-        // Get knowledge cards from onboarding
-        let knowledgeCards = coordinator.getKnowledgeCardStore().onboardingCards
+        // All knowledge cards feed generation — both onboarding-derived and any the
+        // user added manually in the Knowledge Card browser.
+        let knowledgeCards = knowledgeCardStore.knowledgeCards
 
         // Get title sets from library for LLM selection
         let titleSets = titleSetStore?.allTitleSets ?? []

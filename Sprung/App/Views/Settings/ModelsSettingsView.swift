@@ -10,6 +10,10 @@ import SwiftUI
 import SwiftOpenAI
 
 struct ModelsSettingsView: View {
+    /// When set to a model-setting key, that row is boxed in red with a tooltip.
+    /// Cleared once the user picks a model. Bound to the owning SettingsView.
+    @Binding var highlightedKey: String?
+
     // MARK: - Onboarding Models
     @AppStorage("onboardingAnthropicModelId") private var onboardingAnthropicModelId: String = ""
 
@@ -113,7 +117,7 @@ struct ModelsSettingsView: View {
     @ViewBuilder
     private var modelRows: some View {
         // Interview
-        modelRow(operation: "Interview", backend: .anthropic) {
+        modelRow(operation: "Interview", backend: .anthropic, highlightKeys: ["onboardingAnthropicModelId"]) {
             anthropicPicker(selection: $onboardingAnthropicModelId)
         }
 
@@ -121,21 +125,21 @@ struct ModelsSettingsView: View {
         experienceDefaultsRow
 
         // Resume Revision
-        modelRow(operation: "Resume Revision", backend: .anthropic) {
+        modelRow(operation: "Resume Revision", backend: .anthropic, highlightKeys: ["resumeRevisionModelId"]) {
             anthropicPicker(selection: $resumeRevisionModelId)
         }
 
         Divider().padding(.vertical, 4)
 
         // Document Processing
-        modelRow(operation: "Document Analysis", backend: .anthropic) {
+        modelRow(operation: "Document Analysis", backend: .anthropic, highlightKeys: ["onboardingDocAnalysisModelId"]) {
             anthropicPicker(selection: $docAnalysisModelId)
         }
         Text("Powers all document ingestion passes: summary, narrative cards, skill bank, and enrichment. Sonnet balances extraction quality and cost; Haiku is the budget option. Extraction fidelity feeds all downstream cards.")
             .font(.footnote)
             .foregroundStyle(.secondary)
             .padding(.leading, operationWidth + backendWidth)
-        modelRow(operation: "Card Merge", backend: .anthropic) {
+        modelRow(operation: "Card Merge", backend: .anthropic, highlightKeys: ["onboardingCardMergeModelId"]) {
             anthropicPicker(selection: $cardMergeModelId)
         }
         Text("Deduplicates and curates cards/skills after ingestion. Structured judgment over already-extracted content — Sonnet handles this well at a fraction of Opus cost.")
@@ -146,33 +150,33 @@ struct ModelsSettingsView: View {
         Divider().padding(.vertical, 4)
 
         // Skill Processing
-        modelRow(operation: "Inference Guidance", backend: .openRouter) {
+        modelRow(operation: "Inference Guidance", backend: .openRouter, highlightKeys: ["guidanceExtractionModelId"]) {
             openRouterPicker(selection: $guidanceExtractionModelId)
         }
-        modelRow(operation: "Skills Processing", backend: .openRouter) {
+        modelRow(operation: "Skills Processing", backend: .openRouter, highlightKeys: ["skillsProcessingModelId"]) {
             openRouterPicker(selection: $skillsProcessingModelId)
         }
-        modelRow(operation: "Skill Curation", backend: .openRouter) {
+        modelRow(operation: "Skill Curation", backend: .openRouter, highlightKeys: ["skillCurationModelId"]) {
             openRouterPicker(selection: $skillCurationModelId)
         }
 
         Divider().padding(.vertical, 4)
 
         // Additional Models
-        modelRow(operation: "Voice Profile", backend: .openRouter) {
+        modelRow(operation: "Voice Profile", backend: .openRouter, highlightKeys: ["voiceProfileModelId"]) {
             openRouterPicker(selection: $voiceProfileModelId)
         }
-        modelRow(operation: "KC Agent", backend: .openRouter) {
+        modelRow(operation: "KC Agent", backend: .openRouter, highlightKeys: ["onboardingKCAgentModelId"]) {
             openRouterPicker(selection: $kcAgentModelId)
         }
-        modelRow(operation: "Git Ingest", backend: .anthropic) {
+        modelRow(operation: "Git Ingest", backend: .anthropic, highlightKeys: ["onboardingGitIngestModelId"]) {
             anthropicPicker(selection: $gitIngestModelId)
         }
         Text("Multi-turn repository analysis agent. High request volume across many repos/commits — Haiku keeps this affordable; step up to Sonnet only if analysis quality disappoints.")
             .font(.footnote)
             .foregroundStyle(.secondary)
             .padding(.leading, operationWidth + backendWidth)
-        modelRow(operation: "Background Processing", backend: .openRouter) {
+        modelRow(operation: "Background Processing", backend: .openRouter, highlightKeys: ["backgroundProcessingModelId"]) {
             openRouterPicker(selection: $backgroundProcessingModelId)
         }
         jobImportRow
@@ -182,7 +186,7 @@ struct ModelsSettingsView: View {
         // Discovery
         discoveryAIRow
         discoveryReasoningRow
-        modelRow(operation: "Discovery Coaching", backend: .openRouter) {
+        modelRow(operation: "Discovery Coaching", backend: .openRouter, highlightKeys: ["discoveryCoachingModelId"]) {
             openRouterPicker(selection: $coachingModelId)
         }
     }
@@ -192,6 +196,7 @@ struct ModelsSettingsView: View {
     private func modelRow<P: View>(
         operation: String,
         backend: Backend,
+        highlightKeys: [String] = [],
         @ViewBuilder picker: () -> P
     ) -> some View {
         HStack(spacing: 0) {
@@ -203,6 +208,20 @@ struct ModelsSettingsView: View {
             Spacer()
         }
         .padding(.vertical, 6)
+        .modelRowHighlight(active: isHighlighted(highlightKeys))
+    }
+
+    // MARK: - Highlight (no-model-selected affordance)
+
+    /// True when `highlightedKey` matches one of this row's setting keys.
+    private func isHighlighted(_ keys: [String]) -> Bool {
+        guard let highlightedKey else { return false }
+        return keys.contains(highlightedKey)
+    }
+
+    /// Drop the red highlight once the user makes a selection.
+    private func clearHighlight() {
+        highlightedKey = nil
     }
 
     // MARK: - Special Rows
@@ -214,8 +233,8 @@ struct ModelsSettingsView: View {
 
             // Backend switcher
             Menu {
-                Button("Anthropic") { seedGenerationBackend = "anthropic" }
-                Button("OpenRouter") { seedGenerationBackend = "openrouter" }
+                Button("Anthropic") { seedGenerationBackend = "anthropic"; clearHighlight() }
+                Button("OpenRouter") { seedGenerationBackend = "openrouter"; clearHighlight() }
             } label: {
                 HStack(spacing: 4) {
                     Text(backendLabel(seedGenerationBackend))
@@ -239,6 +258,9 @@ struct ModelsSettingsView: View {
             Spacer()
         }
         .padding(.vertical, 6)
+        .modelRowHighlight(active: isHighlighted([
+            "seedGenerationBackend", "seedGenerationAnthropicModelId", "seedGenerationOpenRouterModelId",
+        ]))
     }
 
     private func backendLabel(_ backend: String) -> String {
@@ -271,6 +293,7 @@ struct ModelsSettingsView: View {
             Spacer()
         }
         .padding(.vertical, 6)
+        .modelRowHighlight(active: isHighlighted(["jobImportModelId"]))
     }
 
     private var discoveryReasoningRow: some View {
@@ -381,6 +404,7 @@ struct ModelsSettingsView: View {
                 ForEach(filteredAnthropicModels) { model in
                     Button(model.displayName) {
                         selection.wrappedValue = model.id
+                        clearHighlight()
                     }
                 }
             } label: {
@@ -407,6 +431,7 @@ struct ModelsSettingsView: View {
                 ForEach(allOpenRouterModels, id: \.modelId) { model in
                     Button(model.displayName.isEmpty ? model.modelId : model.displayName) {
                         selection.wrappedValue = model.modelId
+                        clearHighlight()
                     }
                 }
             } label: {
@@ -441,6 +466,7 @@ struct ModelsSettingsView: View {
                 ForEach(filteredOpenAIModels, id: \.id) { model in
                     Button(model.id) {
                         selection.wrappedValue = model.id
+                        clearHighlight()
                         var s = discoveryCoordinator.settingsStore.current()
                         guard s.llmModelId != model.id else { return }
                         s.llmModelId = model.id
@@ -491,6 +517,23 @@ struct ModelsSettingsView: View {
                 (lhs.displayName.isEmpty ? lhs.modelId : lhs.displayName)
                     < (rhs.displayName.isEmpty ? rhs.modelId : rhs.displayName)
             }
+    }
+}
+
+// MARK: - Row Highlight Modifier
+private extension View {
+    /// Box a model row in red with a "select a model" tooltip when `active`.
+    func modelRowHighlight(active: Bool) -> some View {
+        padding(.horizontal, active ? 8 : 0)
+            .background(
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(Color.red.opacity(active ? 0.08 : 0))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 6)
+                    .stroke(Color.red, lineWidth: active ? 1.5 : 0)
+            )
+            .help(active ? "Select a model for this operation" : "")
     }
 }
 

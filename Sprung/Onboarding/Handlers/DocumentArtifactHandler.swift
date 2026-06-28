@@ -445,11 +445,14 @@ actor DocumentArtifactHandler: OnboardingEventEmitter {
             let userMessage: String
             if let extractionError = error as? DocumentExtractionService.ExtractionError {
                 userMessage = extractionError.userFacingMessage
-            } else if error is ModelConfigurationError {
+            } else if let modelError = error as? ModelConfigurationError {
                 // Repo standard: missing model config surfaces the settings picker.
                 userMessage = "Document analysis model not configured. Choose one in Settings → Models, then re-upload \(filename)."
                 await MainActor.run {
-                    NotificationCenter.default.post(name: .showSettings, object: nil)
+                    NotificationCenter.default.post(
+                        name: .showModelSettings, object: nil,
+                        userInfo: ["settingKey": modelError.settingKey]
+                    )
                 }
             } else {
                 userMessage = "Failed to extract \(filename)"

@@ -54,6 +54,12 @@ extension Notification.Name {
 
     // Window Commands (for toolbar buttons)
     static let showSettings = Notification.Name("showSettings")
+    /// Open Settings → Models and (optionally) highlight the unconfigured row.
+    /// userInfo: ["settingKey": String] — the UserDefaults key whose picker is unset.
+    static let showModelSettings = Notification.Name("showModelSettings")
+    /// Internal: drive an already-open SettingsView to the Models tab and highlight
+    /// a row. userInfo: ["settingKey": String] (absent = navigate only, no highlight).
+    static let highlightModelSetting = Notification.Name("highlightModelSetting")
     static let showApplicantProfile = Notification.Name("showApplicantProfile")
     static let showTemplateEditor = Notification.Name("showTemplateEditor")
     static let showExperienceEditor = Notification.Name("showExperienceEditor")

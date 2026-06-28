@@ -58,6 +58,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             name: .showSettings,
             object: nil
         )
+        // Deep-link to Settings → Models with the offending row highlighted. Observed
+        // here so any "no model configured" failure can route the user to the picker
+        // regardless of which window or module raised it.
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleShowModelSettings(_:)),
+            name: .showModelSettings,
+            object: nil
+        )
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(showApplicantProfileWindow),
@@ -125,6 +134,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc func showSettingsWindow() {
         windowManager.showSettings()
+    }
+
+    @objc private func handleShowModelSettings(_ notification: Notification) {
+        let key = notification.userInfo?["settingKey"] as? String
+        windowManager.showModelSettings(highlightKey: key)
     }
 
     @objc func showApplicantProfileWindow() {

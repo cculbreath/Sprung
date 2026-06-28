@@ -219,8 +219,11 @@ struct WritingSamplesBrowserTab: View {
                 service.storeVoiceProfile(profile, in: guidanceStore, coverRefStore: coverRefStore)
                 voiceResultMessage = voiceProfileSummary(profile, sampleCount: samples.count)
                 Logger.info("🎤 Voice profile extracted from writing samples browser (\(samples.count) samples)", category: .ai)
-            } catch is ModelConfigurationError {
-                NotificationCenter.default.post(name: .showSettings, object: nil)
+            } catch let error as ModelConfigurationError {
+                NotificationCenter.default.post(
+                    name: .showModelSettings, object: nil,
+                    userInfo: ["settingKey": error.settingKey]
+                )
                 voiceResultMessage = "Voice profile model is not configured. Choose one in Settings → Models, then try again."
             } catch {
                 voiceResultMessage = "Extraction failed: \(error.localizedDescription)"
