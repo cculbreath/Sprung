@@ -193,6 +193,9 @@ class CandidateDossier: Identifiable, Codable {
 
         parts.append("Job Search Context:\n\(jobSearchContext)")
 
+        if let throughLines = careerThroughLines, !throughLines.isEmpty {
+            parts.append("Career Through-Lines:\n\(throughLines)")
+        }
         if let strengths = strengthsToEmphasize, !strengths.isEmpty {
             parts.append("Strengths to Emphasize:\n\(strengths)")
         }
@@ -211,12 +214,16 @@ class CandidateDossier: Identifiable, Codable {
         return parts.joined(separator: "\n\n")
     }
 
-    /// Export for job matching/fit scoring (context + constraints only)
+    /// Export for job matching/fit scoring (context + constraints + the
+    /// cross-cutting career narrative as fit signal)
     func exportForJobMatching() -> String {
         var parts: [String] = []
 
         parts.append("<job_search_context>\n\(jobSearchContext)\n</job_search_context>")
 
+        if let throughLines = careerThroughLines, !throughLines.isEmpty {
+            parts.append("<career_through_lines>\n\(throughLines)\n</career_through_lines>")
+        }
         if let prefs = workArrangementPreferences, !prefs.isEmpty {
             parts.append("<work_preferences>\n\(prefs)\n</work_preferences>")
         }
@@ -253,6 +260,9 @@ class CandidateDossier: Identifiable, Codable {
         parts.append("<candidate_profile>")
         parts.append("Job Search Context:\n\(jobSearchContext)")
 
+        if let throughLines = careerThroughLines, !throughLines.isEmpty {
+            parts.append("\nCareer Through-Lines:\n\(throughLines)")
+        }
         if let strengths = strengthsToEmphasize, !strengths.isEmpty {
             parts.append("\nStrengths:\n\(strengths)")
         }
