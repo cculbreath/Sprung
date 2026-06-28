@@ -422,8 +422,13 @@ struct ModelsSettingsView: View {
     @ViewBuilder
     private func openRouterPicker(selection: Binding<String>) -> some View {
         if allOpenRouterModels.isEmpty {
-            Text("No models enabled")
-                .foregroundStyle(.secondary)
+            if let fetchError = enabledLLMStore.fetchError {
+                Text("Couldn't load models — \(fetchError)")
+                    .foregroundStyle(.red)
+            } else {
+                Text("No models enabled")
+                    .foregroundStyle(.secondary)
+            }
         } else {
             let selectedModel = allOpenRouterModels.first { $0.modelId == selection.wrappedValue }
             let displayName = selectedModel.map { $0.displayName.isEmpty ? $0.modelId : $0.displayName } ?? "Select..."

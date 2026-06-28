@@ -53,11 +53,11 @@ actor DiscoveryAgentService {
 
     // MARK: - Prompt Loading
 
-    private func loadPromptTemplate(named name: String) -> String {
+    private func loadPromptTemplate(named name: String) throws -> String {
         guard let url = Bundle.main.url(forResource: name, withExtension: "txt", subdirectory: "Prompts"),
               let content = try? String(contentsOf: url, encoding: .utf8) else {
             Logger.error("Failed to load prompt template: \(name)", category: .ai)
-            return "Error loading prompt template"
+            throw DiscoveryAgentError.promptTemplateMissing(name)
         }
         return content
     }
@@ -177,7 +177,7 @@ actor DiscoveryAgentService {
     // MARK: - Task Methods
 
     func generateDailyTasks(focusArea: String = "balanced") async throws -> DailyTasksResult {
-        let systemPrompt = loadPromptTemplate(named: "discovery_generate_daily_tasks")
+        let systemPrompt = try loadPromptTemplate(named: "discovery_generate_daily_tasks")
         let response = try await runAgent(
             systemPrompt: systemPrompt,
             userMessage: "Generate today's job search tasks. Focus area: \(focusArea)"
@@ -191,7 +191,7 @@ actor DiscoveryAgentService {
         candidateContext: String = "",
         statusCallback: (@MainActor @Sendable (DiscoveryStatus) async -> Void)? = nil
     ) async throws -> JobSourcesResult {
-        let systemPrompt = loadPromptTemplate(named: "discovery_discover_job_sources")
+        let systemPrompt = try loadPromptTemplate(named: "discovery_discover_job_sources")
 
         var userMessage = "Discover job sources for sectors: \(sectors.joined(separator: ", ")) in \(location)"
         if !candidateContext.isEmpty {
@@ -217,7 +217,7 @@ actor DiscoveryAgentService {
         statusCallback: (@MainActor @Sendable (DiscoveryStatus) async -> Void)? = nil,
         reasoningCallback: (@MainActor @Sendable (String) async -> Void)? = nil
     ) async throws -> NetworkingEventsResult {
-        let systemPrompt = loadPromptTemplate(named: "discovery_discover_networking_events")
+        let systemPrompt = try loadPromptTemplate(named: "discovery_discover_networking_events")
 
         var userMessage = "Find networking events for sectors: \(sectors.joined(separator: ", ")) in \(location) for the next \(daysAhead) days"
         if !candidateContext.isEmpty {
@@ -238,7 +238,7 @@ actor DiscoveryAgentService {
     }
 
     func prepareForEvent(eventId: UUID, focusCompanies: [String] = [], goals: String? = nil) async throws -> EventPrepResult {
-        let systemPrompt = loadPromptTemplate(named: "discovery_prepare_for_event")
+        let systemPrompt = try loadPromptTemplate(named: "discovery_prepare_for_event")
         var userMessage = "Prepare me for event \(eventId.uuidString)"
         if !focusCompanies.isEmpty {
             userMessage += ". Focus on companies: \(focusCompanies.joined(separator: ", "))"
@@ -257,7 +257,7 @@ actor DiscoveryAgentService {
         contactsMade: [String],
         notes: String
     ) async throws -> DebriefOutcomesResult {
-        let systemPrompt = loadPromptTemplate(named: "discovery_debrief_outcomes")
+        let systemPrompt = try loadPromptTemplate(named: "discovery_debrief_outcomes")
 
         var contextParts: [String] = ["Event: \(eventName) (\(eventType))"]
         if !contactsMade.isEmpty {
@@ -279,7 +279,7 @@ actor DiscoveryAgentService {
     }
 
     func generateWeeklyReflection() async throws -> String {
-        let systemPrompt = loadPromptTemplate(named: "discovery_generate_weekly_reflection")
+        let systemPrompt = try loadPromptTemplate(named: "discovery_generate_weekly_reflection")
         return try await runAgent(
             systemPrompt: systemPrompt,
             userMessage: "Generate my weekly job search reflection"
@@ -293,7 +293,7 @@ actor DiscoveryAgentService {
         count: Int = 5,
         modelOverride: String? = nil
     ) async throws -> JobSelectionsResult {
-        let systemPrompt = loadPromptTemplate(named: "discovery_choose_best_jobs")
+        let systemPrompt = try loadPromptTemplate(named: "discovery_choose_best_jobs")
 
         var userMessage = "Please select the top \(count) jobs from the following opportunities.\n\n"
         userMessage += "## CANDIDATE KNOWLEDGE CARDS\n\(knowledgeContext)\n\n"

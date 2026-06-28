@@ -111,15 +111,11 @@ struct ResumeBannerView: View {
         .sheet(isPresented: $showCreateResumeSheet) {
             CreateResumeView(
                 onCreateResume: { template, sources in
-                    do {
-                        try resStore.create(
-                            jobApp: jobApp,
-                            sources: sources,
-                            template: template
-                        )
-                    } catch {
-                        ToastCenter.shared.show(.error("Couldn't create resume — \(error.localizedDescription)"))
-                    }
+                    try resStore.create(
+                        jobApp: jobApp,
+                        sources: sources,
+                        template: template
+                    )
                 }
             )
             .padding()

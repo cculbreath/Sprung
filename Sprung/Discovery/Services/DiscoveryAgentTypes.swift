@@ -326,6 +326,7 @@ enum DiscoveryAgentError: Error, LocalizedError {
     case invalidResponse
     case toolExecutionFailed(String)
     case llmError(String)
+    case promptTemplateMissing(String)
 
     var errorDescription: String? {
         switch self {
@@ -339,6 +340,8 @@ enum DiscoveryAgentError: Error, LocalizedError {
             return "Tool execution failed: \(reason)"
         case .llmError(let reason):
             return "LLM error: \(reason)"
+        case .promptTemplateMissing(let name):
+            return "A required prompt template (\(name)) is missing — the app may need to be reinstalled."
         }
     }
 }

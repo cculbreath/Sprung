@@ -10,8 +10,9 @@ import Foundation
 struct CreateResumeView: View {
     @Environment(TemplateStore.self) private var templateStore: TemplateStore
     @Environment(KnowledgeCardStore.self) private var knowledgeCardStore: KnowledgeCardStore
-    var onCreateResume: (Template, [KnowledgeCard]) -> Void
+    var onCreateResume: (Template, [KnowledgeCard]) throws -> Void
     @State private var selectedTemplateID: UUID?
+    @State private var createError: String?
     @Environment(\.dismiss) private var dismiss
     var body: some View {
         let templates = templateStore.templates()
@@ -53,6 +54,12 @@ struct CreateResumeView: View {
             }
             .padding(.bottom, 10)
             Spacer()
+            if let createError {
+                Text(createError)
+                    .font(.callout)
+                    .foregroundStyle(.red)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
             // Action buttons
             HStack {
                 Button("Cancel") {
@@ -71,8 +78,12 @@ struct CreateResumeView: View {
                         )
                         return
                     }
-                    onCreateResume(selectedTemplate, knowledgeCardStore.knowledgeCards)
-                    dismiss()
+                    do {
+                        try onCreateResume(selectedTemplate, knowledgeCardStore.knowledgeCards)
+                        dismiss()
+                    } catch {
+                        createError = "Couldn't create resume — \(error.localizedDescription)"
+                    }
                 }) {
                     HStack {
                         Image(systemName: "doc.badge.plus")

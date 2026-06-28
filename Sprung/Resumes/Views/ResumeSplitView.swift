@@ -73,16 +73,12 @@ struct ResumeSplitView: View {
         .sheet(isPresented: $showCreateResumeSheet) {
             CreateResumeView(
                 onCreateResume: { template, sources in
-                    do {
-                        try resStore.create(
-                            jobApp: selApp,
-                            sources: sources,
-                            template: template
-                        )
-                        refresh.toggle()
-                    } catch {
-                        ToastCenter.shared.show(.error("Couldn't create resume — \(error.localizedDescription)"))
-                    }
+                    try resStore.create(
+                        jobApp: selApp,
+                        sources: sources,
+                        template: template
+                    )
+                    refresh.toggle()
                 }
             )
             .padding()

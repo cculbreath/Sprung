@@ -507,9 +507,15 @@ private extension SetupWizardView {
     var coachingModelPicker: some View {
         VStack(alignment: .leading, spacing: 8) {
             if enabledLLMStore.enabledModels.isEmpty {
-                Text("Enable OpenRouter models to choose a coaching model.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+                if let fetchError = enabledLLMStore.fetchError {
+                    Text("Couldn't load models — \(fetchError)")
+                        .font(.footnote)
+                        .foregroundStyle(.red)
+                } else {
+                    Text("Enable OpenRouter models to choose a coaching model.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
             } else {
                 Picker("Daily Coaching Model", selection: $coachingModelId) {
                     ForEach(enabledLLMStore.enabledModels.sorted(by: { $0.displayName < $1.displayName }), id: \.modelId) { model in
