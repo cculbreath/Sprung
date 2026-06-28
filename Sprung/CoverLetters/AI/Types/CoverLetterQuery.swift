@@ -185,7 +185,13 @@ enum CoverLetterQueryError: LocalizedError {
             return string
         }
         Logger.warning("CoverLetterQuery: resume context is \(byteCount) bytes; truncating to \(Self.maxResumeContextBytes) bytes to avoid prompt overflow.")
-        resumeContextTruncationWarning = "Resume was too large to include in full — the cover letter was generated from a partial resume (\(byteCount / 1_000)k bytes, trimmed to \(Self.maxResumeContextBytes / 1_000)k). Consider reducing resume length."
+        let truncationWarning = "Resume was too large to include in full — the cover letter was generated from a partial resume (\(byteCount / 1_000)k bytes, trimmed to \(Self.maxResumeContextBytes / 1_000)k). Consider reducing resume length."
+        resumeContextTruncationWarning = truncationWarning
+        // No consumer observes the property, so surface the truncation directly —
+        // otherwise the partial-resume generation is silent to the user.
+        Task { @MainActor in
+            ToastCenter.shared.show(.info(truncationWarning))
+        }
         let truncated = truncateContext(string, maxBytes: Self.maxResumeContextBytes)
         return truncated + "\n\n/* truncated resume context to fit cover letter prompt */"
     }

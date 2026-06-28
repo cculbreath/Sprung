@@ -98,7 +98,10 @@ struct ChipDropDelegate: DropDelegate {
                 node.myIndex = idx
             }
             parent.children = originalChildren
-            ToastCenter.shared.show(.error("Couldn't save the skill order — \(error.localizedDescription)"))
+            let message = "Couldn't save the skill order — \(error.localizedDescription)"
+            Task { @MainActor in
+                ToastCenter.shared.show(.error(message))
+            }
         }
     }
 }

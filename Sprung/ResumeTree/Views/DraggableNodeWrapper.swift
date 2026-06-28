@@ -134,7 +134,10 @@ struct NodeDropDelegate: DropDelegate {
                 node.myIndex = idx
             }
             parent.children = originalChildren
-            ToastCenter.shared.show(.error("Couldn't save the order — \(error.localizedDescription)"))
+            let message = "Couldn't save the order — \(error.localizedDescription)"
+            Task { @MainActor in
+                ToastCenter.shared.show(.error(message))
+            }
         }
     }
     private func haveSameParent(_ n1: TreeNode, _ n2: TreeNode) -> Bool {

@@ -378,7 +378,7 @@ final class SecondaryWindowService {
                 NotificationCenter.default.post(name: .discoveryTriggerTaskGeneration, object: nil)
             }
             if triggerWeeklyReflection, let coordinator = self?.deps?.searchOpsCoordinator {
-                Task {
+                Task { @MainActor in
                     do {
                         try await coordinator.generateWeeklyReflection()
                     } catch {
