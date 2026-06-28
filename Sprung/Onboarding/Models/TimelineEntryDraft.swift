@@ -10,6 +10,10 @@ struct TimelineEntryDraft: Identifiable, Equatable, Codable {
     var location: String
     var start: String
     var end: String
+    /// Degree earned — education cards only (e.g. "Ph.D.", "B.S."). Empty for other types.
+    var degree: String
+    /// GPA/score — education cards only, optional. Empty for other types.
+    var gpa: String
     var summary: String
     var highlights: [String]
 
@@ -21,6 +25,8 @@ struct TimelineEntryDraft: Identifiable, Equatable, Codable {
         location: String = "",
         start: String = "",
         end: String = "",
+        degree: String = "",
+        gpa: String = "",
         summary: String = "",
         highlights: [String] = []
     ) {
@@ -31,6 +37,8 @@ struct TimelineEntryDraft: Identifiable, Equatable, Codable {
         self.location = location
         self.start = start
         self.end = end
+        self.degree = degree
+        self.gpa = gpa
         self.summary = summary
         self.highlights = highlights
     }

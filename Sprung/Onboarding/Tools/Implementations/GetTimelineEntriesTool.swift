@@ -9,7 +9,8 @@ struct GetTimelineEntriesTool: InterviewTool {
                 Retrieve the skeleton timeline entries (positions, education, etc.) from Phase 1.
                 Use this in Phase 2 to iterate over each entry and generate Knowledge Cards.
                 RETURNS: { "count": <number>, "entries": [{ timeline entry objects }] }
-                Each entry contains: id, title/role, organization/company, location, start, end, type
+                Each entry contains: id, title/role, organization/company, location, start, end, type.
+                Education entries also carry degree (e.g. 'Ph.D.') and optional gpa, and their title is the field of study.
                 """,
             properties: [:],
             required: [],

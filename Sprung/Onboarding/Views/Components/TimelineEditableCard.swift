@@ -166,10 +166,10 @@ struct TimelineEditableCard: View {
             // Title & Organization
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Title")
+                    Text(entry.experienceType == .education ? "Field of Study" : "Title")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                    TextField("Job title, degree, etc.", text: $entry.title)
+                    TextField(entry.experienceType == .education ? "Physics, Computer Science, etc." : "Job title, role, etc.", text: $entry.title)
                         .textFieldStyle(.roundedBorder)
                 }
                 VStack(alignment: .leading, spacing: 4) {
@@ -205,6 +205,27 @@ struct TimelineEditableCard: View {
                     TextField("YYYY-MM or blank", text: $entry.end)
                         .textFieldStyle(.roundedBorder)
                         .frame(maxWidth: 120)
+                }
+            }
+
+            // Degree & GPA (education cards only)
+            if entry.experienceType == .education {
+                HStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Degree")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        TextField("Ph.D., B.S., etc.", text: $entry.degree)
+                            .textFieldStyle(.roundedBorder)
+                    }
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("GPA")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        TextField("Optional", text: $entry.gpa)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(maxWidth: 120)
+                    }
                 }
             }
 

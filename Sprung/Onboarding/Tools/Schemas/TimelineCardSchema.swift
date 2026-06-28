@@ -44,7 +44,7 @@ enum TimelineCardSchema {
                 ),
                 "title": JSONSchema(
                     type: .string,
-                    description: "Position or role title (e.g., 'Senior Software Engineer', 'Graduate Student')"
+                    description: "For work/volunteer/project cards: position or role title (e.g., 'Senior Software Engineer'). For EDUCATION cards: the FIELD OF STUDY (e.g., 'Physics', 'Computer Science'), NOT a role like 'Graduate Student'."
                 ),
                 "organization": JSONSchema(
                     type: .string,
@@ -61,6 +61,14 @@ enum TimelineCardSchema {
                 "end": JSONSchema(
                     type: .string,
                     description: "Date when position ended in human-readable format (e.g., 'December 2022', 'June 2021'). Use 'Present' or empty string for current/ongoing positions."
+                ),
+                "degree": JSONSchema(
+                    type: .string,
+                    description: "Degree earned — education cards only (e.g. 'Ph.D.', 'B.S.', 'M.A.'). Omit for non-education cards."
+                ),
+                "gpa": JSONSchema(
+                    type: .string,
+                    description: "GPA/score — education cards only, optional (e.g. '3.9/4.0'). Omit for non-education cards."
                 ),
                 "url": JSONSchema(
                     type: .string,

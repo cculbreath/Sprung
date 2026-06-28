@@ -17,6 +17,8 @@ struct CreateTimelineCardInput: Codable {
     var location: String?
     var start: String
     var end: String?
+    var degree: String?
+    var gpa: String?
     var url: String?
 }
 
@@ -28,6 +30,8 @@ struct UpdateTimelineCardInput: Codable {
     var location: String?
     var start: String?
     var end: String?
+    var degree: String?
+    var gpa: String?
     var url: String?
 }
 

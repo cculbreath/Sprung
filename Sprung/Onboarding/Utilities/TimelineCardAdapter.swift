@@ -30,6 +30,8 @@ enum TimelineCardAdapter {
                 location: card.location,
                 start: card.start,
                 end: card.end,
+                degree: card.degree,
+                gpa: card.gpa,
                 summary: card.summary,
                 highlights: card.highlights
             )
@@ -46,6 +48,8 @@ enum TimelineCardAdapter {
                 location: draft.location,
                 start: draft.start,
                 end: draft.end,
+                degree: draft.degree,
+                gpa: draft.gpa,
                 summary: draft.summary,
                 highlights: draft.highlights
             )

@@ -63,6 +63,8 @@ struct UpdateTimelineCardTool: InterviewTool {
                                   input.location != nil ||
                                   input.start != nil ||
                                   input.end != nil ||
+                                  input.degree != nil ||
+                                  input.gpa != nil ||
                                   input.url != nil
 
         guard hasAtLeastOneField else {
@@ -86,6 +88,12 @@ struct UpdateTimelineCardTool: InterviewTool {
         }
         if let end = input.end {
             normalizedFields["end"].string = end
+        }
+        if let degree = input.degree {
+            normalizedFields["degree"].string = degree
+        }
+        if let gpa = input.gpa {
+            normalizedFields["gpa"].string = gpa
         }
         if let url = input.url {
             normalizedFields["url"].string = url

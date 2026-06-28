@@ -256,7 +256,10 @@ final class OnboardingPersistenceService {
         var draft = EducationExperienceDraft()
         draft.institution = card["organization"].stringValue
         draft.url = card["url"].stringValue
+        // For education cards `title` is the field of study (see TimelineCardSchema + phase2 prompt).
         draft.area = card["title"].stringValue
+        draft.studyType = card["degree"].stringValue
+        draft.score = card["gpa"].stringValue
         draft.startDate = card["start"].stringValue
         draft.endDate = card["end"].stringValue
         return draft

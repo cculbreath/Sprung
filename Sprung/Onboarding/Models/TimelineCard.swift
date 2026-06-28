@@ -26,6 +26,10 @@ struct TimelineCard: Identifiable, Equatable {
     var location: String
     var start: String
     var end: String
+    /// Degree earned — education cards only (e.g. "Ph.D.", "B.S."). Empty for other types.
+    var degree: String
+    /// GPA/score — education cards only, optional. Empty for other types.
+    var gpa: String
     var summary: String
     var highlights: [String]
     init(
@@ -36,6 +40,8 @@ struct TimelineCard: Identifiable, Equatable {
         location: String = "",
         start: String = "",
         end: String = "",
+        degree: String = "",
+        gpa: String = "",
         summary: String = "",
         highlights: [String] = []
     ) {
@@ -46,6 +52,8 @@ struct TimelineCard: Identifiable, Equatable {
         self.location = location
         self.start = start
         self.end = end
+        self.degree = degree
+        self.gpa = gpa
         self.summary = summary
         self.highlights = highlights
     }
@@ -61,6 +69,8 @@ struct TimelineCard: Identifiable, Equatable {
         location = json["location"].stringValue
         start = json["start"].stringValue
         end = json["end"].stringValue
+        degree = json["degree"].stringValue
+        gpa = json["gpa"].stringValue
         summary = json["summary"].stringValue
         highlights = json["highlights"].arrayValue.compactMap { entry in
             let trimmed = entry.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -75,6 +85,8 @@ struct TimelineCard: Identifiable, Equatable {
         location = fields["location"].stringValue
         start = fields["start"].stringValue
         end = fields["end"].stringValue
+        degree = fields["degree"].stringValue
+        gpa = fields["gpa"].stringValue
         summary = fields["summary"].stringValue
         highlights = fields["highlights"].arrayValue.compactMap { entry in
             let trimmed = entry.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -96,6 +108,8 @@ struct TimelineCard: Identifiable, Equatable {
             location: fields["location"].string ?? location,
             start: fields["start"].string ?? start,
             end: fields["end"].string ?? end,
+            degree: fields["degree"].string ?? degree,
+            gpa: fields["gpa"].string ?? gpa,
             summary: fields["summary"].string ?? summary,
             highlights: fields["highlights"].array.map { array in
                 array.compactMap { entry in
@@ -114,6 +128,8 @@ struct TimelineCard: Identifiable, Equatable {
         payload["location"].string = location
         payload["start"].string = start
         payload["end"].string = end
+        payload["degree"].string = degree
+        payload["gpa"].string = gpa
         payload["summary"].string = summary
         payload["highlights"] = JSON(highlights)
         return payload

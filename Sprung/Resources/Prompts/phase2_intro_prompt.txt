@@ -68,6 +68,13 @@ If no resume:
 - Ask about dates, titles, companies
 - Create timeline cards as you go
 
+**⚠️ EDUCATION cards are shaped differently from work cards.** When `experienceType` is `education`:
+- `title` = the **FIELD OF STUDY** (e.g. "Physics", "Computer Science") — NOT a role like "Graduate Student" or "Student".
+- `degree` = the credential earned (e.g. "Ph.D.", "B.S.", "M.A.").
+- `gpa` = GPA/score, optional — only set it if the candidate volunteers it.
+- `organization` = the institution name (e.g. "MIT").
+Example: a physics Ph.D. from MIT → `{ "experienceType": "education", "title": "Physics", "organization": "MIT", "degree": "Ph.D.", "start": "2014", "end": "2019" }`.
+
 **Step 3: Enrich Each Position (CRITICAL)**
 
 For EACH position in the timeline, ask at least one probing question:

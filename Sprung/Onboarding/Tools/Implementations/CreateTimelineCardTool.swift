@@ -24,7 +24,10 @@ struct CreateTimelineCardTool: InterviewTool {
         Create skeleton timeline card for a position, role, or education. \
         REQUIRED: fields object with title, organization, start. \
         Optional: experienceType (work|education|volunteer|project), location, end, url. \
+        For EDUCATION cards: put the FIELD OF STUDY in title (e.g. 'Physics'), NOT a role like 'Graduate Student'; \
+        use degree for the credential (e.g. 'Ph.D.', 'B.S.') and gpa for an optional score. \
         Example: { "fields": { "experienceType": "work", "title": "Engineer", "organization": "Acme", "start": "2020", "end": "2023" } }. \
+        Education example: { "fields": { "experienceType": "education", "title": "Physics", "organization": "MIT", "degree": "Ph.D.", "gpa": "3.9", "start": "2014", "end": "2019" } }. \
         RETURNS: { "success": true, "id": "<card-id>" }. \
         DO NOT generate descriptions/bullets - only skeleton facts.
         """
@@ -74,6 +77,12 @@ struct CreateTimelineCardTool: InterviewTool {
         normalizedFields["start"].string = input.start
         if let end = input.end {
             normalizedFields["end"].string = end
+        }
+        if let degree = input.degree {
+            normalizedFields["degree"].string = degree
+        }
+        if let gpa = input.gpa {
+            normalizedFields["gpa"].string = gpa
         }
         if let url = input.url {
             normalizedFields["url"].string = url
