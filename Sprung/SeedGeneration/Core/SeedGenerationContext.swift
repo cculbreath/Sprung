@@ -310,8 +310,7 @@ extension SeedGenerationContext {
                 "studyType": edu.studyType,
                 "startDate": edu.startDate,
                 "endDate": edu.endDate,
-                "score": edu.score,
-                "courses": edu.courses.map { $0.name }
+                "score": edu.score
             ])
         }
 

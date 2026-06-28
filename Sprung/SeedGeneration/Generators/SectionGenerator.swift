@@ -227,14 +227,16 @@ class BaseSectionGenerator: SectionGenerator {
                 schema: schema
             )
         } else {
-            // OpenRouter path: use standard structured output
+            // OpenRouter path: use standard structured output with the model's
+            // full completion headroom so schema-bounded responses aren't truncated.
             let fullPrompt = "\(config.preamble)\n\n---\n\n\(taskPrompt)"
             return try await config.llmFacade.executeStructuredWithDictionarySchema(
                 prompt: "\(systemPrompt)\n\n\(fullPrompt)",
                 modelId: config.modelId,
                 as: responseType,
                 schema: schema,
-                schemaName: schemaName
+                schemaName: schemaName,
+                maxOutputTokens: config.llmFacade.maxOutputTokens(forModel: config.modelId) ?? 32_768
             )
         }
     }
@@ -249,12 +251,6 @@ class BaseSectionGenerator: SectionGenerator {
             context += "The following highlights were rejected:\n"
             for highlight in highlights {
                 context += "- \(highlight)\n"
-            }
-
-        case .educationDescription(_, let description, let courses):
-            context += "Description: \(description)\n"
-            if !courses.isEmpty {
-                context += "Courses: \(courses.joined(separator: ", "))\n"
             }
 
         case .volunteerDescription(_, let summary, let highlights):

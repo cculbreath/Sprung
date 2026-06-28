@@ -41,7 +41,6 @@ final class SeedGenerationOrchestrator {
 
     private let generators: [any SectionGenerator] = [
         WorkHighlightsGenerator(),
-        EducationGenerator(),
         VolunteerGenerator(),
         ProjectsGenerator(),
         SkillsGroupingGenerator(),
@@ -313,10 +312,6 @@ final class SeedGenerationOrchestrator {
             // Parse description and highlights, keep keywords
             let (description, highlights) = parseDescriptionAndHighlights(editedText)
             return GeneratedContent(type: .projectDescription(targetId: targetId, description: description, highlights: highlights, keywords: keywords))
-
-        case .educationDescription(let targetId, _, let courses):
-            // For education, edited text is just the description
-            return GeneratedContent(type: .educationDescription(targetId: targetId, description: editedText.trimmingCharacters(in: .whitespacesAndNewlines), courses: courses))
 
         case .objective:
             return GeneratedContent(type: .objective(summary: editedText.trimmingCharacters(in: .whitespacesAndNewlines)))

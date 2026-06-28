@@ -204,17 +204,6 @@ struct ReviewItemCard: View {
                 }
             }
 
-        case .educationDescription(_, let description, let courses):
-            VStack(alignment: .leading, spacing: 8) {
-                Text(description)
-                    .font(.body)
-                if !courses.isEmpty {
-                    Text("Courses: \(courses.joined(separator: ", "))")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-
         case .objective(let summary):
             Text(summary)
                 .font(.body)
@@ -515,8 +504,6 @@ struct ReviewItemCard: View {
             return highlights.map { "- \($0)" }.joined(separator: "\n")
         case .objective(let summary):
             return summary
-        case .educationDescription(_, let description, _):
-            return description
         case .volunteerDescription(_, let summary, _):
             return summary
         case .projectDescription(_, let description, let highlights, _):

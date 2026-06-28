@@ -300,13 +300,14 @@ final class LLMFacadeSpecializedAPIs {
         userPrompt: String,
         modelId: String,
         responseType: T.Type,
-        schema: [String: Any]
+        schema: [String: Any],
+        maxTokens: Int
     ) async throws -> T {
         let parameters = AnthropicMessageParameter(
             model: modelId,
             messages: [.user(userPrompt)],
             system: .blocks(systemContent),
-            maxTokens: 4096,
+            maxTokens: maxTokens,
             stream: false,
             outputConfig: AnthropicOutputConfig.schema(schema)
         )

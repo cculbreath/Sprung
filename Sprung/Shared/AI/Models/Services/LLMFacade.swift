@@ -760,12 +760,17 @@ final class LLMFacade {
         schema: [String: Any]
     ) async throws -> T {
         let start = ContinuousClock.now
+        // Give structured output the model's full completion headroom so large
+        // (schema-bounded) responses aren't truncated mid-JSON. Falls back to a
+        // conservative floor only when OpenRouter doesn't expose the model's limit.
+        let maxTokens = maxOutputTokens(forModel: modelId) ?? 4096
         let result = try await specializedAPIs.executeStructuredWithAnthropicCaching(
             systemContent: systemContent,
             userPrompt: userPrompt,
             modelId: modelId,
             responseType: responseType,
-            schema: schema
+            schema: schema,
+            maxTokens: maxTokens
         )
         LLMTranscriptLogger.logAnthropicCall(
             method: "executeStructuredWithAnthropicCaching", modelId: modelId,

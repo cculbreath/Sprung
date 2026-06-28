@@ -28,10 +28,6 @@ struct GeneratedContent: Equatable {
         /// Work summary description
         case workSummary(targetId: String, summary: String)
 
-        // MARK: - Education Section
-        /// Education description and courses
-        case educationDescription(targetId: String, description: String, courses: [String])
-
         // MARK: - Volunteer Section
         /// Volunteer description and highlights
         case volunteerDescription(targetId: String, summary: String, highlights: [String])
@@ -99,8 +95,6 @@ extension GeneratedContent.ContentType: Equatable {
             return idA == idB && hA == hB
         case (.workSummary(let idA, let sA), .workSummary(let idB, let sB)):
             return idA == idB && sA == sB
-        case (.educationDescription(let idA, let dA, let cA), .educationDescription(let idB, let dB, let cB)):
-            return idA == idB && dA == dB && cA == cB
         case (.volunteerDescription(let idA, let sA, let hA), .volunteerDescription(let idB, let sB, let hB)):
             return idA == idB && sA == sB && hA == hB
         case (.projectDescription(let idA, let dA, let hA, let kA), .projectDescription(let idB, let dB, let hB, let kB)):
@@ -168,7 +162,6 @@ extension GeneratedContent {
         switch type {
         case .workHighlights(let id, _),
              .workSummary(let id, _),
-             .educationDescription(let id, _, _),
              .volunteerDescription(let id, _, _),
              .projectDescription(let id, _, _, _),
              .awardSummary(let id, _),
@@ -200,8 +193,6 @@ extension GeneratedContent {
         switch type {
         case .workSummary(_, let text):
             return text
-        case .educationDescription(_, let description, _):
-            return description
         case .volunteerDescription(_, let summary, _):
             return summary
         case .projectDescription(_, let description, _, _):
@@ -222,8 +213,6 @@ extension GeneratedContent {
         switch type {
         case .workHighlights, .workSummary:
             return .work
-        case .educationDescription:
-            return .education
         case .volunteerDescription:
             return .volunteer
         case .projectDescription:
