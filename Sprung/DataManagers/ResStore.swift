@@ -6,6 +6,21 @@
 import Foundation
 import SwiftData
 import SwiftUI
+
+enum ResStoreError: LocalizedError {
+    case manifestNotFound(templateSlug: String)
+    case treeBuilderFailed(templateSlug: String)
+
+    var errorDescription: String? {
+        switch self {
+        case .manifestNotFound(let slug):
+            return "No template manifest found for \"\(slug)\". The template may be missing required configuration."
+        case .treeBuilderFailed(let slug):
+            return "Failed to build the resume structure for template \"\(slug)\". The template configuration may be invalid."
+        }
+    }
+}
+
 @Observable
 @MainActor
 final class ResStore: SwiftDataStore {
@@ -24,7 +39,7 @@ final class ResStore: SwiftDataStore {
         self.experienceDefaultsStore = experienceDefaultsStore
     }
     @discardableResult
-    func create(jobApp: JobApp, sources: [KnowledgeCard], template: Template) -> Resume? {
+    func create(jobApp: JobApp, sources: [KnowledgeCard], template: Template) throws -> Resume {
         // ModelContext is guaranteed to exist
         let modelContext = self.modelContext
         let resume = Resume(jobApp: jobApp, enabledSources: sources, template: template)
@@ -36,8 +51,7 @@ final class ResStore: SwiftDataStore {
             jobApp.status = .inProgress
         }
         guard let manifest = TemplateManifestLoader.manifest(for: template) else {
-            Logger.error("ResStore.create: No manifest found for template \(template.slug)")
-            return nil
+            throw ResStoreError.manifestNotFound(templateSlug: template.slug)
         }
         let experienceDefaults = experienceDefaultsStore.currentDefaults()
         let treeBuilder = ExperienceDefaultsToTree(
@@ -46,8 +60,7 @@ final class ResStore: SwiftDataStore {
             manifest: manifest
         )
         guard let rootNode = treeBuilder.buildTree() else {
-            Logger.error("ResStore.create: Failed to build resume tree for template \(template.slug)")
-            return nil
+            throw ResStoreError.treeBuilderFailed(templateSlug: template.slug)
         }
         resume.rootNode = rootNode
 
@@ -65,6 +78,7 @@ final class ResStore: SwiftDataStore {
                 try await exportCoordinator.ensureFreshRenderedText(for: resume)
             } catch {
                 Logger.error("ResStore.create: Failed to render initial PDF for resume \(resume.id): \(error)")
+                ToastCenter.shared.show(.info("Resume created — preview will refresh on next open."))
             }
         }
         return resume
@@ -105,6 +119,7 @@ final class ResStore: SwiftDataStore {
                 try await exportCoordinator.ensureFreshRenderedText(for: newResume)
             } catch {
                 Logger.error("ResStore.duplicate: Failed to render PDF for duplicated resume \(newResume.id): \(error)")
+                ToastCenter.shared.show(.info("Resume duplicated — preview will refresh on next open."))
             }
         }
         return newResume

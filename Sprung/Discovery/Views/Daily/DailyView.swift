@@ -16,6 +16,7 @@ struct DailyView: View {
     @State private var regeneratingCategory: TaskCategory?
     @State private var showingFeedbackSheet = false
     @State private var feedbackText = ""
+    @State private var taskGenerationError: String?
 
     init(coordinator: DiscoveryCoordinator, triggerTaskGeneration: Binding<Bool> = .constant(false)) {
         self.coordinator = coordinator
@@ -138,6 +139,14 @@ struct DailyView: View {
                     }
                 )
             }
+        }
+        .alert("Task Generation Failed", isPresented: Binding(
+            get: { taskGenerationError != nil },
+            set: { if !$0 { taskGenerationError = nil } }
+        )) {
+            Button("OK") { taskGenerationError = nil }
+        } message: {
+            Text(taskGenerationError ?? "")
         }
     }
 
@@ -405,6 +414,7 @@ struct DailyView: View {
             try await coordinator.generateDailyTasks()
         } catch {
             Logger.error("Failed to generate daily tasks: \(error)", category: .ai)
+            taskGenerationError = "Couldn't refresh daily tasks — \(error.localizedDescription)"
         }
     }
 
@@ -419,12 +429,12 @@ struct DailyView: View {
 
         do {
             try await coordinator.coachingService?.regenerateTasksForCategory(category, feedback: feedbackText)
+            regeneratingCategory = nil
+            feedbackText = ""
         } catch {
             Logger.error("Failed to regenerate \(category.displayName) tasks: \(error)", category: .ai)
+            taskGenerationError = "Couldn't regenerate \(category.displayName) tasks — \(error.localizedDescription)"
         }
-
-        regeneratingCategory = nil
-        feedbackText = ""
     }
 }
 

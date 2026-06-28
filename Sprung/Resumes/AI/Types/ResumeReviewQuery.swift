@@ -8,17 +8,17 @@ import Foundation
 @Observable class ResumeReviewQuery {
     // MARK: - Prompt Loading
 
-    private func loadPromptTemplate(named name: String) -> String {
+    private func loadPromptTemplate(named name: String) -> String? {
         guard let url = Bundle.main.url(forResource: name, withExtension: "txt", subdirectory: "Prompts"),
               let content = try? String(contentsOf: url, encoding: .utf8) else {
             Logger.error("Failed to load prompt template: \(name)", category: .ai)
-            return "Error loading prompt template"
+            return nil
         }
         return content
     }
 
-    private func loadPromptTemplateWithSubstitutions(named name: String, substitutions: [String: String]) -> String {
-        var template = loadPromptTemplate(named: name)
+    private func loadPromptTemplateWithSubstitutions(named name: String, substitutions: [String: String]) -> String? {
+        guard var template = loadPromptTemplate(named: name) else { return nil }
         for (key, value) in substitutions {
             template = template.replacingOccurrences(of: "{\(key)}", with: value)
         }
@@ -107,11 +107,16 @@ import Foundation
         writersVoice: String,
         allowEntityMerge: Bool = false
     ) -> String {
-        let mergeInstructions = allowEntityMerge ? loadPromptTemplate(named: "resume_merge_instructions") : ""
-        let prompt = loadPromptTemplateWithSubstitutions(named: "resume_fix_fits", substitutions: [
+        let mergeInstructions = allowEntityMerge ? (loadPromptTemplate(named: "resume_merge_instructions") ?? "") : ""
+        guard let prompt = loadPromptTemplateWithSubstitutions(named: "resume_fix_fits", substitutions: [
             "skillsJsonString": skillsJsonString,
             "mergeInstructions": mergeInstructions
-        ])
+        ]) else {
+            Task { @MainActor in
+                ToastCenter.shared.show(.error("Couldn't load resume prompt template — the app resources may be incomplete."))
+            }
+            return ""
+        }
         return prompt + fixFitsConstraintSections(
             pageCount: pageCount,
             pageLimit: pageLimit,
@@ -137,12 +142,17 @@ import Foundation
         allowEntityMerge: Bool = false
     ) -> String {
         let overflowGuidance = "The rendered resume currently spans \(pageCount) page\(pageCount == 1 ? "" : "s"); the limit is \(pageLimit) page\(pageLimit == 1 ? "" : "s"). Tighten the skills content so the resume fits within the limit."
-        let mergeInstructions = allowEntityMerge ? loadPromptTemplate(named: "resume_merge_instructions") : ""
-        let prompt = loadPromptTemplateWithSubstitutions(named: "resume_grok_fix_fits", substitutions: [
+        let mergeInstructions = allowEntityMerge ? (loadPromptTemplate(named: "resume_merge_instructions") ?? "") : ""
+        guard let prompt = loadPromptTemplateWithSubstitutions(named: "resume_grok_fix_fits", substitutions: [
             "overflowGuidance": overflowGuidance,
             "skillsJsonString": skillsJsonString,
             "mergeInstructions": mergeInstructions
-        ])
+        ]) else {
+            Task { @MainActor in
+                ToastCenter.shared.show(.error("Couldn't load resume prompt template — the app resources may be incomplete."))
+            }
+            return ""
+        }
         return prompt + fixFitsConstraintSections(
             pageCount: pageCount,
             pageLimit: pageLimit,

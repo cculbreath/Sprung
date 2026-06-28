@@ -495,6 +495,12 @@ class MultiModelCoverLetterService {
                     Logger.debug("💾 Successfully saved committee feedback to database")
                 } catch {
                     Logger.error("❌ Failed to save committee feedback: \(error.localizedDescription)")
+                    let saveNote = "Analysis complete but won't appear after relaunch (save failed: \(error.localizedDescription))"
+                    if let existing = errorMessage {
+                        errorMessage = "\(existing); \(saveNote)"
+                    } else {
+                        errorMessage = saveNote
+                    }
                 }
             }
         } catch {

@@ -206,6 +206,11 @@ enum TemplateManifestDefaults {
             return apply(overrides: overrides, to: base, slug: template.slug)
         } catch {
             Logger.warning("TemplateManifestDefaults: Unable to decode manifest overrides for slug \(template.slug): \(error); falling back to defaults.")
+            Task { @MainActor in
+                ToastCenter.shared.show(.error(
+                    "Template \"\(template.slug)\" has invalid configuration — custom fonts, AI fields, and section settings may not apply. \(error.localizedDescription)"
+                ))
+            }
             return base
         }
     }

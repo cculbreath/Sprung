@@ -161,6 +161,7 @@ final class PhaseTransitionService {
             Logger.info("📁 Artifact filesystem initialized at \(exportRoot.path) (\(knowledgeCards.count) KCs)", category: .ai)
         } catch {
             Logger.error("📁 Failed to export artifacts for filesystem browsing: \(error)", category: .ai)
+            ToastCenter.shared.show(.error("Analysis files couldn't be written — the AI may not find your documents this session. \(error.localizedDescription)"))
         }
     }
 
@@ -176,7 +177,8 @@ final class PhaseTransitionService {
             try ArtifactExporter.exportSingleArtifact(artifact, to: rootURL)
             Logger.info("📁 Updated artifact in filesystem: \(artifact.filename)", category: .ai)
         } catch {
-            Logger.error("📁 Failed to update artifact in filesystem: \(error)", category: .ai)
+            Logger.warning("📁 Failed to update artifact in filesystem: \(error)", category: .ai)
+            ToastCenter.shared.show(.error("Couldn't sync \"\(artifact.filename)\" to the analysis workspace — the AI may see stale data."))
         }
     }
 
@@ -192,7 +194,8 @@ final class PhaseTransitionService {
             try ArtifactExporter.exportSingleKnowledgeCard(knowledgeCard, to: rootURL)
             Logger.info("📁 Updated knowledge card in filesystem: \(knowledgeCard.title)", category: .ai)
         } catch {
-            Logger.error("📁 Failed to update knowledge card in filesystem: \(error)", category: .ai)
+            Logger.warning("📁 Failed to update knowledge card in filesystem: \(error)", category: .ai)
+            ToastCenter.shared.show(.error("Couldn't sync card \"\(knowledgeCard.title)\" to the analysis workspace — the AI may see stale data."))
         }
     }
 }

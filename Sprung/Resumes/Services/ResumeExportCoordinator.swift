@@ -29,7 +29,8 @@ final class ResumeExportCoordinator {
     func debounceExport(
         resume: Resume,
         onStart: (() -> Void)? = nil,
-        onFinish: (() -> Void)? = nil
+        onFinish: (() -> Void)? = nil,
+        onFailure: ((Error) -> Void)? = nil
     ) {
         cancelPendingExport(for: resume)
         exportingResumeIDs.insert(resume.id)
@@ -45,6 +46,7 @@ final class ResumeExportCoordinator {
                     try await self.exportService.export(for: resume)
                 } catch {
                     Logger.error("Debounced export failed: \(error)")
+                    onFailure?(error)
                 }
             }
         }

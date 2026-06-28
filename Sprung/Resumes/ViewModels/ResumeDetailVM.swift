@@ -175,7 +175,12 @@ final class ResumeDetailVM {
     }
     /// Re‑exports the resume JSON → PDF via the debounce mechanism.
     func refreshPDF() {
-        exportCoordinator.debounceExport(resume: resume)
+        exportCoordinator.debounceExport(
+            resume: resume,
+            onFailure: { error in
+                ToastCenter.shared.show(.error("Couldn't refresh the resume preview — \(error.localizedDescription)"))
+            }
+        )
     }
 
     /// Triggers SwiftUI to re-evaluate revnode count display

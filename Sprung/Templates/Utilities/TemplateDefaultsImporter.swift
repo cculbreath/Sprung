@@ -39,6 +39,9 @@ struct TemplateDefaultsImporter {
             }
         } catch {
             Logger.error("❌ TemplateDefaultsImporter failed: \(error)", category: .migration)
+            ToastCenter.shared.show(.error(
+                "Couldn't install default templates — you may not be able to create resumes until this is resolved. \(error.localizedDescription)"
+            ))
         }
     }
     private func installDefaults() throws -> Int {

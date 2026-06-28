@@ -37,6 +37,9 @@ class StandaloneKCAnalyzer {
     struct AnalysisResult {
         let skillBank: SkillBank
         let narrativeCards: [KnowledgeCard]
+        /// Per-document extraction failures accumulated during analysis.
+        /// Non-empty means at least one document produced 0 output due to an error.
+        let documentFailures: [(filename: String, reason: String)]
     }
 
     // MARK: - Public API
@@ -51,6 +54,7 @@ class StandaloneKCAnalyzer {
     func analyzeArtifacts(_ artifacts: [JSON], deduplicateNarratives: Bool = false) async throws -> AnalysisResult {
         var allSkills: [Skill] = []
         var allNarrativeCards: [KnowledgeCard] = []
+        var documentFailures: [(filename: String, reason: String)] = []
 
         for artifact in artifacts {
             let docId = artifact["id"].stringValue
@@ -72,6 +76,7 @@ class StandaloneKCAnalyzer {
                     allSkills.append(contentsOf: skills)
                 } catch {
                     Logger.warning("⚠️ StandaloneKCAnalyzer: Failed to extract skills from \(filename): \(error.localizedDescription)", category: .ai)
+                    documentFailures.append((filename: filename, reason: "Skills extraction failed: \(error.localizedDescription)"))
                 }
             }
 
@@ -90,6 +95,7 @@ class StandaloneKCAnalyzer {
                     allNarrativeCards.append(contentsOf: cards)
                 } catch {
                     Logger.warning("⚠️ StandaloneKCAnalyzer: Failed to extract narrative cards from \(filename): \(error.localizedDescription)", category: .ai)
+                    documentFailures.append((filename: filename, reason: "Card extraction failed: \(error.localizedDescription)"))
                 }
             }
         }
@@ -114,7 +120,8 @@ class StandaloneKCAnalyzer {
 
         return AnalysisResult(
             skillBank: mergedSkillBank,
-            narrativeCards: finalNarrativeCards
+            narrativeCards: finalNarrativeCards,
+            documentFailures: documentFailures
         )
     }
 

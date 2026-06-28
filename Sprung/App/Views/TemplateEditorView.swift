@@ -73,6 +73,7 @@ struct TemplateEditorView: View {
     @State private var pdfController = PDFPreviewController()
     @State var templatePendingDeletion: String?
     @State var showRevertConfirmation: Bool = false
+    @State var overlayLoadError: String?
     private var textFilterReference: [TextFilterInfo] {
         TemplateTextFilters.reference
     }
@@ -210,6 +211,7 @@ struct TemplateEditorView: View {
                 }
             case .failure(let error):
                 Logger.error("TemplateEditor: Failed to load overlay PDF: \(error)")
+                overlayLoadError = "Couldn't open the overlay PDF — \(error.localizedDescription)"
             }
         }
         .sheet(isPresented: $showOverlayOptionsSheet) {
@@ -251,6 +253,16 @@ struct TemplateEditorView: View {
             Button("Cancel", role: .cancel) { }
         } message: {
             Text("Reloads the template and manifest from the last saved state.")
+        }
+        .alert("Couldn't Load Overlay PDF", isPresented: Binding(
+            get: { overlayLoadError != nil },
+            set: { if !$0 { overlayLoadError = nil } }
+        )) {
+            Button("OK") { overlayLoadError = nil }
+        } message: {
+            if let error = overlayLoadError {
+                Text(error)
+            }
         }
         .toolbar(id: "templateEditorToolbar") {
             TemplateEditorToolbar(

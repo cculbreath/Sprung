@@ -13,6 +13,7 @@ extension TreeNode {
             return String(data: jsonData, encoding: .utf8)
         } catch {
             Logger.error("Failed to convert TreeNode to JSON: \(error)")
+            assertionFailure("TreeNode.toJSONString failed — callers (FixOverflow, SkillReorder) will silently skip: \(error)")
             return nil
         }
     }

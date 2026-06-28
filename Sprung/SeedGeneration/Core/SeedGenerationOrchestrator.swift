@@ -71,8 +71,8 @@ final class SeedGenerationOrchestrator {
 
     private func setupRegenerationCallback() {
         reviewQueue.onRegenerationRequested = { [weak self] itemId, originalContent, feedback in
-            guard let self else { return nil }
-            return await self.regenerateItem(itemId: itemId, originalContent: originalContent, feedback: feedback)
+            guard let self else { throw RegenerationError.noContext }
+            return try await self.regenerateItem(itemId: itemId, originalContent: originalContent, feedback: feedback)
         }
     }
 
@@ -99,6 +99,28 @@ final class SeedGenerationOrchestrator {
         }
     }
 
+    // MARK: - Regeneration Errors
+
+    enum RegenerationError: LocalizedError {
+        case noContext
+        case itemNotFound
+        case generatorNotFound(String)
+        case generationFailed(Error)
+
+        var errorDescription: String? {
+            switch self {
+            case .noContext:
+                return "Couldn't regenerate — session context is no longer available. Try restarting seed generation."
+            case .itemNotFound:
+                return "Couldn't regenerate — the item was not found in the queue."
+            case .generatorNotFound(let name):
+                return "Couldn't regenerate — no generator found for \(name)."
+            case .generationFailed(let error):
+                return "Regeneration failed — \(error.localizedDescription)"
+            }
+        }
+    }
+
     // MARK: - Section Progress
 
     struct SectionProgress: Identifiable {
@@ -106,8 +128,17 @@ final class SeedGenerationOrchestrator {
         var status: Status
         var totalTasks: Int
         var completedTasks: Int
+        var failedTasks: Int = 0
 
         var id: String { section.rawValue }
+
+        /// Non-nil when the section finished with at least one failure; use in UI to show a per-section error label.
+        var failureMessage: String? {
+            guard failedTasks > 0 else { return nil }
+            return failedTasks == 1
+                ? "1 item failed to generate"
+                : "\(failedTasks) items failed to generate"
+        }
 
         enum Status {
             case pending
@@ -191,6 +222,8 @@ final class SeedGenerationOrchestrator {
 
             updateSectionStatus(generator.sectionKey, to: .running)
 
+            var sectionHadFailure = false
+
             for task in generatorTasks {
                 activityTracker.startTask(id: task.id, displayName: task.displayName)
 
@@ -210,10 +243,12 @@ final class SeedGenerationOrchestrator {
                 } catch {
                     Logger.error("Task failed: \(task.displayName) - \(error)", category: .ai)
                     activityTracker.failTask(id: task.id, error: error.localizedDescription)
+                    sectionHadFailure = true
+                    incrementFailedCount(for: generator.sectionKey)
                 }
             }
 
-            updateSectionStatus(generator.sectionKey, to: .completed)
+            updateSectionStatus(generator.sectionKey, to: sectionHadFailure ? .failed : .completed)
         }
     }
 
@@ -337,28 +372,24 @@ final class SeedGenerationOrchestrator {
 
     // MARK: - Regeneration
 
-    /// Regenerate a rejected item with user feedback
+    /// Regenerate a rejected item with user feedback. Throws `RegenerationError` on failure
+    /// so the caller can surface the reason to the user via `.regenerationFailed`.
     private func regenerateItem(
         itemId: UUID,
         originalContent: GeneratedContent,
         feedback: String?
-    ) async -> GeneratedContent? {
+    ) async throws -> GeneratedContent {
         guard let context else {
-            Logger.error("Cannot regenerate: no context available", category: .ai)
-            return nil
+            throw RegenerationError.noContext
         }
 
-        // Find the original item to get its task
         guard let item = reviewQueue.item(for: itemId) else {
-            Logger.error("Cannot regenerate: item not found", category: .ai)
-            return nil
+            throw RegenerationError.itemNotFound
         }
 
-        // Find the generator for this task
         let generatorTypeName = item.task.generatorType
         guard let generator = generators.first(where: { String(describing: type(of: $0)) == generatorTypeName }) else {
-            Logger.error("Cannot regenerate: generator not found for \(generatorTypeName)", category: .ai)
-            return nil
+            throw RegenerationError.generatorNotFound(generatorTypeName)
         }
 
         let preamble = promptCacheService.buildPreamble(context: context)
@@ -372,17 +403,15 @@ final class SeedGenerationOrchestrator {
         )
 
         do {
-            let newContent = try await generator.regenerate(
+            return try await generator.regenerate(
                 task: item.task,
                 originalContent: originalContent,
                 feedback: feedback,
                 context: context,
                 config: config
             )
-            return newContent
         } catch {
-            Logger.error("Regeneration failed: \(error)", category: .ai)
-            return nil
+            throw RegenerationError.generationFailed(error)
         }
     }
 
@@ -397,6 +426,12 @@ final class SeedGenerationOrchestrator {
     private func incrementCompletedCount(for section: ExperienceSectionKey) {
         if let index = sectionProgress.firstIndex(where: { $0.section == section }) {
             sectionProgress[index].completedTasks += 1
+        }
+    }
+
+    private func incrementFailedCount(for section: ExperienceSectionKey) {
+        if let index = sectionProgress.firstIndex(where: { $0.section == section }) {
+            sectionProgress[index].failedTasks += 1
         }
     }
 }

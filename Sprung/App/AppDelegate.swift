@@ -228,6 +228,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 NSApp.activate(ignoringOtherApps: true)
             } else {
                 Logger.warning("capture-job URL missing 'url' parameter", category: .appLifecycle)
+                ToastCenter.shared.show(.error("Couldn't capture job — the URL was missing required information."))
             }
 
         default:

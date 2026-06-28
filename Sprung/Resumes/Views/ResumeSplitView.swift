@@ -73,12 +73,15 @@ struct ResumeSplitView: View {
         .sheet(isPresented: $showCreateResumeSheet) {
             CreateResumeView(
                 onCreateResume: { template, sources in
-                    if resStore.create(
-                        jobApp: selApp,
-                        sources: sources,
-                        template: template
-                    ) != nil {
+                    do {
+                        try resStore.create(
+                            jobApp: selApp,
+                            sources: sources,
+                            template: template
+                        )
                         refresh.toggle()
+                    } catch {
+                        ToastCenter.shared.show(.error("Couldn't create resume — \(error.localizedDescription)"))
                     }
                 }
             )
@@ -106,6 +109,7 @@ struct ResumeSplitView: View {
     // MARK: - Empty States
 
     @State private var emptyStateTemplateID: UUID?
+    @State private var noResumeCreateError: String?
 
     private func noResumeState(selApp: JobApp) -> some View {
         let templates = templateStore.templates()
@@ -134,12 +138,15 @@ struct ResumeSplitView: View {
                             let templateID = emptyStateTemplateID,
                             let template = templates.first(where: { $0.id == templateID })
                         else { return }
-                        if resStore.create(
-                            jobApp: selApp,
-                            sources: knowledgeCardStore.knowledgeCards,
-                            template: template
-                        ) != nil {
+                        do {
+                            try resStore.create(
+                                jobApp: selApp,
+                                sources: knowledgeCardStore.knowledgeCards,
+                                template: template
+                            )
                             refresh.toggle()
+                        } catch {
+                            noResumeCreateError = error.localizedDescription
                         }
                     } label: {
                         HStack {
@@ -172,6 +179,17 @@ struct ResumeSplitView: View {
 
             ResumeBannerView(jobApp: selApp)
                 .frame(height: 32)
+        }
+        .alert(
+            "Couldn't Create Resume",
+            isPresented: Binding(
+                get: { noResumeCreateError != nil },
+                set: { if !$0 { noResumeCreateError = nil } }
+            )
+        ) {
+            Button("OK") { noResumeCreateError = nil }
+        } message: {
+            Text(noResumeCreateError ?? "")
         }
     }
 

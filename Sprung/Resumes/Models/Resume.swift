@@ -84,15 +84,12 @@ class Resume: Identifiable, Hashable {
     @Attribute(originalName: "textRes")
     var textResume: String = ""
     var pdfData: Data?
-    var jsonTxt: String {
-        do {
-            let context = try ResumeTemplateDataBuilder.buildContext(from: self)
-            let data = try JSONSerialization.data(withJSONObject: context, options: [.prettyPrinted])
-            return String(data: data, encoding: .utf8) ?? ""
-        } catch {
-            Logger.error("Failed to build resume JSON: \(error)")
-            return ""
-        }
+    /// Serializes the resume tree to a pretty-printed JSON string.
+    /// Throws if the context cannot be built or serialized.
+    func buildJSON() throws -> String {
+        let context = try ResumeTemplateDataBuilder.buildContext(from: self)
+        let data = try JSONSerialization.data(withJSONObject: context, options: [.prettyPrinted])
+        return String(data: data, encoding: .utf8) ?? ""
     }
 
     /// Returns true if there are any nodes marked for AI replacement (aiToReplace status)

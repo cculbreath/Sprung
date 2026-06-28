@@ -128,8 +128,16 @@ final class InterviewLifecycleService {
         let modelId: String
         do {
             modelId = try OnboardingModelConfig.currentModelId()
+        } catch let configError as ModelConfigurationError {
+            Logger.error("❌ Model not configured: \(configError.localizedDescription)", category: .ai)
+            NotificationCenter.default.post(
+                name: .showModelSettings,
+                object: nil,
+                userInfo: ["settingKey": configError.settingKey]
+            )
+            return false
         } catch {
-            Logger.error("❌ Model not configured: \(error.localizedDescription)", category: .ai)
+            Logger.error("❌ Failed to get interview model: \(error.localizedDescription)", category: .ai)
             return false
         }
         Logger.info("🎯 Setting interview model from settings: \(modelId)", category: .ai)
@@ -218,8 +226,16 @@ final class InterviewLifecycleService {
         let modelId: String
         do {
             modelId = try OnboardingModelConfig.currentModelId()
+        } catch let configError as ModelConfigurationError {
+            Logger.error("❌ Model not configured: \(configError.localizedDescription)", category: .ai)
+            NotificationCenter.default.post(
+                name: .showModelSettings,
+                object: nil,
+                userInfo: ["settingKey": configError.settingKey]
+            )
+            return false
         } catch {
-            Logger.error("❌ Model not configured: \(error.localizedDescription)", category: .ai)
+            Logger.error("❌ Failed to get interview model: \(error.localizedDescription)", category: .ai)
             return false
         }
         Logger.info("🎯 Setting interview model from settings (resume): \(modelId)", category: .ai)
@@ -389,6 +405,7 @@ final class InterviewLifecycleService {
         } catch {
             Logger.error("Failed to start orchestrator: \(error)", category: .ai)
             await state.setActiveState(false)
+            ToastCenter.shared.show(.error("Couldn't start the interview — \(error.localizedDescription)"))
             return false
         }
 

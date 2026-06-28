@@ -15,6 +15,11 @@ actor TranscriptPersistenceService: OnboardingEventEmitter {
     private let dataStore: InterviewDataStore
     private var subscriptionTask: Task<Void, Never>?
     private var isActive = false
+
+    /// Accumulates descriptions of transcript records that failed to persist.
+    /// Non-empty means the replay tape is incomplete; exposed for diagnostics
+    /// (e.g. debug UI or session-summary logging).
+    private(set) var recordingIntegrityIssues: [String] = []
     // MARK: - Initialization
     init(eventBus: EventBus, dataStore: InterviewDataStore) {
         self.eventBus = eventBus
@@ -72,6 +77,7 @@ actor TranscriptPersistenceService: OnboardingEventEmitter {
             Logger.info("✅ User transcript record persisted with identifier: \(identifier)", category: .ai)
         } catch {
             Logger.error("❌ Failed to persist user transcript record: \(error)", category: .ai)
+            recordingIntegrityIssues.append("user:\(messageId) — \(error.localizedDescription)")
         }
     }
     private func persistAssistantMessage(id: UUID, finalText: String) async {
@@ -88,6 +94,7 @@ actor TranscriptPersistenceService: OnboardingEventEmitter {
             Logger.info("✅ Assistant transcript record persisted with identifier: \(identifier)", category: .ai)
         } catch {
             Logger.error("❌ Failed to persist assistant transcript record: \(error)", category: .ai)
+            recordingIntegrityIssues.append("assistant:\(id) — \(error.localizedDescription)")
         }
     }
 }

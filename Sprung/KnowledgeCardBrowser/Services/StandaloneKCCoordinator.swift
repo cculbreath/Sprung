@@ -193,6 +193,18 @@ class StandaloneKCCoordinator {
         if !nonGitArtifacts.isEmpty {
             status = .analyzing
             let analysisResult = try await analyzer.analyzeArtifacts(nonGitArtifacts, deduplicateNarratives: deduplicateNarratives)
+            // Surface per-document extraction failures (H14/M21).
+            if !analysisResult.documentFailures.isEmpty {
+                let failureCount = analysisResult.documentFailures.count
+                if analysisResult.narrativeCards.isEmpty && analysisResult.skillBank.skills.isEmpty {
+                    // Every document failed to produce output — surface as a hard error.
+                    throw StandaloneKCError.extractionFailed(
+                        "\(failureCount) document\(failureCount == 1 ? "" : "s") failed analysis and no output was produced."
+                    )
+                }
+                // Some documents succeeded — notify the user that some were skipped.
+                ToastCenter.shared.show(.error("\(failureCount) document\(failureCount == 1 ? "" : "s") couldn't be fully analyzed and will be skipped."))
+            }
             allNewCards.append(contentsOf: analysisResult.narrativeCards)
             // Merge skill banks from git analysis and document analysis
             let mergedSkills = skillBank.skills + analysisResult.skillBank.skills
@@ -304,8 +316,13 @@ class StandaloneKCCoordinator {
                     for result in results {
                         Logger.info("StandaloneKCCoordinator: \(result.operation) - \(result.details)", category: .ai)
                     }
-                } catch is ModelConfigurationError {
+                } catch let error as ModelConfigurationError {
                     Logger.warning("StandaloneKCCoordinator: Skills processing skipped - model not configured", category: .ai)
+                    NotificationCenter.default.post(
+                        name: .showModelSettings,
+                        object: nil,
+                        userInfo: ["settingKey": error.settingKey]
+                    )
                 } catch {
                     Logger.warning("StandaloneKCCoordinator: Skills processing failed: \(error.localizedDescription)", category: .ai)
                 }
@@ -328,6 +345,7 @@ class StandaloneKCCoordinator {
 
         let enrichmentService = CardEnrichmentService(llmFacade: facade)
         var enrichedCount = 0
+        var failedEnrichmentCount = 0
         let batchSize = 5
 
         for batchStart in stride(from: 0, to: cards.count, by: batchSize) {
@@ -363,13 +381,21 @@ class StandaloneKCCoordinator {
             }
 
             // Persist successful enrichments on MainActor
-            for (i, success) in successes.enumerated() where success {
-                let card = batch[i]
-                knowledgeCardStore?.update(card)
-                enrichedCount += 1
-                status = .enriching(current: batchStart + i + 1, total: cards.count, cardTitle: card.title)
-                Logger.info("StandaloneKCCoordinator: Enriched card - \(card.title)", category: .ai)
+            for (i, success) in successes.enumerated() {
+                if success {
+                    let card = batch[i]
+                    knowledgeCardStore?.update(card)
+                    enrichedCount += 1
+                    status = .enriching(current: batchStart + i + 1, total: cards.count, cardTitle: card.title)
+                    Logger.info("StandaloneKCCoordinator: Enriched card - \(card.title)", category: .ai)
+                } else {
+                    failedEnrichmentCount += 1
+                }
             }
+        }
+
+        if failedEnrichmentCount > 0 {
+            ToastCenter.shared.show(.error("\(failedEnrichmentCount) card\(failedEnrichmentCount == 1 ? "" : "s") couldn't be enriched and were skipped."))
         }
 
         status = .completedEnrichment(count: enrichedCount)

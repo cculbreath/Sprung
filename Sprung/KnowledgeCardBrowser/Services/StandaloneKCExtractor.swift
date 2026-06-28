@@ -370,6 +370,14 @@ class StandaloneKCExtractor {
                 "StandaloneKCExtractor: git digest extraction had \(analysis.passFailures.count) pass failure(s): \(analysis.passFailures.joined(separator: " | "))",
                 category: .ai
             )
+            // Kill the green-success illusion: if every extraction pass failed and
+            // nothing useful was produced, throw so markFailed() runs in the task
+            // group rather than markCompleted() painting the agent pane green.
+            if skills.isEmpty && narrativeCards.isEmpty {
+                throw StandaloneKCError.extractionFailed(
+                    "Analysis of \(repoName) produced no cards or skills — all \(analysis.passFailures.count) extraction pass(es) failed."
+                )
+            }
         }
 
         // Accumulate derived cards and skills (these bypass the analyzer)

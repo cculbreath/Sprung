@@ -251,6 +251,16 @@ actor DocumentArtifactMessenger: OnboardingEventEmitter {
             pendingBatch = nil
             // Still emit batchUploadCompleted to clear the hasBatchUploadInProgress flag
             await emit(.processing(.batchUploadCompleted))
+            // Notify the LLM so it can tell the user — an upload "success" with no
+            // follow-up tool result would otherwise leave the conversation stalled.
+            var result = JSON()
+            result["status"].string = "failed"
+            result["message"].string = "Document extraction timed out before any usable content could be produced. Please let the user know that their document(s) were not processed — they may want to try re-uploading them."
+            let resultString = result.rawString() ?? "{}"
+            let taggedMessage = "<ui-action-result tool=\"\(OnboardingToolName.getUserUpload.rawValue)\">\n\(resultString)\n</ui-action-result>"
+            var payload = JSON()
+            payload["text"].string = taggedMessage
+            await emit(.llm(.sendUserMessage(payload: payload, isSystemGenerated: true)))
             return
         }
 
@@ -272,6 +282,16 @@ actor DocumentArtifactMessenger: OnboardingEventEmitter {
 
         guard !artifacts.isEmpty else {
             Logger.warning("⚠️ Batch complete but no artifacts to send", category: .ai)
+            // Notify the LLM so it can tell the user — documents were uploaded but
+            // none produced extractable content; leave no tool result unaccompanied.
+            var result = JSON()
+            result["status"].string = "failed"
+            result["message"].string = "Document extraction completed but produced no usable content. The files may be empty, password-protected, or in an unsupported format. Please let the user know and suggest re-uploading valid documents."
+            let resultString = result.rawString() ?? "{}"
+            let taggedMessage = "<ui-action-result tool=\"\(OnboardingToolName.getUserUpload.rawValue)\">\n\(resultString)\n</ui-action-result>"
+            var payload = JSON()
+            payload["text"].string = taggedMessage
+            await emit(.llm(.sendUserMessage(payload: payload, isSystemGenerated: true)))
             return
         }
 
@@ -459,12 +479,18 @@ actor DocumentArtifactMessenger: OnboardingEventEmitter {
         guard let storageURL = URL(string: storageURLString),
               FileManager.default.fileExists(atPath: storageURL.path) else {
             Logger.warning("⚠️ Image artifact file not found: \(storageURLString)", category: .ai)
+            var payload = JSON()
+            payload["text"].string = "The image \"\(filename)\" could not be delivered — the file is no longer available. Please let the user know."
+            await emit(.llm(.executeCoordinatorMessage(payload: payload)))
             return
         }
 
         // Read image data
         guard let imageData = try? Data(contentsOf: storageURL) else {
             Logger.warning("⚠️ Failed to read image data: \(filename)", category: .ai)
+            var payload = JSON()
+            payload["text"].string = "The image \"\(filename)\" could not be read — the file may be corrupted or inaccessible. Please let the user know."
+            await emit(.llm(.executeCoordinatorMessage(payload: payload)))
             return
         }
 

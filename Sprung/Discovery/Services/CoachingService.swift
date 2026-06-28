@@ -579,8 +579,7 @@ final class CoachingService {
             try await executeFollowUpAction(action)
         } catch {
             Logger.error("Failed to execute follow-up action: \(error)", category: .ai)
-            // Still complete the session even if follow-up fails
-            await completeSession()
+            state = .error("Couldn't complete the follow-up action — \(error.localizedDescription)")
         }
     }
 
@@ -691,6 +690,8 @@ final class CoachingService {
 
         } catch {
             Logger.error("Failed to generate daily tasks: \(error)", category: .ai)
+            state = .error("Couldn't generate today's tasks — \(error.localizedDescription)")
+            return
         }
 
         await completeSession()

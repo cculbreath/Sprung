@@ -114,6 +114,8 @@ struct NodeDropDelegate: DropDelegate {
         array.sort { $0.myIndex < $1.myIndex }
         guard let fromIndex = array.firstIndex(of: draggedNode),
               let toIndex = array.firstIndex(of: overNode) else { return }
+        let originalIndices = array.map { ($0, $0.myIndex) }
+        let originalChildren = array
         withAnimation(.easeInOut) {
             array.remove(at: fromIndex)
             let insertionIndex = (dragInfo.dropPosition == .above) ? toIndex : toIndex + 1
@@ -126,13 +128,14 @@ struct NodeDropDelegate: DropDelegate {
         }
         do {
             try parent.resume.modelContext?.save()
+            appEnvironment.resumeExportCoordinator.debounceExport(resume: parent.resume)
         } catch {
-            Logger.warning(
-                "Failed to persist dragged node reorder: \(error.localizedDescription)",
-                category: .storage
-            )
+            for (node, idx) in originalIndices {
+                node.myIndex = idx
+            }
+            parent.children = originalChildren
+            ToastCenter.shared.show(.error("Couldn't save the order — \(error.localizedDescription)"))
         }
-        appEnvironment.resumeExportCoordinator.debounceExport(resume: parent.resume)
     }
     private func haveSameParent(_ n1: TreeNode, _ n2: TreeNode) -> Bool {
         return n1.parent?.id == n2.parent?.id

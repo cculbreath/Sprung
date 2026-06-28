@@ -183,11 +183,13 @@ extension TemplateEditorView {
     func loadOverlayPDF(from url: URL) {
         guard url.startAccessingSecurityScopedResource() else {
             Logger.error("TemplateEditor: Failed to access overlay PDF at \(url.path)")
+            overlayLoadError = "Couldn't access the overlay PDF — permission denied."
             return
         }
         defer { url.stopAccessingSecurityScopedResource() }
         guard let document = PDFDocument(url: url) else {
             Logger.error("TemplateEditor: Failed to read overlay PDF at \(url.path)")
+            overlayLoadError = "Couldn't read the overlay PDF at \(url.lastPathComponent). The file may be corrupted or unreadable."
             return
         }
         pendingOverlayDocument = document

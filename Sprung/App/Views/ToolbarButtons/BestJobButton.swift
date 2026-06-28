@@ -92,7 +92,12 @@ struct BestJobButton: View {
             return
         }
 
-        let systemPrompt = loadPromptTemplate(named: "discovery_choose_best_jobs")
+        guard let systemPrompt = loadPromptTemplate(named: "discovery_choose_best_jobs") else {
+            selectionError = "Couldn't load the job-matching prompt template. The app may need to be reinstalled."
+            showSelectionReport = true
+            isProcessing = false
+            return
+        }
         var userMessage = "Please select the top 5 jobs from the following opportunities.\n\n"
         userMessage += "## CANDIDATE KNOWLEDGE CARDS\n\(knowledgeContext)\n\n"
         userMessage += "## CANDIDATE DOSSIER\n\(dossierContext)\n\n"
@@ -153,11 +158,11 @@ struct BestJobButton: View {
         isProcessing = false
     }
 
-    private func loadPromptTemplate(named name: String) -> String {
+    private func loadPromptTemplate(named name: String) -> String? {
         guard let url = Bundle.main.url(forResource: name, withExtension: "txt", subdirectory: "Prompts"),
               let content = try? String(contentsOf: url, encoding: .utf8) else {
             Logger.error("Failed to load prompt template: \(name)", category: .ai)
-            return "Error loading prompt template"
+            return nil
         }
         return content
     }

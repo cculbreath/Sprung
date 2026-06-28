@@ -31,6 +31,7 @@ struct ResumeRevisionView: View {
         c.fitWidth = true
         return c
     }()
+    @State private var pdfLoadFailed = false
     @State private var errorMessage: String?
     @State private var showError = false
 
@@ -102,6 +103,16 @@ struct ResumeRevisionView: View {
                     overlayColor: .clear,
                     controller: pdfController
                 )
+            } else if pdfLoadFailed {
+                VStack(spacing: 12) {
+                    Image(systemName: "exclamationmark.triangle")
+                        .font(.title2)
+                        .foregroundStyle(.secondary)
+                    Text("Preview unavailable — PDF generation failed.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 VStack(spacing: 12) {
                     ProgressView()
@@ -194,6 +205,7 @@ struct ResumeRevisionView: View {
             pdfData = try await pdfGenerator.generatePDF(for: resume, template: template.slug)
         } catch {
             Logger.error("ResumeRevisionView: Failed to load initial PDF: \(error)", category: .ai)
+            pdfLoadFailed = true
         }
 
         // Resolve model ID

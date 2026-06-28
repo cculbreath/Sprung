@@ -128,6 +128,7 @@ final class TranscriptionCheckpointStore {
             json = String(decoding: try Self.encoder.encode(payload), as: UTF8.self)
         } catch {
             Logger.error("Failed to encode transcription payload for checkpoint: \(error.localizedDescription)", category: .ai)
+            ToastCenter.shared.show(.error("Couldn't checkpoint a transcription chunk — it will be re-transcribed if you resume. \(error.localizedDescription)"))
             return
         }
 

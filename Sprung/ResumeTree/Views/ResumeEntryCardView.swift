@@ -166,19 +166,30 @@ struct ResumeEntryCardView: View {
         }
         // Update the title child node's value
         if let titleNode = titleNode {
-            Logger.debug("[ResumeEntryCardView] Updating titleNode.value from '\(titleNode.value)' to '\(trimmed)'")
+            let prior = titleNode.value
+            Logger.debug("[ResumeEntryCardView] Updating titleNode.value from '\(prior)' to '\(trimmed)'")
             titleNode.value = trimmed
+            do {
+                try modelContext.save()
+                vm.refreshPDF()
+                Logger.debug("[ResumeEntryCardView] Save succeeded")
+            } catch {
+                titleNode.value = prior
+                ToastCenter.shared.show(.error("Couldn't save the rename — \(error.localizedDescription)"))
+            }
         } else {
             // No dedicated title child — update the node's own name
-            Logger.debug("[ResumeEntryCardView] No titleNode found, updating node.name from '\(node.name)' to '\(trimmed)'")
+            let prior = node.name
+            Logger.debug("[ResumeEntryCardView] No titleNode found, updating node.name from '\(prior)' to '\(trimmed)'")
             node.name = trimmed
-        }
-        do {
-            try modelContext.save()
-            vm.refreshPDF()
-            Logger.debug("[ResumeEntryCardView] Save succeeded")
-        } catch {
-            Logger.error("Failed to save title rename: \(error)")
+            do {
+                try modelContext.save()
+                vm.refreshPDF()
+                Logger.debug("[ResumeEntryCardView] Save succeeded")
+            } catch {
+                node.name = prior
+                ToastCenter.shared.show(.error("Couldn't save the rename — \(error.localizedDescription)"))
+            }
         }
         isRenamingTitle = false
     }

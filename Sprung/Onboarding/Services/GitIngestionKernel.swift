@@ -228,6 +228,10 @@ actor GitIngestionKernel {
                 .joined(separator: "\n")
             Logger.info("✅ Git knowledge extraction: \(skills.count) skills, \(narrativeCards.count) narrative cards", category: .ai)
 
+            if !analysis.passFailures.isEmpty {
+                record["extractionFailures"].arrayObject = analysis.passFailures
+            }
+
             let result = IngestionResult(artifactRecord: record)
 
             await ingestionCoordinator?.handleIngestionCompleted(pendingId: pendingId, result: result)

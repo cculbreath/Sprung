@@ -126,7 +126,7 @@ final class VoiceProfileExtractionHandler {
                 }
 
                 let profile = try await voiceProfileService.extractVoiceProfile(from: samples)
-                voiceProfileService.storeVoiceProfile(profile, in: guidanceStore, coverRefStore: coverRefStore)
+                try voiceProfileService.storeVoiceProfile(profile, in: guidanceStore, coverRefStore: coverRefStore)
 
                 if let data = try? JSONEncoder().encode(profile),
                    let json = try? JSON(data: data) {
@@ -159,6 +159,7 @@ final class VoiceProfileExtractionHandler {
                         "error": error.localizedDescription
                     ]
                 )
+                await notifyLLMOfExtractionFailure(error)
                 agentActivityTracker.markFailed(agentId: trackerId, error: error.localizedDescription)
             }
         }
@@ -210,6 +211,22 @@ final class VoiceProfileExtractionHandler {
         let payload = JSON(["text": coordinatorText])
         await eventBus.publish(.llm(.executeCoordinatorMessage(payload: payload)))
         Logger.info("🎤 Sent voice profile coordinator message to LLM", category: .ai)
+    }
+
+    /// Notify the LLM that voice profile extraction failed so it can inform the user.
+    private func notifyLLMOfExtractionFailure(_ error: Error) async {
+        await conversationLog.appendSystemNote("📤 Voice profile extraction failed — notifying onboarding agent")
+
+        let coordinatorText = """
+        Voice profile extraction failed: \(error.localizedDescription)
+
+        Onboarding will continue without a voice profile. AI-generated content may not reflect the user's personal writing style as closely.
+
+        Please let the user know that voice analysis was unsuccessful, and proceed with Phase 2 as normal.
+        """
+        let payload = JSON(["text": coordinatorText])
+        await eventBus.publish(.llm(.executeCoordinatorMessage(payload: payload)))
+        Logger.info("🎤 Sent voice profile failure coordinator message to LLM", category: .ai)
     }
 
     private func buildProfileSummary(_ profile: VoiceProfile) -> String {

@@ -63,23 +63,25 @@ final class WebExtractionService {
         let skillBankService = SkillBankService(llmFacade: llmFacade)
         let kcExtractionService = KnowledgeCardExtractionService(llmFacade: llmFacade)
 
-        async let skillsTask: [Skill]? = generateSkills(
+        async let skillsTask = generateSkills(
             service: skillBankService,
             artifactId: artifactId,
             filename: filename,
             extractedText: extractedText
         )
-        async let cardsTask: [KnowledgeCard]? = generateNarrativeCards(
+        async let cardsTask = generateNarrativeCards(
             service: kcExtractionService,
             artifactId: artifactId,
             filename: filename,
             extractedText: extractedText
         )
 
-        let (skills, narrativeCards) = await (skillsTask, cardsTask)
-        let skillCount = skills?.count ?? 0
-        let kcCount = narrativeCards?.count ?? 0
-        statusCallback?("Extraction complete: \(skillCount) skills, \(kcCount) narrative cards")
+        let (skillsOutcome, cardsOutcome) = await (skillsTask, cardsTask)
+        let skillCount = skillsOutcome.skills.count
+        let kcCount = cardsOutcome.cards.count
+        let skillStatus = skillsOutcome.failed ? "0 skills (extraction failed)" : "\(skillCount) skill\(skillCount == 1 ? "" : "s")"
+        let cardStatus = cardsOutcome.failed ? "0 narrative cards (extraction failed)" : "\(kcCount) narrative card\(kcCount == 1 ? "" : "s")"
+        statusCallback?("Extraction complete: \(skillStatus), \(cardStatus)")
         Logger.info("✅ Knowledge extraction complete: \(skillCount) skills, \(kcCount) KCs", category: .ai)
 
         return WebExtractionResult(
@@ -87,8 +89,10 @@ final class WebExtractionService {
             url: urlString,
             title: title,
             extractedText: extractedText,
-            skills: skills ?? [],
-            narrativeCards: narrativeCards ?? []
+            skills: skillsOutcome.skills,
+            narrativeCards: cardsOutcome.cards,
+            skillExtractionFailed: skillsOutcome.failed,
+            cardExtractionFailed: cardsOutcome.failed
         )
     }
 
@@ -184,16 +188,18 @@ final class WebExtractionService {
         }
     }
 
-    /// Generate skills from extracted text
+    /// Generate skills from extracted text.
+    /// Returns a tuple of extracted skills and a flag indicating whether extraction failed
+    /// (as opposed to legitimately finding no skills).
     private func generateSkills(
         service: SkillBankService,
         artifactId: String,
         filename: String,
         extractedText: String
-    ) async -> [Skill]? {
+    ) async -> (skills: [Skill], failed: Bool) {
         guard llmFacade != nil else {
             Logger.warning("⚠️ No LLM facade available for skill extraction", category: .ai)
-            return nil
+            return ([], false)
         }
 
         do {
@@ -203,23 +209,26 @@ final class WebExtractionService {
                 content: extractedText
             )
             Logger.info("🔧 Generated \(skills.count) skills from \(filename)", category: .ai)
-            return skills
+            return (skills, false)
         } catch {
             Logger.error("❌ Skill extraction failed: \(error.localizedDescription)", category: .ai)
-            return nil
+            ToastCenter.shared.show(.error("Skill extraction failed for \(filename): \(error.localizedDescription)"))
+            return ([], true)
         }
     }
 
-    /// Generate narrative knowledge cards from extracted text
+    /// Generate narrative knowledge cards from extracted text.
+    /// Returns a tuple of extracted cards and a flag indicating whether extraction failed
+    /// (as opposed to legitimately finding no cards).
     private func generateNarrativeCards(
         service: KnowledgeCardExtractionService,
         artifactId: String,
         filename: String,
         extractedText: String
-    ) async -> [KnowledgeCard]? {
+    ) async -> (cards: [KnowledgeCard], failed: Bool) {
         guard llmFacade != nil else {
             Logger.warning("⚠️ No LLM facade available for KC extraction", category: .ai)
-            return nil
+            return ([], false)
         }
 
         do {
@@ -229,10 +238,11 @@ final class WebExtractionService {
                 content: extractedText
             )
             Logger.info("📖 Generated \(cards.count) narrative cards from \(filename)", category: .ai)
-            return cards
+            return (cards, false)
         } catch {
             Logger.error("❌ KC extraction failed: \(error.localizedDescription)", category: .ai)
-            return nil
+            ToastCenter.shared.show(.error("Knowledge card extraction failed for \(filename): \(error.localizedDescription)"))
+            return ([], true)
         }
     }
 }
@@ -247,4 +257,8 @@ struct WebExtractionResult {
     let extractedText: String
     let skills: [Skill]
     let narrativeCards: [KnowledgeCard]
+    /// True when the LLM skill-extraction call failed (as opposed to legitimately finding no skills).
+    let skillExtractionFailed: Bool
+    /// True when the LLM narrative-card extraction call failed (as opposed to legitimately finding no cards).
+    let cardExtractionFailed: Bool
 }

@@ -35,6 +35,7 @@ struct DropZoneHandler {
 
         Task {
             var collected: [URL] = []
+            var imageWriteFailed = false
 
             for provider in providers {
                 // Try file URL first (e.g., from Finder)
@@ -53,6 +54,9 @@ struct DropZoneHandler {
                     if let url = await loadImageData(from: provider) {
                         collected.append(url)
                         Logger.debug("📥 Loaded image data, saved to: \(url.lastPathComponent)", category: .ai)
+                    } else {
+                        Logger.warning("📥 Failed to save dropped image to temp file", category: .ai)
+                        imageWriteFailed = true
                     }
                 }
             }
@@ -62,6 +66,13 @@ struct DropZoneHandler {
                 Logger.info("📥 Processing \(finalURLs.count) dropped file(s)", category: .ai)
                 await MainActor.run {
                     completion(finalURLs)
+                }
+            } else if imageWriteFailed {
+                // Image was present but temp-write failed — surface the error and
+                // signal completion so any loading state in the caller is cleared.
+                await MainActor.run {
+                    ToastCenter.shared.show(.error("Couldn't save the dropped image — please try dragging it again."))
+                    completion([])
                 }
             } else {
                 Logger.warning("📥 No valid files found in drop", category: .ai)

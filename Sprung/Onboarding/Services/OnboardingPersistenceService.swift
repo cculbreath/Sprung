@@ -418,6 +418,8 @@ final class OnboardingPersistenceService {
             Logger.info("💾 Persisted experience_defaults for phase completion (\(persistedId))", category: .ai)
         } catch {
             Logger.error("❌ Failed to persist experience_defaults to data store: \(error.localizedDescription)", category: .ai)
+            await eventBus.publish(.processing(.errorOccurred("Couldn't save your experience data — \(error.localizedDescription)")))
+            return
         }
 
         // Mark objective as completed so subphase can advance to p4_completion

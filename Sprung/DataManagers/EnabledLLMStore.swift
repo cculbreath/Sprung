@@ -12,6 +12,9 @@ import Combine
 @Observable
 class EnabledLLMStore: SwiftDataStore {
     var enabledModels: [EnabledLLM] = []
+    /// Set to a non-nil description when the last `refreshEnabledModels()` call failed.
+    /// Consumers can check this to distinguish a fetch error from a legitimately-empty enabled-model list.
+    var fetchError: String?
     unowned let modelContext: ModelContext
 
     init(modelContext: ModelContext) {
@@ -117,9 +120,12 @@ class EnabledLLMStore: SwiftDataStore {
                 sortBy: [SortDescriptor(\.lastUsed, order: .reverse)]
             )
             enabledModels = try modelContext.fetch(descriptor)
+            fetchError = nil
             Logger.debug("🔄 Refreshed EnabledLLMStore: \(enabledModels.count) enabled models")
         } catch {
             Logger.error("❌ Failed to refresh enabled models: \(error)")
+            fetchError = error.localizedDescription
+            ToastCenter.shared.show(.error("Couldn't load enabled models — the model picker may appear empty. \(error.localizedDescription)"))
         }
     }
     /// Get all enabled model IDs

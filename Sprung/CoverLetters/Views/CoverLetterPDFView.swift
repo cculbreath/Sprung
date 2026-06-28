@@ -46,8 +46,16 @@ struct CoverLetterPDFView: View {
             )
             DispatchQueue.main.async {
                 if !generatedData.isEmpty {
-                    self.pdfData = generatedData
-                    self.errorMessage = nil
+                    if PDFDocument(data: generatedData) != nil {
+                        self.pdfData = generatedData
+                        self.errorMessage = nil
+                    } else {
+                        Logger.error(
+                            "CoverLetterPDFView: PDF data (\(generatedData.count) bytes) could not be parsed as a PDF document",
+                            category: .export
+                        )
+                        self.errorMessage = "Could not generate PDF: the document could not be read"
+                    }
                 } else {
                     Logger.error(
                         "CoverLetterPDFView: Generated PDF data was empty",
@@ -73,22 +81,12 @@ struct PDFKitView: NSViewRepresentable {
         pdfView.backgroundColor = .white
         if let document = PDFDocument(data: data) {
             pdfView.document = document
-        } else {
-            Logger.warning(
-                "PDFKitView: Failed to initialize PDFDocument during make phase",
-                category: .export
-            )
         }
         return pdfView
     }
     func updateNSView(_ nsView: PDFView, context _: Context) {
         if let document = PDFDocument(data: data) {
             nsView.document = document
-        } else {
-            Logger.warning(
-                "PDFKitView: Failed to update PDFDocument with new data",
-                category: .export
-            )
         }
     }
 }

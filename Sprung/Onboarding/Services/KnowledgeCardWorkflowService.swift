@@ -71,6 +71,7 @@ final class KnowledgeCardWorkflowService {
     /// Cards are persisted to stores with isPending=true for user review
     func handleDoneWithUploadsClicked() async {
         Logger.info("📋 Processing Done with Uploads - aggregating cards and skills", category: .ai)
+        var caveats: [String] = []
 
         // Register the card merge agent IMMEDIATELY so it appears in status bar right away
         let cardMergeAgentId = UUID().uuidString
@@ -104,6 +105,8 @@ final class KnowledgeCardWorkflowService {
                 }
             } catch {
                 Logger.warning("⚠️ Chat inventory extraction failed: \(error.localizedDescription)", category: .ai)
+                caveats.append("Note: the interview conversation could not be analysed — cards and skills from it are not included (\(error.localizedDescription))")
+                ToastCenter.shared.show(.error("Chat inventory extraction failed — interview conversation content will not appear in card results."))
             }
         }
 
@@ -146,6 +149,7 @@ final class KnowledgeCardWorkflowService {
             // Fall back to raw cards if deduplication fails
             Logger.warning("⚠️ Deduplication failed, using raw cards: \(error.localizedDescription)", category: .ai)
             cardsToAdd = rawCards
+            caveats.append("Note: deduplication failed so the \(rawCards.count) cards shown may contain duplicates — \(error.localizedDescription)")
             agentActivityTracker.appendTranscript(
                 agentId: cardMergeAgentId,
                 entryType: .system,
@@ -182,6 +186,7 @@ final class KnowledgeCardWorkflowService {
                     )
                 } catch {
                     Logger.warning("⚠️ Skill curation failed, keeping uncurated skills: \(error.localizedDescription)", category: .ai)
+                    caveats.append("Note: skill curation was skipped, so the skill bank may include redundant or overly-granular entries — \(error.localizedDescription)")
                 }
             }
 
@@ -212,6 +217,7 @@ final class KnowledgeCardWorkflowService {
                 }
             } catch {
                 Logger.warning("⚠️ Skills processing failed: \(error.localizedDescription)", category: .ai)
+                caveats.append("Note: ATS synonym expansion and deduplication were skipped — resume keyword matching may be less accurate — \(error.localizedDescription)")
             }
         }
 
@@ -243,9 +249,10 @@ final class KnowledgeCardWorkflowService {
 
         // Notify LLM of results
         let skillSummary = skillCount > 0 ? " and \(skillCount) skills" : ""
+        let caveatText = caveats.isEmpty ? "" : "\n\n" + caveats.joined(separator: "\n")
         await sendChatMessage("""
             I'm done uploading documents. The system has found \(cardCount) potential knowledge cards (\(typeSummary))\(skillSummary). \
-            Please review the proposed cards with me. I can delete any cards that aren't relevant.
+            Please review the proposed cards with me. I can delete any cards that aren't relevant.\(caveatText)
             """)
     }
 

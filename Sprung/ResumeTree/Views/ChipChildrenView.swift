@@ -401,22 +401,23 @@ struct ChipChildrenView: View {
         do {
             try modelContext.save()
             vm.refreshPDF()
+            if syncToSkillLibrary {
+                let chipValue = trimmed.lowercased()
+                let alreadyExists = skillStore.skills.contains { skill in
+                    skill.canonical.lowercased() == chipValue ||
+                    skill.atsVariants.contains { $0.lowercased() == chipValue }
+                }
+                if !alreadyExists {
+                    let parentCategory = parent.parent?.computedTitle ?? "General"
+                    let newSkill = Skill(canonical: trimmed, category: parentCategory)
+                    skillStore.add(newSkill)
+                    Logger.info("Synced new skill to library: '\(trimmed)' in category '\(parentCategory)'")
+                }
+            }
         } catch {
-            Logger.error("Failed to save new chip: \(error)")
-        }
-
-        if syncToSkillLibrary {
-            let chipValue = trimmed.lowercased()
-            let alreadyExists = skillStore.skills.contains { skill in
-                skill.canonical.lowercased() == chipValue ||
-                skill.atsVariants.contains { $0.lowercased() == chipValue }
-            }
-            if !alreadyExists {
-                let parentCategory = parent.parent?.computedTitle ?? "General"
-                let newSkill = Skill(canonical: trimmed, category: parentCategory)
-                skillStore.add(newSkill)
-                Logger.info("Synced new skill to library: '\(trimmed)' in category '\(parentCategory)'")
-            }
+            parent.children?.removeAll { $0 === newNode }
+            modelContext.delete(newNode)
+            ToastCenter.shared.show(.error("Couldn't add the skill — \(error.localizedDescription)"))
         }
 
         newChipText = ""
@@ -448,7 +449,9 @@ struct ChipChildrenView: View {
             try modelContext.save()
             vm.refreshPDF()
         } catch {
-            Logger.error("Failed to save skill from bank: \(error)")
+            parent.children?.removeAll { $0 === newNode }
+            modelContext.delete(newNode)
+            ToastCenter.shared.show(.error("Couldn't add the skill — \(error.localizedDescription)"))
         }
 
         newChipText = ""
@@ -495,22 +498,23 @@ struct ChipChildrenView: View {
         do {
             try modelContext.save()
             vm.refreshPDF()
+            if syncToSkillLibrary {
+                let chipValue = rec.skillName.lowercased()
+                let alreadyExists = skillStore.skills.contains { skill in
+                    skill.canonical.lowercased() == chipValue ||
+                    skill.atsVariants.contains { $0.lowercased() == chipValue }
+                }
+                if !alreadyExists {
+                    let parentCategory = parent.parent?.computedTitle ?? "General"
+                    let newSkill = Skill(canonical: rec.skillName, category: parentCategory)
+                    skillStore.add(newSkill)
+                    Logger.info("Synced new skill to library: '\(rec.skillName)' in category '\(parentCategory)'")
+                }
+            }
         } catch {
-            Logger.error("Failed to save recommendation: \(error)")
-        }
-
-        if syncToSkillLibrary {
-            let chipValue = rec.skillName.lowercased()
-            let alreadyExists = skillStore.skills.contains { skill in
-                skill.canonical.lowercased() == chipValue ||
-                skill.atsVariants.contains { $0.lowercased() == chipValue }
-            }
-            if !alreadyExists {
-                let parentCategory = parent.parent?.computedTitle ?? "General"
-                let newSkill = Skill(canonical: rec.skillName, category: parentCategory)
-                skillStore.add(newSkill)
-                Logger.info("Synced new skill to library: '\(rec.skillName)' in category '\(parentCategory)'")
-            }
+            parent.children?.removeAll { $0 === newNode }
+            modelContext.delete(newNode)
+            ToastCenter.shared.show(.error("Couldn't add the suggested skill — \(error.localizedDescription)"))
         }
     }
 

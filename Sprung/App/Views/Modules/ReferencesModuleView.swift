@@ -148,6 +148,12 @@ struct ReferencesModuleView: View {
             try jsonData.write(to: url)
         } catch {
             Logger.error("Export failed: \(error.localizedDescription)", category: .ai)
+            let alert = NSAlert()
+            alert.messageText = "Export Failed"
+            alert.informativeText = "\(error.localizedDescription) Check disk permissions or available space."
+            alert.alertStyle = .warning
+            alert.addButton(withTitle: "OK")
+            alert.runModal()
         }
     }
 

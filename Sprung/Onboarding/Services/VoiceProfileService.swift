@@ -130,11 +130,14 @@ final class VoiceProfileService {
     ///   workspace, and the writing-samples browser's Voice Primers tab
     /// Both writes upsert — re-running extraction replaces the profile
     /// instead of stacking duplicates.
+    /// Throws if the CoverRef encode fails (cover letters won't use the voice).
+    /// A toast is fired before throwing so callers outside this file don't need
+    /// to surface the error themselves.
     func storeVoiceProfile(
         _ profile: VoiceProfile,
         in guidanceStore: InferenceGuidanceStore,
         coverRefStore: CoverRefStore
-    ) {
+    ) throws {
         let attachments = GuidanceAttachments(voiceProfile: profile)
 
         var promptLines = ["Voice profile for content generation:"]
@@ -161,7 +164,12 @@ final class VoiceProfileService {
             Logger.info("🎤 Voice profile stored in guidance store", category: .ai)
         }
 
-        upsertVoicePrimerRef(profile, summary: prompt, in: coverRefStore)
+        do {
+            try upsertVoicePrimerRef(profile, summary: prompt, in: coverRefStore)
+        } catch {
+            ToastCenter.shared.show(.error("Couldn't save your voice profile for cover letters — \(error.localizedDescription)"))
+            throw error
+        }
     }
 
     /// Upsert the single `.voicePrimer` CoverRef carrying the encoded profile.
@@ -169,13 +177,12 @@ final class VoiceProfileService {
         _ profile: VoiceProfile,
         summary: String,
         in coverRefStore: CoverRefStore
-    ) {
+    ) throws {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        guard let data = try? encoder.encode(profile),
-              let json = String(data: data, encoding: .utf8) else {
-            Logger.error("🎤 Failed to encode voice profile for CoverRef storage", category: .ai)
-            return
+        let data = try encoder.encode(profile)
+        guard let json = String(data: data, encoding: .utf8) else {
+            throw VoiceProfileError.encodingFailed
         }
 
         if let existing = coverRefStore.storedCoverRefs.first(where: { $0.type == .voicePrimer }) {
@@ -199,6 +206,7 @@ final class VoiceProfileService {
     enum VoiceProfileError: Error, LocalizedError {
         case llmNotConfigured
         case noWritingSamples
+        case encodingFailed
 
         var errorDescription: String? {
             switch self {
@@ -206,6 +214,8 @@ final class VoiceProfileService {
                 return "LLM facade not configured"
             case .noWritingSamples:
                 return "No writing samples available for voice profile extraction"
+            case .encodingFailed:
+                return "Voice profile could not be encoded as JSON"
             }
         }
     }

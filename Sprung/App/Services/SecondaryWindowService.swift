@@ -383,6 +383,7 @@ final class SecondaryWindowService {
                         try await coordinator.generateWeeklyReflection()
                     } catch {
                         Logger.error("Failed to generate weekly reflection: \(error)", category: .ai)
+                        ToastCenter.shared.show(.error("Weekly reflection failed — \(error.localizedDescription)"))
                     }
                 }
             }
@@ -585,6 +586,7 @@ final class SecondaryWindowService {
                 titleSetStore: deps.titleSetStore
             ) else {
                 Logger.error("Failed to build SeedGenerationContext", category: .ui)
+                presentContextBuildFailureAlert()
                 return
             }
 
@@ -675,6 +677,17 @@ final class SecondaryWindowService {
         default:
             break
         }
+    }
+
+    /// SeedGenerationContextBuilder returned nil — onboarding likely incomplete.
+    private func presentContextBuildFailureAlert() {
+        NSApp.activate(ignoringOtherApps: true)
+        let alert = NSAlert()
+        alert.messageText = "Couldn't Assemble Generation Context"
+        alert.informativeText = "Couldn't assemble generation context. Ensure the onboarding interview has been completed."
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "OK")
+        alert.runModal()
     }
 
     /// Bring the main window's References module forward on the Knowledge tab.

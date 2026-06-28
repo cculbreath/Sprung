@@ -216,7 +216,7 @@ struct WritingSamplesBrowserTab: View {
                     reasoningStreamManager: reasoningStreamManager
                 )
                 let profile = try await service.extractVoiceProfile(from: samples)
-                service.storeVoiceProfile(profile, in: guidanceStore, coverRefStore: coverRefStore)
+                try service.storeVoiceProfile(profile, in: guidanceStore, coverRefStore: coverRefStore)
                 voiceResultMessage = voiceProfileSummary(profile, sampleCount: samples.count)
                 Logger.info("🎤 Voice profile extracted from writing samples browser (\(samples.count) samples)", category: .ai)
             } catch let error as ModelConfigurationError {

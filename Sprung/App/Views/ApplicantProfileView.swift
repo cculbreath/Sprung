@@ -15,6 +15,7 @@ struct ApplicantProfileView: View {
     @State private var successMessage = ""
     @State private var hasChanges = false
     @State private var isLoading = true
+    @State private var signatureLoadError: String?
     var body: some View {
         VStack {
             if isLoading {
@@ -40,6 +41,16 @@ struct ApplicantProfileView: View {
         .task {
             loadProfile()
             isLoading = false
+        }
+        .alert("Couldn't Load Signature", isPresented: Binding(
+            get: { signatureLoadError != nil },
+            set: { if !$0 { signatureLoadError = nil } }
+        )) {
+            Button("OK") { signatureLoadError = nil }
+        } message: {
+            if let error = signatureLoadError {
+                Text(error)
+            }
         }
     }
     private var signatureSection: some View {
@@ -118,6 +129,7 @@ struct ApplicantProfileView: View {
                 hasChanges = true
             } catch {
                 Logger.error("ApplicantProfileView: Failed to load signature image: \(error)")
+                signatureLoadError = "Couldn't load the signature image — \(error.localizedDescription)"
             }
         }
     }

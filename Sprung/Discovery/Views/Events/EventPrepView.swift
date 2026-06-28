@@ -17,6 +17,8 @@ struct EventPrepView: View {
     @State private var isGeneratingGoals = false
     @State private var pitchText: String = ""
     @State private var goalText: String = ""
+    @State private var pitchError: String?
+    @State private var calendarError: String?
 
     var body: some View {
         ScrollView {
@@ -63,6 +65,22 @@ struct EventPrepView: View {
         .onAppear {
             pitchText = event.pitchScript ?? ""
             goalText = event.goal ?? ""
+        }
+        .alert("Pitch Generation Failed", isPresented: Binding(
+            get: { pitchError != nil },
+            set: { if !$0 { pitchError = nil } }
+        )) {
+            Button("OK") { pitchError = nil }
+        } message: {
+            Text(pitchError ?? "")
+        }
+        .alert("Couldn't Add to Calendar", isPresented: Binding(
+            get: { calendarError != nil },
+            set: { if !$0 { calendarError = nil } }
+        )) {
+            Button("OK") { calendarError = nil }
+        } message: {
+            Text(calendarError ?? "")
         }
     }
 
@@ -409,6 +427,7 @@ struct EventPrepView: View {
             }
         } catch {
             Logger.error("Failed to generate pitch: \(error)", category: .ai)
+            pitchError = "Couldn't generate pitch — \(error.localizedDescription)"
         }
     }
 
@@ -467,6 +486,7 @@ struct EventPrepView: View {
                 }
             } catch {
                 Logger.error("Failed to add to calendar: \(error)", category: .ai)
+                calendarError = "Couldn't add event to calendar — \(error.localizedDescription)"
             }
         }
     }

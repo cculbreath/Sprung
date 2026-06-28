@@ -23,6 +23,7 @@ struct DebriefView: View {
     @State private var isSaving = false
     @State private var isGeneratingOutcomes = false
     @State private var generatedOutcomes: DebriefOutcomesResult?
+    @State private var outcomeError: String?
 
     var body: some View {
         ScrollView {
@@ -66,6 +67,14 @@ struct DebriefView: View {
             .padding()
         }
         .navigationTitle("Event Debrief")
+        .alert("Outcome Generation Failed", isPresented: Binding(
+            get: { outcomeError != nil },
+            set: { if !$0 { outcomeError = nil } }
+        )) {
+            Button("OK") { outcomeError = nil }
+        } message: {
+            Text(outcomeError ?? "")
+        }
     }
 
     // MARK: - Header
@@ -485,6 +494,7 @@ struct DebriefView: View {
             )
         } catch {
             Logger.error("Failed to generate debrief outcomes: \(error)", category: .ai)
+            outcomeError = "Couldn't generate debrief outcomes — \(error.localizedDescription)"
         }
     }
 }

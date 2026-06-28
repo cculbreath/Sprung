@@ -566,11 +566,21 @@ actor DocumentArtifactHandler: OnboardingEventEmitter {
         metadata: JSON
     ) async {
         let filename = file.filename
+        let agentId = UUID().uuidString
+
+        await MainActor.run {
+            agentTracker.trackAgent(id: agentId, type: .documentIngestion, name: filename, task: nil as Task<Void, Never>?)
+        }
 
         Logger.info("📄 Sending resume PDF directly to LLM: \(filename)", category: .ai)
 
         guard let pdfData = try? Data(contentsOf: file.storageURL) else {
-            Logger.error("❌ Failed to read PDF file: \(filename)", category: .ai)
+            let error = NSError(
+                domain: "DocumentArtifactHandler",
+                code: 1,
+                userInfo: [NSLocalizedDescriptionKey: "Couldn't read the resume PDF — the file may have been moved or deleted."]
+            )
+            await handleProcessingFailure(error, filename: filename, agentId: agentId)
             return
         }
 
@@ -594,6 +604,10 @@ actor DocumentArtifactHandler: OnboardingEventEmitter {
         var payload = JSON()
         payload["text"].string = taggedMessage
 
+        await MainActor.run {
+            agentTracker.appendTranscript(agentId: agentId, entryType: .system, content: "Resume PDF sent to LLM", details: "\(sizeKB) KB")
+            agentTracker.markCompleted(agentId: agentId)
+        }
         await emit(.llm(.sendUserMessage(payload: payload, isSystemGenerated: true)))
         Logger.info("✅ Resume PDF sent as ui-action-result: \(filename) (\(sizeKB) KB)", category: .ai)
     }

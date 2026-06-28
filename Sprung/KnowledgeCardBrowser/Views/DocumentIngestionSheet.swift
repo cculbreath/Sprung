@@ -417,6 +417,7 @@ struct DocumentIngestionSheet: View {
             }
         case .failure(let error):
             Logger.error("❌ DocumentIngestionSheet: File selection failed - \(error.localizedDescription)", category: .ai)
+            ToastCenter.shared.show(.error("Couldn't open the selected files — \(error.localizedDescription)"))
         }
     }
 
@@ -454,7 +455,9 @@ struct DocumentIngestionSheet: View {
                 analysisResult = result
                 showAnalysisSheet = true
             } catch {
-                // Error (including cancellation) is reflected in coordinator status.
+                if !(error is CancellationError) {
+                    coordinator.status = .failed(error.localizedDescription)
+                }
             }
         }
     }

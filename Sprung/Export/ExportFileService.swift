@@ -221,7 +221,14 @@ final class ExportFileService {
             extension: "json",
             in: downloadsURL
         )
-        let jsonString = resume.jsonTxt
+        let jsonString: String
+        do {
+            jsonString = try resume.buildJSON()
+        } catch {
+            Logger.error("Failed to build resume JSON for export: \(error)")
+            onToast("Couldn't export resume JSON — \(error.localizedDescription)")
+            return
+        }
         do {
             try jsonString.write(to: fileURL, atomically: true, encoding: .utf8)
             onToast("Resume JSON has been exported to \"\(filename)\"")

@@ -57,6 +57,9 @@ actor LLMConversationStore {
             try modelContext.save()
         } catch {
             Logger.error("❌ Failed to save conversation: \(error)", category: .storage)
+            Task { @MainActor in
+                ToastCenter.shared.show(.error("Couldn't save conversation history — your chat may not persist after relaunch. \(error.localizedDescription)"))
+            }
         }
     }
 }

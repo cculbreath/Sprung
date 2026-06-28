@@ -35,6 +35,7 @@ final class ArtifactRecordStore {
             return true
         } catch {
             Logger.error("SwiftData save failed: \(error.localizedDescription)", category: .storage)
+            SaveFailureToastThrottle.showIfNeeded()
             return false
         }
     }

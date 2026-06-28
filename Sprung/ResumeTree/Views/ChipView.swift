@@ -195,13 +195,12 @@ struct ChipView: View {
             do {
                 try modelContext.save()
                 vm.refreshPDF()
+                if syncToLibrary && trimmed != originalValue {
+                    syncToSkillLibrary(oldValue: originalValue, newValue: trimmed)
+                }
             } catch {
-                Logger.error("Failed to save chip edit: \(error)")
-            }
-
-            // Sync to skill library if enabled
-            if syncToLibrary && trimmed != originalValue {
-                syncToSkillLibrary(oldValue: originalValue, newValue: trimmed)
+                node.value = originalValue
+                ToastCenter.shared.show(.error("Couldn't save the skill edit — \(error.localizedDescription)"))
             }
         }
         showingSuggestions = false

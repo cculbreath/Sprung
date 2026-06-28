@@ -80,6 +80,9 @@ enum CoverLetterQueryError: LocalizedError {
     // MARK: - Properties
     /// Set this to `true` if you want to save a debug file containing the prompt text.
     var saveDebugPrompt: Bool = false
+    /// Non-nil when the resume context was too large for the prompt and was trimmed.
+    /// Callers and views should surface this so users know the letter was generated on a partial resume.
+    private(set) var resumeContextTruncationWarning: String? = nil
     // MARK: - JSON Schemas
     /// Schema for best cover letter selection (FPTP voting)
     static let bestCoverLetterSchemaString = """
@@ -178,9 +181,11 @@ enum CoverLetterQueryError: LocalizedError {
         }
         let byteCount = string.utf8.count
         guard byteCount > Self.maxResumeContextBytes else {
+            resumeContextTruncationWarning = nil
             return string
         }
         Logger.warning("CoverLetterQuery: resume context is \(byteCount) bytes; truncating to \(Self.maxResumeContextBytes) bytes to avoid prompt overflow.")
+        resumeContextTruncationWarning = "Resume was too large to include in full — the cover letter was generated from a partial resume (\(byteCount / 1_000)k bytes, trimmed to \(Self.maxResumeContextBytes / 1_000)k). Consider reducing resume length."
         let truncated = truncateContext(string, maxBytes: Self.maxResumeContextBytes)
         return truncated + "\n\n/* truncated resume context to fit cover letter prompt */"
     }

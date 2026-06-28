@@ -37,6 +37,7 @@ final class OnboardingSessionStore {
             return true
         } catch {
             Logger.error("SwiftData save failed: \(error.localizedDescription)", category: .storage)
+            SaveFailureToastThrottle.showIfNeeded()
             return false
         }
     }
@@ -270,6 +271,7 @@ final class OnboardingSessionStore {
             )
         } catch {
             Logger.error("Failed to encode section config: \(error)", category: .ai)
+            ToastCenter.shared.show(.error("Couldn't save your section selection — \(error.localizedDescription)"))
         }
     }
 
@@ -282,6 +284,7 @@ final class OnboardingSessionStore {
             return try SectionConfig.from(json: json)
         } catch {
             Logger.error("Failed to decode section config: \(error)", category: .ai)
+            ToastCenter.shared.show(.error("Section configuration appears corrupted and couldn't be loaded — your section selection may have reset. \(error.localizedDescription)"))
             return SectionConfig()
         }
     }

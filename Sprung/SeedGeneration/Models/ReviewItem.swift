@@ -59,6 +59,8 @@ struct ReviewItem: Identifiable, Equatable {
         case rejected
         case rejectedWithComment(String)
         case edited
+        /// Regeneration was attempted but failed; item is actionable again
+        case regenerationFailed(reason: String)
     }
 
     /// Whether this item has been acted upon
@@ -106,9 +108,10 @@ final class ReviewQueue {
     /// All items in the queue
     private(set) var items: [ReviewItem] = []
 
-    /// Callback for when an item needs regeneration
+    /// Callback for when an item needs regeneration.
     /// Parameters: (itemId, originalContent, feedback)
-    var onRegenerationRequested: ((UUID, GeneratedContent, String?) async -> GeneratedContent?)?
+    /// Throws on failure so the caller can surface the reason via `.regenerationFailed`.
+    var onRegenerationRequested: ((UUID, GeneratedContent, String?) async throws -> GeneratedContent)?
 
     /// Items pending user action
     var pendingItems: [ReviewItem] {
@@ -188,13 +191,17 @@ final class ReviewQueue {
     private func triggerRegeneration(for item: ReviewItem, feedback: String?) async {
         guard let onRegenerationRequested else {
             Logger.warning("ReviewQueue: No regeneration callback configured", category: .ai)
+            if let index = items.firstIndex(where: { $0.id == item.id }) {
+                items[index].isRegenerating = false
+                items[index].userAction = .regenerationFailed(reason: "Regeneration is not available — please restart seed generation.")
+            }
             return
         }
 
         Logger.info("🔄 Triggering regeneration for: \(item.task.displayName)", category: .ai)
 
-        // Request regeneration
-        if let newContent = await onRegenerationRequested(item.id, item.generatedContent, feedback) {
+        do {
+            let newContent = try await onRegenerationRequested(item.id, item.generatedContent, feedback)
             let newItem = ReviewItem(
                 task: item.task,
                 generatedContent: newContent,
@@ -202,19 +209,18 @@ final class ReviewQueue {
                 previousVersionId: item.id
             )
 
-            // Replace the rejected item with its regeneration
             if let index = items.firstIndex(where: { $0.id == item.id }) {
                 items[index] = newItem
             } else {
                 items.append(newItem)
             }
             Logger.info("✅ Regeneration complete for: \(item.task.displayName)", category: .ai)
-        } else {
-            // Regeneration failed - mark as no longer regenerating
+        } catch {
             if let index = items.firstIndex(where: { $0.id == item.id }) {
                 items[index].isRegenerating = false
+                items[index].userAction = .regenerationFailed(reason: error.localizedDescription)
             }
-            Logger.error("❌ Regeneration failed for: \(item.task.displayName)", category: .ai)
+            Logger.error("❌ Regeneration failed for: \(item.task.displayName) — \(error.localizedDescription)", category: .ai)
         }
     }
 

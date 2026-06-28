@@ -65,7 +65,11 @@ struct AppSheetsModifier: ViewModifier {
                 if let selApp = jobAppStore.selectedApp {
                     CreateResumeView(
                         onCreateResume: { template, sources in
-                            _ = resStore.create(jobApp: selApp, sources: sources, template: template)
+                            do {
+                                try resStore.create(jobApp: selApp, sources: sources, template: template)
+                            } catch {
+                                ToastCenter.shared.show(.error("Couldn't create resume — \(error.localizedDescription)"))
+                            }
                         }
                     )
                     .padding()

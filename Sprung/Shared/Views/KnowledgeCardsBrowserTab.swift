@@ -23,6 +23,7 @@ struct KnowledgeCardsBrowserTab: View {
     @State private var refiningCard: KnowledgeCard?
     @State private var reviewContext: RefinementReviewContext?
     @State private var pipelineCoordinator: StandaloneKCCoordinator?
+    @State private var pipelineError: String?
 
     enum CardTypeFilter: String, CaseIterable {
         case all = "All"
@@ -165,6 +166,14 @@ struct KnowledgeCardsBrowserTab: View {
             Button("Cancel", role: .cancel) {}
         } message: { card in
             Text("Delete \"\(card.title)\"? This cannot be undone.")
+        }
+        .alert("Operation Failed", isPresented: Binding(
+            get: { pipelineError != nil },
+            set: { if !$0 { pipelineError = nil } }
+        )) {
+            Button("OK") { pipelineError = nil }
+        } message: {
+            Text(pipelineError ?? "")
         }
         .onChange(of: selectedFilter) { _, _ in }  // Index reset handled by CoverflowBrowser
         .onChange(of: searchText) { _, _ in }
@@ -323,6 +332,7 @@ struct KnowledgeCardsBrowserTab: View {
                 Logger.info("Pipeline: Enriched \(count) cards", category: .ai)
             } catch {
                 Logger.error("Pipeline: Enrichment failed - \(error.localizedDescription)", category: .ai)
+                pipelineError = "Couldn't enrich your cards — \(error.localizedDescription)"
             }
         }
     }
@@ -337,6 +347,7 @@ struct KnowledgeCardsBrowserTab: View {
                 Logger.info("Pipeline: Merged \(merged) cards, \(remaining) remaining", category: .ai)
             } catch {
                 Logger.error("Pipeline: Merge failed - \(error.localizedDescription)", category: .ai)
+                pipelineError = "Couldn't merge your cards — \(error.localizedDescription)"
             }
         }
     }

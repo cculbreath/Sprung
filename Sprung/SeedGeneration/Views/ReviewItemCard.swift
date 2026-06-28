@@ -346,9 +346,56 @@ struct ReviewItemCard: View {
 
     // MARK: - Actions
 
+    @ViewBuilder
     private var actionButtons: some View {
-        HStack(spacing: 12) {
-            if item.userAction == nil {
+        if case .regenerationFailed(let reason) = item.userAction {
+            // Surface the failure and restore all actions so the item is not permanently frozen
+            VStack(alignment: .leading, spacing: 8) {
+                Label(reason, systemImage: "exclamationmark.triangle.fill")
+                    .font(.caption)
+                    .foregroundStyle(.red)
+
+                HStack(spacing: 12) {
+                    Button {
+                        onApprove()
+                    } label: {
+                        Label("Approve", systemImage: "checkmark.circle")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.green)
+
+                    Button {
+                        isEditing = true
+                        if isArrayContent {
+                            editedItems = contentArray
+                        } else {
+                            editedText = extractEditableText()
+                        }
+                    } label: {
+                        Label("Edit", systemImage: "pencil")
+                    }
+                    .buttonStyle(.bordered)
+
+                    Button {
+                        rejectionLineTarget = targetBulletLines
+                        showingRejectionSheet = true
+                    } label: {
+                        Label("Retry", systemImage: "arrow.triangle.2.circlepath")
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(.orange)
+
+                    Button {
+                        onDelete()
+                    } label: {
+                        Label("Delete", systemImage: "trash")
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(.red)
+                }
+            }
+        } else if item.userAction == nil {
+            HStack(spacing: 12) {
                 Button {
                     onApprove()
                 } label: {
@@ -437,6 +484,8 @@ struct ReviewItemCard: View {
             return .green.opacity(0.5)
         case .rejected, .rejectedWithComment:
             return .orange.opacity(0.5)
+        case .regenerationFailed:
+            return .red.opacity(0.5)
         }
     }
 
@@ -447,6 +496,7 @@ struct ReviewItemCard: View {
             case .edited: return ("Edited", .blue)
             case .rejected: return ("Regenerating", .orange)
             case .rejectedWithComment: return ("Regenerating", .orange)
+            case .regenerationFailed: return ("Failed", .red)
             }
         }()
 

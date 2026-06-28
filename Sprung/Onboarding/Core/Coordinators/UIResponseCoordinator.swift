@@ -822,6 +822,8 @@ final class UIResponseCoordinator {
             Logger.info("✅ Direct upload started: \(fileURLs.count) file(s)", category: .ai)
         } catch {
             Logger.error("❌ Direct upload failed: \(error.localizedDescription)", category: .ai)
+            let name = fileURLs.first?.lastPathComponent ?? "the file"
+            ToastCenter.shared.show(.error("Could not add \"\(name)\" — \(error.localizedDescription)"))
             // Clean up any processed files on error
             for item in processed {
                 uploadStorage.removeFile(at: item.storageURL)
@@ -868,6 +870,8 @@ final class UIResponseCoordinator {
             Logger.info("📝 Writing sample upload started: \(fileURLs.count) file(s)", category: .ai)
         } catch {
             Logger.error("❌ Writing sample upload failed: \(error.localizedDescription)", category: .ai)
+            let name = fileURLs.first?.lastPathComponent ?? "the file"
+            ToastCenter.shared.show(.error("Could not add writing sample \"\(name)\" — \(error.localizedDescription)"))
             // Clean up any processed files on error
             for item in processed {
                 uploadStorage.removeFile(at: item.storageURL)
