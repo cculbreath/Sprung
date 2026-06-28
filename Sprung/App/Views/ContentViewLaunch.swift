@@ -27,6 +27,10 @@ struct ContentViewLaunch: View {
             }
         }
         .animation(.easeInOut, value: appEnvironment.launchState)
+        // App-global toast surface. `ToastCenter.shared` is a single app-wide
+        // singleton; mounting the overlay here lets any store/service/view fire
+        // `ToastCenter.shared.show(...)` and have it render in the main window.
+        .toastOverlay()
     }
     private var coreContent: some View {
         ContentView()

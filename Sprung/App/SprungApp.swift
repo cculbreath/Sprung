@@ -13,6 +13,10 @@ struct SprungApp: App {
     private let modelContainer: ModelContainer
     private let appDependencies: AppDependencies
     private let appEnvironment: AppEnvironment
+    /// Set when a user-requested data-store reset was pending at launch but the
+    /// deletion failed. Surfaced as a startup alert so the user isn't misled into
+    /// believing their data was wiped (it survives). Nil on a normal launch.
+    private let pendingResetFailureMessage: String?
     init() {
         // Test-host guard: when the XCTest bundle launches this app as its host, run the
         // entire app against an ephemeral in-memory store and skip every real-store side
@@ -30,11 +34,19 @@ struct SprungApp: App {
             let dependencies = AppDependencies(modelContext: container.mainContext)
             self.appDependencies = dependencies
             self.appEnvironment = dependencies.appEnvironment
+            self.pendingResetFailureMessage = nil
             return
         }
 
-        // Perform any pending store reset from previous session (must happen before opening)
-        SwiftDataBackupService.performPendingResetIfNeeded()
+        // Perform any pending store reset from previous session (must happen before opening).
+        // A failed reset means the user asked to wipe their data but it survives — capture
+        // that so the launch can alert them instead of silently leaving the data in place.
+        switch SwiftDataBackupService.performPendingResetIfNeeded() {
+        case let .failed(reason):
+            self.pendingResetFailureMessage = Self.pendingResetFailureText(reason: reason)
+        case .notRequested, .completed, .nothingToDelete:
+            self.pendingResetFailureMessage = nil
+        }
 
         // Preflight backup before opening/migrating the store
         SwiftDataBackupService.performPreflightBackupIfNeeded()
@@ -95,6 +107,7 @@ struct SprungApp: App {
                     // so every secondary window resolves its dependencies from it.
                     appDelegate.windowManager.configure(deps: appDependencies)
                     appDelegate.setupMainWindowToolbar()
+                    presentPendingResetFailureAlertIfNeeded()
                 }
         }
         .modelContainer(modelContainer)
@@ -377,5 +390,32 @@ private extension SprungApp {
         The app is showing temporary in-memory data only. Restore the most recent backup below, then quit and relaunch to reload your information.
         Backups live in ~/Library/Application Support/Sprung_Backups.
         """
+    }
+    static func pendingResetFailureText(reason: String) -> String {
+        """
+        Sprung couldn't remove your existing data during this launch, so your information is still on disk (reason: \(reason)).
+        Nothing was erased. You can ask Sprung to try the reset again the next time it launches, or leave your data as it is.
+        """
+    }
+
+    /// Shows a one-shot alert when a pending data-store reset failed at launch.
+    /// Offers to re-arm the reset for the next launch so the user has a recovery
+    /// path instead of silently keeping data they asked to delete.
+    @MainActor
+    func presentPendingResetFailureAlertIfNeeded() {
+        guard let message = pendingResetFailureMessage else { return }
+        // Defer one runloop tick so the main window is fully on screen before the
+        // modal appears.
+        DispatchQueue.main.async {
+            let alert = NSAlert()
+            alert.alertStyle = .warning
+            alert.messageText = "Data Reset Didn't Complete"
+            alert.informativeText = message
+            alert.addButton(withTitle: "OK")
+            alert.addButton(withTitle: "Try Again on Next Launch")
+            if alert.runModal() == .alertSecondButtonReturn {
+                try? SwiftDataBackupService.destroyCurrentStore()
+            }
+        }
     }
 }

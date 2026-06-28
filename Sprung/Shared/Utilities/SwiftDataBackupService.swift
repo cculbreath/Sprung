@@ -94,26 +94,42 @@ struct SwiftDataBackupService {
         Logger.info("🗑️ Data store marked for deletion on next launch")
     }
 
+    /// Outcome of an at-startup pending-reset attempt. Distinguishes a *failed*
+    /// deletion — the user asked to wipe their data but it's still on disk, which
+    /// must be surfaced because they may believe it's gone — from the benign
+    /// cases where there was simply nothing to do.
+    enum PendingResetOutcome: Equatable {
+        /// No reset was pending; normal launch.
+        case notRequested
+        /// A reset was pending and the store files were removed.
+        case completed
+        /// A reset was pending but there were no store files to delete.
+        case nothingToDelete
+        /// A reset was pending and the deletion failed; the store survives.
+        case failed(reason: String)
+    }
+
     /// Called early in app startup (before ModelContainer creation) to perform
     /// any pending store deletion that was requested in a previous session.
-    /// Returns true if deletion was performed.
-    @discardableResult
-    static func performPendingResetIfNeeded() -> Bool {
+    /// The flag is cleared first to avoid a relaunch loop, so the caller must
+    /// inspect the returned outcome and surface `.failed` to the user — the
+    /// reset will not be retried automatically.
+    static func performPendingResetIfNeeded() -> PendingResetOutcome {
         guard UserDefaults.standard.bool(forKey: pendingResetKey) else {
-            return false
+            return .notRequested
         }
         // Clear the flag first to avoid infinite loop if deletion fails
         UserDefaults.standard.removeObject(forKey: pendingResetKey)
 
         guard let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
             Logger.error("❌ Pending reset failed: Application Support not found")
-            return false
+            return .failed(reason: "The Application Support folder could not be located.")
         }
 
         let storeDir = appSupport.appendingPathComponent("Sprung", isDirectory: true)
         guard FileManager.default.fileExists(atPath: storeDir.path) else {
             Logger.info("ℹ️ No store directory found to delete")
-            return false
+            return .nothingToDelete
         }
 
         do {
@@ -131,13 +147,13 @@ struct SwiftDataBackupService {
             }
             if candidates.isEmpty {
                 Logger.info("ℹ️ No store files found to delete")
-                return false
+                return .nothingToDelete
             }
             Logger.info("✅ Data store reset completed successfully")
-            return true
+            return .completed
         } catch {
             Logger.error("❌ Pending reset failed: \(error.localizedDescription)")
-            return false
+            return .failed(reason: error.localizedDescription)
         }
     }
 }

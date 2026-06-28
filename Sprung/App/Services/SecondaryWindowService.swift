@@ -94,6 +94,16 @@ final class SecondaryWindowService {
         return window
     }
 
+    /// Host a secondary-window root with the shared `ToastCenter` overlay mounted.
+    /// A main-window toast overlay does not cover separate NSWindows, so every
+    /// secondary window routes its content through here to make
+    /// `ToastCenter.shared.show(...)` render in whatever window is active. The
+    /// debug-logs window mounts its own overlay (`EventDumpView`) and is the one
+    /// caller intentionally left off this path to avoid a double overlay.
+    private func toastHosted<Content: View>(_ root: Content) -> NSHostingView<AnyView> {
+        NSHostingView(rootView: AnyView(root.toastOverlay()))
+    }
+
     // MARK: - Settings Window
 
     func showSettings() {
@@ -140,7 +150,7 @@ final class SecondaryWindowService {
                 .modelContainer(deps.modelContainer)
             settingsWindow = makeWindow(
                 WindowSpec(title: "Settings", width: 400, height: 200, styleMask: [.titled, .closable]),
-                content: NSHostingView(rootView: AnyView(root))
+                content: toastHosted(root)
             )
         }
         settingsWindow?.makeKeyAndOrderFront(nil)
@@ -181,7 +191,7 @@ final class SecondaryWindowService {
                     title: "Applicant Profile", width: 600, height: 650,
                     minSize: NSSize(width: 500, height: 520)
                 ),
-                content: NSHostingView(rootView: AnyView(root)),
+                content: toastHosted(root),
                 observeClose: true
             )
         }
@@ -237,7 +247,7 @@ final class SecondaryWindowService {
                     title: "Template Editor", width: 1200, height: 760,
                     minSize: NSSize(width: 960, height: 640), disallowTabbing: true
                 ),
-                content: NSHostingView(rootView: AnyView(root))
+                content: toastHosted(root)
             )
         }
         templateEditorWindow?.makeKeyAndOrderFront(nil)
@@ -277,7 +287,7 @@ final class SecondaryWindowService {
                 .environment(onboardingService)
                 .environment(onboardingService.toolRouter)
                 .environment(debugSettingsStore)
-            let hostingView = NSHostingView(rootView: AnyView(root))
+            let hostingView = toastHosted(root)
             let innerXPadding: CGFloat = 32 * 2        // = 64
             let minCardWidth = 1040 + innerXPadding    // = 1104
             let outerPad: CGFloat = 30                 // same as shadowR (left/right)
@@ -344,7 +354,7 @@ final class SecondaryWindowService {
                     title: "Discovery", width: 900, height: 700,
                     minSize: NSSize(width: 700, height: 500)
                 ),
-                content: NSHostingView(rootView: AnyView(root))
+                content: toastHosted(root)
             )
         }
         searchOpsWindow?.makeKeyAndOrderFront(nil)
@@ -404,7 +414,7 @@ final class SecondaryWindowService {
                     title: "Experience Editor", width: 1180, height: 780,
                     minSize: NSSize(width: 960, height: 680), disallowTabbing: true
                 ),
-                content: NSHostingView(rootView: AnyView(root)),
+                content: toastHosted(root),
                 observeClose: true
             )
         }
@@ -485,7 +495,7 @@ final class SecondaryWindowService {
                 title: revisionWindowTitle(for: selectedResume), width: 1300, height: 800,
                 minSize: NSSize(width: 1100, height: 650), disallowTabbing: true
             ),
-            content: NSHostingView(rootView: AnyView(root)),
+            content: toastHosted(root),
             observeClose: true
         )
 
@@ -622,7 +632,7 @@ final class SecondaryWindowService {
                     title: "Seed Generation", width: 1000, height: 700,
                     minSize: NSSize(width: 800, height: 600), disallowTabbing: true
                 ),
-                content: NSHostingView(rootView: AnyView(root))
+                content: toastHosted(root)
             )
             Logger.info("Created seed generation window", category: .ui)
         }
@@ -698,7 +708,7 @@ final class SecondaryWindowService {
                 title: "Background Activity", width: 700, height: 450,
                 minSize: NSSize(width: 500, height: 300)
             ),
-            content: NSHostingView(rootView: BackgroundActivityContent(tracker: tracker))
+            content: toastHosted(BackgroundActivityContent(tracker: tracker))
         )
         backgroundActivityWindow = window
         window.makeKeyAndOrderFront(nil)

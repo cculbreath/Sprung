@@ -16,16 +16,16 @@ protocol SwiftDataStore: AnyObject {
 }
 
 extension SwiftDataStore {
-    /// Attempts to `save()` and logs any thrown error (in *debug* builds only)
-    /// so production performance isn't impacted.
-    /// Returns false if save fails.
+    /// Attempts to `save()`. On failure it logs (in *all* builds, so release
+    /// installs at least leave a Console trace) and surfaces a throttled error
+    /// toast so the user knows their latest edit may not have persisted.
+    /// Returns false if save fails — callers that can roll back should.
     @discardableResult
     func saveContext(file: StaticString = #fileID, line: UInt = #line) -> Bool {
         do {
             try modelContext.save()
             return true
         } catch {
-            #if DEBUG
             Logger.error(
                 "SwiftData save failed: \(error.localizedDescription)",
                 category: .storage,
@@ -34,8 +34,29 @@ extension SwiftDataStore {
                     "line": String(line)
                 ]
             )
-            #endif
+            SaveFailureToastThrottle.showIfNeeded()
             return false
         }
+    }
+}
+
+/// Throttles SwiftData save-failure toasts so a persistently-failing context
+/// doesn't spam the user with one toast per mutation. A single failure surfaces
+/// immediately; repeats inside the window are suppressed (the first toast still
+/// stands).
+@MainActor
+enum SaveFailureToastThrottle {
+    private static var lastShown: Date?
+    private static let interval: TimeInterval = 10
+
+    static func showIfNeeded() {
+        let now = Date()
+        if let last = lastShown, now.timeIntervalSince(last) < interval {
+            return
+        }
+        lastShown = now
+        ToastCenter.shared.show(
+            .error("Couldn't save your changes — your latest edit may not persist.")
+        )
     }
 }
