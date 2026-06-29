@@ -102,11 +102,19 @@ struct VerticalResizeHandle: View {
     @State private var isDragging = false
     @State private var dragStartWidth: Double = 0
 
+    /// Real interactive width the gesture owns. A thin separator line is drawn
+    /// centered inside it. This must be a genuine layout width (not a negative
+    /// `contentShape` overhang) so the drag region never overlaps an adjacent
+    /// AppKit view such as the PDF preview's `PDFView`, which would otherwise
+    /// swallow the `mouseDown` and prevent the drag from ever starting.
+    private let hitWidth: CGFloat = 9
+
     var body: some View {
         Rectangle()
             .fill(isDragging ? Color.accentColor.opacity(0.3) : (isHovered ? Color.primary.opacity(0.1) : Color(.separatorColor)))
             .frame(width: isDragging ? 3 : 1)
-            .contentShape(Rectangle().inset(by: -3))
+            .frame(width: hitWidth)
+            .contentShape(Rectangle())
             .onHover { hovering in
                 isHovered = hovering
                 if hovering {
