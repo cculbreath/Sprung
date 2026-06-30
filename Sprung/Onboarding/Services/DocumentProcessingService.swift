@@ -127,7 +127,7 @@ actor DocumentProcessingService {
         let documentSummary: DocumentSummary?
         let skills: [Skill]?
         let narrativeCards: [KnowledgeCard]?
-        let passFailures: [String]
+        var passFailures: [String]
         // The PDF transcription IR (nil for writing samples and text sources).
         let intermediateRepresentation: IntermediateRepresentation?
 
@@ -255,18 +255,25 @@ actor DocumentProcessingService {
         // Add summary, skills, and narrative cards (shared writers so a resumed
         // IR-based pass produces an identical record — see reanalyzeFromIR).
         Self.writeSummary(documentSummary, into: &artifactRecord)
-        Self.writeSkills(skills, into: &artifactRecord)
-        Self.writeNarrativeCards(narrativeCards, into: &artifactRecord)
+        Self.writeSkills(skills, into: &artifactRecord, failures: &passFailures)
+        Self.writeNarrativeCards(narrativeCards, into: &artifactRecord, failures: &passFailures)
 
         // Persist the intermediate representation (PDF transcription) so extraction
         // can be re-run later for $0 without re-reading the source. The faithful
         // transcription also REPLACES native PDF text extraction as the artifact's
         // full text (the interview-context full-text path), capturing tables and
         // visuals that native extraction loses. Routed through the IR codec.
-        if let intermediateRepresentation,
-           let irString = try? intermediateRepresentation.encodedJSONString() {
-            artifactRecord["intermediateRepresentation"].string = irString
-            artifactRecord["extractedText"].string = intermediateRepresentation.fullText
+        if let intermediateRepresentation {
+            do {
+                let irString = try intermediateRepresentation.encodedJSONString()
+                artifactRecord["intermediateRepresentation"].string = irString
+                artifactRecord["extractedText"].string = intermediateRepresentation.fullText
+            } catch {
+                // Don't drop the transcription silently: a failed IR encode means
+                // reanalyzeFromIR later finds no IR and pays full re-transcription.
+                // Surface it via passFailures so the doc is flagged incomplete.
+                passFailures.append("ir-encode — \(error.localizedDescription)")
+            }
         }
 
         // Record analysis passes that failed after exhausting retries so the
@@ -451,14 +458,22 @@ actor DocumentProcessingService {
         record["summaryMetadata"] = summaryMeta
     }
 
-    private static func writeSkills(_ skills: [Skill]?, into record: inout JSON) {
+    private static func writeSkills(_ skills: [Skill]?, into record: inout JSON, failures: inout [String]) {
         guard let skillsResult = skills else { return }
         let encoder = JSONEncoder()
         // Note: Skill model has explicit CodingKeys for snake_case - no conversion needed
         encoder.dateEncodingStrategy = .iso8601
-        if let skillsData = try? encoder.encode(skillsResult),
-           let skillsString = String(data: skillsData, encoding: .utf8) {
-            record["skills"].string = skillsString
+        do {
+            let skillsData = try encoder.encode(skillsResult)
+            if let skillsString = String(data: skillsData, encoding: .utf8) {
+                record["skills"].string = skillsString
+            } else {
+                failures.append("skills-encode — UTF-8 decoding of encoded skills failed")
+            }
+        } catch {
+            // Encode failure would leave record["skills"] unset → artifact stored
+            // with 0 skills. Surface it instead of dropping it silently.
+            failures.append("skills-encode — \(error.localizedDescription)")
         }
         // Add skills stats
         var skillsStats = JSON()
@@ -471,14 +486,22 @@ actor DocumentProcessingService {
         record["skillsStats"] = skillsStats
     }
 
-    private static func writeNarrativeCards(_ cards: [KnowledgeCard]?, into record: inout JSON) {
+    private static func writeNarrativeCards(_ cards: [KnowledgeCard]?, into record: inout JSON, failures: inout [String]) {
         guard let cardsResult = cards else { return }
         let encoder = JSONEncoder()
         // Note: KnowledgeCard model has explicit CodingKeys for snake_case - no conversion needed
         encoder.dateEncodingStrategy = .iso8601
-        if let cardsData = try? encoder.encode(cardsResult),
-           let cardsString = String(data: cardsData, encoding: .utf8) {
-            record["narrativeCards"].string = cardsString
+        do {
+            let cardsData = try encoder.encode(cardsResult)
+            if let cardsString = String(data: cardsData, encoding: .utf8) {
+                record["narrativeCards"].string = cardsString
+            } else {
+                failures.append("cards-encode — UTF-8 decoding of encoded narrative cards failed")
+            }
+        } catch {
+            // Encode failure would leave record["narrativeCards"] unset → 0 KCs
+            // from this document. Surface it instead of dropping it silently.
+            failures.append("cards-encode — \(error.localizedDescription)")
         }
         // Add narrative cards stats
         var kcStats = JSON()
@@ -540,14 +563,17 @@ actor DocumentProcessingService {
         }
 
         var merged = record
+        var encodeFailures: [String] = []
         Self.writeSummary(result.summary, into: &merged)
-        Self.writeSkills(result.skills, into: &merged)
-        Self.writeNarrativeCards(result.narrativeCards, into: &merged)
+        Self.writeSkills(result.skills, into: &merged, failures: &encodeFailures)
+        Self.writeNarrativeCards(result.narrativeCards, into: &merged, failures: &encodeFailures)
 
         // Recompute failures: drop the timeout failures we just re-ran, KEEP any
-        // unrelated (e.g. budget) failures, and fold in whatever the rerun reported.
+        // unrelated (e.g. budget) failures, fold in whatever the rerun reported,
+        // and add any section-writer encode failures so a stale value can't pass
+        // as a successful re-analysis.
         let priorFailures = record["extractionFailures"].arrayValue.map(\.stringValue)
-        let newFailures = Self.mergedFailures(prior: priorFailures, reran: result.passFailures)
+        let newFailures = Self.mergedFailures(prior: priorFailures, reran: result.passFailures) + encodeFailures
         if newFailures.isEmpty {
             merged["extractionFailures"] = JSON.null
         } else {
@@ -615,18 +641,32 @@ actor DocumentProcessingService {
             let encoder = JSONEncoder()
             encoder.dateEncodingStrategy = .iso8601
 
-            if let skills = result?.skills,
-               let skillsData = try? encoder.encode(skills),
-               let skillsString = String(data: skillsData, encoding: .utf8) {
-                artifact.skillsJSON = skillsString
-                Logger.info("Skills regenerated for \(filename): \(skills.count) skills", category: .ai)
+            if let skills = result?.skills {
+                do {
+                    let skillsData = try encoder.encode(skills)
+                    if let skillsString = String(data: skillsData, encoding: .utf8) {
+                        artifact.skillsJSON = skillsString
+                        Logger.info("Skills regenerated for \(filename): \(skills.count) skills", category: .ai)
+                    } else {
+                        Logger.error("Skills re-encode for \(filename) dropped — UTF-8 decoding failed; kept prior skillsJSON", category: .ai)
+                    }
+                } catch {
+                    Logger.error("Skills re-encode for \(filename) dropped — \(error.localizedDescription); kept prior skillsJSON", category: .ai)
+                }
             }
 
-            if let cards = result?.narrativeCards,
-               let cardsData = try? encoder.encode(cards),
-               let cardsString = String(data: cardsData, encoding: .utf8) {
-                artifact.narrativeCardsJSON = cardsString
-                Logger.info("Narrative cards regenerated for \(filename): \(cards.count) cards", category: .ai)
+            if let cards = result?.narrativeCards {
+                do {
+                    let cardsData = try encoder.encode(cards)
+                    if let cardsString = String(data: cardsData, encoding: .utf8) {
+                        artifact.narrativeCardsJSON = cardsString
+                        Logger.info("Narrative cards regenerated for \(filename): \(cards.count) cards", category: .ai)
+                    } else {
+                        Logger.error("Narrative cards re-encode for \(filename) dropped — UTF-8 decoding failed; kept prior narrativeCardsJSON", category: .ai)
+                    }
+                } catch {
+                    Logger.error("Narrative cards re-encode for \(filename) dropped — \(error.localizedDescription); kept prior narrativeCardsJSON", category: .ai)
+                }
             }
         }
     }

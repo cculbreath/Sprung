@@ -292,9 +292,17 @@ class BackgroundMergeAgent {
             return deletedIds.contains(id)
         }
 
-        // Add new merged card summary to index
-        if let cardData = mergedCardJSON.data(using: .utf8),
-           let cardDict = try? JSONSerialization.jsonObject(with: cardData) as? [String: Any] {
+        // Add new merged card summary to index. A parse failure here silently
+        // drops the merged card from index.json so the next merge pass can't see
+        // it — log it loudly instead of swallowing it (the card itself is already
+        // safely written to disk, so we keep the rest of the index update).
+        do {
+            guard let cardData = mergedCardJSON.data(using: .utf8) else {
+                throw MergeError.invalidJSON
+            }
+            guard let cardDict = try JSONSerialization.jsonObject(with: cardData) as? [String: Any] else {
+                throw MergeError.invalidJSON
+            }
             let summary: [String: Any] = [
                 "id": newCardId,
                 "cardType": cardDict["cardType"] as? String ?? "",
@@ -304,6 +312,11 @@ class BackgroundMergeAgent {
                 "narrative_preview": String((cardDict["narrative"] as? String ?? "").prefix(200))
             ]
             index.append(summary)
+        } catch {
+            Logger.error(
+                "🔀 Merged card \(newCardId) omitted from index.json — unparseable JSON: \(error.localizedDescription)",
+                category: .ai
+            )
         }
 
         // Write updated index

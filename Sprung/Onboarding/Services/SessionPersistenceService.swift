@@ -439,22 +439,30 @@ final class SessionPersistenceService {
             return
         }
 
-        // Decode, update, and re-encode tool calls
-        guard let data = record.toolCallsJSON?.data(using: .utf8),
-              var toolCalls = try? JSONDecoder().decode([ToolCallSlot].self, from: data),
-              let index = toolCalls.firstIndex(where: { $0.callId == callId }) else {
-            return
-        }
+        // Decode, update, and re-encode tool calls. Missing JSON or a call that
+        // isn't in this record are legitimate no-ops; a decode/encode FAILURE is
+        // not — it silently leaves the persisted status stale, so log it loudly.
+        guard let data = record.toolCallsJSON?.data(using: .utf8) else { return }
+        do {
+            var toolCalls = try JSONDecoder().decode([ToolCallSlot].self, from: data)
+            guard let index = toolCalls.firstIndex(where: { $0.callId == callId }) else {
+                return
+            }
 
-        // The result is already set in ConversationLog - we need to sync it
-        // For now, just mark that the status changed (the result will be synced on session restore)
-        toolCalls[index].status = ToolCallStatus(rawValue: status) ?? .completed
+            // The result is already set in ConversationLog - we need to sync it
+            // For now, just mark that the status changed (the result will be synced on session restore)
+            toolCalls[index].status = ToolCallStatus(rawValue: status) ?? .completed
 
-        if let newData = try? JSONEncoder().encode(toolCalls),
-           let newJSON = String(data: newData, encoding: .utf8) {
+            let newData = try JSONEncoder().encode(toolCalls)
+            guard let newJSON = String(data: newData, encoding: .utf8) else {
+                Logger.error("Tool result status update dropped for \(callId.prefix(8)) — UTF-8 encoding of tool calls failed", category: .ai)
+                return
+            }
             record.toolCallsJSON = newJSON
             sessionStore.saveConversationEntries()
             Logger.debug("💾 Updated tool result status: \(callId.prefix(8)) → \(status)", category: .ai)
+        } catch {
+            Logger.error("Tool result status update dropped for \(callId.prefix(8)) — decode/encode failed: \(error.localizedDescription)", category: .ai)
         }
     }
 

@@ -88,12 +88,28 @@ enum ArtifactExporter {
             try writePrettyJSON(narrativeCardsJSON, to: cardsPath)
         }
 
-        // Export git analysis for git repositories
+        // Export git analysis for git repositories. A git artifact carries its
+        // analysis in metadata.rawData; a parse/shape failure here must surface
+        // (the export's outer catch handles it) rather than silently skipping the
+        // git evidence — which would leave the interview running with no git data.
         if artifact.sourceType == "git" || artifact.sourceType == "git_repository",
-           let metadataJSON = artifact.metadataJSON,
-           let metadataData = metadataJSON.data(using: .utf8),
-           let metadata = try? JSONSerialization.jsonObject(with: metadataData) as? [String: Any],
-           let rawData = metadata["rawData"] as? [String: Any] {
+           let metadataJSON = artifact.metadataJSON {
+            guard let metadataData = metadataJSON.data(using: .utf8) else {
+                throw NSError(
+                    domain: "ArtifactExport",
+                    code: 1,
+                    userInfo: [NSLocalizedDescriptionKey: "Git artifact \(artifact.artifactFolderName): metadata JSON not UTF-8 encodable"]
+                )
+            }
+            let parsedMetadata = try JSONSerialization.jsonObject(with: metadataData)
+            guard let metadata = parsedMetadata as? [String: Any],
+                  let rawData = metadata["rawData"] as? [String: Any] else {
+                throw NSError(
+                    domain: "ArtifactExport",
+                    code: 2,
+                    userInfo: [NSLocalizedDescriptionKey: "Git artifact \(artifact.artifactFolderName): metadata missing a usable rawData object"]
+                )
+            }
             try exportGitAnalysis(rawData, to: artifactDir)
         }
     }
