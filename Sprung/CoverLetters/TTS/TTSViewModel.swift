@@ -110,7 +110,7 @@ class TTSViewModel {
             self.isSpeaking = false
             self.isPaused = false
             self.clearStateTimeout() // Clear any timeout since we're done
-            Logger.debug("[TTSViewModel] Error from provider: \(error.localizedDescription)")
+            Logger.error("[TTSViewModel] Error from provider: \(error.localizedDescription)")
             self.logCurrentState("after provider onError")
         }
     }

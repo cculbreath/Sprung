@@ -105,6 +105,12 @@ struct TTSButton: View {
             // Force restart TTS
             restartTTS()
         }
+        .onChange(of: ttsViewModel?.ttsError) { _, newValue in
+            // Surface TTS failures so Read Aloud doesn't silently return to idle
+            if let newValue, !newValue.isEmpty {
+                ToastCenter.shared.show(.error("Read aloud failed: \(newValue)"))
+            }
+        }
     }
     private func handleClick() {
         let event = NSApp.currentEvent

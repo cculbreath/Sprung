@@ -114,7 +114,7 @@ class CoverLetter: Identifiable, Hashable {
             do {
                 encodedAssessmentData = try JSONEncoder().encode(newValue)
             } catch {
-                Logger.debug("Failed to encode assessmentData: \(error.localizedDescription)")
+                Logger.error("Failed to encode assessmentData: \(error.localizedDescription)")
             }
         }
     }
@@ -159,7 +159,7 @@ class CoverLetter: Identifiable, Hashable {
             do {
                 encodedCommitteeFeedback = try JSONEncoder().encode(newValue)
             } catch {
-                Logger.debug("Failed to encode committeeFeedback: \(error.localizedDescription)")
+                Logger.error("Failed to encode committeeFeedback: \(error.localizedDescription)")
             }
         }
     }
@@ -180,7 +180,7 @@ class CoverLetter: Identifiable, Hashable {
             do {
                 encodedGenerationSources = try JSONEncoder().encode(newValue)
             } catch {
-                Logger.debug("Failed to encode generationSources: \(error.localizedDescription)")
+                Logger.error("Failed to encode generationSources: \(error.localizedDescription)")
             }
         }
     }

@@ -131,7 +131,8 @@ final class ExportFileService {
             }
         }
         if combinedPDF.pageCount != expectedPages {
-            Logger.debug("Warning: Expected \(expectedPages) pages but got \(combinedPDF.pageCount)")
+            Logger.error("Failed to combine PDFs: expected \(expectedPages) pages but got \(combinedPDF.pageCount)")
+            return nil
         }
         return combinedPDF.dataRepresentation()
     }
@@ -316,6 +317,7 @@ final class ExportFileService {
 
     private func exportAllCoverLetters(onToast: @escaping (String) -> Void) {
         guard let jobApp = jobAppStore.selectedApp else {
+            onToast("No job application selected. Please select a job application first.")
             return
         }
         let allCoverLetters = jobApp.coverLetters.filter { $0.generated }.sorted(by: { $0.moddedDate > $1.moddedDate })
