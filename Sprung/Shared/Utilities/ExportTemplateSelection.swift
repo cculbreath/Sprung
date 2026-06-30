@@ -46,12 +46,14 @@ struct ExportTemplateSelection {
             cssPanel.message = "Choose a CSS file to include with the template"
             cssPanel.allowedContentTypes = [UTType.text]
             cssPanel.allowsMultipleSelection = false
-            if cssPanel.runModal() == .OK, let cssURL = cssPanel.url, let cssContent = try? String(contentsOf: cssURL, encoding: .utf8) {
-                return (html: htmlContent, css: cssContent)
-            } else {
-                // Treat cancel as no CSS
+            guard cssPanel.runModal() == .OK, let cssURL = cssPanel.url else {
+                // User cancelled the CSS picker — proceed with embedded CSS.
                 return (html: htmlContent, css: nil)
             }
+            guard let cssContent = try? String(contentsOf: cssURL, encoding: .utf8) else {
+                throw ExportTemplateSelectionError.failedToReadFile
+            }
+            return (html: htmlContent, css: cssContent)
         } else if cssResponse == .alertSecondButtonReturn {
             return (html: htmlContent, css: nil)
         } else {

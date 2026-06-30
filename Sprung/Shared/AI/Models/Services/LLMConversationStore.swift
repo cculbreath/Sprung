@@ -17,10 +17,19 @@ import SwiftData
 actor LLMConversationStore {
     func loadMessages(conversationId: UUID) -> [LLMMessageDTO] {
         let descriptor = FetchDescriptor<ConversationContext>(predicate: #Predicate { $0.id == conversationId }, sortBy: [])
-        if let stored = try? modelContext.fetch(descriptor).first {
+        do {
+            guard let stored = try modelContext.fetch(descriptor).first else {
+                // Legitimately new conversation — no stored history yet.
+                return []
+            }
             return stored.messages.sorted { $0.timestamp < $1.timestamp }.map { $0.dto }
+        } catch {
+            Logger.error("❌ Failed to load conversation: \(error)", category: .storage)
+            Task { @MainActor in
+                ToastCenter.shared.show(.error("Could not load this conversation history. \(error.localizedDescription)"))
+            }
+            return []
         }
-        return []
     }
 
     func saveMessages(

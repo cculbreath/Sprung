@@ -9,6 +9,7 @@ struct ApplicantProfileEditor: View {
     var emailSuggestions: [String] = []
     @State private var selectedProfileID: UUID?
     @State private var hoveredProfileID: UUID?
+    @State private var photoLoadError: String?
     var body: some View {
         VStack(alignment: .leading, spacing: 24) {
             GroupBox {
@@ -178,6 +179,14 @@ struct ApplicantProfileEditor: View {
                     .font(.headline)
             }
         }
+        .alert("Could Not Load Image", isPresented: Binding(
+            get: { photoLoadError != nil },
+            set: { if !$0 { photoLoadError = nil } }
+        )) {
+            Button("OK") { photoLoadError = nil }
+        } message: {
+            Text(photoLoadError ?? "")
+        }
     }
     private func addProfile() {
         let newProfile = ApplicantSocialProfileDraft()
@@ -204,7 +213,10 @@ struct ApplicantProfileEditor: View {
         panel.allowedContentTypes = [.image]
         panel.begin { response in
             guard response == .OK, let url = panel.url else { return }
-            guard let data = try? Data(contentsOf: url) else { return }
+            guard let data = try? Data(contentsOf: url) else {
+                photoLoadError = "Could not read the selected image."
+                return
+            }
             draft.updatePicture(data: data, mimeType: url.mimeTypeHint())
         }
     }
@@ -216,7 +228,10 @@ struct ApplicantProfileEditor: View {
         panel.directoryURL = URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Pictures")
         panel.begin { response in
             guard response == .OK, let url = panel.url else { return }
-            guard let data = try? Data(contentsOf: url) else { return }
+            guard let data = try? Data(contentsOf: url) else {
+                photoLoadError = "Could not read the selected image."
+                return
+            }
             draft.updatePicture(data: data, mimeType: url.mimeTypeHint())
         }
     }
