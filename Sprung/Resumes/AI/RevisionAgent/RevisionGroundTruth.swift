@@ -128,15 +128,20 @@ struct RevisionGroundTruth {
     /// writes separately).
     func verifyProposedChanges(_ changes: [ProposeChangesTool.ChangeDetail]) -> [ChangeProposal.BeforeVerification] {
         let nodesBySlug: [String: [WorkspaceNodeSnapshot]]
-        if let flattened = try? flattenNodeFiles(in: layout.treenodes) {
-            nodesBySlug = flattened
-        } else {
+        do {
+            nodesBySlug = try flattenNodeFiles(in: layout.treenodes)
+        } catch {
+            Logger.error("Proposal verification: could not read the revision workspace treenodes: \(error.localizedDescription)", category: .ai)
+            ToastCenter.shared.show(.error("Could not read the revision workspace — proposal checks may be unreliable."))
             nodesBySlug = [:]
         }
         let snapshotValues: [String]
-        if let flattened = try? flattenNodeFiles(in: layout.snapshots) {
+        do {
+            let flattened = try flattenNodeFiles(in: layout.snapshots)
             snapshotValues = flattened.values.flatMap { $0 }.map(\.value).filter { !$0.isEmpty }
-        } else {
+        } catch {
+            Logger.error("Proposal verification: could not read the revision workspace snapshots: \(error.localizedDescription)", category: .ai)
+            ToastCenter.shared.show(.error("Could not read the revision workspace — proposal checks may be unreliable."))
             snapshotValues = []
         }
         let allValues = nodesBySlug.values.flatMap { $0 }.map(\.value).filter { !$0.isEmpty } + snapshotValues
@@ -210,8 +215,17 @@ struct RevisionGroundTruth {
         var lines: [String] = []
         for fileURL in nodeFiles {
             let slug = fileURL.deletingPathExtension().lastPathComponent
-            guard let data = try? Data(contentsOf: fileURL),
-                  let nodes = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
+            let nodes: [[String: Any]]
+            do {
+                let data = try Data(contentsOf: fileURL)
+                guard let parsed = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
+                    Logger.warning("Coherence pass: '\(fileURL.lastPathComponent)' is not a node array — skipped", category: .ai)
+                    continue
+                }
+                nodes = parsed
+            } catch {
+                Logger.error("Coherence pass: could not read '\(fileURL.lastPathComponent)' — resume audit ran on partial content: \(error.localizedDescription)", category: .ai)
+                ToastCenter.shared.show(.error("Part of the resume could not be read — the coherence check ran on incomplete content."))
                 continue
             }
             lines.append("## \(slug)")
@@ -269,21 +283,35 @@ struct RevisionGroundTruth {
             }
         }
 
-        if let skillBank = try? String(contentsOf: layout.root.appendingPathComponent("skill_bank.txt"), encoding: .utf8) {
+        do {
+            let skillBank = try String(contentsOf: layout.root.appendingPathComponent("skill_bank.txt"), encoding: .utf8)
             append(skillBank)
+        } catch {
+            Logger.error("Grounding pass: could not read the skill bank — fabrication detection ran with reduced evidence: \(error.localizedDescription)", category: .ai)
+            ToastCenter.shared.show(.error("Could not read the skill bank — the grounding check ran on partial evidence."))
         }
 
-        let cardFiles = (try? FileManager.default.contentsOfDirectory(at: cardsDir, includingPropertiesForKeys: nil))?
-            .filter { $0.pathExtension == "txt" }
-            .sorted { $0.lastPathComponent < $1.lastPathComponent } ?? []
+        let cardFiles: [URL]
+        do {
+            cardFiles = try FileManager.default.contentsOfDirectory(at: cardsDir, includingPropertiesForKeys: nil)
+                .filter { $0.pathExtension == "txt" }
+                .sorted { $0.lastPathComponent < $1.lastPathComponent }
+        } catch {
+            Logger.error("Grounding pass: could not read the knowledge-card corpus — fabrication detection ran with reduced evidence: \(error.localizedDescription)", category: .ai)
+            ToastCenter.shared.show(.error("Could not read the knowledge-card evidence — the grounding check ran on partial evidence."))
+            cardFiles = []
+        }
         for cardFile in cardFiles {
             guard remaining > 0 else {
                 sections.append("[... additional knowledge cards omitted for length ...]")
                 wasTruncated = true
                 break
             }
-            if let card = try? String(contentsOf: cardFile, encoding: .utf8) {
+            do {
+                let card = try String(contentsOf: cardFile, encoding: .utf8)
                 append(card)
+            } catch {
+                Logger.error("Grounding pass: could not read knowledge card '\(cardFile.lastPathComponent)' — omitted from the grounding evidence: \(error.localizedDescription)", category: .ai)
             }
         }
 
