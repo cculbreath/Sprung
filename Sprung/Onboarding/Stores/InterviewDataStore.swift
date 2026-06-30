@@ -22,7 +22,7 @@ actor InterviewDataStore {
         do {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         } catch {
-            Logger.debug("Failed to create onboarding data directory: \(error)")
+            Logger.error("Failed to create onboarding data directory: \(error.localizedDescription)")
         }
         baseURL = directory
     }

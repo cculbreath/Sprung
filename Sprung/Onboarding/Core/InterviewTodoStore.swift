@@ -220,11 +220,17 @@ actor InterviewTodoStore {
     private func emitUpdateEvent() {
         guard let eventBus else { return }
         // Serialize items to JSON
-        if let data = try? JSONEncoder().encode(items),
-           let jsonString = String(data: data, encoding: .utf8) {
+        do {
+            let data = try JSONEncoder().encode(items)
+            guard let jsonString = String(data: data, encoding: .utf8) else {
+                Logger.error("📋 Failed to UTF-8 decode encoded todo list; todoListUpdated event not published", category: .ai)
+                return
+            }
             Task {
                 await eventBus.publish(.tool(.todoListUpdated(todoListJSON: jsonString)))
             }
+        } catch {
+            Logger.error("📋 Failed to encode todo list for todoListUpdated event: \(error.localizedDescription); event not published", category: .ai)
         }
     }
 }

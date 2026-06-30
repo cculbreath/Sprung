@@ -85,22 +85,26 @@ struct SubmitForValidationTool: InterviewTool {
                 var data = JSON()
 
                 // Convert section cards to JSON using Codable
-                let sectionCardsJSON: [JSON] = coordinator.ui.sectionCards.compactMap { card in
-                    guard let jsonData = try? JSONEncoder().encode(card),
-                          let jsonObject = try? JSON(data: jsonData) else {
-                        return nil
+                var sectionCardsJSON: [JSON] = []
+                for card in coordinator.ui.sectionCards {
+                    do {
+                        let jsonData = try JSONEncoder().encode(card)
+                        sectionCardsJSON.append(try JSON(data: jsonData))
+                    } catch {
+                        Logger.error("Dropped section card '\(card.title ?? card.id)' from validation payload: \(error.localizedDescription)", category: .ai)
                     }
-                    return jsonObject
                 }
                 data["sectionCards"] = JSON(sectionCardsJSON)
 
                 // Convert publication cards to JSON using Codable
-                let publicationCardsJSON: [JSON] = coordinator.ui.publicationCards.compactMap { card in
-                    guard let jsonData = try? JSONEncoder().encode(card),
-                          let jsonObject = try? JSON(data: jsonData) else {
-                        return nil
+                var publicationCardsJSON: [JSON] = []
+                for card in coordinator.ui.publicationCards {
+                    do {
+                        let jsonData = try JSONEncoder().encode(card)
+                        publicationCardsJSON.append(try JSON(data: jsonData))
+                    } catch {
+                        Logger.error("Dropped publication card '\(card.name.isEmpty ? card.id : card.name)' from validation payload: \(error.localizedDescription)", category: .ai)
                     }
-                    return jsonObject
                 }
                 data["publicationCards"] = JSON(publicationCardsJSON)
 

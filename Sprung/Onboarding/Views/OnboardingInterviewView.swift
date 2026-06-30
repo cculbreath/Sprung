@@ -12,6 +12,7 @@ struct OnboardingInterviewView: View {
     @State private var showSetupWizard = false
     @State private var showBudgetSheet = false
     @State private var pendingStartAction: PendingStartAction?
+    @State private var startFailureMessage: String?
 
     /// Interview start deferred until the budget sheet confirms model choices.
     enum PendingStartAction {
@@ -150,6 +151,14 @@ struct OnboardingInterviewView: View {
             }
             .alert("Import Failed", isPresented: $uiState.showImportError, presenting: uiState.importErrorText, actions: { _ in
                 Button("OK") { uiState.clearImportError() }
+            }, message: { message in
+                Text(message)
+            })
+            .alert("Could Not Start Interview", isPresented: Binding(
+                get: { startFailureMessage != nil },
+                set: { if !$0 { startFailureMessage = nil } }
+            ), presenting: startFailureMessage, actions: { _ in
+                Button("OK") { startFailureMessage = nil }
             }, message: { message in
                 Text(message)
             })
@@ -435,17 +444,22 @@ private extension OnboardingInterviewView {
         guard let action = pendingStartAction else { return }
         pendingStartAction = nil
         Task { @MainActor in
+            let started: Bool
             switch action {
             case .fresh:
                 Logger.info("📝 Starting fresh interview", category: .ai)
-                _ = await interviewCoordinator.startInterview(resumeExisting: false)
+                started = await interviewCoordinator.startInterview(resumeExisting: false)
             case .resume:
                 Logger.info("📝 Resuming existing interview", category: .ai)
-                _ = await interviewCoordinator.startInterview(resumeExisting: true)
+                started = await interviewCoordinator.startInterview(resumeExisting: true)
             case .startOver:
                 Logger.info("📝 Starting over - clearing all onboarding data", category: .ai)
                 interviewCoordinator.clearAllOnboardingData()
-                _ = await interviewCoordinator.startInterview(resumeExisting: false)
+                started = await interviewCoordinator.startInterview(resumeExisting: false)
+            }
+            if !started {
+                Logger.error("Interview failed to start (resumeExisting action=\(action))", category: .ai)
+                startFailureMessage = "Could not start the interview — check your model settings."
             }
         }
     }

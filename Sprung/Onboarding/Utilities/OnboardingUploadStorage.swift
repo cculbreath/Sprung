@@ -36,7 +36,7 @@ struct OnboardingUploadStorage {
             do {
                 try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
             } catch {
-                Logger.debug("Failed to create uploads directory: \(error)")
+                Logger.error("Failed to create uploads directory: \(error.localizedDescription)", category: .ai)
             }
         }
         uploadsDirectory = directory
