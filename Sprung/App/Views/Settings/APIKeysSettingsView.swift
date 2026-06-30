@@ -12,6 +12,7 @@ struct APIKeysSettingsView: View {
     @State private var openAiTTSApiKey: String = APIKeyStore.get(.openAI) ?? ""
     @State private var anthropicApiKey: String = APIKeyStore.get(.anthropic) ?? ""
     @State private var showModelSelectionSheet = false
+    @State private var keychainSaveError: String?
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Manage credentials used for importing jobs and accessing external AI services. Leave a field blank to remove the saved key.")
@@ -80,15 +81,28 @@ struct APIKeysSettingsView: View {
         .onReceive(NotificationCenter.default.publisher(for: .apiKeysChanged)) { _ in
             refreshKeys()
         }
+        .alert("Couldn't Save Key", isPresented: Binding(
+            get: { keychainSaveError != nil },
+            set: { if !$0 { keychainSaveError = nil } }
+        )) {
+            Button("OK") { keychainSaveError = nil }
+        } message: {
+            if let keychainSaveError {
+                Text(keychainSaveError)
+            }
+        }
     }
     private func handleOpenRouterSave(_ newValue: String) {
         let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty {
             APIKeyStore.delete(.openRouter)
             openRouterApiKey = ""
-        } else {
-            _ = APIKeyStore.set(.openRouter, value: trimmed)
+        } else if APIKeyStore.set(.openRouter, value: trimmed) {
             openRouterApiKey = trimmed
+        } else {
+            keychainSaveError = "Could not save the key to Keychain. Please try again."
+            refreshKeys()
+            return
         }
         appState.reconfigureOpenRouterService()
         NotificationCenter.default.post(name: .apiKeysChanged, object: nil)
@@ -98,9 +112,12 @@ struct APIKeysSettingsView: View {
         if trimmed.isEmpty {
             APIKeyStore.delete(.openAI)
             openAiTTSApiKey = ""
-        } else {
-            _ = APIKeyStore.set(.openAI, value: trimmed)
+        } else if APIKeyStore.set(.openAI, value: trimmed) {
             openAiTTSApiKey = trimmed
+        } else {
+            keychainSaveError = "Could not save the key to Keychain. Please try again."
+            refreshKeys()
+            return
         }
         NotificationCenter.default.post(name: .apiKeysChanged, object: nil)
     }
@@ -109,9 +126,12 @@ struct APIKeysSettingsView: View {
         if trimmed.isEmpty {
             APIKeyStore.delete(.anthropic)
             anthropicApiKey = ""
-        } else {
-            _ = APIKeyStore.set(.anthropic, value: trimmed)
+        } else if APIKeyStore.set(.anthropic, value: trimmed) {
             anthropicApiKey = trimmed
+        } else {
+            keychainSaveError = "Could not save the key to Keychain. Please try again."
+            refreshKeys()
+            return
         }
         NotificationCenter.default.post(name: .apiKeysChanged, object: nil)
     }

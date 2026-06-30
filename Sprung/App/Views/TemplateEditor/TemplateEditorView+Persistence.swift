@@ -140,7 +140,12 @@ extension TemplateEditorView {
             isCustom: true
         )
         if let manifest = source.manifestData {
-            try? appEnvironment.templateStore.updateManifest(slug: candidateSlug, manifestData: manifest)
+            do {
+                try appEnvironment.templateStore.updateManifest(slug: candidateSlug, manifestData: manifest)
+            } catch {
+                Logger.error("Failed to copy template manifest to \(candidateSlug): \(error.localizedDescription)", category: .storage)
+                ToastCenter.shared.show(.error("Could not copy the template settings."))
+            }
         }
         loadAvailableTemplates()
         selectedTemplate = candidateSlug

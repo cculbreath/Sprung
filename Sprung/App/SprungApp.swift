@@ -414,7 +414,17 @@ private extension SprungApp {
             alert.addButton(withTitle: "OK")
             alert.addButton(withTitle: "Try Again on Next Launch")
             if alert.runModal() == .alertSecondButtonReturn {
-                try? SwiftDataBackupService.destroyCurrentStore()
+                do {
+                    try SwiftDataBackupService.destroyCurrentStore()
+                } catch {
+                    Logger.error("❌ Failed to re-arm pending data-store reset: \(error.localizedDescription)", category: .appLifecycle)
+                    let failureAlert = NSAlert()
+                    failureAlert.alertStyle = .warning
+                    failureAlert.messageText = "Couldn't Schedule Reset"
+                    failureAlert.informativeText = "Sprung couldn't schedule the data reset for the next launch (reason: \(error.localizedDescription)). Your data is unchanged — please try again."
+                    failureAlert.addButton(withTitle: "OK")
+                    failureAlert.runModal()
+                }
             }
         }
     }

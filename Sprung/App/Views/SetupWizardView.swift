@@ -28,6 +28,7 @@ struct SetupWizardView: View {
     @State private var currentStep: Int = 0
     @State private var showModelPicker = false
     @State private var showExitAlert = false
+    @State private var keychainSaveError: String?
 
     // Model selection from OpenRouter API
     @State private var selectedModelIds: Set<String> = []
@@ -67,6 +68,16 @@ struct SetupWizardView: View {
                 Button("Cancel", role: .cancel) { }
             } message: {
                 Text("You can rerun the wizard from Settings at any time.")
+            }
+            .alert("Couldn't Save Key", isPresented: Binding(
+                get: { keychainSaveError != nil },
+                set: { if !$0 { keychainSaveError = nil } }
+            )) {
+                Button("OK") { keychainSaveError = nil }
+            } message: {
+                if let keychainSaveError {
+                    Text(keychainSaveError)
+                }
             }
             .task {
                 await preloadAnthropicModelsIfPossible()
@@ -563,8 +574,9 @@ private extension SetupWizardView {
         case .welcome:
             withAnimation { currentStep += 1 }
         case .apiKeys:
-            saveKeys()
-            withAnimation { currentStep += 1 }
+            if saveKeys() {
+                withAnimation { currentStep += 1 }
+            }
         case .models:
             if selectedModelIds.isEmpty {
                 return
@@ -596,26 +608,36 @@ private extension SetupWizardView {
         Logger.info("✅ Enabled \(selectedModelIds.count) OpenRouter models from setup wizard")
     }
 
-    func saveKeys() {
+    /// Persists the entered keys. Returns `false` (and sets `keychainSaveError`)
+    /// if a non-empty key failed to write to the Keychain, so the caller can
+    /// keep the user on this step instead of advancing with an unsaved key.
+    func saveKeys() -> Bool {
         let router = openRouterApiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         let openai = openAiApiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         let anthropic = anthropicApiKey.trimmingCharacters(in: .whitespacesAndNewlines)
 
+        var failed = false
         if router.isEmpty {
             APIKeyStore.delete(.openRouter)
-        } else {
-            _ = APIKeyStore.set(.openRouter, value: router)
+        } else if !APIKeyStore.set(.openRouter, value: router) {
+            failed = true
         }
         if openai.isEmpty {
             APIKeyStore.delete(.openAI)
-        } else {
-            _ = APIKeyStore.set(.openAI, value: openai)
+        } else if !APIKeyStore.set(.openAI, value: openai) {
+            failed = true
         }
         if anthropic.isEmpty {
             APIKeyStore.delete(.anthropic)
-        } else {
-            _ = APIKeyStore.set(.anthropic, value: anthropic)
+        } else if !APIKeyStore.set(.anthropic, value: anthropic) {
+            failed = true
         }
+
+        if failed {
+            keychainSaveError = "Could not save the key to Keychain. Please try again."
+            return false
+        }
+
         NotificationCenter.default.post(name: .apiKeysChanged, object: nil)
         appState.reconfigureOpenRouterService()
 
@@ -624,6 +646,7 @@ private extension SetupWizardView {
         if !router.isEmpty {
             openRouterService.configure(apiKey: router)
         }
+        return true
     }
 
     func finalizeDefaults() {
