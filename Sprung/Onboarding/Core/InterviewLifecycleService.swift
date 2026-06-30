@@ -336,8 +336,15 @@ final class InterviewLifecycleService {
     /// Restore todo list from persisted session
     private func restoreTodoList(from session: OnboardingSession) async {
         guard let todoListJSON = sessionPersistenceHandler.getRestoredTodoList(session),
-              let data = todoListJSON.data(using: .utf8),
-              let items = try? JSONDecoder().decode([InterviewTodoItem].self, from: data) else {
+              let data = todoListJSON.data(using: .utf8) else {
+            return
+        }
+
+        let items: [InterviewTodoItem]
+        do {
+            items = try JSONDecoder().decode([InterviewTodoItem].self, from: data)
+        } catch {
+            Logger.error("📥 Failed to restore todo list on resume: \(error.localizedDescription)", category: .ai)
             return
         }
 

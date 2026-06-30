@@ -112,13 +112,20 @@ struct AnthropicHistoryBuilder {
                 if let outputData = output.data(using: .utf8) {
                     let json = JSON(outputData)
                     if json["pdfAttachment"].exists(),
-                       let storagePath = json["pdfAttachment"]["storageUrl"].string,
-                       let pdfData = try? Data(contentsOf: URL(fileURLWithPath: storagePath)) {
-                        let pdfBase64 = pdfData.base64EncodedString()
-                        let docSource = AnthropicDocumentSource(mediaType: "application/pdf", data: pdfBase64)
-                        contentBlocks.append(.document(AnthropicDocumentBlock(source: docSource)))
-                        let filename = json["pdfAttachment"]["filename"].string ?? "resume.pdf"
-                        Logger.info("📄 Re-including PDF in history: \(filename) (\(pdfData.count / 1024) KB)", category: .ai)
+                       let storagePath = json["pdfAttachment"]["storageUrl"].string {
+                        do {
+                            let pdfData = try Data(contentsOf: URL(fileURLWithPath: storagePath))
+                            let pdfBase64 = pdfData.base64EncodedString()
+                            let docSource = AnthropicDocumentSource(mediaType: "application/pdf", data: pdfBase64)
+                            contentBlocks.append(.document(AnthropicDocumentBlock(source: docSource)))
+                            let filename = json["pdfAttachment"]["filename"].string ?? "resume.pdf"
+                            Logger.info("📄 Re-including PDF in history: \(filename) (\(pdfData.count / 1024) KB)", category: .ai)
+                        } catch {
+                            Logger.error("📄 Failed to re-include PDF in history from \(storagePath): \(error.localizedDescription)", category: .ai)
+                            Task { @MainActor in
+                                ToastCenter.shared.show(.error("Your uploaded PDF is no longer accessible — the AI will not see it this session."))
+                            }
+                        }
                     }
                 }
 
@@ -172,11 +179,20 @@ struct AnthropicHistoryBuilder {
     /// its key order on the wire unconditionally. No app-side pre-sorting is needed —
     /// the dict's in-memory iteration order can't reach the wire.
     static func deterministicToolInput(fromArgumentsJSON argumentsJSON: String) -> [String: Any] {
-        guard let argsData = argumentsJSON.data(using: .utf8),
-              let parsed = try? JSONSerialization.jsonObject(with: argsData) as? [String: Any] else {
+        guard let argsData = argumentsJSON.data(using: .utf8) else {
+            Logger.error("Failed to encode recorded tool-call arguments as UTF-8 — sending empty tool_use input", category: .ai)
             return [:]
         }
-        return parsed
+        do {
+            guard let parsed = try JSONSerialization.jsonObject(with: argsData) as? [String: Any] else {
+                Logger.error("Recorded tool-call arguments did not parse to a JSON object — sending empty tool_use input", category: .ai)
+                return [:]
+            }
+            return parsed
+        } catch {
+            Logger.error("Failed to parse recorded tool-call arguments: \(error.localizedDescription) — sending empty tool_use input", category: .ai)
+            return [:]
+        }
     }
 
     // MARK: - Message Merging
@@ -261,8 +277,18 @@ struct AnthropicHistoryBuilder {
 
         // Check for pdfAttachment with storageUrl
         guard json["pdfAttachment"].exists(),
-              let storagePath = json["pdfAttachment"]["storageUrl"].string,
-              let pdfData = try? Data(contentsOf: URL(fileURLWithPath: storagePath)) else {
+              let storagePath = json["pdfAttachment"]["storageUrl"].string else {
+            return nil
+        }
+
+        let pdfData: Data
+        do {
+            pdfData = try Data(contentsOf: URL(fileURLWithPath: storagePath))
+        } catch {
+            Logger.error("📄 Failed to re-include PDF in user message history from \(storagePath): \(error.localizedDescription)", category: .ai)
+            Task { @MainActor in
+                ToastCenter.shared.show(.error("Your uploaded PDF is no longer accessible — the AI will not see it this session."))
+            }
             return nil
         }
 
