@@ -3,6 +3,7 @@ import SwiftUI
 struct ExperienceEditorView: View {
     @Environment(ExperienceDefaultsStore.self) private var defaultsStore: ExperienceDefaultsStore
     @Environment(AppEnvironment.self) private var appEnvironment: AppEnvironment
+    @Environment(ExperienceEntryRefinementService.self) private var refinementService: ExperienceEntryRefinementService
     @State private var draft = ExperienceDefaultsDraft()
     @State private var originalDraft = ExperienceDefaultsDraft()
     @State private var isLoading = true
@@ -11,6 +12,7 @@ struct ExperienceEditorView: View {
     @State private var saveState: SaveState = .idle
     @State private var editingEntries: Set<UUID> = []
     @State private var showImportSheet = false
+    @State private var refineRequest: ExperienceRefineRequest?
     private enum SaveState: Equatable {
         case idle
         case saving
@@ -23,7 +25,8 @@ struct ExperienceEditorView: View {
             beginEditing: beginEditingEntry,
             toggleEditing: toggleEditingEntry,
             endEditing: endEditingEntry,
-            onChange: markDirty
+            onChange: markDirty,
+            requestRefine: requestRefine
         )
     }
     private var activeSectionRenderers: [AnyExperienceSectionRenderer] {
@@ -65,6 +68,17 @@ struct ExperienceEditorView: View {
                     markDirty()
                 }
             )
+        }
+        .sheet(item: $refineRequest) { request in
+            if let current = currentRefineContent(for: request) {
+                ExperienceRefineSheet(
+                    draft: draft,
+                    request: request,
+                    current: current,
+                    onApply: { accepted in applyRefinement(accepted, for: request) }
+                )
+                .environment(refinementService)
+            }
         }
     }
     // MARK: - Seed Generation Banner
@@ -236,5 +250,75 @@ struct ExperienceEditorView: View {
     }
     private func clearEditingEntries() {
         editingEntries.removeAll()
+    }
+
+    // MARK: - Refinement
+
+    private func requestRefine(_ entryID: UUID, kind: ExperienceRefineKind) {
+        guard let title = refineTitle(for: entryID, kind: kind) else { return }
+        refineRequest = ExperienceRefineRequest(entryID: entryID, kind: kind, title: title)
+    }
+
+    private func refineTitle(for entryID: UUID, kind: ExperienceRefineKind) -> String? {
+        switch kind {
+        case .work:
+            guard let entry = draft.work.first(where: { $0.id == entryID }) else { return nil }
+            let position = entry.position.trimmed()
+            let company = entry.name.trimmed()
+            return [position, company].filter { !$0.isEmpty }.joined(separator: " · ").nonEmptyOr("Work Role")
+        case .projects:
+            guard let entry = draft.projects.first(where: { $0.id == entryID }) else { return nil }
+            return entry.name.trimmed().nonEmptyOr("Project")
+        }
+    }
+
+    /// Snapshot the entry's current AI-revisable content to seed the prompt and
+    /// drive the review sheet's current-vs-proposed comparison.
+    private func currentRefineContent(for request: ExperienceRefineRequest) -> ExperienceRefineContent? {
+        switch request.kind {
+        case .work:
+            guard let entry = draft.work.first(where: { $0.id == request.entryID }) else { return nil }
+            return ExperienceRefineContent(
+                description: nil,
+                highlights: entry.highlights.map(\.text),
+                keywords: nil
+            )
+        case .projects:
+            guard let entry = draft.projects.first(where: { $0.id == request.entryID }) else { return nil }
+            return ExperienceRefineContent(
+                description: entry.description,
+                highlights: entry.highlights.map(\.text),
+                keywords: entry.keywords.map(\.keyword)
+            )
+        }
+    }
+
+    /// Write the user-accepted content back onto the live draft. Fields the user
+    /// rejected (empty/nil here) are left untouched.
+    private func applyRefinement(_ accepted: ExperienceRefineContent, for request: ExperienceRefineRequest) {
+        switch request.kind {
+        case .work:
+            guard let index = draft.work.firstIndex(where: { $0.id == request.entryID }) else { return }
+            guard !accepted.highlights.isEmpty else { return }
+            draft.work[index].highlights = accepted.highlights.map { HighlightDraft(text: $0) }
+        case .projects:
+            guard let index = draft.projects.firstIndex(where: { $0.id == request.entryID }) else { return }
+            if let description = accepted.description {
+                draft.projects[index].description = description
+            }
+            if !accepted.highlights.isEmpty {
+                draft.projects[index].highlights = accepted.highlights.map { ProjectHighlightDraft(text: $0) }
+            }
+            if let keywords = accepted.keywords {
+                draft.projects[index].keywords = keywords.map { KeywordDraft(keyword: $0) }
+            }
+        }
+        markDirty()
+    }
+}
+
+private extension String {
+    func nonEmptyOr(_ fallback: String) -> String {
+        isEmpty ? fallback : self
     }
 }

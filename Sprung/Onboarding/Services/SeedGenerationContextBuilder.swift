@@ -19,8 +19,29 @@ enum SeedGenerationContextBuilder {
         candidateDossierStore: CandidateDossierStore?,
         titleSetStore: TitleSetStore?
     ) async -> SeedGenerationContext? {
-        let defaults = experienceDefaultsStore.currentDefaults()
+        await build(
+            defaults: experienceDefaultsStore.currentDefaults(),
+            knowledgeCardStore: knowledgeCardStore,
+            skillStore: skillStore,
+            applicantProfileStore: applicantProfileStore,
+            coverRefStore: coverRefStore,
+            candidateDossierStore: candidateDossierStore,
+            titleSetStore: titleSetStore
+        )
+    }
 
+    /// Build a context from an explicit `ExperienceDefaults` snapshot rather than the
+    /// persisted store. Single-entry refinement passes an in-memory snapshot of the
+    /// live editor draft here so unsaved edits are reflected in the generator prompt.
+    static func build(
+        defaults: ExperienceDefaults,
+        knowledgeCardStore: KnowledgeCardStore,
+        skillStore: SkillStore,
+        applicantProfileStore: ApplicantProfileStore?,
+        coverRefStore: CoverRefStore?,
+        candidateDossierStore: CandidateDossierStore?,
+        titleSetStore: TitleSetStore?
+    ) async -> SeedGenerationContext? {
         // Get applicant profile
         let applicantProfile: ApplicantProfileDraft
         if let profileStore = applicantProfileStore {

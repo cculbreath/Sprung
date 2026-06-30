@@ -36,6 +36,7 @@ final class AppDependencies {
     let guidanceStore: InferenceGuidanceStore
     let titleSetStore: TitleSetStore
     let backgroundActivityTracker: BackgroundActivityTracker
+    let experienceEntryRefinementService: ExperienceEntryRefinementService
     // MARK: - UI State
     let dragInfo: DragInfo
     let debugSettingsStore: DebugSettingsStore
@@ -198,6 +199,18 @@ final class AppDependencies {
         // Background Activity Tracker (for monitoring LLM operations)
         let backgroundActivityTracker = BackgroundActivityTracker()
         self.backgroundActivityTracker = backgroundActivityTracker
+
+        // Single-entry refinement reuses the SGM generators; built here where every
+        // store it needs (and the facade) already exists.
+        self.experienceEntryRefinementService = ExperienceEntryRefinementService(
+            knowledgeCardStore: knowledgeCardStore,
+            skillStore: skillStore,
+            applicantProfileStore: applicantProfileStore,
+            coverRefStore: coverRefStore,
+            candidateDossierStore: candidateDossierStore,
+            titleSetStore: titleSetStore,
+            llmFacade: llmFacade
+        )
 
         // Job App Preprocessor (background processing for job requirements and
         // card selection). Deferred second phase of jobAppStore wiring: this is

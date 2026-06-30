@@ -122,7 +122,8 @@ struct AnyExperienceSectionRenderer: Identifiable {
         title: @escaping (Item) -> String,
         subtitle: @escaping (Item) -> String?,
         editorBuilder: @escaping (Binding<Item>, ExperienceSectionViewCallbacks) -> Editor,
-        summaryBuilder: @escaping (Item) -> Summary
+        summaryBuilder: @escaping (Item) -> Summary,
+        refineKind: ExperienceRefineKind? = nil
     ) where Item: Identifiable & Equatable, Item.ID == UUID {
         self.key = key
         isEnabledClosure = { draft in
@@ -144,7 +145,8 @@ struct AnyExperienceSectionRenderer: Identifiable {
                     title: title,
                     subtitle: subtitle,
                     editorBuilder: editorBuilder,
-                    summaryBuilder: summaryBuilder
+                    summaryBuilder: summaryBuilder,
+                    refineKind: refineKind
                 )
             )
         }
@@ -195,7 +197,8 @@ extension WorkExperienceSectionView {
             },
             summaryBuilder: { entry in
                 WorkExperienceSummaryView(entry: entry)
-            }
+            },
+            refineKind: .work
         )
     }
 }
@@ -249,7 +252,8 @@ extension ProjectExperienceSectionView {
             },
             summaryBuilder: { entry in
                 ProjectExperienceSummaryView(entry: entry)
-            }
+            },
+            refineKind: .projects
         )
     }
 }

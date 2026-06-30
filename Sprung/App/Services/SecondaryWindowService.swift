@@ -410,6 +410,7 @@ final class SecondaryWindowService {
                 .environment(deps.experienceDefaultsStore)
                 .environment(appEnvironment.careerKeywordStore)
                 .environment(deps.guidanceStore)
+                .environment(deps.experienceEntryRefinementService)
             experienceEditorWindow = makeWindow(
                 WindowSpec(
                     title: "Experience Editor", width: 1180, height: 780,

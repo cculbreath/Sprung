@@ -7,16 +7,21 @@ struct ExperienceSectionViewCallbacks {
     var toggleEditing: (UUID) -> Void
     var endEditing: (UUID) -> Void
     var onChange: () -> Void
+    /// Request AI refinement of a specific entry. Only wired for refinable
+    /// sections (work, projects); no-ops elsewhere.
+    var requestRefine: (UUID, ExperienceRefineKind) -> Void = { _, _ in }
 }
 struct ExperienceCard<Content: View>: View {
     let onDelete: () -> Void
     var onToggleEdit: (() -> Void)?
+    var onRefine: (() -> Void)?
     var isEditing: Bool = false
     let content: Content
     @State private var isHovered = false
-    init(onDelete: @escaping () -> Void, onToggleEdit: (() -> Void)? = nil, isEditing: Bool = false, @ViewBuilder content: () -> Content) {
+    init(onDelete: @escaping () -> Void, onToggleEdit: (() -> Void)? = nil, onRefine: (() -> Void)? = nil, isEditing: Bool = false, @ViewBuilder content: () -> Content) {
         self.onDelete = onDelete
         self.onToggleEdit = onToggleEdit
+        self.onRefine = onRefine
         self.isEditing = isEditing
         self.content = content()
     }
@@ -36,6 +41,15 @@ struct ExperienceCard<Content: View>: View {
         .overlay(alignment: .topTrailing) {
             if isHovered {
                 HStack(spacing: 6) {
+                    if let onRefine {
+                        Button(action: onRefine, label: {
+                            Image(systemName: "wand.and.stars")
+                        })
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                        .help("Refine with AI")
+                        .accessibilityLabel("Refine Entry with AI")
+                    }
                     if let onToggleEdit {
                         Button(action: onToggleEdit, label: {
                             Image(systemName: isEditing ? "checkmark.circle.fill" : "pencil")
@@ -182,6 +196,8 @@ struct GenericExperienceSectionView<Item, Editor: View, Summary: View>: View whe
     let subtitle: (Item) -> String?
     let editorBuilder: (Binding<Item>, ExperienceSectionViewCallbacks) -> Editor
     let summaryBuilder: (Item) -> Summary
+    /// When set, each entry shows a Refine button that requests AI refinement.
+    var refineKind: ExperienceRefineKind?
     @State private var draggingID: UUID?
     var body: some View {
         sectionContainer(title: metadata.title, subtitle: metadata.subtitle) {
@@ -192,6 +208,7 @@ struct GenericExperienceSectionView<Item, Editor: View, Summary: View>: View whe
                 ExperienceCard(
                     onDelete: { delete(entryID) },
                     onToggleEdit: { callbacks.toggleEditing(entryID) },
+                    onRefine: refineKind.map { kind in { callbacks.requestRefine(entryID, kind) } },
                     isEditing: editing
                 ) {
                     ExperienceEntryHeader(
