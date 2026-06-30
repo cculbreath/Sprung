@@ -40,6 +40,9 @@ struct DocumentIngestionSheet: View {
     @State private var deduplicateNarratives = false
     /// Whether to extract and persist skills from imported documents
     @State private var extractSkillsAfterImport = true
+    /// Card-generation failure message, surfaced as an alert. When set, the
+    /// confirmation sheet is also dismissed so its spinner can't hang forever.
+    @State private var generationError: String?
 
     // MARK: - Callbacks
 
@@ -99,20 +102,29 @@ struct DocumentIngestionSheet: View {
                     coordinator: coordinator,
                     onConfirm: { selectedNew, selectedEnhancements in
                         Task {
-                            let (created, _, _) = try await coordinator.generateSelected(
-                                newCards: selectedNew,
-                                enhancements: selectedEnhancements,
-                                artifacts: result.artifacts,
-                                skillBank: result.skillBank,
-                                persistSkills: extractSkillsAfterImport
-                            )
-                            // Notify caller of first created card (for UI refresh)
-                            if created > 0, let first = selectedNew.first {
-                                onCardGenerated?(first)
+                            do {
+                                let (created, _, _) = try await coordinator.generateSelected(
+                                    newCards: selectedNew,
+                                    enhancements: selectedEnhancements,
+                                    artifacts: result.artifacts,
+                                    skillBank: result.skillBank,
+                                    persistSkills: extractSkillsAfterImport
+                                )
+                                // Notify caller of first created card (for UI refresh)
+                                if created > 0, let first = selectedNew.first {
+                                    onCardGenerated?(first)
+                                }
+                                showAnalysisSheet = false
+                                try? await Task.sleep(for: .seconds(1))
+                                dismiss()
+                            } catch {
+                                Logger.error("❌ DocumentIngestionSheet: card generation failed - \(error.localizedDescription)", category: .ai)
+                                // Tear down the confirmation sheet so its
+                                // `isGenerating` spinner can't spin forever, then
+                                // surface the failure to the user.
+                                showAnalysisSheet = false
+                                generationError = error.localizedDescription
                             }
-                            showAnalysisSheet = false
-                            try? await Task.sleep(for: .seconds(1))
-                            dismiss()
                         }
                     },
                     onCancel: {
@@ -121,6 +133,14 @@ struct DocumentIngestionSheet: View {
                 )
             }
         }
+        .alert("Card Generation Failed", isPresented: Binding(
+            get: { generationError != nil },
+            set: { if !$0 { generationError = nil } }
+        ), presenting: generationError, actions: { _ in
+            Button("OK") { generationError = nil }
+        }, message: { message in
+            Text(message)
+        })
     }
 
     // MARK: - Header

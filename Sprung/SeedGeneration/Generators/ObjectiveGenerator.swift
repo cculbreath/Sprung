@@ -193,8 +193,11 @@ final class ObjectiveGenerator: BaseSectionGenerator {
             Logger.warning("ObjectiveGenerator: content type mismatch", category: .ai)
             return
         }
-        Logger.info("Generated professional summary: \(summary.prefix(50))...", category: .ai)
-        // The actual application to ApplicantProfile happens elsewhere
+        // apply(to:defaults:) writes nothing here — the professional summary lands
+        // on ApplicantProfileDraft elsewhere, not via ExperienceDefaults. If section
+        // dispatch ever routes an approved summary through this path, it would vanish
+        // silently, so log at .error to make that disappearance visible.
+        Logger.error("ObjectiveGenerator.apply(to:defaults:) discards the approved professional summary (it is applied to ApplicantProfileDraft elsewhere): \(summary.prefix(50))...", category: .ai)
     }
 
     // MARK: - Context Building
