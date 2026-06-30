@@ -170,7 +170,11 @@ final class ActivityReportService {
     private func getResumeStatsSince(_ since: Date) -> (created: Int, modified: Int, llmCustomized: Int) {
         // Query resumes directly from context
         let descriptor = FetchDescriptor<Resume>()
-        guard let resumes = try? modelContext.fetch(descriptor) else {
+        let resumes: [Resume]
+        do {
+            resumes = try modelContext.fetch(descriptor)
+        } catch {
+            Logger.error("Activity report: failed to fetch resumes for coaching context: \(error.localizedDescription)", category: .storage)
             return (0, 0, 0)
         }
 
@@ -198,7 +202,11 @@ final class ActivityReportService {
     private func getCoverLetterStatsSince(_ since: Date) -> (created: Int, modified: Int) {
         // Query cover letters directly from context
         let descriptor = FetchDescriptor<CoverLetter>()
-        guard let coverLetters = try? modelContext.fetch(descriptor) else {
+        let coverLetters: [CoverLetter]
+        do {
+            coverLetters = try modelContext.fetch(descriptor)
+        } catch {
+            Logger.error("Activity report: failed to fetch cover letters for coaching context: \(error.localizedDescription)", category: .storage)
             return (0, 0)
         }
 
@@ -223,7 +231,11 @@ final class ActivityReportService {
     /// Excludes empty/uncomposed letters, includes full content for selected letters
     private func getCoverLetterDetailsSince(_ since: Date) -> [ActivitySnapshot.CoverLetterDetail] {
         let descriptor = FetchDescriptor<CoverLetter>()
-        guard let coverLetters = try? modelContext.fetch(descriptor) else {
+        let coverLetters: [CoverLetter]
+        do {
+            coverLetters = try modelContext.fetch(descriptor)
+        } catch {
+            Logger.error("Activity report: failed to fetch cover letters for coaching context: \(error.localizedDescription)", category: .storage)
             return []
         }
 

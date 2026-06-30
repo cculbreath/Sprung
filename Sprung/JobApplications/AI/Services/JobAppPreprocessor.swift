@@ -210,7 +210,14 @@ class JobAppPreprocessor {
 
                 job.jobApp.extractedRequirements = result.requirements
                 job.jobApp.relevantCardIds = result.relevantCardIds
-                try? job.context.save()
+                do {
+                    try job.context.save()
+                } catch {
+                    Logger.error("❌ [JobAppPreprocessor] Failed to save preprocessing results for \(job.jobApp.jobPosition): \(error.localizedDescription)", category: .storage)
+                    await MainActor.run {
+                        SaveFailureToastThrottle.showIfNeeded()
+                    }
+                }
 
                 await MainActor.run {
                     activityTracker?.markCompleted(operationId: operationId)
