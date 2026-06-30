@@ -101,8 +101,6 @@ final class WorkHighlightsGenerator: BaseSectionGenerator {
 
             4. **Vary sentence structure** - Don't start every bullet the same way
 
-            ## LENGTH GUIDELINES
-
             \(config.options.bulletConstraintText)
 
             ## FORBIDDEN
@@ -177,8 +175,6 @@ final class WorkHighlightsGenerator: BaseSectionGenerator {
             3. **Describe work narratively** - Focus on what was built, created, discovered, or accomplished
 
             4. **Vary sentence structure** - Don't start every bullet the same way
-
-            ## LENGTH GUIDELINES
 
             \(config.options.bulletConstraintText)
 

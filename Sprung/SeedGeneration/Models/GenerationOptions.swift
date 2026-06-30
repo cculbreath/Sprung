@@ -71,13 +71,22 @@ struct GenerationOptions: Equatable {
     // MARK: - Prompt Fragments
 
     /// Bullet constraints shared by every highlights-producing prompt.
-    /// Length is expressed as a rendered-line target so the LLM aims for
-    /// visual fit rather than an arbitrary word count.
+    /// Length is expressed as both a rendered-line target AND a concrete
+    /// word ceiling — the line target alone reads as a soft suggestion the
+    /// model routinely overruns, so we give it a hard number to self-check.
     var bulletConstraintText: String {
-        let lineLabel = targetBulletLines == 1 ? "1 line" : "\(targetBulletLines) lines"
+        let lineLabel = targetBulletLines == 1 ? "ONE line" : "\(targetBulletLines) lines"
+        let wordCeiling = targetBulletLines * 16
         return """
-        - Generate at most \(maxHighlightsPerEntry) highlight bullets
-        - Aim for each bullet to fill about \(lineLabel) on the printed resume. Assume 10-12pt type on a 5-6 inch text column, roughly 12-16 words per line. This is a guideline for visual fit, not a hard limit — but avoid bullets that run well past the target
+        ## LENGTH — HARD CONSTRAINT (a strict limit, NOT a guideline)
+
+        On the printed resume each bullet wraps at ~12-16 words per line (10-12pt type, ~5-6 inch column). The user has chosen a length of \(lineLabel) per bullet. Therefore:
+
+        - **HARD CEILING: at most \(wordCeiling) words per bullet.** A bullet longer than \(wordCeiling) words has FAILED the requirement — shorten it before returning it.
+        - Generate at most \(maxHighlightsPerEntry) bullets total.
+        - Stay within length by CUTTING content, never by spilling onto extra lines. Lead with the single most important fact and stop there.
+        - Delete em-dash asides (— like this —), colon-introduced lists (": a, b, c, d"), and trailing "and also…" clauses — these are exactly what overrun the line budget.
+        - Dropping a detail to stay short is correct. A long, comprehensive bullet is wrong.
         """
     }
 }

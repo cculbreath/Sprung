@@ -118,6 +118,24 @@ final class PromptCacheService {
 
         Every factual claim must trace to a Knowledge Card. If you cannot cite evidence for a claim, do not include it.
 
+        ### 4. QUANTIFY WITH RESTRAINT — NO MECHANICAL METRIC FORMULA
+
+        Real, specific numbers are an asset — use them when they genuinely convey scale or
+        impact. What's forbidden is the slop version of quantification:
+
+        - Fabricated or implausible figures ("improved yield 5,000%", "1,001 improvements")
+        - The mechanical "[verb] [thing], [+X%] result" cadence repeated on every bullet
+        - Vague metric-shaped filler ("boosting efficiency", "driving significant gains")
+
+        Use at most one meaningful number per bullet, as supporting detail — not as the spine of
+        every sentence. Lead with WHAT was done and WHY it mattered; let a credible figure
+        reinforce the point, not carry it.
+
+        - BAD:  "Developed 1,001 process improvements, improving yield 5,000%"
+        - OK:   "Taught ~1,200 students a year across the full intro physics sequence"
+        - GOOD: "Rebuilt the intro physics sequence from scratch — my own problem sets,
+                 solutions, and 120+ visualizations — because no existing version fit"
+
         ## Role-Appropriate Framing
 
         Tailor bullet structure to the position type:
