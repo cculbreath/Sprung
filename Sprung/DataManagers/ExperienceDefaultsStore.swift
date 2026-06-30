@@ -18,9 +18,21 @@ final class ExperienceDefaultsStore: SwiftDataStore {
         if let cachedDefaults {
             return cachedDefaults
         }
-        if let existing = try? modelContext.fetch(FetchDescriptor<ExperienceDefaults>()).first {
-            cachedDefaults = existing
-            return existing
+        do {
+            if let existing = try modelContext.fetch(FetchDescriptor<ExperienceDefaults>()).first {
+                cachedDefaults = existing
+                return existing
+            }
+        } catch {
+            Logger.error(
+                "Failed to load ExperienceDefaults: \(error.localizedDescription)",
+                category: .storage
+            )
+            ToastCenter.shared.show(.error("Could not load your experience data — sections may appear empty."))
+            // A thrown fetch (migration/corruption) must NOT fall through to insert a
+            // blank — that would overwrite real on-disk data. Return a transient,
+            // un-inserted instance and leave the store untouched.
+            return ExperienceDefaults()
         }
         let defaults = ExperienceDefaults()
         modelContext.insert(defaults)

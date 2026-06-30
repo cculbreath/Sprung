@@ -40,7 +40,12 @@ extension EntityStore {
         let descriptor = sortBy.isEmpty
             ? FetchDescriptor<Entity>()
             : FetchDescriptor<Entity>(sortBy: sortBy)
-        return (try? modelContext.fetch(descriptor)) ?? []
+        do {
+            return try modelContext.fetch(descriptor)
+        } catch {
+            Logger.error("EntityStore failed to fetch \(Entity.self): \(error.localizedDescription)", category: .storage)
+            return []
+        }
     }
 
     /// Insert one entity, persist, and trigger a refresh.

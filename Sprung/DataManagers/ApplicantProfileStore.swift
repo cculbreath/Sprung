@@ -24,9 +24,21 @@ final class ApplicantProfileStore: SwiftDataStore, ApplicantProfileProviding {
         if let cachedProfile {
             return cachedProfile
         }
-        if let existing = try? modelContext.fetch(FetchDescriptor<ApplicantProfile>()).first {
-            cachedProfile = existing
-            return existing
+        do {
+            if let existing = try modelContext.fetch(FetchDescriptor<ApplicantProfile>()).first {
+                cachedProfile = existing
+                return existing
+            }
+        } catch {
+            Logger.error(
+                "Failed to load ApplicantProfile: \(error.localizedDescription)",
+                category: .storage
+            )
+            ToastCenter.shared.show(.error("Could not load your profile — it may appear empty."))
+            // A thrown fetch must NOT fall through to insert+save a blank "John Doe"
+            // profile — that would overwrite the user's real identity on disk. Return
+            // a transient, un-inserted instance and leave the store untouched.
+            return ApplicantProfile()
         }
         let profile = ApplicantProfile()
         modelContext.insert(profile)

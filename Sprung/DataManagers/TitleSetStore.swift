@@ -67,11 +67,17 @@ final class TitleSetRecord {
     // MARK: - JSON Encoding/Decoding
 
     private static func encodeWords(_ words: [TitleWord]) -> String {
-        guard let data = try? JSONEncoder().encode(words),
-              let json = String(data: data, encoding: .utf8) else {
+        do {
+            let data = try JSONEncoder().encode(words)
+            guard let json = String(data: data, encoding: .utf8) else {
+                Logger.error("TitleSetRecord failed to stringify encoded words", category: .storage)
+                return "[]"
+            }
+            return json
+        } catch {
+            Logger.error("TitleSetRecord failed to encode words: \(error.localizedDescription)", category: .storage)
             return "[]"
         }
-        return json
     }
 
     private static func decodeWords(_ json: String) -> [TitleWord] {
@@ -164,7 +170,12 @@ final class TitleSetStore: SwiftDataStore {
         let descriptor = FetchDescriptor<TitleSetRecord>(
             sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
         )
-        allTitleSets = (try? modelContext.fetch(descriptor)) ?? []
+        do {
+            allTitleSets = try modelContext.fetch(descriptor)
+        } catch {
+            Logger.error("TitleSetStore failed to fetch title sets: \(error.localizedDescription)", category: .storage)
+            allTitleSets = []
+        }
     }
 
     // MARK: - Queries

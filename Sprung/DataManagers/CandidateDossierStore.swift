@@ -25,7 +25,16 @@ final class CandidateDossierStore: SwiftDataStore {
         let descriptor = FetchDescriptor<CandidateDossier>(
             sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
         )
-        return (try? modelContext.fetch(descriptor))?.first
+        do {
+            // An empty result legitimately means "no dossier yet" → nil. A *thrown*
+            // fetch (corruption/migration) must be surfaced, not collapsed into the
+            // same nil, or a later upsert would shadow the real dossier with a blank.
+            return try modelContext.fetch(descriptor).first
+        } catch {
+            Logger.error("Failed to load candidate dossier: \(error.localizedDescription)", category: .storage)
+            ToastCenter.shared.show(.error("Couldn't load your candidate dossier — it may appear empty."))
+            return nil
+        }
     }
 
     /// Whether a dossier exists

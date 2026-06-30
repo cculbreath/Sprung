@@ -87,8 +87,11 @@ final class TemplateStore: SwiftDataStore {
     func setDefault(_ template: Template) {
         guard template.isDefault == false else { return }
         let descriptor = FetchDescriptor<Template>(predicate: #Predicate { $0.isDefault == true })
-        if let currentDefaults = try? modelContext.fetch(descriptor) {
+        do {
+            let currentDefaults = try modelContext.fetch(descriptor)
             currentDefaults.forEach { $0.isDefault = false }
+        } catch {
+            Logger.error("Failed to clear existing default templates: \(error.localizedDescription)", category: .storage)
         }
         template.isDefault = true
         template.updatedAt = Date()

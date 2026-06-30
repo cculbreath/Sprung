@@ -264,6 +264,25 @@ class KnowledgeCard: Identifiable, Codable {
         try container.encodeIfPresent(evidenceCardIdsJSON, forKey: .evidenceCardIdsJSON)
     }
 
+    // MARK: - Enrichment Encoding
+
+    /// Encode an enrichment value to its JSON string, logging (rather than silently
+    /// swallowing) any encode failure so stale LLM-derived metadata isn't retained
+    /// without a trace. Returns nil on failure.
+    private func encodeOrLog<T: Encodable>(_ value: T, _ label: String) -> String? {
+        do {
+            let data = try JSONEncoder().encode(value)
+            guard let json = String(data: data, encoding: .utf8) else {
+                Logger.error("KnowledgeCard failed to stringify encoded \(label)", category: .storage)
+                return nil
+            }
+            return json
+        } catch {
+            Logger.error("KnowledgeCard failed to encode \(label): \(error.localizedDescription)", category: .storage)
+            return nil
+        }
+    }
+
     // MARK: - Computed Properties
 
     /// Card type as enum
@@ -298,8 +317,7 @@ class KnowledgeCard: Identifiable, Codable {
         set {
             if newValue.isEmpty {
                 evidenceAnchorsJSON = nil
-            } else if let data = try? JSONEncoder().encode(newValue),
-                      let json = String(data: data, encoding: .utf8) {
+            } else if let json = encodeOrLog(newValue, "evidenceAnchors") {
                 evidenceAnchorsJSON = json
             }
         }
@@ -316,8 +334,7 @@ class KnowledgeCard: Identifiable, Codable {
             return decoded
         }
         set {
-            if let data = try? JSONEncoder().encode(newValue),
-               let json = String(data: data, encoding: .utf8) {
+            if let json = encodeOrLog(newValue, "extractable") {
                 extractableJSON = json
             }
         }
@@ -356,8 +373,7 @@ class KnowledgeCard: Identifiable, Codable {
         set {
             if newValue.isEmpty {
                 suggestedBulletsJSON = nil
-            } else if let data = try? JSONEncoder().encode(newValue),
-                      let json = String(data: data, encoding: .utf8) {
+            } else if let json = encodeOrLog(newValue, "suggestedBullets") {
                 suggestedBulletsJSON = json
             }
         }
@@ -376,8 +392,7 @@ class KnowledgeCard: Identifiable, Codable {
         set {
             if newValue.isEmpty {
                 technologiesJSON = nil
-            } else if let data = try? JSONEncoder().encode(newValue),
-                      let json = String(data: data, encoding: .utf8) {
+            } else if let json = encodeOrLog(newValue, "technologies") {
                 technologiesJSON = json
             }
         }
@@ -396,8 +411,7 @@ class KnowledgeCard: Identifiable, Codable {
         set {
             if newValue.isEmpty {
                 factsJSON = nil
-            } else if let data = try? JSONEncoder().encode(newValue),
-                      let json = String(data: data, encoding: .utf8) {
+            } else if let json = encodeOrLog(newValue, "facts") {
                 factsJSON = json
             }
         }
@@ -421,8 +435,7 @@ class KnowledgeCard: Identifiable, Codable {
         set {
             if newValue.isEmpty {
                 verbatimExcerptsJSON = nil
-            } else if let data = try? JSONEncoder().encode(newValue),
-                      let json = String(data: data, encoding: .utf8) {
+            } else if let json = encodeOrLog(newValue, "verbatimExcerpts") {
                 verbatimExcerptsJSON = json
             }
         }
@@ -441,8 +454,7 @@ class KnowledgeCard: Identifiable, Codable {
         set {
             if newValue.isEmpty {
                 evidenceCardIdsJSON = nil
-            } else if let data = try? JSONEncoder().encode(newValue),
-                      let json = String(data: data, encoding: .utf8) {
+            } else if let json = encodeOrLog(newValue, "evidenceCardIds") {
                 evidenceCardIdsJSON = json
             }
         }
@@ -461,8 +473,7 @@ class KnowledgeCard: Identifiable, Codable {
         set {
             if newValue.isEmpty {
                 outcomesJSON = nil
-            } else if let data = try? JSONEncoder().encode(newValue),
-                      let json = String(data: data, encoding: .utf8) {
+            } else if let json = encodeOrLog(newValue, "outcomes") {
                 outcomesJSON = json
             }
         }
