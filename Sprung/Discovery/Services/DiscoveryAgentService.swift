@@ -8,8 +8,10 @@
 //  user-selected Discovery Anthropic model — event discovery additionally
 //  carries Anthropic's server-side web_search/web_fetch tools (see
 //  EventDiscoveryLoop). Single-shot flows (debrief outcomes,
-//  choose-best-jobs) are plain Anthropic Messages calls. Daily-task
-//  generation lives in DailyTaskGenerator — the single generation path.
+//  choose-best-jobs, and the onboarding structured calls: role
+//  suggestions + location-preference extraction) are plain Anthropic
+//  Messages calls. Daily-task generation lives in DailyTaskGenerator —
+//  the single generation path.
 //
 
 import Foundation
@@ -333,6 +335,213 @@ final class DiscoveryAgentService {
         )
         return try parser.parseJobSelections(response)
     }
+
+    // MARK: - Onboarding Structured Calls (single-shot, structured output)
+
+    /// Suggest 5-8 specific target job titles from the user's dossier.
+    /// Discovery-onboarding-only. The facade sets maxTokens to the model's
+    /// full completion headroom (4096 floor), so schema-bounded responses
+    /// aren't truncated.
+    func suggestTargetRoles(
+        dossierSummary: String,
+        existingRoles: [String] = [],
+        keywords: String? = nil
+    ) async throws -> [String] {
+        let modelId = try anthropicModelId(operation: "Role Suggestions")
+        let result: RoleSuggestionsResult = try await llmFacade.executeStructuredWithAnthropicCaching(
+            systemContent: [AnthropicSystemBlock(text: Self.roleSuggestionsSystemPrompt)],
+            userPrompt: Self.roleSuggestionsUserPrompt(
+                dossierSummary: dossierSummary,
+                existingRoles: existingRoles,
+                keywords: keywords
+            ),
+            modelId: modelId,
+            responseType: RoleSuggestionsResult.self,
+            schema: Self.roleSuggestionsSchema
+        )
+        return result.suggestedRoles
+    }
+
+    /// Extract location and work-arrangement preferences from the applicant
+    /// profile and dossier. Discovery-onboarding-only.
+    func extractLocationPreferences(
+        profileInfo: String,
+        dossierSummary: String
+    ) async throws -> ExtractedLocationPreferences {
+        let modelId = try anthropicModelId(operation: "Location Preferences")
+        let result: LocationPreferencesResult = try await llmFacade.executeStructuredWithAnthropicCaching(
+            systemContent: [AnthropicSystemBlock(text: Self.locationPreferencesSystemPrompt)],
+            userPrompt: Self.locationPreferencesUserPrompt(
+                profileInfo: profileInfo,
+                dossierSummary: dossierSummary
+            ),
+            modelId: modelId,
+            responseType: LocationPreferencesResult.self,
+            schema: Self.locationPreferencesSchema
+        )
+        return Self.extractedPreferences(from: result)
+    }
+
+    // MARK: - Onboarding Call Prompts & Schemas (pure — unit-testable halves)
+
+    static let roleSuggestionsSystemPrompt =
+        "You are a career advisor helping someone identify job roles to target. Be specific with job titles."
+
+    /// Build the role-suggestions user prompt. Existing roles and keywords are
+    /// optional context blocks; the schema pins the output shape.
+    static func roleSuggestionsUserPrompt(
+        dossierSummary: String,
+        existingRoles: [String],
+        keywords: String?
+    ) -> String {
+        let existingContext = existingRoles.isEmpty
+            ? ""
+            : "\n\nThe user has already indicated interest in: \(existingRoles.joined(separator: ", ")). Suggest additional complementary roles they might not have considered."
+
+        let keywordsContext: String
+        if let keywords, !keywords.isEmpty {
+            keywordsContext = "\n\nKEYWORDS TO EXPLORE:\nThe user is particularly interested in roles related to: \(keywords). Prioritize suggestions that connect their background to these areas, industries, or themes."
+        } else {
+            keywordsContext = ""
+        }
+
+        return """
+            Based on the following professional background, suggest 5-8 specific job roles/titles this person should target in their job search.
+
+            BACKGROUND:
+            \(dossierSummary)
+            \(existingContext)\(keywordsContext)
+
+            Focus on:
+            1. Roles that match their experience level
+            2. Both obvious fits and adjacent opportunities they might not have considered
+            3. Specific titles (e.g., "Senior Software Engineer", "Engineering Manager", "Staff Developer"), not broad categories
+            \(keywordsContext.isEmpty ? "" : "4. Roles that connect to the specified keywords/interests")
+            """
+    }
+
+    static let roleSuggestionsSchema: [String: Any] = [
+        "type": "object",
+        "properties": [
+            "suggestedRoles": [
+                "type": "array",
+                "description": "List of specific job titles to target",
+                "items": ["type": "string"]
+            ],
+            "reasoning": [
+                "type": ["string", "null"],
+                "description": "Brief explanation of why these roles fit, or null"
+            ]
+        ],
+        "required": ["suggestedRoles", "reasoning"],
+        "additionalProperties": false
+    ]
+
+    static let locationPreferencesSystemPrompt =
+        "Extract job search preferences from the provided profile and background. Return null for fields that cannot be determined."
+
+    /// Build the location-preferences user prompt from the applicant profile
+    /// and dossier context.
+    static func locationPreferencesUserPrompt(
+        profileInfo: String,
+        dossierSummary: String
+    ) -> String {
+        """
+        Extract job search preferences from the following sources.
+
+        APPLICANT PROFILE:
+        \(profileInfo)
+
+        BACKGROUND/DOSSIER:
+        \(dossierSummary)
+
+        Infer from context clues like mentions of relocating, working from home, commuting preferences, company culture preferences, etc.
+        """
+    }
+
+    static let locationPreferencesSchema: [String: Any] = [
+        "type": "object",
+        "properties": [
+            "location": [
+                "type": ["string", "null"],
+                "description": "Primary job search location (e.g., 'San Francisco Bay Area', 'Austin, TX'). Null if not determinable."
+            ],
+            "workArrangement": [
+                "type": ["string", "null"],
+                "description": "Work arrangement preference: remote, hybrid, or onsite. Null if not determinable."
+            ],
+            "remoteAcceptable": [
+                "type": ["boolean", "null"],
+                "description": "True if open to remote work, false if prefers in-person. Null if not determinable."
+            ],
+            "companySize": [
+                "type": ["string", "null"],
+                "description": "Preferred company size: startup, small, mid, enterprise, or any. Null if not determinable."
+            ]
+        ],
+        "required": ["location", "workArrangement", "remoteAcceptable", "companySize"],
+        "additionalProperties": false
+    ]
+
+    /// Map the wire DTO into the typed preferences the onboarding flow
+    /// consumes. Unrecognized enum strings map to nil — the flow leaves the
+    /// corresponding field untouched rather than guessing.
+    static func extractedPreferences(from result: LocationPreferencesResult) -> ExtractedLocationPreferences {
+        ExtractedLocationPreferences(
+            location: result.location,
+            workArrangement: parseWorkArrangement(result.workArrangement),
+            remoteAcceptable: result.remoteAcceptable,
+            companySize: parseCompanySizePreference(result.companySize)
+        )
+    }
+
+    static func parseWorkArrangement(_ raw: String?) -> WorkArrangement? {
+        switch raw?.lowercased() {
+        case "remote": return .remote
+        case "hybrid": return .hybrid
+        case "onsite", "on-site", "in-office": return .onsite
+        default: return nil
+        }
+    }
+
+    static func parseCompanySizePreference(_ raw: String?) -> CompanySizePreference? {
+        switch raw?.lowercased() {
+        case "startup": return .startup
+        case "small": return .small
+        case "mid", "mid-size", "midsize": return .mid
+        case "enterprise", "large": return .enterprise
+        case "any": return .any
+        default: return nil
+        }
+    }
+}
+
+// MARK: - Onboarding Call DTOs
+
+/// Wire contract of the role-suggestions structured call (camelCase keys we
+/// control; `reasoning` arrives as explicit JSON null when the model has
+/// nothing to add).
+struct RoleSuggestionsResult: Codable {
+    let suggestedRoles: [String]
+    let reasoning: String?
+}
+
+/// Wire contract of the location-preferences structured call. Every field is
+/// nullable — the model returns null for anything the sources don't support.
+struct LocationPreferencesResult: Codable {
+    let location: String?
+    let workArrangement: String?
+    let remoteAcceptable: Bool?
+    let companySize: String?
+}
+
+/// Location preferences with parsed enums, as consumed by the Discovery
+/// onboarding flow.
+struct ExtractedLocationPreferences {
+    let location: String?
+    let workArrangement: WorkArrangement?
+    let remoteAcceptable: Bool?
+    let companySize: CompanySizePreference?
 }
 
 // MARK: - Agent Loop Delegate

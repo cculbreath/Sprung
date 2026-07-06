@@ -113,7 +113,6 @@ final class DiscoveryCoordinator {
 
     // MARK: - Services
 
-    private(set) var llmService: DiscoveryLLMService?
     private(set) var calendarService: CalendarIntegrationService?
 
     // MARK: - Discovery State (persists across navigation)
@@ -170,32 +169,28 @@ final class DiscoveryCoordinator {
         self.skillStore = skillStore
     }
 
-    /// Configure the LLM service. Must be called after initialization with LLMFacade.
+    /// Configure the Discovery LLM services. Must be called after initialization with LLMFacade.
     func configureLLMService(llmFacade: LLMFacade) {
-        self.llmService = DiscoveryLLMService(llmFacade: llmFacade, settingsStore: settingsStore)
-
         // Set up agent service with full context provider
-        if let llmService {
-            let contextProvider = DiscoveryContextProviderImpl(coordinator: self)
-            let agentService = DiscoveryAgentService(
-                llmFacade: llmService.llmFacade,
-                contextProvider: contextProvider
-            )
-            self.agentServiceStore = agentService
+        let contextProvider = DiscoveryContextProviderImpl(coordinator: self)
+        let agentService = DiscoveryAgentService(
+            llmFacade: llmFacade,
+            contextProvider: contextProvider
+        )
+        self.agentServiceStore = agentService
 
-            // Set up coaching service + the shared daily-task generator
-            configureCoachingService(llmService: llmService, contextProvider: contextProvider)
+        // Set up coaching service + the shared daily-task generator
+        configureCoachingService(llmFacade: llmFacade, contextProvider: contextProvider)
 
-            // Coordinator startup is the weekly checkpoint for automatic
-            // event discovery (the developer runs the app far more often
-            // than weekly, so launch-time is a sufficient trigger).
-            autoRunWeeklyEventDiscoveryIfNeeded()
-        }
+        // Coordinator startup is the weekly checkpoint for automatic
+        // event discovery (the developer runs the app far more often
+        // than weekly, so launch-time is a sufficient trigger).
+        autoRunWeeklyEventDiscoveryIfNeeded()
     }
 
     /// Configure the coaching service and the shared daily-task generator
     private func configureCoachingService(
-        llmService: DiscoveryLLMService,
+        llmFacade: LLMFacade,
         contextProvider: DiscoveryContextProviderImpl
     ) {
         let modelContext = dailyTaskStore.modelContext
@@ -216,7 +211,7 @@ final class DiscoveryCoordinator {
         // The single daily-task generation path (coaching completion, Daily
         // view refresh, and per-category regenerate all funnel through it).
         let generator = DailyTaskGenerator(
-            llmFacade: llmService.llmFacade,
+            llmFacade: llmFacade,
             dailyTaskStore: dailyTaskStore,
             preferencesStore: preferencesStore,
             weeklyGoalStore: weeklyGoalStore,
@@ -228,7 +223,7 @@ final class DiscoveryCoordinator {
         // Create coaching service
         let coaching = CoachingService(
             modelContext: modelContext,
-            llmFacade: llmService.llmFacade,
+            llmFacade: llmFacade,
             activityReportService: activityService,
             sessionStore: sessionStore,
             dailyTaskStore: dailyTaskStore,
@@ -323,7 +318,7 @@ final class DiscoveryCoordinator {
     /// Refresh today's tasks through the shared daily-task generator.
     func generateDailyTasks() async throws {
         guard let generator = dailyTaskGenerator else {
-            throw DiscoveryLLMError.toolExecutionFailed("Task generator not configured")
+            throw DiscoveryAgentError.toolExecutionFailed("Task generator not configured")
         }
         try await generator.generate(.refresh)
     }
@@ -332,7 +327,7 @@ final class DiscoveryCoordinator {
     /// the shared daily-task generator.
     func regenerateDailyTasks(category: TaskCategory, feedback: String) async throws {
         guard let generator = dailyTaskGenerator else {
-            throw DiscoveryLLMError.toolExecutionFailed("Task generator not configured")
+            throw DiscoveryAgentError.toolExecutionFailed("Task generator not configured")
         }
         try await generator.generate(.categoryFeedback(category: category, feedback: feedback))
     }
@@ -346,7 +341,7 @@ final class DiscoveryCoordinator {
         streamCallback: (@MainActor @Sendable (DiscoveryStatus, String?) async -> Void)? = nil
     ) async throws {
         guard let agent = agentService else {
-            throw DiscoveryLLMError.toolExecutionFailed("Agent service not configured")
+            throw DiscoveryAgentError.toolExecutionFailed("Agent service not configured")
         }
         let prefs = preferencesStore.current()
         let candidateContext = buildCandidateContext()
@@ -464,7 +459,7 @@ final class DiscoveryCoordinator {
     /// conversation starters, things to avoid) using LLM agent and persist it on the event.
     func prepareEvent(_ event: NetworkingEventOpportunity) async throws {
         guard let agent = agentService else {
-            throw DiscoveryLLMError.toolExecutionFailed("Agent service not configured")
+            throw DiscoveryAgentError.toolExecutionFailed("Agent service not configured")
         }
         try await performEventPrep(for: event, using: agent)
     }
@@ -477,7 +472,7 @@ final class DiscoveryCoordinator {
         notes: String
     ) async throws -> DebriefOutcomesResult {
         guard let agent = agentService else {
-            throw DiscoveryLLMError.toolExecutionFailed("Agent service not configured")
+            throw DiscoveryAgentError.toolExecutionFailed("Agent service not configured")
         }
         return try await agent.generateDebriefOutcomes(
             eventName: event.name,
@@ -491,7 +486,7 @@ final class DiscoveryCoordinator {
     /// Generate weekly reflection using LLM agent
     func generateWeeklyReflection() async throws {
         guard let agent = agentService else {
-            throw DiscoveryLLMError.toolExecutionFailed("Agent service not configured")
+            throw DiscoveryAgentError.toolExecutionFailed("Agent service not configured")
         }
         let reflection = try await agent.generateWeeklyReflection(
             previousWeekNotes: weeklyGoalStore.previousWeekUserNotes()
@@ -626,13 +621,8 @@ final class DiscoveryCoordinator {
 
     // MARK: - Role Suggestion (Onboarding)
 
-    /// Response structure for role suggestions
-    struct RoleSuggestionsResult: Codable {
-        let suggestedRoles: [String]
-        let reasoning: String?
-    }
-
-    /// Generate target role suggestions based on user's dossier (knowledge cards)
+    /// Generate target role suggestions based on user's dossier (knowledge cards).
+    /// Runs on the Discovery Anthropic model via DiscoveryAgentService.
     /// - Parameters:
     ///   - dossierSummary: Summary of user's background from ResRefs
     ///   - existingRoles: Any roles the user has already selected/added
@@ -643,181 +633,30 @@ final class DiscoveryCoordinator {
         existingRoles: [String] = [],
         keywords: String? = nil
     ) async throws -> [String] {
-        guard let llm = llmService else {
-            throw DiscoveryLLMError.toolExecutionFailed("LLM service not configured")
+        guard let agent = agentService else {
+            throw DiscoveryAgentError.toolExecutionFailed("Agent service not configured")
         }
-
-        let existingContext = existingRoles.isEmpty
-            ? ""
-            : "\n\nThe user has already indicated interest in: \(existingRoles.joined(separator: ", ")). Suggest additional complementary roles they might not have considered."
-
-        let keywordsContext: String
-        if let keywords = keywords, !keywords.isEmpty {
-            keywordsContext = "\n\nKEYWORDS TO EXPLORE:\nThe user is particularly interested in roles related to: \(keywords). Prioritize suggestions that connect their background to these areas, industries, or themes."
-        } else {
-            keywordsContext = ""
-        }
-
-        let prompt = """
-            Based on the following professional background, suggest 5-8 specific job roles/titles this person should target in their job search.
-
-            BACKGROUND:
-            \(dossierSummary)
-            \(existingContext)\(keywordsContext)
-
-            Return a JSON object with:
-            - suggestedRoles: array of specific job title strings (e.g., "Senior Software Engineer", "Engineering Manager", "Staff Developer")
-            - reasoning: brief explanation of why these roles fit (optional)
-
-            Focus on:
-            1. Roles that match their experience level
-            2. Both obvious fits and adjacent opportunities they might not have considered
-            3. Specific titles, not broad categories
-            \(keywords != nil ? "4. Roles that connect to the specified keywords/interests" : "")
-            """
-
-        // Build JSON schema for OpenAI structured output
-        // Note: OpenAI requires ALL properties in 'required' - use nullable types for optional fields
-        let schema = JSONSchema(
-            type: .object,
-            properties: [
-                "suggestedRoles": JSONSchema(
-                    type: .array,
-                    description: "List of specific job titles to target",
-                    items: JSONSchema(type: .string)
-                ),
-                "reasoning": JSONSchema(
-                    type: .optional(.string),
-                    description: "Brief explanation of why these roles fit"
-                )
-            ],
-            required: ["suggestedRoles", "reasoning"],
-            additionalProperties: false
+        return try await agent.suggestTargetRoles(
+            dossierSummary: dossierSummary,
+            existingRoles: existingRoles,
+            keywords: keywords
         )
-
-        // Use discovery model via OpenAI backend
-        let result = try await llm.executeStructured(
-            prompt: prompt,
-            systemPrompt: "You are a career advisor helping someone identify job roles to target. Be specific with job titles.",
-            as: RoleSuggestionsResult.self,
-            backend: .openAI,
-            schema: schema,
-            schemaName: "role_suggestions"
-        )
-
-        return result.suggestedRoles
     }
 
     // MARK: - Location Preference Extraction (Onboarding)
 
-    /// Response structure for location preferences extraction
-    struct LocationPreferencesResult: Codable {
-        let location: String?
-        let workArrangement: String?
-        let remoteAcceptable: Bool?
-        let companySize: String?
-    }
-
-    /// Extracted location preferences with parsed enums
-    struct ExtractedLocationPreferences {
-        let location: String?
-        let workArrangement: WorkArrangement?
-        let remoteAcceptable: Bool?
-        let companySize: CompanySizePreference?
-    }
-
-    /// Extract location and work arrangement preferences from profile and dossier
+    /// Extract location and work arrangement preferences from profile and dossier.
+    /// Runs on the Discovery Anthropic model via DiscoveryAgentService.
     func extractLocationPreferences(
         profileInfo: String,
         dossierSummary: String
     ) async throws -> ExtractedLocationPreferences {
-        guard let llm = llmService else {
-            throw DiscoveryLLMError.toolExecutionFailed("LLM service not configured")
+        guard let agent = agentService else {
+            throw DiscoveryAgentError.toolExecutionFailed("Agent service not configured")
         }
-
-        let prompt = """
-            Extract job search preferences from the following sources.
-
-            APPLICANT PROFILE:
-            \(profileInfo)
-
-            BACKGROUND/DOSSIER:
-            \(dossierSummary)
-
-            Infer from context clues like mentions of relocating, working from home, commuting preferences, company culture preferences, etc.
-            """
-
-        // Build JSON schema for strict structured output
-        // Use .optional() to allow null values for fields that can't be determined
-        let schema = JSONSchema(
-            type: .object,
-            properties: [
-                "location": JSONSchema(
-                    type: .optional(.string),
-                    description: "Primary job search location (e.g., 'San Francisco Bay Area', 'Austin, TX'). Null if not determinable."
-                ),
-                "workArrangement": JSONSchema(
-                    type: .optional(.string),
-                    description: "Work arrangement preference: remote, hybrid, or onsite",
-                    enum: ["remote", "hybrid", "onsite"]
-                ),
-                "remoteAcceptable": JSONSchema(
-                    type: .optional(.boolean),
-                    description: "True if open to remote work, false if prefers in-person"
-                ),
-                "companySize": JSONSchema(
-                    type: .optional(.string),
-                    description: "Preferred company size",
-                    enum: ["startup", "small", "mid", "enterprise", "any"]
-                )
-            ],
-            required: ["location", "workArrangement", "remoteAcceptable", "companySize"],
-            additionalProperties: false
-        )
-
-        // Use discovery model via OpenAI backend
-        let result = try await llm.executeFlexibleJSON(
-            prompt: prompt,
-            systemPrompt: "Extract job search preferences from the provided profile and background. Return null for fields that cannot be determined.",
-            as: LocationPreferencesResult.self,
-            jsonSchema: schema,
-            backend: .openAI,
-            schemaName: "location_preferences"
-        )
-
-        // Parse work arrangement string to enum
-        let arrangement: WorkArrangement?
-        if let arrangementStr = result.workArrangement?.lowercased() {
-            switch arrangementStr {
-            case "remote": arrangement = .remote
-            case "hybrid": arrangement = .hybrid
-            case "onsite", "on-site", "in-office": arrangement = .onsite
-            default: arrangement = nil
-            }
-        } else {
-            arrangement = nil
-        }
-
-        // Parse company size string to enum
-        let companySize: CompanySizePreference?
-        if let sizeStr = result.companySize?.lowercased() {
-            switch sizeStr {
-            case "startup": companySize = .startup
-            case "small": companySize = .small
-            case "mid", "mid-size", "midsize": companySize = .mid
-            case "enterprise", "large": companySize = .enterprise
-            case "any": companySize = .any
-            default: companySize = nil
-            }
-        } else {
-            companySize = nil
-        }
-
-        return ExtractedLocationPreferences(
-            location: result.location,
-            workArrangement: arrangement,
-            remoteAcceptable: result.remoteAcceptable,
-            companySize: companySize
+        return try await agent.extractLocationPreferences(
+            profileInfo: profileInfo,
+            dossierSummary: dossierSummary
         )
     }
 }

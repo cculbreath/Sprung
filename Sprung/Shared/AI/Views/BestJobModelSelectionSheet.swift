@@ -3,17 +3,14 @@
 //  Sprung
 //
 //  Model selection sheet for Choose Best Jobs operation.
-//  Defaults to the Discovery settings model but allows override.
+//  Remembers the last explicit selection; no substitute default otherwise.
 //
 import SwiftUI
 
 /// Pre-flight model selection sheet for the Choose Best Jobs operation.
-/// Defaults to the Discovery settings model if no previous selection exists.
 struct ChooseBestJobsSheet: View {
     @Binding var isPresented: Bool
     let onModelSelected: (String) -> Void
-
-    @Environment(DiscoveryCoordinator.self) private var coordinator
 
     @State private var selectedModel: String = ""
     @AppStorage("lastSelectedModel_best_job") private var lastSelectedModel: String = ""
@@ -57,12 +54,6 @@ struct ChooseBestJobsSheet: View {
             .onAppear {
                 if !lastSelectedModel.isEmpty {
                     selectedModel = lastSelectedModel
-                } else {
-                    // Default to Discovery settings model
-                    let discoveryModel = coordinator.settingsStore.current().llmModelId
-                    if !discoveryModel.isEmpty {
-                        selectedModel = discoveryModel
-                    }
                 }
             }
         }

@@ -48,7 +48,6 @@ struct ModelsSettingsView: View {
     // MARK: - Environment
     @Environment(EnabledLLMStore.self) private var enabledLLMStore
     @Environment(LLMFacade.self) private var llmFacade
-    @Environment(DiscoveryCoordinator.self) private var discoveryCoordinator
 
     // MARK: - Model List State
     @State private var anthropicModels: [AnthropicModel] = []
@@ -58,10 +57,6 @@ struct ModelsSettingsView: View {
     @State private var openAIModels: [ModelObject] = []
     @State private var isLoadingOpenAIModels = false
     @State private var openAIModelError: String?
-
-    // Discovery state synced with coordinator
-    @State private var discoveryLLMModelId: String = ""
-    @State private var discoveryReasoningEffort: String = "low"
 
     // Column widths
     private let operationWidth: CGFloat = 180
@@ -89,9 +84,6 @@ struct ModelsSettingsView: View {
             Task {
                 await refreshAllModelLists()
             }
-            let s = discoveryCoordinator.settingsStore.current()
-            discoveryLLMModelId = s.llmModelId
-            discoveryReasoningEffort = s.reasoningEffort
         }
     }
 
@@ -184,8 +176,6 @@ struct ModelsSettingsView: View {
         Divider().padding(.vertical, 4)
 
         // Discovery
-        discoveryAIRow
-        discoveryReasoningRow
         modelRow(operation: "Discovery Agent", backend: .anthropic, highlightKeys: ["discoveryAnthropicModelId"]) {
             anthropicPicker(selection: $discoveryAnthropicModelId)
         }
@@ -275,18 +265,6 @@ struct ModelsSettingsView: View {
         }
     }
 
-    private var discoveryAIRow: some View {
-        HStack(spacing: 0) {
-            Text("Discovery AI")
-                .frame(width: operationWidth, alignment: .leading)
-            backendBadge(.openAI)
-                .frame(width: backendWidth, alignment: .leading)
-            openAIPicker(selection: $discoveryLLMModelId)
-            Spacer()
-        }
-        .padding(.vertical, 6)
-    }
-
     private var jobImportRow: some View {
         HStack(spacing: 0) {
             Text("Job Import")
@@ -298,39 +276,6 @@ struct ModelsSettingsView: View {
         }
         .padding(.vertical, 6)
         .modelRowHighlight(active: isHighlighted(["jobImportModelId"]))
-    }
-
-    private var discoveryReasoningRow: some View {
-        HStack(spacing: 0) {
-            Text("Discovery Reasoning")
-                .frame(width: operationWidth, alignment: .leading)
-            Text("")
-                .frame(width: backendWidth, alignment: .leading)
-            Menu {
-                Button("Low") {
-                    discoveryReasoningEffort = "low"
-                    updateReasoningEffort("low")
-                }
-                Button("Medium") {
-                    discoveryReasoningEffort = "medium"
-                    updateReasoningEffort("medium")
-                }
-                Button("High") {
-                    discoveryReasoningEffort = "high"
-                    updateReasoningEffort("high")
-                }
-            } label: {
-                HStack(spacing: 4) {
-                    Text(discoveryReasoningEffort.capitalized)
-                    Image(systemName: "chevron.up.chevron.down")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .menuStyle(.borderlessButton)
-            Spacer()
-        }
-        .padding(.vertical, 6)
     }
 
     // MARK: - Additional Settings
@@ -476,10 +421,6 @@ struct ModelsSettingsView: View {
                     Button(model.id) {
                         selection.wrappedValue = model.id
                         clearHighlight()
-                        var s = discoveryCoordinator.settingsStore.current()
-                        guard s.llmModelId != model.id else { return }
-                        s.llmModelId = model.id
-                        discoveryCoordinator.settingsStore.update(s)
                     }
                 }
             } label: {
@@ -546,16 +487,6 @@ private extension View {
     }
 }
 
-// MARK: - Helpers
-private extension ModelsSettingsView {
-    func updateReasoningEffort(_ newValue: String) {
-        var s = discoveryCoordinator.settingsStore.current()
-        guard s.reasoningEffort != newValue else { return }
-        s.reasoningEffort = newValue
-        discoveryCoordinator.settingsStore.update(s)
-    }
-}
-
 // MARK: - Model Loading
 private extension ModelsSettingsView {
     func refreshAllModelLists() async {
@@ -599,14 +530,6 @@ private extension ModelsSettingsView {
             let service = OpenAIServiceFactory.service(apiKey: apiKey)
             let response = try await service.listModels()
             openAIModels = response.data
-            if !filteredOpenAIModels.contains(where: { $0.id == discoveryLLMModelId }) {
-                if let first = filteredOpenAIModels.first {
-                    discoveryLLMModelId = first.id
-                    var s = discoveryCoordinator.settingsStore.current()
-                    s.llmModelId = first.id
-                    discoveryCoordinator.settingsStore.update(s)
-                }
-            }
         } catch {
             openAIModelError = error.localizedDescription
         }
