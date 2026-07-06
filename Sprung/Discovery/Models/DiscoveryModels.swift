@@ -62,30 +62,6 @@ struct SearchPreferences: Codable {
     }
 }
 
-// MARK: - Search Ops Settings (UserDefaults-backed)
-
-struct DiscoverySettings: Codable {
-    var createdAt: Date = Date()
-    var updatedAt: Date = Date()
-
-    static let userDefaultsKey = "searchOpsSettings"
-
-    static func load() -> DiscoverySettings {
-        guard let data = UserDefaults.standard.data(forKey: userDefaultsKey),
-              let settings = try? JSONDecoder().decode(DiscoverySettings.self, from: data) else {
-            return DiscoverySettings()
-        }
-        return settings
-    }
-
-    func save() {
-        var copy = self
-        copy.updatedAt = Date()
-        if let data = try? JSONEncoder().encode(copy) {
-            UserDefaults.standard.set(data, forKey: Self.userDefaultsKey)
-        }
-    }
-}
 
 // MARK: - Daily Task
 

@@ -10,29 +10,13 @@ import Foundation
 @Observable
 @MainActor
 final class DiscoverySettingsStore {
-    private var cached: DiscoverySettings?
-
-    /// Injectable seam for the standalone (non-blob) keys owned by this store.
+    /// Injectable seam for the UserDefaults keys owned by this store.
     /// Defaults to `.standard` in production; tests pass `TestDefaults().store`
     /// so these round-trips never touch the developer's real defaults.
     private let defaults: UserDefaults
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
-    }
-
-    func current() -> DiscoverySettings {
-        if let cached {
-            return cached
-        }
-        let settings = DiscoverySettings.load()
-        cached = settings
-        return settings
-    }
-
-    func update(_ settings: DiscoverySettings) {
-        settings.save()
-        cached = settings
     }
 
     // MARK: - Event-Discovery Auto-Run State
