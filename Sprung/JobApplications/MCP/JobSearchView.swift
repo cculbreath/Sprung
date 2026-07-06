@@ -2,11 +2,12 @@
 //  JobSearchView.swift
 //  Sprung
 //
-//  Search either MCP job board (Dice or ZipRecruiter) — or point the agentic
-//  Custom Site search at any small "web-fetch friendly" board or careers
-//  page — and import results into the pipeline as `.new` leads. The thin
-//  async glue and UI state live here while the request/decode/mapping halves
-//  live in JobMCPImportService and SiteJobSearchService (mirroring
+//  Search an MCP job board (Dice, ZipRecruiter, or LinkedIn via the local
+//  MCP server) — or point the agentic Custom Site search at any small
+//  "web-fetch friendly" board or careers page — and import results into the
+//  pipeline as `.new` leads. The thin async glue and UI state live here
+//  while the request/decode/mapping halves live in JobMCPImportService,
+//  LinkedInMCPImportService, and SiteJobSearchService (mirroring
 //  NewAppSheetView + JobURLImportService).
 //
 
@@ -18,6 +19,7 @@ import SwiftUI
 private enum JobBoard: String, CaseIterable, Identifiable, Hashable {
     case dice = "Dice"
     case zipRecruiter = "ZipRecruiter"
+    case linkedIn = "LinkedIn"
     case customSite = "Custom Site"
 
     var id: String { rawValue }
@@ -29,6 +31,10 @@ struct JobSearchView: View {
     /// Supplies the LLMFacade the Custom Site agent loop runs on. Present in
     /// both the main and Discovery windows' environments.
     @Environment(AppEnvironment.self) private var appEnvironment
+
+    /// Owns the local LinkedIn MCP server's lifecycle (spawn + handshake +
+    /// stop-on-quit). Injected from AppDependencies.
+    @Environment(LinkedInMCPServerService.self) private var linkedInServer
 
     @State private var selectedBoard: JobBoard = .dice
     @State private var isSearching = false
@@ -61,6 +67,32 @@ struct JobSearchView: View {
     @State private var zipOffset = 0
     @State private var zipHasSearched = false
     @State private var zipClient: MCPStreamableHTTPClient?
+
+    // MARK: LinkedIn session state
+
+    /// One-time risk consent for the LinkedIn board (LinkedIn's User
+    /// Agreement prohibits automated access) — the first Search presents
+    /// LinkedInConsentDialog instead of searching; declining aborts. The
+    /// flag itself lives on `linkedInServer.consentAccepted` (persisted
+    /// under `LinkedInMCPServerService.consentDefaultsKey`).
+    @State private var showingLinkedInConsent = false
+    @State private var linkedInKeywords = ""
+    @State private var linkedInLocation = ""
+    @State private var linkedInDatePosted: LinkedInDatePosted?
+    @State private var linkedInWorkTypes: Set<LinkedInWorkType> = []
+    @State private var linkedInResults: [LinkedInJobLead] = []
+    @State private var linkedInHasSearched = false
+    /// One client per sheet so the initialize handshake happens once per
+    /// session. The generous timeout covers the server's cold start (first
+    /// run downloads a browser) and multi-second page scrapes.
+    @State private var linkedInClient: MCPStreamableHTTPClient?
+    /// Progress phase while a LinkedIn search runs ("Starting LinkedIn
+    /// server…" → "Searching LinkedIn…").
+    @State private var linkedInPhase: String?
+
+    /// Rolling hourly call budget (risk rail). Rebuilt on each read — the
+    /// state lives in UserDefaults, not the view.
+    private var linkedInBudget: LinkedInCallBudget { LinkedInCallBudget() }
 
     // MARK: Custom Site session state
 
@@ -104,6 +136,9 @@ struct JobSearchView: View {
             let role = zipJobRole.trimmingCharacters(in: .whitespacesAndNewlines)
             let location = zipLocation.trimmingCharacters(in: .whitespacesAndNewlines)
             return !role.isEmpty || !location.isEmpty
+        case .linkedIn:
+            return !linkedInKeywords.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                && !linkedInBudget.isExhausted
         case .customSite:
             return SiteJobSearchService.normalizedSiteURL(siteURLText) != nil
         }
@@ -113,6 +148,7 @@ struct JobSearchView: View {
         switch selectedBoard {
         case .dice: return diceResults.isEmpty
         case .zipRecruiter: return zipResults.isEmpty
+        case .linkedIn: return linkedInResults.isEmpty
         case .customSite: return siteResults.isEmpty
         }
     }
@@ -121,6 +157,7 @@ struct JobSearchView: View {
         switch selectedBoard {
         case .dice: return diceHasSearched
         case .zipRecruiter: return zipHasSearched
+        case .linkedIn: return linkedInHasSearched
         case .customSite: return siteHasSearched
         }
     }
@@ -131,6 +168,8 @@ struct JobSearchView: View {
             return diceResults.filter { !JobMCPImportService.isImported($0, importedURLs: importedURLs) }.count
         case .zipRecruiter:
             return zipResults.filter { !JobMCPImportService.isImported($0, importedPairs: importedTitleCompanyPairs) }.count
+        case .linkedIn:
+            return linkedInResults.filter { !LinkedInMCPImportService.isImported($0, importedURLs: importedURLs) }.count
         case .customSite:
             return siteResults.filter { !SiteJobSearchService.isImported($0, importedURLs: importedURLs) }.count
         }
@@ -155,6 +194,21 @@ struct JobSearchView: View {
             // Cooperative cancellation: never leave the agent loop burning
             // tokens for results nobody will see.
             siteSearchTask?.cancel()
+        }
+        .sheet(isPresented: $showingLinkedInConsent) {
+            // One-time risk consent gates the FIRST LinkedIn call; accepting
+            // persists the flag and immediately runs the pending search,
+            // declining just dismisses.
+            LinkedInConsentDialog(
+                onAccept: {
+                    linkedInServer.acceptConsent()
+                    showingLinkedInConsent = false
+                    searchLinkedIn()
+                },
+                onDecline: {
+                    showingLinkedInConsent = false
+                }
+            )
         }
     }
 
@@ -234,6 +288,60 @@ struct JobSearchView: View {
                 .disabled(!canSearch)
             }
             .padding()
+        case .linkedIn:
+            VStack(spacing: 8) {
+                HStack(spacing: 8) {
+                    TextField("Keywords (e.g. staff physicist)", text: $linkedInKeywords)
+                        .textFieldStyle(.roundedBorder)
+                        .onSubmit { searchLinkedIn() }
+
+                    TextField("Location (optional)", text: $linkedInLocation)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 180)
+                        .onSubmit { searchLinkedIn() }
+
+                    Picker("Posted", selection: $linkedInDatePosted) {
+                        Text("Any time").tag(LinkedInDatePosted?.none)
+                        ForEach(LinkedInDatePosted.allCases) { period in
+                            Text(period.displayName).tag(Optional(period))
+                        }
+                    }
+                    .fixedSize()
+
+                    Button("Search") {
+                        searchLinkedIn()
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(!canSearch)
+                }
+
+                HStack(spacing: 8) {
+                    ForEach(LinkedInWorkType.allCases) { workType in
+                        Toggle(workType.displayName, isOn: Binding(
+                            get: { linkedInWorkTypes.contains(workType) },
+                            set: { isOn in
+                                if isOn {
+                                    linkedInWorkTypes.insert(workType)
+                                } else {
+                                    linkedInWorkTypes.remove(workType)
+                                }
+                            }
+                        ))
+                        .toggleStyle(.button)
+                    }
+
+                    Spacer()
+
+                    if linkedInBudget.isExhausted {
+                        // Budget rail: the Search button is disabled and the
+                        // cap is explained — never silently queued.
+                        Label(linkedInBudgetMessage, systemImage: "hourglass")
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                    }
+                }
+            }
+            .padding()
         case .customSite:
             VStack(spacing: 8) {
                 HStack(spacing: 8) {
@@ -268,7 +376,11 @@ struct JobSearchView: View {
                 VStack(spacing: 12) {
                     Spacer()
                     ProgressView()
-                    Text("Searching \((searchingBoard ?? selectedBoard).rawValue)…")
+                    // LinkedIn searches have two phases (server spawn, then
+                    // the search itself) — surface which one is running.
+                    Text(searchingBoard == .linkedIn
+                        ? (linkedInPhase ?? "Searching LinkedIn…")
+                        : "Searching \((searchingBoard ?? selectedBoard).rawValue)…")
                         .font(.callout)
                         .foregroundStyle(.secondary)
                     Spacer()
@@ -345,6 +457,16 @@ struct JobSearchView: View {
                     }
                 }
                 .listStyle(.inset)
+            case .linkedIn:
+                List(linkedInResults) { lead in
+                    LinkedInLeadResultRow(
+                        lead: lead,
+                        isImported: LinkedInMCPImportService.isImported(lead, importedURLs: importedURLs)
+                    ) {
+                        importResult(lead)
+                    }
+                }
+                .listStyle(.inset)
             case .customSite:
                 List(siteResults) { listing in
                     SiteListingResultRow(
@@ -365,9 +487,24 @@ struct JobSearchView: View {
                 ? "The agent found no matching postings on the site."
                 : "No jobs matched your search."
         }
-        return selectedBoard == .customSite
-            ? "Point the agent at a small job board or company careers page. It browses the site, verifies each posting's page, and imports matches as pipeline leads."
-            : "Search \(selectedBoard.rawValue) and import results as pipeline leads."
+        switch selectedBoard {
+        case .customSite:
+            return "Point the agent at a small job board or company careers page. It browses the site, verifies each posting's page, and imports matches as pipeline leads."
+        case .linkedIn:
+            return "Search LinkedIn through the local MCP server and import results as pipeline leads. Titles land immediately; company and details arrive as each lead enriches."
+        case .dice, .zipRecruiter:
+            return "Search \(selectedBoard.rawValue) and import results as pipeline leads."
+        }
+    }
+
+    /// The budget-exhausted explanation shown beside the disabled Search
+    /// button (risk rail: the cap surfaces, it never silently queues).
+    private var linkedInBudgetMessage: String {
+        let budget = linkedInBudget
+        if let nextAvailable = budget.nextAvailableDate() {
+            return "Hourly LinkedIn call limit reached (\(budget.limit)/hr). Try again after \(nextAvailable.formatted(date: .omitted, time: .shortened))."
+        }
+        return "Hourly LinkedIn call limit reached (\(budget.limit)/hr). Try again later."
     }
 
     /// Live agent activity while a Custom Site search runs: spinner, the
@@ -453,6 +590,15 @@ struct JobSearchView: View {
                     Image(systemName: "chevron.right")
                 }
                 .disabled(isSearching || !zipHasMoreResults)
+            case .linkedIn:
+                // No pagination — one page per user-initiated search
+                // (max_pages hard-defaults to 1; a new search is the explicit
+                // way to see more).
+                if !linkedInResults.isEmpty {
+                    Text("\(linkedInResults.count) result\(linkedInResults.count == 1 ? "" : "s") • first page")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             case .customSite:
                 // No pagination — the agent submits one verified list per run.
                 if !siteResults.isEmpty {
@@ -516,6 +662,8 @@ struct JobSearchView: View {
             searchDice(page: diceCurrentPage)
         case .zipRecruiter:
             searchZipRecruiter(offset: zipOffset)
+        case .linkedIn:
+            searchLinkedIn()
         case .customSite:
             searchCustomSite()
         }
@@ -587,6 +735,73 @@ struct JobSearchView: View {
         }
     }
 
+    /// Run one LinkedIn search: consent gate → ensure the local MCP server
+    /// is running → one `search_jobs` call (the only tool this board ever
+    /// calls) through the rolling hourly budget → decode into leads. An
+    /// auth-failure tool result maps to the single "sign in to linkedin.com
+    /// in your browser" state with the standard Retry affordance; every
+    /// other failure surfaces its own message. All loud, nothing degrades
+    /// silently.
+    private func searchLinkedIn() {
+        let trimmedKeywords = linkedInKeywords.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedKeywords.isEmpty, !isSearching else { return }
+        guard linkedInServer.consentAccepted else {
+            showingLinkedInConsent = true
+            return
+        }
+        let budget = linkedInBudget
+        guard !budget.isExhausted else {
+            // The Search button disables when exhausted; this guard keeps
+            // onSubmit paths honest too — with the explanation, never quietly.
+            errorMessage = linkedInBudgetMessage
+            return
+        }
+        isSearching = true
+        searchingBoard = .linkedIn
+        errorMessage = nil
+        importSummary = nil
+        linkedInPhase = "Starting LinkedIn server…"
+        let location = linkedInLocation
+        let datePosted = linkedInDatePosted
+        let workTypes = LinkedInWorkType.allCases.filter { linkedInWorkTypes.contains($0) }
+        Task {
+            do {
+                try await linkedInServer.ensureRunning()
+                linkedInPhase = "Searching LinkedIn…"
+                let activeClient: MCPStreamableHTTPClient
+                if let linkedInClient {
+                    activeClient = linkedInClient
+                } else {
+                    activeClient = MCPStreamableHTTPClient(
+                        endpoint: LinkedInMCPServerService.endpoint,
+                        requestTimeout: 180
+                    )
+                    linkedInClient = activeClient
+                }
+                linkedInResults = try await LinkedInMCPImportService.searchJobs(
+                    keywords: trimmedKeywords,
+                    location: location,
+                    datePosted: datePosted,
+                    workTypes: workTypes,
+                    client: activeClient,
+                    budget: budget
+                )
+                linkedInHasSearched = true
+            } catch {
+                if LinkedInMCPImportService.isAuthFailure(error) {
+                    Logger.error("❌ [LinkedInSearch] Auth failure from \(LinkedInMCPImportService.searchToolName): \(error.localizedDescription)", category: .networking)
+                    errorMessage = LinkedInMCPImportService.noSessionMessage
+                } else {
+                    Logger.error("❌ [LinkedInSearch] \(LinkedInMCPImportService.searchToolName) failed: \(error.localizedDescription)", category: .networking)
+                    errorMessage = error.localizedDescription
+                }
+            }
+            isSearching = false
+            searchingBoard = nil
+            linkedInPhase = nil
+        }
+    }
+
     /// Kick off the agent loop against the typed site. The search runs until
     /// the agent submits (maxTurns-bounded, no wall-clock deadline) or the
     /// user cancels; per-turn progress streams into `siteProgressLines`.
@@ -647,6 +862,13 @@ struct JobSearchView: View {
         }
     }
 
+    private func importResult(_ lead: LinkedInJobLead) {
+        importSummary = nil
+        if case .skipped(let reason) = LinkedInMCPImportService.importAsLead(lead, into: jobAppStore) {
+            errorMessage = "Couldn't import \"\(lead.title)\": \(reason)"
+        }
+    }
+
     private func importResult(_ listing: SiteJobListing) {
         importSummary = nil
         if case .skipped(let reason) = SiteJobSearchService.importAsLead(listing, siteHost: siteSearchedHost, into: jobAppStore) {
@@ -670,6 +892,14 @@ struct JobSearchView: View {
         case .zipRecruiter:
             for result in zipResults {
                 switch JobMCPImportService.importAsLead(result, into: jobAppStore) {
+                case .imported: imported += 1
+                case .duplicate: duplicates += 1
+                case .skipped: skipped += 1
+                }
+            }
+        case .linkedIn:
+            for lead in linkedInResults {
+                switch LinkedInMCPImportService.importAsLead(lead, into: jobAppStore) {
                 case .imported: imported += 1
                 case .duplicate: duplicates += 1
                 case .skipped: skipped += 1
@@ -779,6 +1009,59 @@ private struct JobSearchResultRow: View {
             .background(Color.secondary.opacity(0.1))
             .cornerRadius(4)
             .lineLimit(1)
+    }
+}
+
+// MARK: - LinkedIn lead row
+
+/// A LinkedIn search result is deliberately thin: the search payload yields
+/// only a stable job id + display title, so the row shows the title and the
+/// canonical posting URL. Company/location/description arrive after import,
+/// when the lead enriches — the row says so rather than showing blanks.
+private struct LinkedInLeadResultRow: View {
+    let lead: LinkedInJobLead
+    let isImported: Bool
+    let onImport: () -> Void
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(lead.title)
+                    .font(.headline)
+
+                Text(lead.canonicalURL)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+
+                Text("Company and details load after import")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+            }
+
+            Spacer()
+
+            if isImported {
+                Label("Imported", systemImage: "checkmark.circle.fill")
+                    .font(.caption)
+                    .foregroundStyle(.green)
+            } else {
+                Button("Import") {
+                    onImport()
+                }
+                .buttonStyle(.bordered)
+            }
+        }
+        .padding(.vertical, 4)
+        .contextMenu {
+            if let url = URL(string: lead.canonicalURL) {
+                Button {
+                    NSWorkspace.shared.open(url)
+                } label: {
+                    Label("Open on LinkedIn", systemImage: "safari")
+                }
+            }
+        }
     }
 }
 
