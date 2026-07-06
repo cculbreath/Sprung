@@ -167,10 +167,14 @@ struct DiscoveryOnboardingView: View {
         prefs.weeklyNetworkingTarget = weeklyNetworkingTarget
         coordinator.preferencesStore.update(prefs)
 
-        // Update weekly goal
-        let goal = coordinator.weeklyGoalStore.currentWeek()
-        goal.applicationTarget = weeklyApplicationTarget
-        goal.eventsAttendedTarget = weeklyNetworkingTarget
+        // Snapshot the chosen targets onto the current week's goal row.
+        // Future weeks inherit automatically: currentWeek() seeds new rows
+        // from the preferences saved above (the source of truth for targets).
+        coordinator.weeklyGoalStore.applyTargetsToCurrentWeek(
+            applications: weeklyApplicationTarget,
+            events: weeklyNetworkingTarget,
+            contacts: nil
+        )
 
         // Try to generate the first daily task list
         do {

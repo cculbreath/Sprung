@@ -286,11 +286,18 @@ final class DiscoveryAgentService {
         return try parser.parseDebriefOutcomes(response)
     }
 
-    func generateWeeklyReflection() async throws -> String {
+    func generateWeeklyReflection(previousWeekNotes: String?) async throws -> String {
         let systemPrompt = try loadPromptTemplate(named: "discovery_generate_weekly_reflection")
+
+        var userMessage = "Generate my weekly job search reflection"
+        if let previousWeekNotes,
+           !previousWeekNotes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            userMessage += "\n\n## Last Week's Review Notes (written by the user)\n\(previousWeekNotes)"
+        }
+
         return try await runAgent(
             systemPrompt: systemPrompt,
-            userMessage: "Generate my weekly job search reflection",
+            userMessage: userMessage,
             operation: "Weekly Reflection"
         )
     }

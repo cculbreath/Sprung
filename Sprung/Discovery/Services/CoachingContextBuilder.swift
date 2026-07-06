@@ -13,10 +13,16 @@ import Foundation
 struct CoachingContextBuilder {
     private let preferencesStore: SearchPreferencesStore
     private let jobAppStore: JobAppStore
+    private let weeklyGoalStore: WeeklyGoalStore
 
-    init(preferencesStore: SearchPreferencesStore, jobAppStore: JobAppStore) {
+    init(
+        preferencesStore: SearchPreferencesStore,
+        jobAppStore: JobAppStore,
+        weeklyGoalStore: WeeklyGoalStore
+    ) {
         self.preferencesStore = preferencesStore
         self.jobAppStore = jobAppStore
+        self.weeklyGoalStore = weeklyGoalStore
     }
 
     /// Build list of available knowledge cards with metadata
@@ -98,6 +104,8 @@ struct CoachingContextBuilder {
             "{{WEEKLY_APPLICATION_TARGET}}": String(preferences.weeklyApplicationTarget),
             "{{WEEKLY_NETWORKING_TARGET}}": String(preferences.weeklyNetworkingTarget),
             "{{COMPANY_SIZE_PREFERENCE}}": preferences.companySizePreference.rawValue,
+            "{{LAST_WEEK_REVIEW_NOTES}}": weeklyGoalStore.previousWeekUserNotes()
+                ?? "No review notes from last week.",
             "{{DOSSIER_CONTEXT}}": dossierContext,
             "{{KNOWLEDGE_CARDS_LIST}}": knowledgeCardsList,
             "{{ACTIVE_JOB_APPS}}": activeJobApps

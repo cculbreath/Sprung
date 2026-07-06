@@ -13,10 +13,21 @@ import Foundation
 final class WeeklyGoalStore: SwiftDataStore {
     unowned let modelContext: ModelContext
     private let jobAppStore: JobAppStore
+    /// Live read of the user's search preferences — the single source of
+    /// truth for the weekly application and events targets. New week rows
+    /// snapshot these at mint time; target edits (Weekly Review editor,
+    /// Discovery onboarding) write preferences first, then re-snapshot the
+    /// current row via `applyTargetsToCurrentWeek`.
+    private let currentPreferences: @MainActor () -> SearchPreferences
 
-    init(context: ModelContext, jobAppStore: JobAppStore) {
+    init(
+        context: ModelContext,
+        jobAppStore: JobAppStore,
+        currentPreferences: @escaping @MainActor () -> SearchPreferences
+    ) {
         modelContext = context
         self.jobAppStore = jobAppStore
+        self.currentPreferences = currentPreferences
     }
 
     var allGoals: [WeeklyGoal] {
@@ -51,11 +62,36 @@ final class WeeklyGoalStore: SwiftDataStore {
             return existing
         }
 
-        // Create new goal for this week
+        // Create new goal for this week, seeded from search preferences —
+        // the source of truth for application/events targets. The contacts
+        // target has no preferences field; it carries forward from the most
+        // recent prior week's row (the model's initial value only applies to
+        // the very first week ever minted).
         let newGoal = WeeklyGoal(weekStartDate: weekStart)
+        let prefs = currentPreferences()
+        newGoal.applicationTarget = prefs.weeklyApplicationTarget
+        newGoal.eventsAttendedTarget = prefs.weeklyNetworkingTarget
+        if let previous = allGoals.first(where: { $0.weekStartDate < weekStart }) {
+            newGoal.newContactsTarget = previous.newContactsTarget
+        }
         modelContext.insert(newGoal)
         saveContext()
         return newGoal
+    }
+
+    /// Snapshot edited targets onto the current week's row (minting it if
+    /// needed). Callers update `SearchPreferences` first — preferences are
+    /// what future weeks are seeded from; this call makes the edit visible
+    /// in the current week too. Pass `nil` contacts to leave the row's
+    /// contacts target unchanged (onboarding doesn't collect one).
+    func applyTargetsToCurrentWeek(applications: Int, events: Int, contacts: Int?) {
+        let goal = currentWeek()
+        goal.applicationTarget = applications
+        goal.eventsAttendedTarget = events
+        if let contacts {
+            goal.newContactsTarget = contacts
+        }
+        saveContext()
     }
 
     func add(_ goal: WeeklyGoal) {
@@ -128,12 +164,6 @@ final class WeeklyGoalStore: SwiftDataStore {
         saveContext()
     }
 
-    func addTimeMinutes(_ minutes: Int) {
-        let goal = currentWeek()
-        goal.actualMinutes += minutes
-        saveContext()
-    }
-
     // MARK: - Reflection
 
     func setReflection(_ reflection: String) {
@@ -141,6 +171,23 @@ final class WeeklyGoalStore: SwiftDataStore {
         goal.llmReflection = reflection
         goal.reflectionGeneratedAt = Date()
         saveContext()
+    }
+
+    /// The user's saved Weekly Review notes from the most recent week before
+    /// the current one. Fed into the weekly-reflection generation context and
+    /// the coaching system prompt so reflection compounds week over week
+    /// instead of vanishing into a write-only field.
+    func previousWeekUserNotes() -> String? {
+        let calendar = Calendar.current
+        let weekStart = calendar.date(
+            from: calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: Date())
+        ) ?? Date()
+
+        return allGoals.first(where: { goal in
+            guard goal.weekStartDate < weekStart else { return false }
+            let notes = goal.userNotes?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            return !notes.isEmpty
+        })?.userNotes
     }
 
     // MARK: - Statistics
@@ -158,21 +205,12 @@ final class WeeklyGoalStore: SwiftDataStore {
         return Double(total) / Double(recent.count)
     }
 
-    /// Average time per week over recent weeks
-    func averageTimePerWeek(weeks: Int = 4) -> Int {
-        let recent = recentGoals(count: weeks)
-        guard !recent.isEmpty else { return 0 }
-        let total = recent.reduce(0) { $0 + $1.actualMinutes }
-        return total / recent.count
-    }
-
     /// Reset current week's progress (keeps targets)
     /// Note: applicationActual is no longer stored — it's computed from JobApp.appliedDate
     func resetCurrentWeek() {
         let goal = currentWeek()
         goal.eventsAttendedActual = 0
         goal.newContactsActual = 0
-        goal.actualMinutes = 0
         goal.userNotes = nil
         goal.llmReflection = nil
         goal.reflectionGeneratedAt = nil

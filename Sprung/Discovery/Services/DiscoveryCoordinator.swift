@@ -106,7 +106,6 @@ final class DiscoveryCoordinator {
     let settingsStore: DiscoverySettingsStore
     let jobAppStore: JobAppStore
     let dailyTaskStore: DailyTaskStore
-    let timeEntryStore: TimeEntryStore
     let weeklyGoalStore: WeeklyGoalStore
     let eventStore: NetworkingEventStore
     let contactStore: NetworkingContactStore
@@ -150,12 +149,16 @@ final class DiscoveryCoordinator {
         skillStore: SkillStore
     ) {
         // Pipeline stores
-        self.preferencesStore = SearchPreferencesStore()
+        let preferencesStore = SearchPreferencesStore()
+        self.preferencesStore = preferencesStore
         self.settingsStore = DiscoverySettingsStore()
         self.jobAppStore = jobAppStore
         self.dailyTaskStore = DailyTaskStore(context: modelContext)
-        self.timeEntryStore = TimeEntryStore(context: modelContext)
-        self.weeklyGoalStore = WeeklyGoalStore(context: modelContext, jobAppStore: jobAppStore)
+        self.weeklyGoalStore = WeeklyGoalStore(
+            context: modelContext,
+            jobAppStore: jobAppStore,
+            currentPreferences: { preferencesStore.current() }
+        )
         self.calendarService = CalendarIntegrationService()
         // Networking stores
         self.eventStore = NetworkingEventStore(context: modelContext)
@@ -207,8 +210,7 @@ final class DiscoveryCoordinator {
             jobAppStore: jobAppStore,
             eventStore: eventStore,
             contactStore: contactStore,
-            interactionStore: interactionStore,
-            timeEntryStore: timeEntryStore
+            interactionStore: interactionStore
         )
 
         // The single daily-task generation path (coaching completion, Daily
@@ -232,6 +234,7 @@ final class DiscoveryCoordinator {
             dailyTaskStore: dailyTaskStore,
             preferencesStore: preferencesStore,
             jobAppStore: jobAppStore,
+            weeklyGoalStore: weeklyGoalStore,
             candidateDossierStore: candidateDossierStore,
             knowledgeCardStore: knowledgeCardStore,
             taskGenerator: generator
@@ -490,7 +493,9 @@ final class DiscoveryCoordinator {
         guard let agent = agentService else {
             throw DiscoveryLLMError.toolExecutionFailed("Agent service not configured")
         }
-        let reflection = try await agent.generateWeeklyReflection()
+        let reflection = try await agent.generateWeeklyReflection(
+            previousWeekNotes: weeklyGoalStore.previousWeekUserNotes()
+        )
         weeklyGoalStore.setReflection(reflection)
         Logger.info("✅ Generated weekly reflection", category: .ai)
     }

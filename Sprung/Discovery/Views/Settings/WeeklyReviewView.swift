@@ -18,6 +18,10 @@ struct WeeklyReviewView: View {
     @State private var isGeneratingReflection = false
     @State private var reflectionError: String?
     @State private var showSaveConfirmation = false
+    @State private var showTargetEditor = false
+    @State private var editApplicationsTarget = 0
+    @State private var editEventsTarget = 0
+    @State private var editContactsTarget = 0
 
     private var currentGoal: WeeklyGoal? {
         coordinator.weeklyGoalStore.currentWeekGoal()
@@ -56,6 +60,7 @@ struct WeeklyReviewView: View {
         } message: {
             Text("Your weekly review has been saved.")
         }
+        .onAppear { loadSavedNotes() }
     }
 
     // MARK: - Header
@@ -83,9 +88,23 @@ struct WeeklyReviewView: View {
 
     private var goalsProgressSection: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("GOALS PROGRESS")
-                .font(.headline)
-                .foregroundStyle(.secondary)
+            HStack {
+                Text("GOALS PROGRESS")
+                    .font(.headline)
+                    .foregroundStyle(.secondary)
+
+                Spacer()
+
+                Button {
+                    beginEditingTargets()
+                } label: {
+                    Label("Edit Targets", systemImage: "slider.horizontal.3")
+                }
+                .buttonStyle(.bordered)
+                .popover(isPresented: $showTargetEditor, arrowEdge: .bottom) {
+                    targetEditor
+                }
+            }
 
             if let goal = currentGoal {
                 LazyVGrid(columns: [
@@ -127,6 +146,85 @@ struct WeeklyReviewView: View {
         }
     }
 
+    // MARK: - Target Editor
+
+    /// Popover for editing the weekly targets. Saving writes the application
+    /// and events targets through `SearchPreferences` — the source of truth
+    /// new weeks are seeded from — and snapshots all three onto the current
+    /// week's goal row so the change is visible immediately.
+    private var targetEditor: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Weekly Targets")
+                .font(.headline)
+
+            Stepper(value: $editApplicationsTarget, in: 1...20) {
+                HStack {
+                    Text("Applications")
+                    Spacer()
+                    Text("\(editApplicationsTarget)")
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Stepper(value: $editEventsTarget, in: 0...10) {
+                HStack {
+                    Text("Events")
+                    Spacer()
+                    Text("\(editEventsTarget)")
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Stepper(value: $editContactsTarget, in: 0...20) {
+                HStack {
+                    Text("New Contacts")
+                    Spacer()
+                    Text("\(editContactsTarget)")
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Text("Applies to this week and seeds every future week.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            HStack {
+                Spacer()
+                Button("Save Targets") {
+                    saveTargets()
+                }
+                .buttonStyle(.borderedProminent)
+            }
+        }
+        .padding()
+        .frame(width: 280)
+    }
+
+    private func beginEditingTargets() {
+        let prefs = coordinator.preferencesStore.current()
+        editApplicationsTarget = prefs.weeklyApplicationTarget
+        editEventsTarget = prefs.weeklyNetworkingTarget
+        editContactsTarget = coordinator.weeklyGoalStore.currentWeek().newContactsTarget
+        showTargetEditor = true
+    }
+
+    private func saveTargets() {
+        var prefs = coordinator.preferencesStore.current()
+        prefs.weeklyApplicationTarget = editApplicationsTarget
+        prefs.weeklyNetworkingTarget = editEventsTarget
+        coordinator.preferencesStore.update(prefs)
+
+        coordinator.weeklyGoalStore.applyTargetsToCurrentWeek(
+            applications: editApplicationsTarget,
+            events: editEventsTarget,
+            contacts: editContactsTarget
+        )
+        showTargetEditor = false
+    }
+
     // MARK: - Activity Summary
 
     private var activitySummarySection: some View {
@@ -137,28 +235,12 @@ struct WeeklyReviewView: View {
 
             HStack(spacing: 24) {
                 StatBlock(
-                    label: "Time Invested",
-                    value: formattedTimeInvested,
-                    icon: "clock"
-                )
-
-                StatBlock(
                     label: "Tasks Completed",
                     value: "\(completedTasksThisWeek)",
                     icon: "checkmark.circle"
                 )
             }
         }
-    }
-
-    private var formattedTimeInvested: String {
-        let minutes = coordinator.timeEntryStore.totalMinutesThisWeek
-        let hours = minutes / 60
-        let mins = minutes % 60
-        if hours > 0 {
-            return "\(hours)h \(mins)m"
-        }
-        return "\(mins)m"
     }
 
     private var completedTasksThisWeek: Int {
@@ -283,19 +365,100 @@ struct WeeklyReviewView: View {
         }
     }
 
+    /// Load previously saved review notes back into the four fields so a
+    /// revisit continues the review instead of starting blank. Skipped when
+    /// the user has already typed something unsaved.
+    private func loadSavedNotes() {
+        guard winsText.isEmpty, challengesText.isEmpty,
+              reflectionText.isEmpty, nextWeekFocusText.isEmpty,
+              let saved = currentGoal?.userNotes else { return }
+
+        let notes = ReflectionNotes(parsing: saved)
+        winsText = notes.wins
+        challengesText = notes.challenges
+        reflectionText = notes.learnings
+        nextWeekFocusText = notes.nextWeekFocus
+    }
+
     private func saveReview() {
-        // Save reflection to current goal
-        if let goal = currentGoal {
-            goal.userNotes = """
-            Wins: \(winsText)
-            Challenges: \(challengesText)
-            Learnings: \(reflectionText)
-            Next Week: \(nextWeekFocusText)
-            """
+        let notes = ReflectionNotes(
+            wins: winsText,
+            challenges: challengesText,
+            learnings: reflectionText,
+            nextWeekFocus: nextWeekFocusText
+        )
+
+        // Blank saves are a no-op: never overwrite previously saved notes
+        // with the empty template.
+        if let composed = notes.composed {
+            let goal = coordinator.weeklyGoalStore.currentWeek()
+            goal.userNotes = composed
             coordinator.weeklyGoalStore.update(goal)
         }
 
         showSaveConfirmation = true
+    }
+}
+
+// MARK: - Reflection Notes
+
+/// The four Weekly Review reflection fields and their round-trip to the
+/// labeled prose stored in `WeeklyGoal.userNotes` (read back by next week's
+/// review, the weekly-reflection generation context, and the coaching
+/// system prompt).
+struct ReflectionNotes: Equatable {
+    var wins = ""
+    var challenges = ""
+    var learnings = ""
+    var nextWeekFocus = ""
+
+    private static let fields: [(label: String, keyPath: WritableKeyPath<ReflectionNotes, String>)] = [
+        ("Wins:", \.wins),
+        ("Challenges:", \.challenges),
+        ("Learnings:", \.learnings),
+        ("Next Week:", \.nextWeekFocus)
+    ]
+
+    init(wins: String = "", challenges: String = "", learnings: String = "", nextWeekFocus: String = "") {
+        self.wins = wins
+        self.challenges = challenges
+        self.learnings = learnings
+        self.nextWeekFocus = nextWeekFocus
+    }
+
+    /// Parse notes previously produced by `composed` back into the fields.
+    /// Lines that don't start a new labeled field continue the current one.
+    init(parsing text: String) {
+        var current: WritableKeyPath<ReflectionNotes, String>?
+        for line in text.components(separatedBy: "\n") {
+            if let field = Self.fields.first(where: { line.hasPrefix($0.label) }) {
+                current = field.keyPath
+                self[keyPath: field.keyPath] = String(line.dropFirst(field.label.count))
+                    .trimmingCharacters(in: .whitespaces)
+            } else if let current {
+                let existing = self[keyPath: current]
+                self[keyPath: current] = existing.isEmpty ? line : existing + "\n" + line
+            }
+        }
+        for field in Self.fields {
+            self[keyPath: field.keyPath] = self[keyPath: field.keyPath]
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+    }
+
+    /// The labeled prose form stored in `WeeklyGoal.userNotes`, or nil when
+    /// every field is blank — the caller's guard against wiping saved notes
+    /// with an accidental empty save.
+    var composed: String? {
+        let values = [wins, challenges, learnings, nextWeekFocus]
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+        guard values.contains(where: { !$0.isEmpty }) else { return nil }
+        return """
+        Wins: \(values[0])
+        Challenges: \(values[1])
+        Learnings: \(values[2])
+        Next Week: \(values[3])
+        """
     }
 }
 

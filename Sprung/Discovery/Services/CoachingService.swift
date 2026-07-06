@@ -81,6 +81,7 @@ final class CoachingService: AnthropicToolLoopDelegate {
         dailyTaskStore: DailyTaskStore,
         preferencesStore: SearchPreferencesStore,
         jobAppStore: JobAppStore,
+        weeklyGoalStore: WeeklyGoalStore,
         candidateDossierStore: CandidateDossierStore,
         knowledgeCardStore: KnowledgeCardStore,
         taskGenerator: DailyTaskGenerator
@@ -98,7 +99,11 @@ final class CoachingService: AnthropicToolLoopDelegate {
 
         // Initialize extracted components
         self.toolHandler = CoachingToolHandler(modelContext: modelContext, jobAppStore: jobAppStore)
-        self.contextBuilder = CoachingContextBuilder(preferencesStore: preferencesStore, jobAppStore: jobAppStore)
+        self.contextBuilder = CoachingContextBuilder(
+            preferencesStore: preferencesStore,
+            jobAppStore: jobAppStore,
+            weeklyGoalStore: weeklyGoalStore
+        )
     }
 
     // MARK: - Public API

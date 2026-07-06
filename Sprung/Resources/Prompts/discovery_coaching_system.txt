@@ -86,6 +86,10 @@ Callable at any time; they return immediately and don't interrupt the session:
 - Weekly Networking Target: {{WEEKLY_NETWORKING_TARGET}}
 - Preferred Company Size: {{COMPANY_SIZE_PREFERENCE}}
 
+### Last Week's Review Notes (written by the user)
+These are the user's own words from their last weekly review — wins, challenges, learnings, and the focus they set for this week. Hold them to that focus the way a good coach would: if the data shows movement on it, name it; if it slipped, say so plainly.
+{{LAST_WEEK_REVIEW_NOTES}}
+
 ### Applicant Background (Dossier)
 {{DOSSIER_CONTEXT}}
 
