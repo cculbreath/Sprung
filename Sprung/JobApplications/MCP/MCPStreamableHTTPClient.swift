@@ -6,8 +6,9 @@
 //  transport: every message is a POST to a single endpoint, and responses may
 //  come back either as plain JSON or SSE-framed ("event: message" / "data: {…}")
 //  even for single JSON-RPC responses. No LLM is involved anywhere — tool calls
-//  are deterministic queries. An optional Authorization header slot supports
-//  OAuth-protected servers (e.g. ZipRecruiter); Dice's server requires none.
+//  are deterministic queries. An optional Authorization header slot supports a
+//  future OAuth-protected board; both Dice and ZipRecruiter's public servers
+//  require none.
 //
 
 import Foundation
@@ -50,14 +51,16 @@ actor MCPStreamableHTTPClient {
     private let endpoint: URL
     private let session: URLSession
     /// Sent verbatim as the `Authorization` header when present (e.g.
-    /// "Bearer <token>" for OAuth-protected servers). Dice needs none.
+    /// "Bearer <token>" for a future OAuth-protected server). Neither Dice nor
+    /// ZipRecruiter needs one.
     private let authorizationHeader: String?
 
     private var nextRequestID = 1
     private var isInitialized = false
     /// Session id issued by stateful servers via the `Mcp-Session-Id` response
     /// header on initialize; echoed on subsequent requests when present.
-    /// Stateless servers (Dice) never issue one — absence is not an error.
+    /// Stateless servers (Dice, ZipRecruiter) never issue one — absence is not
+    /// an error.
     private var sessionID: String?
 
     init(endpoint: URL, authorizationHeader: String? = nil, session: URLSession = .shared) {

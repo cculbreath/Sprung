@@ -164,6 +164,21 @@ final class JobAppStore: EntityStore {
         return jobApp
     }
 
+    /// Find an existing job app that already represents a posting, so an
+    /// import pipeline (Indeed scrape, Dice/ZipRecruiter MCP search) can treat
+    /// it as a duplicate instead of inserting a copy.
+    ///
+    /// Checks `postingURL` equality first — skipped when `url` is `nil` or
+    /// empty, which callers whose board issues unstable per-request redirect
+    /// URLs (e.g. ZipRecruiter's `job_redirect_url` match-token links) should
+    /// pass. Falls back to an exact title+company match.
+    func findDuplicateJobApp(url: String?, title: String, company: String) -> JobApp? {
+        if let url, !url.isEmpty, let existingByURL = jobApps.first(where: { $0.postingURL == url }) {
+            return existingByURL
+        }
+        return jobApps.first { $0.jobPosition == title && $0.companyName == company }
+    }
+
     /// Creates a new blank job application for manual entry
     func createManualEntry() -> JobApp {
         let jobApp = JobApp()

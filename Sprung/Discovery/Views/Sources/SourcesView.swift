@@ -114,7 +114,7 @@ struct SourcesView: View {
                         Label("Search Job Boards", systemImage: "magnifyingglass")
                     }
                     .buttonStyle(.bordered)
-                    .help("Search Dice and import results as pipeline leads")
+                    .help("Search job boards and import results as pipeline leads")
 
                     Spacer()
                 }
