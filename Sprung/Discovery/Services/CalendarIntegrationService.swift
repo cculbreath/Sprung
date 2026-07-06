@@ -20,8 +20,6 @@ final class CalendarIntegrationService {
 
     private(set) var authorizationStatus: EKAuthorizationStatus = .notDetermined
     private(set) var isAuthorized: Bool = false
-    private(set) var availableCalendars: [EKCalendar] = []
-    private(set) var selectedCalendarIdentifier: String?
 
     // MARK: - Initialization
 
@@ -35,10 +33,6 @@ final class CalendarIntegrationService {
     func updateAuthorizationStatus() {
         authorizationStatus = EKEventStore.authorizationStatus(for: .event)
         isAuthorized = authorizationStatus == .fullAccess
-
-        if isAuthorized {
-            loadCalendars()
-        }
     }
 
     /// Request full access to calendar events if not already determined, then refresh status.
@@ -54,32 +48,10 @@ final class CalendarIntegrationService {
             let granted = try await eventStore.requestFullAccessToEvents()
             authorizationStatus = EKEventStore.authorizationStatus(for: .event)
             isAuthorized = granted && authorizationStatus == .fullAccess
-
-            if isAuthorized {
-                loadCalendars()
-            }
         } catch {
             updateAuthorizationStatus()
             throw error
         }
-    }
-
-    // MARK: - Calendar Management
-
-    /// Load available calendars
-    private func loadCalendars() {
-        availableCalendars = eventStore.calendars(for: .event)
-            .filter { $0.allowsContentModifications }
-            .sorted { $0.title < $1.title }
-    }
-
-    /// Get the selected calendar or default
-    var targetCalendar: EKCalendar? {
-        if let identifier = selectedCalendarIdentifier,
-           let calendar = availableCalendars.first(where: { $0.calendarIdentifier == identifier }) {
-            return calendar
-        }
-        return eventStore.defaultCalendarForNewEvents
     }
 
     // MARK: - Event Creation
@@ -92,7 +64,7 @@ final class CalendarIntegrationService {
             throw CalendarError.notAuthorized
         }
 
-        guard let calendar = targetCalendar else {
+        guard let calendar = eventStore.defaultCalendarForNewEvents else {
             throw CalendarError.noCalendarAvailable
         }
 

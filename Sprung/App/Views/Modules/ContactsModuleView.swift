@@ -16,7 +16,7 @@ struct ContactsModuleView: View {
             // Module header
             ModuleHeader(
                 title: "Contacts",
-                subtitle: "Track relationships and get follow-up reminders"
+                subtitle: "Track relationships and log interactions — follow-ups surface as daily tasks"
             )
 
             // Existing ContactsView

@@ -114,22 +114,22 @@ struct WeeklyReviewView: View {
                     GoalProgressCard(
                         title: "Applications",
                         current: coordinator.weeklyGoalStore.applicationsSubmittedThisWeek(),
-                        target: goal.applicationsTarget,
+                        target: goal.applicationTarget,
                         icon: "doc.text",
                         color: .blue
                     )
 
                     GoalProgressCard(
                         title: "Events Attended",
-                        current: goal.eventsAttended,
-                        target: goal.eventsTarget,
+                        current: goal.eventsAttendedActual,
+                        target: goal.eventsAttendedTarget,
                         icon: "calendar",
                         color: .purple
                     )
 
                     GoalProgressCard(
                         title: "New Contacts",
-                        current: goal.newContacts,
+                        current: goal.newContactsActual,
                         target: goal.newContactsTarget,
                         icon: "person.2",
                         color: .green

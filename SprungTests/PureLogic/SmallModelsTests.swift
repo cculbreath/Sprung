@@ -4,7 +4,8 @@
 //
 //  Pure-logic coverage for small value types:
 //   - CardMetadata.defaults(fromFilename:) — extension/underscore/hyphen cleanup
-//   - SearchPreferences / DiscoverySettings — defaults + Codable round-trip
+//   - SearchPreferences — defaults + Codable round-trip
+//   - DiscoverySettings — Codable round-trip + tolerance of removed legacy keys
 //
 //  NOTE: SearchPreferences.load()/save() and DiscoverySettings.load()/save()
 //  hardcode UserDefaults.standard, so they are NOT exercised here (would mutate
@@ -71,28 +72,44 @@ final class SmallModelsTests: XCTestCase {
 
     // MARK: - DiscoverySettings
 
-    func testDiscoverySettingsDefaults() {
-        let settings = DiscoverySettings()
-        XCTAssertEqual(settings.llmModelId, "", "no hardcoded model id default")
-        XCTAssertEqual(settings.reasoningEffort, "low")
-        XCTAssertFalse(settings.useJobSearchCalendar)
-        XCTAssertTrue(settings.dailyBriefingEnabled)
-        XCTAssertEqual(settings.dailyBriefingHour, 8)
-        XCTAssertEqual(settings.weeklyReviewDay, 6)
-        XCTAssertEqual(settings.weeklyReviewHour, 16)
+    /// The 2026-07 dead-settings sweep removed the notification, calendar, and
+    /// OpenAI-model fields from `DiscoverySettings`. Blobs saved by older builds
+    /// still carry those keys; synthesized `Decodable` ignores unknown JSON keys,
+    /// so existing stored settings must keep decoding. This pins that contract.
+    func testDiscoverySettingsDecodingIgnoresRemovedLegacyKeys() throws {
+        let legacyJSON = """
+        {
+            "llmModelId": "some/model",
+            "reasoningEffort": "high",
+            "useJobSearchCalendar": true,
+            "jobSearchCalendarIdentifier": "cal-123",
+            "notificationsEnabled": true,
+            "dailyBriefingEnabled": true,
+            "dailyBriefingHour": 7,
+            "dailyBriefingMinute": 30,
+            "followUpRemindersEnabled": true,
+            "weeklyReviewEnabled": true,
+            "weeklyReviewDay": 6,
+            "weeklyReviewHour": 16,
+            "weeklyReviewMinute": 0,
+            "notificationFatiguePauseOffered": false,
+            "createdAt": 700000000,
+            "updatedAt": 700000001
+        }
+        """
+        let decoded = try JSONDecoder().decode(DiscoverySettings.self, from: Data(legacyJSON.utf8))
+        XCTAssertEqual(decoded.createdAt, Date(timeIntervalSinceReferenceDate: 700000000))
+        XCTAssertEqual(decoded.updatedAt, Date(timeIntervalSinceReferenceDate: 700000001))
     }
 
     func testDiscoverySettingsCodableRoundTrip() throws {
-        var settings = DiscoverySettings()
-        settings.llmModelId = "some/model"
-        settings.reasoningEffort = "high"
-        settings.dailyBriefingHour = 7
-        settings.jobSearchCalendarIdentifier = "cal-123"
+        let settings = DiscoverySettings()
         let data = try JSONEncoder().encode(settings)
         let decoded = try JSONDecoder().decode(DiscoverySettings.self, from: data)
-        XCTAssertEqual(decoded.llmModelId, "some/model")
-        XCTAssertEqual(decoded.reasoningEffort, "high")
-        XCTAssertEqual(decoded.dailyBriefingHour, 7)
-        XCTAssertEqual(decoded.jobSearchCalendarIdentifier, "cal-123")
+        XCTAssertEqual(
+            decoded.createdAt.timeIntervalSinceReferenceDate,
+            settings.createdAt.timeIntervalSinceReferenceDate,
+            accuracy: 0.001
+        )
     }
 }

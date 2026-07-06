@@ -65,30 +65,6 @@ struct SearchPreferences: Codable {
 // MARK: - Search Ops Settings (UserDefaults-backed)
 
 struct DiscoverySettings: Codable {
-    // LLM Configuration
-    var llmModelId: String = ""
-    var reasoningEffort: String = "low"  // none, low, medium, high
-
-    // Calendar Configuration
-    var useJobSearchCalendar: Bool = false
-    var jobSearchCalendarIdentifier: String?
-
-    // Notification Configuration
-    var notificationsEnabled: Bool = false
-    var dailyBriefingEnabled: Bool = true
-    var dailyBriefingHour: Int = 8
-    var dailyBriefingMinute: Int = 0
-    var followUpRemindersEnabled: Bool = true
-    var weeklyReviewEnabled: Bool = true
-    var weeklyReviewDay: Int = 6  // Friday (1 = Sunday, 6 = Friday)
-    var weeklyReviewHour: Int = 16
-    var weeklyReviewMinute: Int = 0
-
-    // Fatigue Tracking
-    var lastNotificationClickedAt: Date?
-    var notificationFatiguePauseOffered: Bool = false
-    var notificationsPausedAt: Date?
-
     var createdAt: Date = Date()
     var updatedAt: Date = Date()
 
@@ -191,10 +167,4 @@ class WeeklyGoal: Identifiable {
         let actual = eventsAttendedActual + newContactsActual
         return min(1.0, Double(actual) / Double(total))
     }
-
-    // Convenience aliases for cleaner access
-    var applicationsTarget: Int { applicationTarget }
-    var eventsAttended: Int { eventsAttendedActual }
-    var eventsTarget: Int { eventsAttendedTarget }
-    var newContacts: Int { newContactsActual }
 }
