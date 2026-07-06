@@ -34,17 +34,26 @@ final class SeedGenerationPromptTests: XCTestCase {
     }
 
     func testBulletConstraintTextReflectsCounts() {
+        // Since 25ce63a1 (2026-06-29) the fragment states both a bullet-count
+        // cap ("at most N bullets total") and a derived hard word ceiling
+        // (targetBulletLines * 16), replacing the older soft rendered-line
+        // guideline wording.
         let options = GenerationOptions(maxHighlightsPerEntry: 6, targetBulletLines: 3)
         let text = options.bulletConstraintText
-        XCTAssertTrue(text.contains("at most 6 highlight bullets"),
+        XCTAssertTrue(text.contains("at most 6 bullets total"),
                       "constraint text must reflect maxHighlightsPerEntry: \(text)")
         XCTAssertTrue(text.contains("3 lines"), "plural line count expected: \(text)")
+        XCTAssertTrue(text.contains("at most 48 words per bullet"),
+                      "word ceiling must be targetBulletLines * 16: \(text)")
     }
 
     func testBulletConstraintTextSingularLineLabel() {
+        // Since 25ce63a1, targetBulletLines == 1 renders the word "ONE"
+        // rather than the digit "1" specifically to sidestep the "1 lines"
+        // pluralization mistake this test originally guarded against.
         let options = GenerationOptions(targetBulletLines: 1)
-        XCTAssertTrue(options.bulletConstraintText.contains("1 line"),
-                      "targetBulletLines == 1 must render '1 line', not '1 lines'")
+        XCTAssertTrue(options.bulletConstraintText.contains("ONE line"),
+                      "targetBulletLines == 1 must render 'ONE line'")
         XCTAssertFalse(options.bulletConstraintText.contains("1 lines"))
     }
 
