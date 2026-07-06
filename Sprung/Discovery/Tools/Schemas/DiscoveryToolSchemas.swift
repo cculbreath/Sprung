@@ -2,124 +2,145 @@
 //  DiscoveryToolSchemas.swift
 //  Sprung
 //
-//  JSON schemas for Discovery LLM tools.
+//  Anthropic tool definitions for the Discovery agent loop.
+//  Input-schema keys are camelCase (keys we control); tool names stay
+//  snake_case per the app-wide Anthropic tool naming convention.
 //
 
 import Foundation
 import SwiftOpenAI
 
 enum DiscoveryToolSchemas {
+    // MARK: - Tool Names
+
+    /// Completion tool: the agent submits its final response through this tool,
+    /// which terminates the shared `AnthropicToolLoopRunner` loop.
+    static let finalResponseToolName = "submit_final_response"
+
     // MARK: - Complete Tool Definitions
 
-    /// Returns all Discovery tools as ChatCompletionParameters.Tool objects
-    static let allTools: [ChatCompletionParameters.Tool] = [
+    /// All Discovery agent tools: the three context tools plus the completion tool.
+    static let allTools: [AnthropicTool] = [
         buildGenerateDailyTasksTool(),
         buildPrepareForEventTool(),
-        buildGenerateWeeklyReflectionTool()
+        buildGenerateWeeklyReflectionTool(),
+        buildSubmitFinalResponseTool()
     ]
 
     // MARK: - Tool Builders
 
-    private static func buildGenerateDailyTasksTool() -> ChatCompletionParameters.Tool {
-        let schema = JSONSchema(
-            type: .object,
+    private static func buildGenerateDailyTasksTool() -> AnthropicTool {
+        let schema: [String: Any] = [
+            "type": "object",
+            "properties": [
+                "focusArea": [
+                    "type": "string",
+                    "description": "Optional focus area: applications, networking, follow_ups, or balanced",
+                    "enum": ["applications", "networking", "follow_ups", "balanced"]
+                ],
+                "maxTasks": [
+                    "type": "integer",
+                    "description": "Maximum number of tasks to generate (default: 8)"
+                ]
+            ],
+            "required": [],
+            "additionalProperties": false
+        ]
+
+        return .function(AnthropicFunctionTool(
+            name: "generate_daily_tasks",
             description: """
                 Generate prioritized daily tasks for job search based on current state.
                 Considers due sources, upcoming events, contacts needing attention, and weekly goals.
                 Returns 5-8 actionable tasks with priorities and time estimates.
                 """,
-            properties: [
-                "focus_area": JSONSchema(
-                    type: .string,
-                    description: "Optional focus area: applications, networking, follow_ups, or balanced",
-                    enum: ["applications", "networking", "follow_ups", "balanced"]
-                ),
-                "max_tasks": JSONSchema(
-                    type: .integer,
-                    description: "Maximum number of tasks to generate (default: 8)"
-                )
-            ],
-            required: [],
-            additionalProperties: false
-        )
-
-        return ChatCompletionParameters.Tool(
-            function: ChatCompletionParameters.ChatFunction(
-                name: "generate_daily_tasks",
-                strict: false,
-                description: "Generate prioritized daily job search tasks",
-                parameters: schema
-            )
-        )
+            inputSchema: schema
+        ))
     }
 
-    private static func buildPrepareForEventTool() -> ChatCompletionParameters.Tool {
-        let schema = JSONSchema(
-            type: .object,
+    private static func buildPrepareForEventTool() -> AnthropicTool {
+        let schema: [String: Any] = [
+            "type": "object",
+            "properties": [
+                "eventId": [
+                    "type": "string",
+                    "description": "UUID of the event to prepare for"
+                ],
+                "focusCompanies": [
+                    "type": "array",
+                    "description": "Specific companies to research for this event",
+                    "items": ["type": "string"]
+                ],
+                "personalGoals": [
+                    "type": "string",
+                    "description": "Personal goals for this event (e.g., make 3 contacts)"
+                ]
+            ],
+            "required": ["eventId"],
+            "additionalProperties": false
+        ]
+
+        return .function(AnthropicFunctionTool(
+            name: "prepare_for_event",
             description: """
                 Generate preparation materials for an upcoming networking event.
                 Creates: elevator pitch, talking points, target company context,
                 conversation starters, and things to avoid.
                 """,
-            properties: [
-                "event_id": JSONSchema(
-                    type: .string,
-                    description: "UUID of the event to prepare for"
-                ),
-                "focus_companies": JSONSchema(
-                    type: .array,
-                    description: "Specific companies to research for this event",
-                    items: JSONSchema(type: .string)
-                ),
-                "personal_goals": JSONSchema(
-                    type: .string,
-                    description: "Personal goals for this event (e.g., make 3 contacts)"
-                )
-            ],
-            required: ["event_id"],
-            additionalProperties: false
-        )
-
-        return ChatCompletionParameters.Tool(
-            function: ChatCompletionParameters.ChatFunction(
-                name: "prepare_for_event",
-                strict: false,
-                description: "Generate preparation materials for a networking event",
-                parameters: schema
-            )
-        )
+            inputSchema: schema
+        ))
     }
 
-    private static func buildGenerateWeeklyReflectionTool() -> ChatCompletionParameters.Tool {
-        let schema = JSONSchema(
-            type: .object,
+    private static func buildGenerateWeeklyReflectionTool() -> AnthropicTool {
+        let schema: [String: Any] = [
+            "type": "object",
+            "properties": [
+                "includeMetrics": [
+                    "type": "boolean",
+                    "description": "Include specific metrics in reflection (default: true)"
+                ],
+                "focus": [
+                    "type": "string",
+                    "description": "Reflection focus: achievements, improvements, planning",
+                    "enum": ["achievements", "improvements", "planning", "balanced"]
+                ]
+            ],
+            "required": [],
+            "additionalProperties": false
+        ]
+
+        return .function(AnthropicFunctionTool(
+            name: "generate_weekly_reflection",
             description: """
                 Generate a weekly reflection on job search progress.
                 Analyzes achievements, areas for improvement, and provides encouragement.
                 Returns 2-3 paragraph reflection with actionable suggestions.
                 """,
-            properties: [
-                "include_metrics": JSONSchema(
-                    type: .boolean,
-                    description: "Include specific metrics in reflection (default: true)"
-                ),
-                "focus": JSONSchema(
-                    type: .string,
-                    description: "Reflection focus: achievements, improvements, planning",
-                    enum: ["achievements", "improvements", "planning", "balanced"]
-                )
-            ],
-            required: [],
-            additionalProperties: false
-        )
+            inputSchema: schema
+        ))
+    }
 
-        return ChatCompletionParameters.Tool(
-            function: ChatCompletionParameters.ChatFunction(
-                name: "generate_weekly_reflection",
-                strict: false,
-                description: "Generate weekly reflection on job search progress",
-                parameters: schema
-            )
-        )
+    private static func buildSubmitFinalResponseTool() -> AnthropicTool {
+        let schema: [String: Any] = [
+            "type": "object",
+            "properties": [
+                "response": [
+                    "type": "string",
+                    "description": "The complete final response, in exactly the output format the task requested"
+                ]
+            ],
+            "required": ["response"],
+            "additionalProperties": false
+        ]
+
+        return .function(AnthropicFunctionTool(
+            name: finalResponseToolName,
+            description: """
+                Submit your final response for this task. Call this exactly once, when your
+                analysis is complete, passing the entire final response as `response`.
+                """,
+            inputSchema: schema,
+            strict: true
+        ))
     }
 }

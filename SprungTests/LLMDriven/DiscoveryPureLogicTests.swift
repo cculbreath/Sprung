@@ -8,10 +8,12 @@
 //  DiscoveryAgentTypes.swift. Phase 1's DiscoveryResponseParserTests exercises
 //  the three top-level Result wrappers (tasks/sources/events) through the
 //  text-extraction parser; this file covers the per-item response DTOs directly
-//  — the snake_case wire-key mapping and optional-field handling — plus the two
-//  value-type mappers (TalkingPointResult / TargetCompanyResult), which are pure.
-//  The remaining `to*()` mappers build SwiftData @Model objects (DailyTask,
-//  JobSource, NetworkingEventOpportunity) and are out of scope for a pure unit.
+//  — the wire-key mapping (camelCase for the daily-task/job-selection contracts
+//  we control; snake_case where the prompt templates pin it) and optional-field
+//  handling — plus the two value-type mappers (TalkingPointResult /
+//  TargetCompanyResult), which are pure. The remaining `to*()` mappers build
+//  SwiftData @Model objects (DailyTask, JobSource, NetworkingEventOpportunity)
+//  and are out of scope for a pure unit.
 //
 
 import XCTest
@@ -26,29 +28,29 @@ final class DiscoveryPureLogicTests: XCTestCase {
         return try decoder.decode(type, from: data)
     }
 
-    // MARK: - GeneratedDailyTask (snake_case keys, optionals)
+    // MARK: - GeneratedDailyTask (camelCase keys, optionals)
 
-    func testGeneratedDailyTaskDecodesSnakeCaseAndOptionals() throws {
+    func testGeneratedDailyTaskDecodesCamelCaseAndOptionals() throws {
         let json = """
         {
-          "task_type": "follow_up",
+          "taskType": "follow_up",
           "title": "Email Dana",
           "description": "Thank-you note",
           "priority": 2,
-          "related_id": "B6A1...",
-          "estimated_minutes": 15
+          "relatedId": "B6A1...",
+          "estimatedMinutes": 15
         }
         """
         let task = try decode(GeneratedDailyTask.self, json)
-        XCTAssertEqual(task.taskType, "follow_up", "task_type maps to taskType")
+        XCTAssertEqual(task.taskType, "follow_up", "taskType decodes (values like follow_up stay snake_case)")
         XCTAssertEqual(task.title, "Email Dana")
         XCTAssertEqual(task.priority, 2)
-        XCTAssertEqual(task.relatedId, "B6A1...", "related_id maps to relatedId")
-        XCTAssertEqual(task.estimatedMinutes, 15, "estimated_minutes maps to estimatedMinutes")
+        XCTAssertEqual(task.relatedId, "B6A1...", "relatedId decodes")
+        XCTAssertEqual(task.estimatedMinutes, 15, "estimatedMinutes decodes")
     }
 
     func testGeneratedDailyTaskMissingOptionalsDecodeToNil() throws {
-        let json = #"{ "task_type": "gather", "title": "Scan boards", "priority": 1 }"#
+        let json = #"{ "taskType": "gather", "title": "Scan boards", "priority": 1 }"#
         let task = try decode(GeneratedDailyTask.self, json)
         XCTAssertNil(task.description)
         XCTAssertNil(task.relatedId)
@@ -58,8 +60,8 @@ final class DiscoveryPureLogicTests: XCTestCase {
     func testDailyTasksResultWrapsArray() throws {
         let json = """
         { "tasks": [
-          { "task_type": "apply", "title": "Submit X", "priority": 1 },
-          { "task_type": "networking", "title": "DM Y", "priority": 3 }
+          { "taskType": "apply", "title": "Submit X", "priority": 1 },
+          { "taskType": "networking", "title": "DM Y", "priority": 3 }
         ] }
         """
         let result = try decode(DailyTasksResult.self, json)
@@ -129,30 +131,30 @@ final class DiscoveryPureLogicTests: XCTestCase {
         let uuid = UUID()
         let json = """
         {
-          "job_id": "\(uuid.uuidString)",
+          "jobId": "\(uuid.uuidString)",
           "company": "Globex",
           "role": "Platform Engineer",
-          "match_score": 0.82,
+          "matchScore": 0.82,
           "reasoning": "Strong infra overlap"
         }
         """
         let selection = try decode(JobSelection.self, json)
-        XCTAssertEqual(selection.jobId, uuid, "job_id decodes into a UUID")
+        XCTAssertEqual(selection.jobId, uuid, "jobId decodes into a UUID")
         XCTAssertEqual(selection.company, "Globex")
-        XCTAssertEqual(selection.matchScore, 0.82, accuracy: 0.0001, "match_score -> matchScore")
+        XCTAssertEqual(selection.matchScore, 0.82, accuracy: 0.0001, "matchScore decodes")
     }
 
     func testJobSelectionsResultDecodesWrapperFields() throws {
         let json = """
         {
           "selections": [],
-          "overall_analysis": "Two strong fits this week.",
+          "overallAnalysis": "Two strong fits this week.",
           "considerations": ["Location", "Comp"]
         }
         """
         let result = try decode(JobSelectionsResult.self, json)
         XCTAssertEqual(result.overallAnalysis, "Two strong fits this week.",
-                       "overall_analysis -> overallAnalysis")
+                       "overallAnalysis decodes")
         XCTAssertEqual(result.considerations, ["Location", "Comp"])
         XCTAssertTrue(result.selections.isEmpty)
     }

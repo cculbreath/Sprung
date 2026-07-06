@@ -49,7 +49,6 @@ final class LLMFacade {
     private let llmService: OpenRouterServiceBackend
     private let openRouterService: OpenRouterService
     private var backendClients: [Backend: LLMClient] = [:]
-    private var conversationServices: [Backend: LLMConversationService] = [:]
 
     // Extracted components
     private static func jsonLogString<T: Encodable>(_ value: T) -> String {
@@ -59,7 +58,6 @@ final class LLMFacade {
     private let streamingManager = LLMStreamingService()
     private let capabilityValidator: LLMFacadeCapabilityValidator
     private let specializedAPIs = LLMFacadeSpecializedAPIs()
-    private let openAIToolsAdapter: LLMFacadeOpenAIToolsAdapter
 
     init(
         client: LLMClient,
@@ -76,17 +74,11 @@ final class LLMFacade {
             openRouterService: openRouterService,
             modelValidationService: modelValidationService
         )
-        self.openAIToolsAdapter = LLMFacadeOpenAIToolsAdapter(specializedAPIs: specializedAPIs)
         backendClients[.openRouter] = client
-        conversationServices[.openRouter] = llmService
     }
 
     func registerClient(_ client: LLMClient, for backend: Backend) {
         backendClients[backend] = client
-    }
-
-    func registerConversationService(_ service: LLMConversationService, for backend: Backend) {
-        conversationServices[backend] = service
     }
 
     func registerOpenAIService(_ service: OpenAIService) {
@@ -380,44 +372,24 @@ final class LLMFacade {
         reasoning: OpenRouterReasoning? = nil,
         jsonSchema: JSONSchema? = nil,
         backend: Backend,
-        images: [Data] = [],
         maxTokens: Int? = nil
     ) async throws -> LLMStreamingHandle {
-        let handle: LLMStreamingHandle
-        if backend == .openRouter {
-            var required: [ModelCapability] = []
-            if reasoning != nil { required.append(.reasoning) }
-            if jsonSchema != nil { required.append(.structuredOutput) }
-            try await capabilityValidator.validate(modelId: modelId, requires: required)
-            let (conversationId, sourceStream) = try await llmService.startConversationStreaming(
-                systemPrompt: systemPrompt,
-                userMessage: userMessage,
-                modelId: modelId,
-                reasoning: reasoning,
-                jsonSchema: jsonSchema,
-                maxTokens: maxTokens
-            )
-            handle = streamingManager.makeStreamingHandle(conversationId: conversationId, sourceStream: sourceStream)
-        } else if backend == .openAI {
-            guard reasoning == nil else {
-                throw LLMError.clientError("Reasoning mode is not supported for OpenAI Responses streaming")
-            }
-            guard jsonSchema == nil else {
-                throw LLMError.clientError("Structured outputs are not supported for OpenAI Responses streaming")
-            }
-            guard let service = conversationServices[.openAI] as? LLMStreamingConversationService else {
-                throw LLMError.clientError("OpenAI streaming conversation service is unavailable")
-            }
-            let (conversationId, sourceStream) = try await service.startConversationStreaming(
-                systemPrompt: systemPrompt,
-                userMessage: userMessage,
-                modelId: modelId,
-                images: images
-            )
-            handle = streamingManager.makeStreamingHandle(conversationId: conversationId, sourceStream: sourceStream)
-        } else {
+        guard backend == .openRouter else {
             throw LLMError.clientError("Streaming conversations are not supported for backend \(backend.displayName)")
         }
+        var required: [ModelCapability] = []
+        if reasoning != nil { required.append(.reasoning) }
+        if jsonSchema != nil { required.append(.structuredOutput) }
+        try await capabilityValidator.validate(modelId: modelId, requires: required)
+        let (conversationId, sourceStream) = try await llmService.startConversationStreaming(
+            systemPrompt: systemPrompt,
+            userMessage: userMessage,
+            modelId: modelId,
+            reasoning: reasoning,
+            jsonSchema: jsonSchema,
+            maxTokens: maxTokens
+        )
+        let handle = streamingManager.makeStreamingHandle(conversationId: conversationId, sourceStream: sourceStream)
         LLMTranscriptLogger.logStreamingRequest(
             method: "startConversationStreaming", modelId: modelId, backend: backend.displayName,
             prompt: "System: \(systemPrompt ?? "(none)")\nUser: \(userMessage)"
@@ -434,41 +406,22 @@ final class LLMFacade {
         jsonSchema: JSONSchema? = nil,
         backend: Backend = .openRouter
     ) async throws -> LLMStreamingHandle {
-        let handle: LLMStreamingHandle
-        if backend == .openRouter {
-            var required: [ModelCapability] = images.isEmpty ? [] : [.vision]
-            if reasoning != nil { required.append(.reasoning) }
-            if jsonSchema != nil { required.append(.structuredOutput) }
-            try await capabilityValidator.validate(modelId: modelId, requires: required)
-            let sourceStream = llmService.continueConversationStreaming(
-                userMessage: userMessage,
-                modelId: modelId,
-                conversationId: conversationId,
-                images: images,
-                reasoning: reasoning,
-                jsonSchema: jsonSchema
-            )
-            handle = streamingManager.makeStreamingHandle(conversationId: conversationId, sourceStream: sourceStream)
-        } else if backend == .openAI {
-            guard reasoning == nil else {
-                throw LLMError.clientError("Reasoning mode is not supported for OpenAI Responses streaming")
-            }
-            guard jsonSchema == nil else {
-                throw LLMError.clientError("Structured outputs are not supported for OpenAI Responses streaming")
-            }
-            guard let service = conversationServices[.openAI] as? LLMStreamingConversationService else {
-                throw LLMError.clientError("OpenAI streaming conversation service is unavailable")
-            }
-            let sourceStream = try await service.continueConversationStreaming(
-                userMessage: userMessage,
-                modelId: modelId,
-                conversationId: conversationId,
-                images: images
-            )
-            handle = streamingManager.makeStreamingHandle(conversationId: conversationId, sourceStream: sourceStream)
-        } else {
+        guard backend == .openRouter else {
             throw LLMError.clientError("Streaming conversations are not supported for backend \(backend.displayName)")
         }
+        var required: [ModelCapability] = images.isEmpty ? [] : [.vision]
+        if reasoning != nil { required.append(.reasoning) }
+        if jsonSchema != nil { required.append(.structuredOutput) }
+        try await capabilityValidator.validate(modelId: modelId, requires: required)
+        let sourceStream = llmService.continueConversationStreaming(
+            userMessage: userMessage,
+            modelId: modelId,
+            conversationId: conversationId,
+            images: images,
+            reasoning: reasoning,
+            jsonSchema: jsonSchema
+        )
+        let handle = streamingManager.makeStreamingHandle(conversationId: conversationId, sourceStream: sourceStream)
         LLMTranscriptLogger.logStreamingRequest(
             method: "continueConversationStreaming", modelId: modelId, backend: backend.displayName,
             prompt: "ConversationId: \(conversationId)\nUser: \(userMessage)"
@@ -486,27 +439,17 @@ final class LLMFacade {
         backend: Backend = .openRouter
     ) async throws -> String {
         let start = ContinuousClock.now
-        let result: String
-        if backend == .openRouter {
-            let required: [ModelCapability] = images.isEmpty ? [] : [.vision]
-            try await capabilityValidator.validate(modelId: modelId, requires: required)
-            result = try await llmService.continueConversation(
-                userMessage: userMessage,
-                modelId: modelId,
-                conversationId: conversationId,
-                images: images
-            )
-        } else {
-            guard let service = conversationServices[backend] else {
-                throw LLMError.clientError("Selected backend does not support conversations")
-            }
-            result = try await service.continueConversation(
-                userMessage: userMessage,
-                modelId: modelId,
-                conversationId: conversationId,
-                images: images
-            )
+        guard backend == .openRouter else {
+            throw LLMError.clientError("Conversations are only supported via OpenRouter at this time")
         }
+        let required: [ModelCapability] = images.isEmpty ? [] : [.vision]
+        try await capabilityValidator.validate(modelId: modelId, requires: required)
+        let result = try await llmService.continueConversation(
+            userMessage: userMessage,
+            modelId: modelId,
+            conversationId: conversationId,
+            images: images
+        )
         LLMTranscriptLogger.logTextCall(
             method: "continueConversation", modelId: modelId, backend: backend.displayName,
             prompt: "ConversationId: \(conversationId)\nUser: \(userMessage)", response: result, durationMs: elapsedMs(from: start)
@@ -553,24 +496,15 @@ final class LLMFacade {
         backend: Backend = .openRouter
     ) async throws -> (UUID, String) {
         let start = ContinuousClock.now
-        let result: (UUID, String)
-        if backend == .openRouter {
-            try await capabilityValidator.validate(modelId: modelId, requires: [])
-            result = try await llmService.startConversation(
-                systemPrompt: systemPrompt,
-                userMessage: userMessage,
-                modelId: modelId
-            )
-        } else {
-            guard let service = conversationServices[backend] else {
-                throw LLMError.clientError("Selected backend does not support conversations")
-            }
-            result = try await service.startConversation(
-                systemPrompt: systemPrompt,
-                userMessage: userMessage,
-                modelId: modelId
-            )
+        guard backend == .openRouter else {
+            throw LLMError.clientError("Conversations are only supported via OpenRouter at this time")
         }
+        try await capabilityValidator.validate(modelId: modelId, requires: [])
+        let result = try await llmService.startConversation(
+            systemPrompt: systemPrompt,
+            userMessage: userMessage,
+            modelId: modelId
+        )
         LLMTranscriptLogger.logTextCall(
             method: "startConversation", modelId: modelId, backend: backend.displayName,
             prompt: "System: \(systemPrompt ?? "(none)")\nUser: \(userMessage)", response: result.1, durationMs: elapsedMs(from: start)
@@ -581,67 +515,6 @@ final class LLMFacade {
     func cancelAllRequests() {
         streamingManager.cancelAllTasks()
         llmService.cancelAllRequests()
-    }
-
-    // MARK: - Tool Calling (for Agent Workflows)
-
-    func executeWithTools(
-        messages: [ChatCompletionParameters.Message],
-        tools: [ChatCompletionParameters.Tool],
-        toolChoice: ToolChoice? = .auto,
-        modelId: String,
-        reasoningEffort: String? = nil,
-        maxTokens: Int? = nil,
-        useFullContextLength: Bool = false,
-        responseFormat: ResponseFormat? = nil,
-        backend: Backend = .openRouter
-    ) async throws -> ChatCompletionObject {
-        let start = ContinuousClock.now
-        let result: ChatCompletionObject
-        if backend == .openRouter {
-            try await capabilityValidator.validate(modelId: modelId, requires: [])
-
-            // Determine maxTokens: explicit value takes precedence, then fullMax lookup
-            var resolvedMaxTokens = maxTokens
-            if resolvedMaxTokens == nil && useFullContextLength {
-                resolvedMaxTokens = openRouterService.findModel(id: modelId)?.contextLength
-                if let tokens = resolvedMaxTokens {
-                    Logger.debug("🔧 Using full context length for \(modelId): \(tokens) tokens", category: .ai)
-                }
-            }
-
-            let parameters = LLMRequestBuilder.buildToolRequest(
-                messages: messages,
-                modelId: modelId,
-                tools: tools,
-                toolChoice: toolChoice,
-                reasoningEffort: reasoningEffort,
-                maxTokens: resolvedMaxTokens,
-                responseFormat: responseFormat
-            )
-            result = try await llmService.executeToolRequest(parameters: parameters)
-        } else {
-            // For OpenAI backend, delegate to specialized adapter
-            result = try await openAIToolsAdapter.execute(
-                messages: messages,
-                tools: tools,
-                toolChoice: toolChoice,
-                modelId: modelId,
-                reasoningEffort: reasoningEffort
-            )
-        }
-        let toolNames = tools.map { $0.function.name }
-        let firstChoice = result.choices?.first
-        let content = firstChoice?.message?.content
-        let responseToolCalls = firstChoice?.message?.toolCalls?.map {
-            "\($0.function.name ?? "<unknown>")(\($0.function.arguments.prefix(200)))"
-        } ?? []
-        LLMTranscriptLogger.logToolCall(
-            method: "executeWithTools", modelId: modelId, backend: backend.displayName,
-            messageCount: messages.count, toolNames: toolNames,
-            responseContent: content, responseToolCalls: responseToolCalls, durationMs: elapsedMs(from: start)
-        )
-        return result
     }
 
     // MARK: - OpenAI Responses API (Specialized)

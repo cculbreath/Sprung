@@ -535,13 +535,4 @@ struct TaskJSON: Codable {
     let priority: Int
     let estimatedMinutes: Int
     let relatedId: String?
-
-    enum CodingKeys: String, CodingKey {
-        case taskType = "task_type"
-        case title
-        case description
-        case priority
-        case estimatedMinutes = "estimated_minutes"
-        case relatedId = "related_id"
-    }
 }

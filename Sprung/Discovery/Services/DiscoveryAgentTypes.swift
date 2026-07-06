@@ -4,6 +4,12 @@
 //
 //  Result types and generated data structures for Discovery LLM responses.
 //
+//  Wire-key note: the daily-task and job-selection contracts are camelCase
+//  (keys we control, instructed by discovery_generate_daily_tasks.txt /
+//  discovery_choose_best_jobs.txt). The event-prep, debrief, source, and
+//  networking-event DTOs keep snake_case CodingKeys because their contracts
+//  are pinned by the corresponding prompt templates in Resources/Prompts.
+//
 
 import Foundation
 
@@ -25,12 +31,6 @@ struct JobSelectionsResult: Codable {
     let selections: [JobSelection]
     let overallAnalysis: String
     let considerations: [String]
-
-    enum CodingKeys: String, CodingKey {
-        case selections
-        case overallAnalysis = "overall_analysis"
-        case considerations
-    }
 }
 
 struct JobSelection: Codable {
@@ -39,13 +39,6 @@ struct JobSelection: Codable {
     let role: String
     let matchScore: Double
     let reasoning: String
-
-    enum CodingKeys: String, CodingKey {
-        case jobId = "job_id"
-        case company, role
-        case matchScore = "match_score"
-        case reasoning
-    }
 }
 
 struct EventPrepResult: Codable {
@@ -144,15 +137,6 @@ struct GeneratedDailyTask: Codable {
     let priority: Int
     let relatedId: String?
     let estimatedMinutes: Int?
-
-    enum CodingKeys: String, CodingKey {
-        case taskType = "task_type"
-        case title
-        case description
-        case priority
-        case relatedId = "related_id"
-        case estimatedMinutes = "estimated_minutes"
-    }
 
     func toDailyTask() -> DailyTask {
         let task = DailyTask()

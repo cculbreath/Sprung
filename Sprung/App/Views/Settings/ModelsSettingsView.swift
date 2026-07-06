@@ -43,7 +43,7 @@ struct ModelsSettingsView: View {
     @AppStorage("jobImportModelId") private var jobImportModelId: String = ""
 
     // MARK: - Discovery Models
-    @AppStorage("discoveryCoachingModelId") private var coachingModelId: String = ""
+    @AppStorage("discoveryAnthropicModelId") private var discoveryAnthropicModelId: String = ""
 
     // MARK: - Environment
     @Environment(EnabledLLMStore.self) private var enabledLLMStore
@@ -186,9 +186,13 @@ struct ModelsSettingsView: View {
         // Discovery
         discoveryAIRow
         discoveryReasoningRow
-        modelRow(operation: "Discovery Coaching", backend: .openRouter, highlightKeys: ["discoveryCoachingModelId"]) {
-            openRouterPicker(selection: $coachingModelId)
+        modelRow(operation: "Discovery Agent", backend: .anthropic, highlightKeys: ["discoveryAnthropicModelId"]) {
+            anthropicPicker(selection: $discoveryAnthropicModelId)
         }
+        Text("Powers daily coaching sessions, daily-task generation, event prep, weekly reflections, and job-lead triage in Discovery.")
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+            .padding(.leading, operationWidth + backendWidth)
     }
 
     // MARK: - Row Builder

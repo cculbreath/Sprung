@@ -2,9 +2,11 @@
 //  CoachingToolSchemas.swift
 //  Sprung
 //
-//  JSON schemas for Job Search Coach LLM tools.
+//  Anthropic tool definitions for the Job Search Coach LLM tools.
 //  Defines the coaching_multiple_choice tool that allows the LLM
 //  to ask the user structured questions during coaching sessions.
+//  All JSON keys we control are camelCase; tool names stay snake_case
+//  per the app-wide Anthropic tool naming convention.
 //
 
 import Foundation
@@ -16,12 +18,6 @@ struct CoachingMultipleChoiceArgs: Codable {
     let question: String
     let options: [CoachingMultipleChoiceOptionArgs]
     let questionType: String
-
-    enum CodingKeys: String, CodingKey {
-        case question
-        case options
-        case questionType = "question_type"
-    }
 }
 
 struct CoachingMultipleChoiceOptionArgs: Codable {
@@ -34,30 +30,15 @@ struct GetKnowledgeCardArgs: Codable {
     let cardId: String
     let startLine: Int?
     let endLine: Int?
-
-    enum CodingKeys: String, CodingKey {
-        case cardId = "card_id"
-        case startLine = "start_line"
-        case endLine = "end_line"
-    }
 }
 
 struct GetJobDescriptionArgs: Codable {
     let jobAppId: String
-
-    enum CodingKeys: String, CodingKey {
-        case jobAppId = "job_app_id"
-    }
 }
 
 struct GetResumeArgs: Codable {
     let resumeId: String
     let section: String?
-
-    enum CodingKeys: String, CodingKey {
-        case resumeId = "resume_id"
-        case section
-    }
 }
 
 struct UpdateDailyTasksArgs: Codable {
@@ -71,15 +52,6 @@ struct UpdateDailyTaskEntry: Codable {
     let priority: Int
     let estimatedMinutes: Int
     let relatedId: String?
-
-    enum CodingKeys: String, CodingKey {
-        case taskType = "task_type"
-        case title
-        case description
-        case priority
-        case estimatedMinutes = "estimated_minutes"
-        case relatedId = "related_id"
-    }
 }
 
 struct ChooseBestJobsArgs: Codable {
@@ -97,14 +69,6 @@ struct KnowledgeCardToolResult: Encodable {
     let dateRange: String?
     let content: String
     let wordCount: Int
-
-    enum CodingKeys: String, CodingKey {
-        case cardId = "card_id"
-        case title, type, organization
-        case dateRange = "date_range"
-        case content
-        case wordCount = "word_count"
-    }
 }
 
 struct JobDescriptionToolResult: Encodable {
@@ -116,15 +80,6 @@ struct JobDescriptionToolResult: Encodable {
     let jobUrl: String
     let notes: String
     let appliedDate: String?
-
-    enum CodingKeys: String, CodingKey {
-        case jobAppId = "job_app_id"
-        case company, position, status
-        case jobDescription = "job_description"
-        case jobUrl = "job_url"
-        case notes
-        case appliedDate = "applied_date"
-    }
 }
 
 struct CoachingResumeToolResult: Encodable {
@@ -134,13 +89,6 @@ struct CoachingResumeToolResult: Encodable {
     let content: String?
     let availableSections: [String]?
     let summary: String?
-
-    enum CodingKeys: String, CodingKey {
-        case resumeId = "resume_id"
-        case template, section, content
-        case availableSections = "available_sections"
-        case summary
-    }
 }
 
 struct ChooseBestJobsToolResult: Encodable {
@@ -151,16 +99,6 @@ struct ChooseBestJobsToolResult: Encodable {
     let overallAnalysis: String?
     let considerations: [String]?
     let error: String?
-
-    enum CodingKeys: String, CodingKey {
-        case success
-        case selectedCount = "selected_count"
-        case identifiedCount = "identified_count"
-        case selections
-        case overallAnalysis = "overall_analysis"
-        case considerations
-        case error
-    }
 }
 
 struct ChooseBestJobsSelectionResult: Encodable {
@@ -168,22 +106,11 @@ struct ChooseBestJobsSelectionResult: Encodable {
     let role: String
     let matchScore: Double
     let reasoning: String
-
-    enum CodingKeys: String, CodingKey {
-        case company, role
-        case matchScore = "match_score"
-        case reasoning
-    }
 }
 
 struct ToolAnswerResult: Encodable {
     let selectedValue: Int
     let selectedLabel: String
-
-    enum CodingKeys: String, CodingKey {
-        case selectedValue = "selected_value"
-        case selectedLabel = "selected_label"
-    }
 }
 
 struct ToolErrorResult: Encodable {
@@ -203,8 +130,8 @@ enum CoachingToolSchemas {
 
     // MARK: - Complete Tool Definitions
 
-    /// Returns all coaching tools including background research tools
-    static let allTools: [ChatCompletionParameters.Tool] = [
+    /// All coaching tools including background research tools.
+    static let allTools: [AnthropicTool] = [
         buildCoachingMultipleChoiceTool(),
         buildGetKnowledgeCardTool(),
         buildGetJobDescriptionTool(),
@@ -215,33 +142,55 @@ enum CoachingToolSchemas {
 
     // MARK: - Multiple Choice Question Tool
 
-    /// Build the coaching_multiple_choice tool schema
-    /// This tool allows the LLM to ask the user structured multiple-choice questions
-    /// to gather context before providing coaching recommendations.
-    static func buildCoachingMultipleChoiceTool() -> ChatCompletionParameters.Tool {
-        let optionSchema = JSONSchema(
-            type: .object,
-            description: "A single answer option for the question",
-            properties: [
-                "value": JSONSchema(
-                    type: .integer,
-                    description: "Numeric value for this option (1-10 scale recommended for motivation, 1-5 for preferences)"
-                ),
-                "label": JSONSchema(
-                    type: .string,
-                    description: "Display label for this option (keep concise, 2-5 words)"
-                ),
-                "emoji": JSONSchema(
-                    type: .optional(.string),
-                    description: "Optional emoji to display with this option for visual appeal"
-                )
+    /// The coaching_multiple_choice tool lets the LLM ask the user structured
+    /// multiple-choice questions to gather context before providing coaching
+    /// recommendations.
+    static func buildCoachingMultipleChoiceTool() -> AnthropicTool {
+        let optionSchema: [String: Any] = [
+            "type": "object",
+            "description": "A single answer option for the question",
+            "properties": [
+                "value": [
+                    "type": "integer",
+                    "description": "Numeric value for this option (1-10 scale recommended for motivation, 1-5 for preferences)"
+                ],
+                "label": [
+                    "type": "string",
+                    "description": "Display label for this option (keep concise, 2-5 words)"
+                ],
+                "emoji": [
+                    "type": ["string", "null"],
+                    "description": "Optional emoji to display with this option for visual appeal"
+                ]
             ],
-            required: ["value", "label", "emoji"],
-            additionalProperties: false
-        )
+            "required": ["value", "label", "emoji"],
+            "additionalProperties": false
+        ]
 
-        let schema = JSONSchema(
-            type: .object,
+        let schema: [String: Any] = [
+            "type": "object",
+            "properties": [
+                "question": [
+                    "type": "string",
+                    "description": "The question to ask the user. Keep it conversational and empathetic."
+                ],
+                "options": [
+                    "type": "array",
+                    "description": "2-5 answer options for the user to choose from. Each should be distinct and meaningful.",
+                    "items": optionSchema
+                ],
+                "questionType": [
+                    "type": "string",
+                    "description": "Category of question to help organize the coaching conversation",
+                    "enum": ["motivation", "challenge", "focus", "feedback"]
+                ]
+            ],
+            "required": ["question", "options", "questionType"],
+            "additionalProperties": false
+        ]
+
+        return .function(AnthropicFunctionTool(
+            name: multipleChoiceToolName,
             description: """
                 Present a multiple choice question to the user to understand their current state and needs.
                 You MUST call this tool at least twice before providing recommendations.
@@ -254,34 +203,9 @@ enum CoachingToolSchemas {
                 Design questions that are quick to answer but provide meaningful coaching context.
                 Options should be clear, distinct, and cover the range of likely responses.
                 """,
-            properties: [
-                "question": JSONSchema(
-                    type: .string,
-                    description: "The question to ask the user. Keep it conversational and empathetic."
-                ),
-                "options": JSONSchema(
-                    type: .array,
-                    description: "2-5 answer options for the user to choose from. Each should be distinct and meaningful.",
-                    items: optionSchema
-                ),
-                "question_type": JSONSchema(
-                    type: .string,
-                    description: "Category of question to help organize the coaching conversation",
-                    enum: ["motivation", "challenge", "focus", "feedback"]
-                )
-            ],
-            required: ["question", "options", "question_type"],
-            additionalProperties: false
-        )
-
-        return ChatCompletionParameters.Tool(
-            function: ChatCompletionParameters.ChatFunction(
-                name: multipleChoiceToolName,
-                strict: true,
-                description: "Ask the user a multiple choice question to gather coaching context",
-                parameters: schema
-            )
-        )
+            inputSchema: schema,
+            strict: true
+        ))
     }
 
     // MARK: - Tool Response Parsing
@@ -315,179 +239,149 @@ enum CoachingToolSchemas {
     // MARK: - Knowledge Card Tool
 
     /// Tool to retrieve detailed content from a knowledge card
-    static func buildGetKnowledgeCardTool() -> ChatCompletionParameters.Tool {
-        let schema = JSONSchema(
-            type: .object,
+    static func buildGetKnowledgeCardTool() -> AnthropicTool {
+        let schema: [String: Any] = [
+            "type": "object",
+            "properties": [
+                "cardId": [
+                    "type": "string",
+                    "description": "The ID of the knowledge card to retrieve (from the available cards list)"
+                ],
+                "startLine": [
+                    "type": ["integer", "null"],
+                    "description": "Start line number for a specific excerpt (1-indexed), or null for full content"
+                ],
+                "endLine": [
+                    "type": ["integer", "null"],
+                    "description": "End line number for a specific excerpt, or null for full content"
+                ]
+            ],
+            "required": ["cardId", "startLine", "endLine"],
+            "additionalProperties": false
+        ]
+
+        return .function(AnthropicFunctionTool(
+            name: getKnowledgeCardToolName,
             description: """
                 Retrieve detailed content from a user's knowledge card. Use this to learn more about
                 specific work experience, skills, or projects. You can request specific line ranges
                 for targeted information.
                 """,
-            properties: [
-                "card_id": JSONSchema(
-                    type: .string,
-                    description: "The ID of the knowledge card to retrieve (from the available cards list)"
-                ),
-                "start_line": JSONSchema(
-                    type: .optional(.integer),
-                    description: "Start line number for a specific excerpt (1-indexed), or null for full content"
-                ),
-                "end_line": JSONSchema(
-                    type: .optional(.integer),
-                    description: "End line number for a specific excerpt, or null for full content"
-                )
-            ],
-            required: ["card_id", "start_line", "end_line"],
-            additionalProperties: false
-        )
-
-        return ChatCompletionParameters.Tool(
-            function: ChatCompletionParameters.ChatFunction(
-                name: getKnowledgeCardToolName,
-                strict: true,
-                description: "Get detailed content from a knowledge card about the user's experience",
-                parameters: schema
-            )
-        )
+            inputSchema: schema,
+            strict: true
+        ))
     }
 
     // MARK: - Job Description Tool
 
     /// Tool to retrieve job description details for a specific job application
-    static func buildGetJobDescriptionTool() -> ChatCompletionParameters.Tool {
-        let schema = JSONSchema(
-            type: .object,
+    static func buildGetJobDescriptionTool() -> AnthropicTool {
+        let schema: [String: Any] = [
+            "type": "object",
+            "properties": [
+                "jobAppId": [
+                    "type": "string",
+                    "description": "The UUID of the job application to retrieve details for"
+                ]
+            ],
+            "required": ["jobAppId"],
+            "additionalProperties": false
+        ]
+
+        return .function(AnthropicFunctionTool(
+            name: getJobDescriptionToolName,
             description: """
                 Retrieve the job description and details for a specific job application.
                 Use this to understand what the user is applying for and provide targeted coaching.
                 """,
-            properties: [
-                "job_app_id": JSONSchema(
-                    type: .string,
-                    description: "The UUID of the job application to retrieve details for"
-                )
-            ],
-            required: ["job_app_id"],
-            additionalProperties: false
-        )
-
-        return ChatCompletionParameters.Tool(
-            function: ChatCompletionParameters.ChatFunction(
-                name: getJobDescriptionToolName,
-                strict: true,
-                description: "Get job description and details for a specific application",
-                parameters: schema
-            )
-        )
+            inputSchema: schema,
+            strict: true
+        ))
     }
 
     // MARK: - Resume Tool
 
     /// Tool to retrieve resume content for a specific resume
-    static func buildGetResumeTool() -> ChatCompletionParameters.Tool {
-        let schema = JSONSchema(
-            type: .object,
+    static func buildGetResumeTool() -> AnthropicTool {
+        let schema: [String: Any] = [
+            "type": "object",
+            "properties": [
+                "resumeId": [
+                    "type": "string",
+                    "description": "The UUID of the resume to retrieve"
+                ],
+                "section": [
+                    "type": ["string", "null"],
+                    "description": "Specific section to retrieve (summary, work, skills, etc.), or null for overview"
+                ]
+            ],
+            "required": ["resumeId", "section"],
+            "additionalProperties": false
+        ]
+
+        return .function(AnthropicFunctionTool(
+            name: getResumeToolName,
             description: """
                 Retrieve the content of a specific resume. Use this to understand what
                 materials the user has prepared and provide feedback or suggestions.
                 """,
-            properties: [
-                "resume_id": JSONSchema(
-                    type: .string,
-                    description: "The UUID of the resume to retrieve"
-                ),
-                "section": JSONSchema(
-                    type: .optional(.string),
-                    description: "Specific section to retrieve (summary, work, skills, etc.), or null for overview"
-                )
-            ],
-            required: ["resume_id", "section"],
-            additionalProperties: false
-        )
-
-        return ChatCompletionParameters.Tool(
-            function: ChatCompletionParameters.ChatFunction(
-                name: getResumeToolName,
-                strict: true,
-                description: "Get content from a specific resume",
-                parameters: schema
-            )
-        )
+            inputSchema: schema,
+            strict: true
+        ))
     }
 
     // MARK: - Update Daily Tasks Tool
 
     /// Tool for the LLM to output structured daily tasks at the end of a coaching session
-    static func buildUpdateDailyTasksTool() -> ChatCompletionParameters.Tool {
-        let taskSchema = JSONSchema(
-            type: .object,
-            description: "A single task to add to the user's daily task list",
-            properties: [
-                "task_type": JSONSchema(
-                    type: .string,
-                    description: "The type of task",
-                    enum: ["gather", "customize", "apply", "follow_up", "networking", "event_prep", "debrief"]
-                ),
-                "title": JSONSchema(
-                    type: .string,
-                    description: "Short, actionable title for the task (2-8 words)"
-                ),
-                "description": JSONSchema(
-                    type: .string,
-                    description: "Brief context or details about the task"
-                ),
-                "priority": JSONSchema(
-                    type: .integer,
-                    description: "Priority level: 0 (low), 1 (medium), 2 (high)"
-                ),
-                "estimated_minutes": JSONSchema(
-                    type: .integer,
-                    description: "Estimated time in minutes to complete the task"
-                ),
-                "related_id": JSONSchema(
-                    type: .optional(.string),
-                    description: "UUID of related job app, event, or contact if applicable, otherwise null"
-                )
+    static func buildUpdateDailyTasksTool() -> AnthropicTool {
+        let schema: [String: Any] = [
+            "type": "object",
+            "properties": [
+                "tasks": [
+                    "type": "array",
+                    "description": "The daily tasks to add. Generate 3-6 tasks based on the coaching conversation.",
+                    "items": dailyTaskEntrySchema
+                ]
             ],
-            required: ["task_type", "title", "description", "priority", "estimated_minutes", "related_id"],
-            additionalProperties: false
-        )
+            "required": ["tasks"],
+            "additionalProperties": false
+        ]
 
-        let schema = JSONSchema(
-            type: .object,
+        return .function(AnthropicFunctionTool(
+            name: updateDailyTasksToolName,
             description: """
                 Generate the user's daily task list based on the coaching conversation.
                 Create 3-6 specific, actionable tasks that align with what was discussed.
                 Match task count/complexity to the user's stated energy level.
                 Include tasks from multiple categories when appropriate.
                 """,
-            properties: [
-                "tasks": JSONSchema(
-                    type: .array,
-                    description: "The daily tasks to add. Generate 3-6 tasks based on the coaching conversation.",
-                    items: taskSchema
-                )
-            ],
-            required: ["tasks"],
-            additionalProperties: false
-        )
-
-        return ChatCompletionParameters.Tool(
-            function: ChatCompletionParameters.ChatFunction(
-                name: updateDailyTasksToolName,
-                strict: true,
-                description: "Set the user's daily task list based on the coaching session",
-                parameters: schema
-            )
-        )
+            inputSchema: schema,
+            strict: true
+        ))
     }
 
     // MARK: - Choose Best Jobs Tool
 
     /// Tool to trigger the job selection workflow that identifies and advances top job opportunities
-    static func buildChooseBestJobsTool() -> ChatCompletionParameters.Tool {
-        let schema = JSONSchema(
-            type: .object,
+    static func buildChooseBestJobsTool() -> AnthropicTool {
+        let schema: [String: Any] = [
+            "type": "object",
+            "properties": [
+                "count": [
+                    "type": "integer",
+                    "description": "Number of top jobs to select (1-10, default 5)"
+                ],
+                "reason": [
+                    "type": "string",
+                    "description": "Brief explanation of why you're triggering job selection now"
+                ]
+            ],
+            "required": ["count", "reason"],
+            "additionalProperties": false
+        ]
+
+        return .function(AnthropicFunctionTool(
+            name: chooseBestJobsToolName,
             description: """
                 Analyze all jobs in the Identified stage and select the best matches for the user.
                 This triggers the job selection workflow that:
@@ -496,85 +390,69 @@ enum CoachingToolSchemas {
                 3. Advances the top matches to Researching stage
                 Use this when the user has accumulated job leads and is ready to focus their efforts.
                 """,
-            properties: [
-                "count": JSONSchema(
-                    type: .integer,
-                    description: "Number of top jobs to select (1-10, default 5)"
-                ),
-                "reason": JSONSchema(
-                    type: .string,
-                    description: "Brief explanation of why you're triggering job selection now"
-                )
-            ],
-            required: ["count", "reason"],
-            additionalProperties: false
-        )
-
-        return ChatCompletionParameters.Tool(
-            function: ChatCompletionParameters.ChatFunction(
-                name: chooseBestJobsToolName,
-                strict: true,
-                description: "Analyze identified jobs and advance best matches to Researching stage",
-                parameters: schema
-            )
-        )
+            inputSchema: schema,
+            strict: true
+        ))
     }
 
     // MARK: - Task Regeneration Schema
 
-    /// Schema for structured task output during regeneration
-    static func buildTaskRegenerationSchema() -> JSONSchema {
-        let taskSchema = JSONSchema(
-            type: .object,
-            description: "A single task to add to the user's daily task list",
-            properties: [
-                "task_type": JSONSchema(
-                    type: .string,
-                    description: "The type of task",
-                    enum: ["gather", "customize", "apply", "follow_up", "networking", "event_prep", "debrief"]
-                ),
-                "title": JSONSchema(
-                    type: .string,
-                    description: "Short title for the task (2-8 words)"
-                ),
-                "description": JSONSchema(
-                    type: .string,
-                    description: "Brief context or details about the task"
-                ),
-                "priority": JSONSchema(
-                    type: .integer,
-                    description: "Priority level: 0 (low), 1 (medium), 2 (high)"
-                ),
-                "estimated_minutes": JSONSchema(
-                    type: .integer,
-                    description: "Estimated time in minutes to complete the task"
-                ),
-                "related_id": JSONSchema(
-                    type: .optional(.string),
-                    description: "UUID of related job app, event, or contact if applicable, otherwise null"
-                )
+    /// A single daily-task entry schema, shared by the update_daily_tasks tool
+    /// and the task-regeneration structured output.
+    private static let dailyTaskEntrySchema: [String: Any] = [
+        "type": "object",
+        "description": "A single task to add to the user's daily task list",
+        "properties": [
+            "taskType": [
+                "type": "string",
+                "description": "The type of task",
+                "enum": ["gather", "customize", "apply", "follow_up", "networking", "event_prep", "debrief"]
             ],
-            required: ["task_type", "title", "description", "priority", "estimated_minutes", "related_id"],
-            additionalProperties: false
-        )
+            "title": [
+                "type": "string",
+                "description": "Short, actionable title for the task (2-8 words)"
+            ],
+            "description": [
+                "type": "string",
+                "description": "Brief context or details about the task"
+            ],
+            "priority": [
+                "type": "integer",
+                "description": "Priority level: 0 (low), 1 (medium), 2 (high)"
+            ],
+            "estimatedMinutes": [
+                "type": "integer",
+                "description": "Estimated time in minutes to complete the task"
+            ],
+            "relatedId": [
+                "type": ["string", "null"],
+                "description": "UUID of related job app, event, or contact if applicable, otherwise null"
+            ]
+        ],
+        "required": ["taskType", "title", "description", "priority", "estimatedMinutes", "relatedId"],
+        "additionalProperties": false
+    ]
 
-        return JSONSchema(
-            type: .object,
-            description: "Regenerated tasks for a specific category based on user feedback",
-            properties: [
-                "tasks": JSONSchema(
-                    type: .array,
-                    description: "The regenerated tasks. Generate 2-5 tasks based on the user's feedback.",
-                    items: taskSchema
-                ),
-                "explanation": JSONSchema(
-                    type: .string,
-                    description: "Brief explanation of why these tasks were suggested based on the feedback"
-                )
+    /// Schema (dictionary form, for Anthropic structured output) for regenerated
+    /// tasks in a specific category based on user feedback.
+    static func buildTaskRegenerationSchema() -> [String: Any] {
+        [
+            "type": "object",
+            "description": "Regenerated tasks for a specific category based on user feedback",
+            "properties": [
+                "tasks": [
+                    "type": "array",
+                    "description": "The regenerated tasks. Generate 2-5 tasks based on the user's feedback.",
+                    "items": dailyTaskEntrySchema
+                ],
+                "explanation": [
+                    "type": "string",
+                    "description": "Brief explanation of why these tasks were suggested based on the feedback"
+                ]
             ],
-            required: ["tasks", "explanation"],
-            additionalProperties: false
-        )
+            "required": ["tasks", "explanation"],
+            "additionalProperties": false
+        ]
     }
 }
 

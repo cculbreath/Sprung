@@ -5,6 +5,12 @@
 //  Main orchestration service for the Job Search Coach feature.
 //  Manages the coaching flow: activity report -> questions -> recommendations.
 //
+//  The session runs as one AnthropicToolLoopRunner loop against the Messages
+//  API. Question tool calls suspend inside executeTools on a continuation
+//  until the user answers (submitAnswer / submitFollowUpAnswer resume it);
+//  background research tools execute immediately. The forced
+//  update_daily_tasks call is the loop's completion tool.
+//
 
 import Foundation
 import SwiftData
@@ -12,9 +18,9 @@ import SwiftOpenAI
 
 @Observable
 @MainActor
-final class CoachingService {
+final class CoachingService: AnthropicToolLoopDelegate {
     private let modelContext: ModelContext
-    private let llmService: DiscoveryLLMService
+    private let llmFacade: LLMFacade
     private let activityReportService: ActivityReportService
     private let sessionStore: CoachingSessionStore
     private let dailyTaskStore: DailyTaskStore
@@ -38,21 +44,44 @@ final class CoachingService {
     private(set) var currentSession: CoachingSession?
     private(set) var currentQuestion: CoachingQuestion?
 
-    private var conversationId: UUID?
     private var pendingQuestions: [CoachingQuestion] = []
     private var collectedAnswers: [CoachingAnswer] = []
     private var questionIndex: Int = 0
 
-    /// Queue of pending question tool calls (toolCallId, question)
-    private var pendingQuestionToolCalls: [(toolCallId: String, question: CoachingQuestion)] = []
-    /// The tool call ID for the currently displayed question
-    private var currentQuestionToolCallId: String?
+    // MARK: - Session Loop State
+
+    /// Where the session is in the coaching script; drives per-turn tool choice.
+    private enum SessionPhase {
+        /// Asking questions / researching until the model gives recommendations.
+        case gatheringAnswers
+        /// Recommendations shown; the model was asked to offer a follow-up.
+        case awaitingFollowUp
+        /// Terminal phase: the update_daily_tasks completion tool is forced.
+        case generatingTasks
+    }
+
+    private var phase: SessionPhase = .gatheringAnswers
+    private var sessionSystemPrompt: String = ""
+    private var sessionModelId: String = ""
+    /// The running session loop; cancelled by cancelSession().
+    private var sessionTask: Task<Void, Never>?
+    /// Monotonic token so a cancelled session's trailing error (e.g. a
+    /// URLError from a torn-down request) can't clobber a newer session's state.
+    private var sessionGeneration = 0
+    /// Continuation parked while a question is displayed, resumed by
+    /// submitAnswer / submitFollowUpAnswer with the user's selection.
+    private var pendingAnswer: CheckedContinuation<(value: Int, label: String), Error>?
+    /// Text of the most recent assistant turn (captured for the
+    /// recommendations no-tool turn).
+    private var lastTurnText: String = ""
+
+    private static let maxResponseTokens = 8192
 
     // MARK: - Initialization
 
     init(
         modelContext: ModelContext,
-        llmService: DiscoveryLLMService,
+        llmFacade: LLMFacade,
         activityReportService: ActivityReportService,
         sessionStore: CoachingSessionStore,
         dailyTaskStore: DailyTaskStore,
@@ -62,7 +91,7 @@ final class CoachingService {
         knowledgeCardStore: KnowledgeCardStore
     ) {
         self.modelContext = modelContext
-        self.llmService = llmService
+        self.llmFacade = llmFacade
         self.activityReportService = activityReportService
         self.sessionStore = sessionStore
         self.dailyTaskStore = dailyTaskStore
@@ -74,7 +103,7 @@ final class CoachingService {
         // Initialize extracted components
         self.toolHandler = CoachingToolHandler(modelContext: modelContext, jobAppStore: jobAppStore)
         self.contextBuilder = CoachingContextBuilder(preferencesStore: preferencesStore, jobAppStore: jobAppStore)
-        self.taskGenerator = DailyTaskGenerator(dailyTaskStore: dailyTaskStore, llmService: llmService)
+        self.taskGenerator = DailyTaskGenerator(dailyTaskStore: dailyTaskStore)
     }
 
     // MARK: - Public API
@@ -120,21 +149,36 @@ final class CoachingService {
         }
     }
 
-    /// Get the currently selected model ID for coaching (OpenRouter model)
-    /// Returns nil if no coaching model is configured
+    /// The currently selected Anthropic model ID for Discovery coaching,
+    /// or nil if none is configured.
     var coachingModelId: String? {
-        let id = UserDefaults.standard.string(forKey: "discoveryCoachingModelId") ?? ""
+        let id = UserDefaults.standard.string(forKey: DiscoveryAgentService.anthropicModelSettingKey) ?? ""
         return id.isEmpty ? nil : id
     }
 
     /// Start a new coaching session
     func startSession() async throws {
+        // Tear down any in-flight session first
+        cancelSession()
+
         // Reset state
         state = .generatingReport
         pendingQuestions = []
         collectedAnswers = []
         questionIndex = 0
         currentQuestion = nil
+        phase = .gatheringAnswers
+        lastTurnText = ""
+
+        // Model must be user-configured — never substituted.
+        guard let modelId = coachingModelId else {
+            state = .error("No coaching model configured. Please select a model in Settings.")
+            throw ModelConfigurationError.modelNotConfigured(
+                settingKey: DiscoveryAgentService.anthropicModelSettingKey,
+                operationName: "Discovery Coaching"
+            )
+        }
+        sessionModelId = modelId
 
         // Calculate activity window: since last session that was at least 12 hours ago
         // Sessions within 12 hours don't reset context (allows multiple sessions per day)
@@ -149,7 +193,7 @@ final class CoachingService {
         let session = CoachingSession()
         session.activitySummary = snapshot
         session.daysSinceLastSession = sessionStore.daysSinceLastSession()
-        session.llmModel = coachingModelId
+        session.llmModel = modelId
         currentSession = session
 
         // Build dossier context from CandidateDossier
@@ -159,7 +203,7 @@ final class CoachingService {
         let knowledgeCardsList = contextBuilder.buildKnowledgeCardsList(from: knowledgeCardStore.knowledgeCards)
 
         // Build system prompt with full context
-        let systemPrompt = contextBuilder.buildSystemPrompt(
+        sessionSystemPrompt = contextBuilder.buildSystemPrompt(
             activitySummary: snapshot.textSummary(),
             recentHistory: sessionStore.recentHistorySummary(),
             dossierContext: dossierContext,
@@ -167,44 +211,54 @@ final class CoachingService {
             activeJobApps: contextBuilder.buildActiveJobAppsList()
         )
 
-        // Start conversation with coaching tools (use OpenRouter model)
-        guard let modelId = coachingModelId else {
-            state = .error("No coaching model configured. Please select a model in Settings.")
-            return
+        // Drive the whole session as one shared tool loop. Question tool calls
+        // suspend until the user answers; the loop completes on the forced
+        // update_daily_tasks call.
+        sessionGeneration += 1
+        let generation = sessionGeneration
+        sessionTask = Task { [weak self] in
+            guard let self else { return }
+            do {
+                _ = try await AnthropicToolLoopRunner(delegate: self).run()
+            } catch is CancellationError {
+                // cancelSession() already reset the UI state.
+            } catch {
+                guard self.sessionGeneration == generation else { return }
+                Logger.error("Coaching session failed: \(error)", category: .ai)
+                self.state = .error(error.localizedDescription)
+            }
         }
-
-        conversationId = llmService.startConversation(
-            systemPrompt: systemPrompt,
-            tools: CoachingToolSchemas.allTools,
-            overrideModelId: modelId
-        )
-
-        // Send initial message to trigger tool calls
-        try await sendInitialMessage()
     }
 
     /// Submit answer to current question
     func submitAnswer(value: Int, label: String) async throws {
-        guard let question = currentQuestion else {
+        guard currentQuestion != nil, let continuation = pendingAnswer else {
             Logger.warning("No current question to answer", category: .ai)
             return
         }
 
         // Clear question immediately so UI shows loading
+        pendingAnswer = nil
         currentQuestion = nil
         state = .waitingForAnswer
 
-        // Record answer
-        let answer = CoachingAnswer(
-            questionId: question.id,
-            selectedValue: value,
-            selectedLabel: label
-        )
-        collectedAnswers.append(answer)
-        currentSession?.answers = collectedAnswers
+        continuation.resume(returning: (value: value, label: label))
+    }
 
-        // Continue conversation with the answer
-        try await continueWithAnswer(answer)
+    /// Handle follow-up answer selection
+    func submitFollowUpAnswer(value: Int, label: String) async throws {
+        guard let question = currentQuestion,
+              question.questionType == .followUp,
+              let continuation = pendingAnswer else {
+            Logger.warning("No follow-up question to answer or missing context", category: .ai)
+            return
+        }
+
+        pendingAnswer = nil
+        currentQuestion = nil
+        state = .waitingForAnswer
+
+        continuation.resume(returning: (value: value, label: label))
     }
 
     /// Regenerate by deleting current session and re-running full coaching flow
@@ -223,144 +277,231 @@ final class CoachingService {
 
     /// Cancel the current coaching session
     func cancelSession() {
-        if let convId = conversationId {
-            llmService.endConversation(convId)
+        sessionGeneration += 1
+        sessionTask?.cancel()
+        sessionTask = nil
+        if let continuation = pendingAnswer {
+            pendingAnswer = nil
+            continuation.resume(throwing: CancellationError())
         }
-        conversationId = nil
         currentSession = nil
         currentQuestion = nil
         pendingQuestions = []
         collectedAnswers = []
-        pendingQuestionToolCalls = []
-        currentQuestionToolCallId = nil
         state = .idle
     }
 
+    // MARK: - Tool Loop Delegate
+
+    var maxTurns: Int { 40 }
+    var completionToolName: String { CoachingToolSchemas.updateDailyTasksToolName }
+
+    func maxTurnsError() -> Error {
+        DiscoveryAgentError.toolLoopExceeded
+    }
+
+    func initialMessages() -> [AnthropicMessage] {
+        [.user("Please start my coaching session for today. Ask me questions to understand how I'm doing.")]
+    }
+
+    func runModelTurn(messages: [AnthropicMessage]) async throws -> AnthropicTurnResult {
+        // Tool choice based on conversation phase:
+        // - generating tasks: force update_daily_tasks (session terminal)
+        // - exactly 1 answer collected: force a second question
+        // - otherwise: .auto — the model can research, ask, or recommend
+        let toolChoice: AnthropicToolChoice
+        switch phase {
+        case .generatingTasks:
+            toolChoice = .tool(name: CoachingToolSchemas.updateDailyTasksToolName)
+        case .gatheringAnswers where collectedAnswers.count == 1:
+            toolChoice = .tool(name: CoachingToolSchemas.multipleChoiceToolName)
+        default:
+            toolChoice = .auto
+        }
+
+        let parameters = AnthropicMessageParameter(
+            model: sessionModelId,
+            messages: messages,
+            system: .blocks([AnthropicSystemBlock(text: sessionSystemPrompt, cacheControl: .ephemeral)]),
+            maxTokens: Self.maxResponseTokens,
+            stream: false,
+            tools: CoachingToolSchemas.allTools,
+            toolChoice: toolChoice
+        )
+        let response = try await llmFacade.anthropicMessages(parameters: parameters)
+        let usage = response.usage
+        Logger.debug(
+            "🧑‍🏫 Coaching usage (\(sessionModelId)): input=\(usage.inputTokens) cache_read=\(usage.cacheReadInputTokens ?? 0) output=\(usage.outputTokens)",
+            category: .ai
+        )
+        let result = AnthropicTurnResult(response: response)
+        lastTurnText = result.textBlocks.joined(separator: "\n")
+        return result
+    }
+
+    func executeTools(_ toolCalls: [AnthropicToolUseResponseBlock]) async -> [String: AnthropicToolOutput] {
+        var outputs: [String: AnthropicToolOutput] = [:]
+
+        // Question tool calls in this turn, displayed one at a time (each
+        // suspends until the user answers). Count them up front so the
+        // progress indicator can show how many are queued.
+        var remainingQuestionCalls = toolCalls.filter { $0.name == CoachingToolSchemas.multipleChoiceToolName }.count
+
+        for call in toolCalls {
+            let arguments = call.input.jsonString
+
+            if call.name == CoachingToolSchemas.multipleChoiceToolName {
+                remainingQuestionCalls -= 1
+                outputs[call.id] = await handleQuestionToolCall(
+                    arguments: arguments,
+                    questionsQueuedAfter: remainingQuestionCalls
+                )
+            } else {
+                let result = await handleBackgroundTool(name: call.name, arguments: arguments)
+                outputs[call.id] = AnthropicToolOutput(content: result)
+            }
+        }
+        return outputs
+    }
+
+    func parseCompletion(_ call: AnthropicToolUseResponseBlock) async throws -> Int {
+        guard phase == .generatingTasks else {
+            // Premature update_daily_tasks call — send a corrective tool_result
+            // and keep the conversation going (pre-runner behavior never let a
+            // mid-session call end the session).
+            throw DiscoveryAgentError.toolExecutionFailed(
+                "Not yet — continue the coaching conversation first. Daily tasks are requested at the end of the session."
+            )
+        }
+
+        let count = taskGenerator.handleUpdateDailyTasksToolCall(
+            arguments: call.input.jsonString,
+            session: currentSession
+        )
+        Logger.info("✅ Daily tasks generated from coaching session", category: .ai)
+        completeSession()
+        return count
+    }
+
+    func handleNoTool(turnCount: Int, consecutiveNoToolTurns: Int) -> AnthropicNoToolDecision {
+        switch phase {
+        case .gatheringAnswers:
+            // A no-tool text turn is the final recommendations.
+            handleFinalRecommendations(lastTurnText)
+            phase = .awaitingFollowUp
+            return .nudge(
+                "Based on our conversation, what would be most helpful for me to do next? "
+                + "Offer me a contextual follow-up action using the coaching_multiple_choice tool."
+            )
+        case .awaitingFollowUp:
+            // No follow-up question offered — move straight to task generation.
+            phase = .generatingTasks
+            return .nudge(Self.taskGenerationPrompt)
+        case .generatingTasks:
+            // Shouldn't happen (tool choice is forced); re-issue the instruction.
+            return .nudge(Self.taskGenerationPrompt)
+        }
+    }
+
+    func onMaxTurnsReached(messages: [AnthropicMessage]) async throws -> Int? {
+        nil  // → runner throws maxTurnsError()
+    }
+
     // MARK: - Private Implementation
+
+    private static let taskGenerationPrompt =
+        "Now generate my daily task list based on our coaching conversation. "
+        + "Use the update_daily_tasks tool to create 3-6 specific, actionable tasks."
 
     private func encodeToJSON<T: Encodable>(_ value: T) -> String {
         (try? String(data: JSONEncoder().encode(value), encoding: .utf8)) ?? "{}"
     }
 
-    private func sendInitialMessage() async throws {
-        guard let convId = conversationId else { return }
-
-        // Add initial user message
-        llmService.addUserMessage(
-            conversationId: convId,
-            message: "Please start my coaching session for today. Ask me questions to understand how I'm doing."
-        )
-
-        // Get first response - uses .auto so LLM can research before asking first question
-        try await processNextResponse()
-    }
-
-    /// Process the next LLM response, handling tool calls or final text
-    private func processNextResponse() async throws {
-        guard let convId = conversationId else { return }
-
-        // Tool choice based on conversation phase:
-        // - 0 answers: .auto - LLM can research + ask first question
-        // - 1 answer: Force second question
-        // - 2+ answers: .auto - can ask Q3, give recommendations, or research more
-        let toolChoice: ToolChoice
-        switch collectedAnswers.count {
-        case 0:
-            // First call - allow research tools alongside question
-            toolChoice = .auto
-        case 1:
-            // After first answer - force second question
-            toolChoice = .function(name: CoachingToolSchemas.multipleChoiceToolName)
-        default:
-            // After 2+ answers - flexible: can ask more, recommend, or research
-            toolChoice = .auto
-        }
-
-        do {
-            // parallelToolCalls is enabled by default in LLMRequestBuilder
-            let message = try await llmService.sendMessageSingleTurn(
-                conversationId: convId,
-                toolChoice: toolChoice
+    /// Display a question tool call and suspend until the user answers.
+    /// Returns the tool output carrying the user's selection.
+    private func handleQuestionToolCall(
+        arguments: String,
+        questionsQueuedAfter: Int
+    ) async -> AnthropicToolOutput {
+        guard var question = CoachingToolSchemas.parseQuestion(from: arguments) else {
+            return AnthropicToolOutput(
+                content: encodeToJSON(ToolErrorResult(error: "Failed to parse question")),
+                isError: true
             )
-
-            // Handle all tool calls (may be multiple in parallel)
-            if let toolCalls = message.toolCalls, !toolCalls.isEmpty {
-                // Collect question tool calls and handle research tools immediately
-                var questionToolCalls: [(toolCallId: String, question: CoachingQuestion)] = []
-
-                for toolCall in toolCalls {
-                    let toolName = toolCall.function.name ?? ""
-                    let toolCallId = toolCall.id ?? UUID().uuidString
-
-                    if toolName == CoachingToolSchemas.multipleChoiceToolName {
-                        // Parse and queue the question
-                        if let question = CoachingToolSchemas.parseQuestion(from: toolCall.function.arguments) {
-                            questionToolCalls.append((toolCallId: toolCallId, question: question))
-                        } else {
-                            // Send error response for unparseable question
-                            llmService.addToolResult(conversationId: convId, toolCallId: toolCallId, result: "{\"error\": \"Failed to parse question\"}")
-                        }
-                    } else {
-                        // Handle background research tools immediately
-                        let result = await handleBackgroundTool(name: toolName, arguments: toolCall.function.arguments)
-                        llmService.addToolResult(conversationId: convId, toolCallId: toolCallId, result: result)
-                    }
-                }
-
-                // If we have question tool calls, queue them and show the first one
-                if !questionToolCalls.isEmpty {
-                    pendingQuestionToolCalls = questionToolCalls
-                    Logger.debug("Coaching: queued \(questionToolCalls.count) question(s)", category: .ai)
-                    showNextQueuedQuestion()
-                    return
-                }
-
-                // If we only handled background tools, continue for next response
-                try await processNextResponse()
-                return
-            }
-
-            // No tool call - this is the final recommendations
-            let recommendations = message.content ?? ""
-            await handleFinalRecommendations(recommendations)
-
-        } catch {
-            // Check for missing tool output error and try to recover
-            if let toolCallId = extractMissingToolCallId(from: error) {
-                Logger.warning("⚠️ Missing tool output for \(toolCallId), sending error response", category: .ai)
-                llmService.addToolResult(
-                    conversationId: convId,
-                    toolCallId: toolCallId,
-                    result: "{\"error\": \"Tool call was not processed. Please continue without this information.\"}"
-                )
-                // Retry after providing the error response
-                try await processNextResponse()
-                return
-            }
-
-            Logger.error("Failed to get coaching response: \(error)", category: .ai)
-            state = .error(error.localizedDescription)
-            throw error
         }
+
+        let isFollowUp = phase == .awaitingFollowUp
+        if isFollowUp {
+            // Ensure it's marked as follow-up type
+            question = CoachingQuestion(
+                questionText: question.questionText,
+                options: question.options,
+                questionType: .followUp
+            )
+            currentQuestion = question
+            state = .askingFollowUp(question: question)
+            Logger.debug("Coaching: showing follow-up question", category: .ai)
+        } else {
+            pendingQuestions.append(question)
+            currentSession?.questions = (currentSession?.questions ?? []) + [question]
+            questionIndex += 1
+            currentQuestion = question
+            state = .askingQuestion(
+                question: question,
+                index: questionIndex,
+                total: max(3, questionIndex + questionsQueuedAfter)
+            )
+            Logger.debug("Coaching: showing question \(questionIndex) (queued: \(questionsQueuedAfter) remaining)", category: .ai)
+        }
+
+        // Suspend until submitAnswer / submitFollowUpAnswer resumes us.
+        let selection: (value: Int, label: String)
+        do {
+            selection = try await withCheckedThrowingContinuation { continuation in
+                pendingAnswer = continuation
+            }
+        } catch {
+            // Session cancelled while waiting — the runner's per-turn
+            // cancellation check ends the loop right after this turn.
+            return AnthropicToolOutput(content: "Session cancelled before the user answered.", isError: true)
+        }
+
+        if isFollowUp {
+            return followUpAnswerOutput(value: selection.value, label: selection.label)
+        }
+
+        // Record answer
+        let answer = CoachingAnswer(
+            questionId: question.id,
+            selectedValue: selection.value,
+            selectedLabel: selection.label
+        )
+        collectedAnswers.append(answer)
+        currentSession?.answers = collectedAnswers
+
+        return AnthropicToolOutput(content: encodeToJSON(ToolAnswerResult(
+            selectedValue: answer.selectedValue,
+            selectedLabel: answer.selectedLabel
+        )))
     }
 
-    /// Extract tool call ID from "No tool output found" error message
-    private func extractMissingToolCallId(from error: Error) -> String? {
-        let errorString = String(describing: error)
-        // Pattern: "No tool output found for function call call_XXXXX"
-        guard errorString.contains("No tool output found for function call") else {
-            return nil
+    /// Map the follow-up selection to an action, apply its side effects, and
+    /// build the tool output that steers the model into task generation.
+    private func followUpAnswerOutput(value: Int, label: String) -> AnthropicToolOutput {
+        let action = mapFollowUpAnswer(value: value, label: label)
+
+        if action == .generateTasks, let session = currentSession {
+            state = .executingFollowUp(action: action)
+            session.recommendations += "\n\n---\n**Task List**: Your daily tasks were automatically generated from this coaching session. Check the Today view to see your prioritized task list."
+            sessionStore.update(session)
         }
 
-        // Extract the call_XXXXX identifier
-        let pattern = "call_[A-Za-z0-9]+"
-        guard let regex = try? NSRegularExpression(pattern: pattern),
-              let match = regex.firstMatch(in: errorString, range: NSRange(errorString.startIndex..., in: errorString)),
-              let range = Range(match.range, in: errorString) else {
-            return nil
-        }
+        // Either way the session ends with task generation (pre-runner behavior).
+        phase = .generatingTasks
+        Logger.info("📋 Requesting daily tasks from coach", category: .ai)
 
-        return String(errorString[range])
+        let answerJSON = encodeToJSON(ToolAnswerResult(selectedValue: value, selectedLabel: label))
+        return AnthropicToolOutput(content: answerJSON + "\n\n" + Self.taskGenerationPrompt)
     }
 
     /// Handle background research tool calls (knowledge cards, job descriptions, resumes)
@@ -388,199 +529,15 @@ final class CoachingService {
         }
     }
 
-    private func continueWithAnswer(_ answer: CoachingAnswer) async throws {
-        guard let convId = conversationId else { return }
-
-        state = .waitingForAnswer
-
-        // Send tool result for this answer
-        let toolResultString = encodeToJSON(ToolAnswerResult(
-            selectedValue: answer.selectedValue,
-            selectedLabel: answer.selectedLabel
-        ))
-
-        // Get the tool call ID for this question (it was just answered, so it's the one we just showed)
-        // The current question's tool call ID was removed from the queue when we showed it
-        // We stored it separately when showing the question
-        if let toolCallId = currentQuestionToolCallId {
-            llmService.addToolResult(
-                conversationId: convId,
-                toolCallId: toolCallId,
-                result: toolResultString
-            )
-            currentQuestionToolCallId = nil
-        }
-
-        // Check if there are more queued questions from parallel tool calls
-        if !pendingQuestionToolCalls.isEmpty {
-            showNextQueuedQuestion()
-            return
-        }
-
-        // No more queued questions - get next response from LLM
-        try await processNextResponse()
-    }
-
-    /// Show the next question from the queue
-    private func showNextQueuedQuestion() {
-        guard !pendingQuestionToolCalls.isEmpty else { return }
-
-        let (toolCallId, question) = pendingQuestionToolCalls.removeFirst()
-        currentQuestionToolCallId = toolCallId
-
-        // Store question
-        pendingQuestions.append(question)
-        currentSession?.questions = (currentSession?.questions ?? []) + [question]
-
-        // Update UI state
-        questionIndex += 1
-        currentQuestion = question
-        state = .askingQuestion(question: question, index: questionIndex, total: max(3, questionIndex + pendingQuestionToolCalls.count))
-
-        Logger.debug("Coaching: showing question \(questionIndex) (queued: \(pendingQuestionToolCalls.count) remaining)", category: .ai)
-    }
-
-    private func handleFinalRecommendations(_ recommendations: String) async {
+    private func handleFinalRecommendations(_ recommendations: String) {
         guard let session = currentSession else { return }
 
-        // Store recommendations (tasks will be generated via forced tool call at end of session)
+        // Store recommendations (tasks are generated via the forced
+        // update_daily_tasks completion call at the end of the session)
         session.recommendations = recommendations
         session.questionCount = collectedAnswers.count
 
-        // Show recommendations and request follow-up offer
         state = .showingRecommendations(recommendations: recommendations)
-
-        // Request a contextual follow-up offer from the model
-        await requestFollowUpOffer()
-    }
-
-    /// Request the model to offer a contextual follow-up action
-    private func requestFollowUpOffer() async {
-        guard let convId = conversationId else {
-            // No conversation - still generate tasks before completing
-            await generateDailyTasksViaToolCall()
-            return
-        }
-
-        // Add a user message prompting for follow-up
-        llmService.addUserMessage(
-            conversationId: convId,
-            message: "Based on our conversation, what would be most helpful for me to do next? Offer me a contextual follow-up action using the coaching_multiple_choice tool."
-        )
-
-        do {
-            // Use .auto to allow research tools alongside follow-up question
-            let message = try await llmService.sendMessageSingleTurn(
-                conversationId: convId,
-                toolChoice: .auto
-            )
-
-            // Handle any tool calls (research tools + question tool)
-            if let toolCalls = message.toolCalls, !toolCalls.isEmpty {
-                var questionToolCallId: String?
-                var questionToolArgs: String?
-
-                // Process background tools first
-                for toolCall in toolCalls {
-                    let toolName = toolCall.function.name ?? ""
-                    let toolCallId = toolCall.id ?? UUID().uuidString
-
-                    if toolName == CoachingToolSchemas.multipleChoiceToolName {
-                        questionToolCallId = toolCallId
-                        questionToolArgs = toolCall.function.arguments
-                    } else {
-                        // Handle research tools
-                        let result = await handleBackgroundTool(name: toolName, arguments: toolCall.function.arguments)
-                        llmService.addToolResult(conversationId: convId, toolCallId: toolCallId, result: result)
-                    }
-                }
-
-                // Now handle the follow-up question if present
-                if let toolCallId = questionToolCallId, let argsString = questionToolArgs {
-                    if var question = CoachingToolSchemas.parseQuestion(from: argsString) {
-                        // Ensure it's marked as follow-up type
-                        question = CoachingQuestion(
-                            questionText: question.questionText,
-                            options: question.options,
-                            questionType: .followUp
-                        )
-
-                        currentQuestionToolCallId = toolCallId
-                        currentQuestion = question
-                        state = .askingFollowUp(question: question)
-
-                        Logger.debug("Coaching: showing follow-up question", category: .ai)
-                        return
-                    }
-                }
-            }
-
-            // No follow-up question offered - generate tasks and complete
-            await generateDailyTasksViaToolCall()
-
-        } catch {
-            Logger.warning("Failed to get follow-up offer: \(error)", category: .ai)
-            // Not critical - still generate tasks before completing
-            await generateDailyTasksViaToolCall()
-        }
-    }
-
-    /// Complete the coaching session
-    private func completeSession() async {
-        guard let session = currentSession else { return }
-
-        session.completedAt = Date()
-        sessionStore.add(session)
-
-        // Clean up conversation
-        if let convId = conversationId {
-            llmService.endConversation(convId)
-        }
-        conversationId = nil
-
-        state = .complete(sessionId: session.id)
-        Logger.info("Coaching session completed with \(collectedAnswers.count) questions", category: .ai)
-    }
-
-    /// Handle follow-up answer selection
-    func submitFollowUpAnswer(value: Int, label: String) async throws {
-        guard let question = currentQuestion,
-              question.questionType == .followUp,
-              let convId = conversationId,
-              let toolCallId = currentQuestionToolCallId else {
-            Logger.warning("No follow-up question to answer or missing context", category: .ai)
-            return
-        }
-
-        currentQuestion = nil
-        currentQuestionToolCallId = nil
-
-        // Send tool result for the follow-up question
-        let followUpResultString = encodeToJSON(ToolAnswerResult(selectedValue: value, selectedLabel: label))
-        llmService.addToolResult(
-            conversationId: convId,
-            toolCallId: toolCallId,
-            result: followUpResultString
-        )
-
-        // Map the answer to an action
-        let action = mapFollowUpAnswer(value: value, label: label)
-
-        if action == .done {
-            // User chose to end session - still generate tasks first
-            await generateDailyTasksViaToolCall()
-            return
-        }
-
-        // Execute the follow-up action
-        state = .executingFollowUp(action: action)
-
-        do {
-            try await executeFollowUpAction(action)
-        } catch {
-            Logger.error("Failed to execute follow-up action: \(error)", category: .ai)
-            state = .error("Couldn't complete the follow-up action — \(error.localizedDescription)")
-        }
     }
 
     /// Map follow-up answer to action (based on value or label matching)
@@ -597,81 +554,15 @@ final class CoachingService {
         return value <= 2 ? .generateTasks : .done
     }
 
-    /// Execute the selected follow-up action
-    private func executeFollowUpAction(_ action: CoachingFollowUpAction) async throws {
+    /// Complete the coaching session
+    private func completeSession() {
         guard let session = currentSession else { return }
 
-        let actionResult: String
+        session.completedAt = Date()
+        sessionStore.add(session)
 
-        switch action {
-        case .generateTasks:
-            actionResult = "\n\n---\n**Task List**: Your daily tasks were automatically generated from this coaching session. Check the Today view to see your prioritized task list."
-
-        case .done:
-            actionResult = ""
-        }
-
-        if !actionResult.isEmpty {
-            session.recommendations += actionResult
-            sessionStore.update(session)
-        }
-
-        // Force task generation before completing
-        await generateDailyTasksViaToolCall()
-    }
-
-    /// Force the LLM to generate daily tasks via tool call
-    private func generateDailyTasksViaToolCall() async {
-        guard let convId = conversationId else {
-            await completeSession()
-            return
-        }
-
-        Logger.info("📋 Requesting daily tasks from coach", category: .ai)
-
-        // Add instruction to generate tasks
-        llmService.addUserMessage(
-            conversationId: convId,
-            message: "Now generate my daily task list based on our coaching conversation. Use the update_daily_tasks tool to create 3-6 specific, actionable tasks."
-        )
-
-        do {
-            // Force the update_daily_tasks tool
-            let message = try await llmService.sendMessageSingleTurn(
-                conversationId: convId,
-                toolChoice: .function(name: CoachingToolSchemas.updateDailyTasksToolName)
-            )
-
-            // Handle the tool call
-            if let toolCalls = message.toolCalls, !toolCalls.isEmpty {
-                for toolCall in toolCalls {
-                    let toolName = toolCall.function.name ?? ""
-                    let toolCallId = toolCall.id ?? UUID().uuidString
-
-                    if toolName == CoachingToolSchemas.updateDailyTasksToolName {
-                        _ = taskGenerator.handleUpdateDailyTasksToolCall(
-                            arguments: toolCall.function.arguments,
-                            session: currentSession
-                        )
-                        // Send acknowledgment
-                        llmService.addToolResult(
-                            conversationId: convId,
-                            toolCallId: toolCallId,
-                            result: "{\"success\": true, \"message\": \"Tasks saved successfully\"}"
-                        )
-                    }
-                }
-            }
-
-            Logger.info("✅ Daily tasks generated from coaching session", category: .ai)
-
-        } catch {
-            Logger.error("Failed to generate daily tasks: \(error)", category: .ai)
-            state = .error("Couldn't generate today's tasks — \(error.localizedDescription)")
-            return
-        }
-
-        await completeSession()
+        state = .complete(sessionId: session.id)
+        Logger.info("Coaching session completed with \(collectedAnswers.count) questions", category: .ai)
     }
 
     // MARK: - Task Regeneration
@@ -687,7 +578,10 @@ final class CoachingService {
         }
 
         guard let modelId = coachingModelId else {
-            throw DiscoveryLLMError.modelNotConfigured
+            throw ModelConfigurationError.modelNotConfigured(
+                settingKey: DiscoveryAgentService.anthropicModelSettingKey,
+                operationName: "Task Regeneration"
+            )
         }
 
         Logger.info("🔄 Regenerating \(category.displayName) tasks with feedback", category: .ai)
@@ -700,19 +594,17 @@ final class CoachingService {
             activitySummary: session.activitySummary?.textSummary() ?? "No activity data available"
         )
 
-        // Execute structured request
-        let response: TaskRegenerationResponse = try await llmService.executeStructured(
-            prompt: prompt,
-            systemPrompt: """
+        // Execute structured request against the coaching model
+        let response: TaskRegenerationResponse = try await llmFacade.executeStructuredWithAnthropicCaching(
+            systemContent: [AnthropicSystemBlock(text: """
                 You are a job search coach helping regenerate daily tasks based on user feedback.
                 Generate practical, actionable tasks that address the user's concerns.
                 Only generate tasks for the specified category: \(category.displayName).
-                """,
-            as: TaskRegenerationResponse.self,
-            backend: .openRouter,
+                """)],
+            userPrompt: prompt,
             modelId: modelId,
-            schema: CoachingToolSchemas.buildTaskRegenerationSchema(),
-            schemaName: "task_regeneration"
+            responseType: TaskRegenerationResponse.self,
+            schema: CoachingToolSchemas.buildTaskRegenerationSchema()
         )
 
         // Clear existing tasks for this category and add new ones

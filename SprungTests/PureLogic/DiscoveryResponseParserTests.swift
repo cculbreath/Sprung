@@ -4,7 +4,9 @@
 //
 //  Pure-logic coverage for DiscoveryResponseParser: JSON extraction (fenced
 //  blocks, raw braces, raw brackets) exercised through the typed parse* methods,
-//  plus error surfacing for unparseable input. Snake_case wire keys are checked.
+//  plus error surfacing for unparseable input. Wire keys are checked: camelCase
+//  for the daily-task contract we control; snake_case where the source/event
+//  prompt templates pin it.
 //
 
 import XCTest
@@ -18,12 +20,12 @@ final class DiscoveryResponseParserTests: XCTestCase {
 
     func testParseTasksRawJSON() throws {
         let json = #"""
-        {"tasks":[{"task_type":"apply","title":"Apply to Acme","description":"do it","priority":1,"related_id":null,"estimated_minutes":30}]}
+        {"tasks":[{"taskType":"apply","title":"Apply to Acme","description":"do it","priority":1,"relatedId":null,"estimatedMinutes":30}]}
         """#
         let result = try parser.parseTasks(json)
         XCTAssertEqual(result.tasks.count, 1)
         XCTAssertEqual(result.tasks.first?.title, "Apply to Acme")
-        XCTAssertEqual(result.tasks.first?.taskType, "apply", "snake_case task_type must map to taskType")
+        XCTAssertEqual(result.tasks.first?.taskType, "apply", "camelCase taskType must decode")
         XCTAssertEqual(result.tasks.first?.priority, 1)
         XCTAssertEqual(result.tasks.first?.estimatedMinutes, 30)
     }
@@ -44,7 +46,7 @@ final class DiscoveryResponseParserTests: XCTestCase {
     func testParseTasksUsesFirstBraceToLastBrace() throws {
         // extractJSON grabs firstIndex("{")...lastIndex("}"); trailing prose with no
         // braces is excluded, so this parses cleanly.
-        let response = "prefix {\"tasks\":[{\"task_type\":\"gather\",\"title\":\"T\",\"priority\":2}]} done"
+        let response = "prefix {\"tasks\":[{\"taskType\":\"gather\",\"title\":\"T\",\"priority\":2}]} done"
         let result = try parser.parseTasks(response)
         XCTAssertEqual(result.tasks.first?.taskType, "gather")
         XCTAssertEqual(result.tasks.first?.priority, 2)

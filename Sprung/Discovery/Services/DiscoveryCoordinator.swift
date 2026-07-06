@@ -215,7 +215,7 @@ final class DiscoveryCoordinator {
         // Create coaching service
         let coaching = CoachingService(
             modelContext: modelContext,
-            llmService: llmService,
+            llmFacade: llmService.llmFacade,
             activityReportService: activityService,
             sessionStore: sessionStore,
             dailyTaskStore: dailyTaskStore,

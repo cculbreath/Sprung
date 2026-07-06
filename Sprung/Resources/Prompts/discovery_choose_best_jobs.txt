@@ -24,16 +24,16 @@ Return your analysis as JSON:
 {
     "selections": [
         {
-            "job_id": "The UUID of the selected job",
+            "jobId": "The UUID of the selected job",
             "company": "Company name",
             "role": "Job title",
-            "match_score": 0.95,
+            "matchScore": 0.95,
             "reasoning": "2-3 sentence explanation of why this is a strong match"
         }
     ],
-    "overall_analysis": "A paragraph summarizing the selection strategy and common themes among the top picks",
+    "overallAnalysis": "A paragraph summarizing the selection strategy and common themes among the top picks",
     "considerations": ["Any caveats, things to verify, or preparation tips for these applications"]
 }
 
-Order selections from strongest to weakest match (highest match_score first).
+Order selections from strongest to weakest match (highest matchScore first).
 Be specific in your reasoning - reference actual skills, experiences, or preferences from the candidate's profile.

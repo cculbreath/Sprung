@@ -51,7 +51,7 @@ enum LLMError: LocalizedError {
 ///   public entry point for LLM operations. Do not instantiate directly outside
 ///   of `LLMFacadeFactory`.
 @Observable
-final class OpenRouterServiceBackend: LLMConversationService {
+final class OpenRouterServiceBackend {
     // Dependencies
     private var appState: AppState?
     private var enabledLLMStore: EnabledLLMStore?
@@ -405,29 +405,4 @@ final class OpenRouterServiceBackend: LLMConversationService {
         }
     }
 
-    // MARK: - Tool Calling Support
-
-    /// Execute a request with tool calling parameters.
-    /// Returns the raw LLMResponse (ChatCompletionObject) for agent workflows.
-    func executeToolRequest(
-        parameters: ChatCompletionParameters
-    ) async throws -> LLMResponse {
-        try await ensureInitialized()
-        let response = try await requestExecutor.execute(parameters: parameters)
-        let finishReason = response.choices?.first?.finishReason
-        let reasonString: String
-        switch finishReason {
-        case .int(let val):
-            reasonString = String(val)
-        case .string(let val):
-            reasonString = val
-        case .none:
-            reasonString = "unknown"
-        }
-        // Extract tool names from response for logging
-        let toolNames = response.choices?.first?.message?.toolCalls?.compactMap { $0.function.name } ?? []
-        let toolInfo = toolNames.isEmpty ? "" : " tools: [\(toolNames.joined(separator: ", "))]"
-        Logger.info("🔧 Tool request completed, finish reason: \(reasonString)\(toolInfo)")
-        return response
-    }
 }

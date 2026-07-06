@@ -4,11 +4,12 @@
 //
 //  Actor-based tool executor for Discovery module.
 //  Provides tool schemas and execution for LLM agent interactions.
-//  Uses ChatCompletionParameters.Tool pattern per SEARCHOPS_AMENDMENT.
+//  Tool input/result keys we control are camelCase. The final-response
+//  contracts instructed below use whatever keys the corresponding prompt
+//  template + DTO decoder pin (see DiscoveryAgentTypes.swift).
 //
 
 import Foundation
-import SwiftOpenAI
 
 // MARK: - Discovery Tool Executor
 
@@ -25,11 +26,6 @@ actor DiscoveryToolExecutor {
     }
 
     // MARK: - Public API
-
-    /// Get all tool schemas for LLM (nonisolated - schemas are static data)
-    nonisolated func getToolSchemas() -> [ChatCompletionParameters.Tool] {
-        return DiscoveryToolSchemas.allTools
-    }
 
     /// Execute a tool by name with JSON arguments
     /// - Returns: JSON string result
@@ -103,29 +99,29 @@ actor DiscoveryToolExecutor {
     // MARK: - Tool Implementations
 
     private func executeGenerateDailyTasks(args: [String: Any]) async throws -> String {
-        let focusArea = stringArg(args, "focus_area", default: "balanced")
-        let maxTasks = intArg(args, "max_tasks", default: 8)
+        let focusArea = stringArg(args, "focusArea", default: "balanced")
+        let maxTasks = intArg(args, "maxTasks", default: 8)
 
         let context = await contextProvider.getDailyTaskContext()
 
         return buildResult([
             "status": "context_provided",
-            "focus_area": focusArea,
-            "max_tasks": maxTasks,
+            "focusArea": focusArea,
+            "maxTasks": maxTasks,
             "context": context,
             "instruction": """
                 Based on the context provided, generate \(maxTasks) prioritized daily tasks.
                 Focus area: \(focusArea).
-                Return tasks as a JSON array with: task_type, title, description, priority (0-2), estimated_minutes.
+                Return tasks as a JSON array with: taskType, title, description, priority (0-2), estimatedMinutes.
                 Task types: gather, customize, apply, follow_up, networking, event_prep, debrief.
                 """
         ], rawJsonKeys: ["context"])
     }
 
     private func executePrepareForEvent(args: [String: Any]) async throws -> String {
-        let eventId = stringArg(args, "event_id")
-        let focusCompanies = stringArrayArg(args, "focus_companies")
-        let personalGoals = args["personal_goals"] as? String
+        let eventId = stringArg(args, "eventId")
+        let focusCompanies = stringArrayArg(args, "focusCompanies")
+        let personalGoals = args["personalGoals"] as? String
 
         let eventContext = await contextProvider.getEventContext(eventId: eventId)
         let preferences = await contextProvider.getPreferencesContext()
@@ -133,11 +129,11 @@ actor DiscoveryToolExecutor {
 
         return buildResult([
             "status": "context_provided",
-            "event_id": eventId,
+            "eventId": eventId,
             "event": eventContext,
-            "focus_companies": focusCompanies,
-            "personal_goals": personalGoals ?? "Make meaningful connections",
-            "existing_contacts": existingContacts,
+            "focusCompanies": focusCompanies,
+            "personalGoals": personalGoals ?? "Make meaningful connections",
+            "existingContacts": existingContacts,
             "preferences": preferences,
             "instruction": """
                 Generate event preparation materials.
@@ -149,11 +145,11 @@ actor DiscoveryToolExecutor {
                 - conversation_starters: Array of conversation starters
                 - things_to_avoid: Array of topics/behaviors to avoid
                 """
-        ], rawJsonKeys: ["event", "existing_contacts", "preferences"])
+        ], rawJsonKeys: ["event", "existingContacts", "preferences"])
     }
 
     private func executeGenerateWeeklyReflection(args: [String: Any]) async throws -> String {
-        let includeMetrics = boolArg(args, "include_metrics", default: true)
+        let includeMetrics = boolArg(args, "includeMetrics", default: true)
         let focus = stringArg(args, "focus", default: "balanced")
 
         let weeklySummary = await contextProvider.getWeeklySummaryContext()
@@ -161,10 +157,10 @@ actor DiscoveryToolExecutor {
 
         return buildResult([
             "status": "context_provided",
-            "include_metrics": includeMetrics,
+            "includeMetrics": includeMetrics,
             "focus": focus,
-            "weekly_summary": weeklySummary,
-            "goal_progress": goalProgress,
+            "weeklySummary": weeklySummary,
+            "goalProgress": goalProgress,
             "instruction": """
                 Generate a weekly reflection. Focus: \(focus). Include metrics: \(includeMetrics).
                 Return JSON with:
@@ -174,7 +170,7 @@ actor DiscoveryToolExecutor {
                 - next_week_focus: Key focus for next week
                 - encouragement: Personalized encouragement message
                 """
-        ], rawJsonKeys: ["weekly_summary", "goal_progress"])
+        ], rawJsonKeys: ["weeklySummary", "goalProgress"])
     }
 
     // MARK: - Helpers

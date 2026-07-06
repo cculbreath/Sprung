@@ -20,7 +20,7 @@ struct SetupWizardView: View {
     @AppStorage("onboardingAnthropicModelId") private var interviewModelId: String = ""
     @AppStorage("onboardingDocAnalysisModelId") private var docAnalysisModelId: String = ""
     @AppStorage("onboardingGitIngestModelId") private var gitIngestModelId: String = ""
-    @AppStorage("discoveryCoachingModelId") private var coachingModelId: String = ""
+    @AppStorage("discoveryAnthropicModelId") private var discoveryAnthropicModelId: String = ""
 
     @State private var openRouterApiKey: String = APIKeyStore.get(.openRouter) ?? ""
     @State private var openAiApiKey: String = APIKeyStore.get(.openAI) ?? ""
@@ -517,33 +517,20 @@ private extension SetupWizardView {
 
     var coachingModelPicker: some View {
         VStack(alignment: .leading, spacing: 8) {
-            if enabledLLMStore.enabledModels.isEmpty {
-                if let fetchError = enabledLLMStore.fetchError {
-                    Text("Couldn't load models — \(fetchError)")
-                        .font(.footnote)
-                        .foregroundStyle(.red)
-                } else {
-                    Text("Enable OpenRouter models to choose a coaching model.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                }
+            if filteredAnthropicModels.isEmpty {
+                Text("Add an Anthropic API key and load models to choose a Discovery agent model.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
             } else {
-                Picker("Daily Coaching Model", selection: $coachingModelId) {
-                    ForEach(enabledLLMStore.enabledModels.sorted(by: { $0.displayName < $1.displayName }), id: \.modelId) { model in
-                        Text(model.displayName.isEmpty ? model.modelId : model.displayName)
-                            .tag(model.modelId)
+                Picker("Discovery Agent Model", selection: $discoveryAnthropicModelId) {
+                    Text("Select a model…").tag("")
+                    ForEach(filteredAnthropicModels, id: \.id) { model in
+                        Text(model.displayName).tag(model.id)
                     }
                 }
                 .pickerStyle(.menu)
-                .onAppear {
-                    // Auto-select first model if none selected
-                    if coachingModelId.isEmpty,
-                       let first = enabledLLMStore.enabledModels.sorted(by: { $0.displayName < $1.displayName }).first {
-                        coachingModelId = first.modelId
-                    }
-                }
             }
-            Text("Used for daily job search coaching in Discovery. Uses OpenRouter.")
+            Text("Powers daily coaching, task generation, event prep, and reflections in Discovery. Uses Anthropic.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
         }

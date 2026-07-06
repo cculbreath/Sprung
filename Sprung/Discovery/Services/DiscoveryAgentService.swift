@@ -2,9 +2,12 @@
 //  DiscoveryAgentService.swift
 //  Sprung
 //
-//  Actor-based agent service for Discovery LLM interactions.
-//  Uses LLMFacade for all LLM operations including web search.
-//  Per SEARCHOPS_AMENDMENT: Uses local context management, NOT server-managed.
+//  Agent service for Discovery LLM interactions.
+//  Tool-loop flows (daily tasks, event prep, weekly reflection) run on the
+//  shared AnthropicToolLoopRunner against the user-selected Discovery
+//  Anthropic model; single-shot flows (debrief outcomes, choose-best-jobs)
+//  are plain Anthropic Messages calls. Web-search discovery (job sources,
+//  networking events) stays on LLMFacade.executeWithWebSearch (OpenAI).
 //
 
 import Foundation
@@ -12,7 +15,8 @@ import SwiftOpenAI
 
 // MARK: - Discovery Agent Service
 
-actor DiscoveryAgentService {
+@MainActor
+final class DiscoveryAgentService {
 
     // MARK: - Dependencies
 
@@ -21,9 +25,11 @@ actor DiscoveryAgentService {
     private let settingsStore: DiscoverySettingsStore
     private let parser = DiscoveryResponseParser()
 
-    // MARK: - Configuration
+    // MARK: - Model Configuration
 
-    private let maxIterations = 10
+    /// UserDefaults key for the user-selected Anthropic model powering all
+    /// Discovery agent + coaching LLM flows (Settings > Models > Discovery Agent).
+    static let anthropicModelSettingKey = "discoveryAnthropicModelId"
 
     // MARK: - Initialization
 
@@ -37,18 +43,20 @@ actor DiscoveryAgentService {
         self.settingsStore = settingsStore
     }
 
-    // MARK: - Model Configuration
+    /// The user-selected Anthropic model for Discovery agent flows.
+    /// Throws `ModelConfigurationError` when unset — never substitutes a default.
+    private func anthropicModelId(operation: String) throws -> String {
+        try ModelConfigResolver.resolve(key: Self.anthropicModelSettingKey, operation: operation)
+    }
 
-    private var modelId: String {
-        get async {
-            await MainActor.run { settingsStore.current().llmModelId }
-        }
+    // MARK: - Web-Search Model Configuration (OpenAI Responses path)
+
+    private var webSearchModelId: String {
+        settingsStore.current().llmModelId
     }
 
     private var reasoningEffort: String {
-        get async {
-            await MainActor.run { settingsStore.current().reasoningEffort }
-        }
+        settingsStore.current().reasoningEffort
     }
 
     // MARK: - Prompt Loading
@@ -62,85 +70,41 @@ actor DiscoveryAgentService {
         return content
     }
 
-    // MARK: - Agent Loop (via LLMFacade)
+    // MARK: - Agent Loop (shared AnthropicToolLoopRunner)
 
-    /// Run an agent loop with tool execution.
-    /// - Parameters:
-    ///   - systemPrompt: System prompt for the agent
-    ///   - userMessage: User message to process
-    ///   - enableTools: Whether to enable tool calling
-    ///   - backend: LLM backend to use (.openAI for discovery model, .openRouter for OpenRouter models)
-    func runAgent(
+    /// Run a tool-enabled agent loop and return the final response text the
+    /// agent submitted via the `submit_final_response` completion tool.
+    private func runAgent(
         systemPrompt: String,
         userMessage: String,
-        enableTools: Bool = true,
-        backend: LLMFacade.Backend = .openAI,
-        modelOverride: String? = nil
+        operation: String
     ) async throws -> String {
-        let defaultModel = await modelId
-        let model = modelOverride ?? defaultModel
-
-        var messages: [ChatCompletionParameters.Message] = [
-            .init(role: .system, content: .text(systemPrompt)),
-            .init(role: .user, content: .text(userMessage))
-        ]
-
-        let tools = enableTools ? toolExecutor.getToolSchemas() : []
-
-        var iterations = 0
-        while iterations < maxIterations {
-            iterations += 1
-
-            let response = try await llmFacade.executeWithTools(
-                messages: messages,
-                tools: tools,
-                toolChoice: enableTools ? .auto : nil,
-                modelId: model,
-                backend: backend
-            )
-
-            guard let choices = response.choices,
-                  let choice = choices.first,
-                  let message = choice.message else {
-                throw DiscoveryAgentError.noResponse
-            }
-
-            if let toolCalls = message.toolCalls, !toolCalls.isEmpty {
-                let assistantContent: ChatCompletionParameters.Message.ContentType =
-                    message.content.map { .text($0) } ?? .text("")
-                messages.append(ChatCompletionParameters.Message(
-                    role: .assistant,
-                    content: assistantContent,
-                    toolCalls: message.toolCalls
-                ))
-
-                for toolCall in toolCalls {
-                    let toolCallId = toolCall.id ?? UUID().uuidString
-                    let toolName = toolCall.function.name ?? "unknown"
-                    Logger.debug("Executing tool: \(toolName)", category: .ai)
-
-                    let result = await toolExecutor.execute(
-                        toolName: toolName,
-                        arguments: toolCall.function.arguments
-                    )
-
-                    messages.append(ChatCompletionParameters.Message(
-                        role: .tool,
-                        content: .text(result),
-                        toolCallID: toolCallId
-                    ))
-                }
-                continue
-            }
-
-            Logger.info("Agent completed with response", category: .ai)
-            return message.content ?? ""
-        }
-
-        throw DiscoveryAgentError.toolLoopExceeded
+        let modelId = try anthropicModelId(operation: operation)
+        let delegate = DiscoveryAgentLoop(
+            llmFacade: llmFacade,
+            toolExecutor: toolExecutor,
+            modelId: modelId,
+            systemPrompt: systemPrompt,
+            userMessage: userMessage
+        )
+        return try await AnthropicToolLoopRunner(delegate: delegate).run()
     }
 
-    // MARK: - OpenAI Responses API (via LLMFacade)
+    /// Run a single-shot (no tools) Anthropic request and return the response text.
+    private func runSingleShot(
+        systemPrompt: String,
+        userMessage: String,
+        operation: String
+    ) async throws -> String {
+        let modelId = try anthropicModelId(operation: operation)
+        return try await llmFacade.executeTextWithAnthropicCaching(
+            systemContent: [AnthropicSystemBlock(text: systemPrompt)],
+            userPrompt: userMessage,
+            modelId: modelId
+        )
+    }
+
+    // MARK: - OpenAI Responses API (web search, via LLMFacade)
 
     private func runOpenAIRequest(
         systemPrompt: String,
@@ -153,7 +117,6 @@ actor DiscoveryAgentService {
         reasoningCallback: (@MainActor @Sendable (String) async -> Void)? = nil
     ) async throws -> String {
         do {
-            // LLMFacade is @MainActor - Swift handles the actor hop automatically
             return try await llmFacade.executeWithWebSearch(
                 systemPrompt: systemPrompt,
                 userMessage: userMessage,
@@ -180,7 +143,8 @@ actor DiscoveryAgentService {
         let systemPrompt = try loadPromptTemplate(named: "discovery_generate_daily_tasks")
         let response = try await runAgent(
             systemPrompt: systemPrompt,
-            userMessage: "Generate today's job search tasks. Focus area: \(focusArea)"
+            userMessage: "Generate today's job search tasks. Focus area: \(focusArea)",
+            operation: "Daily Task Generation"
         )
         return try parser.parseTasks(response)
     }
@@ -201,8 +165,8 @@ actor DiscoveryAgentService {
         let response = try await runOpenAIRequest(
             systemPrompt: systemPrompt,
             userMessage: userMessage,
-            modelId: await modelId,
-            reasoningEffort: await reasoningEffort,
+            modelId: webSearchModelId,
+            reasoningEffort: reasoningEffort,
             webSearchLocation: location,
             statusCallback: statusCallback
         )
@@ -227,8 +191,8 @@ actor DiscoveryAgentService {
         let response = try await runOpenAIRequest(
             systemPrompt: systemPrompt,
             userMessage: userMessage,
-            modelId: await modelId,
-            reasoningEffort: await reasoningEffort,
+            modelId: webSearchModelId,
+            reasoningEffort: reasoningEffort,
             webSearchLocation: location,
             searchContext: "networking events",
             statusCallback: statusCallback,
@@ -246,7 +210,11 @@ actor DiscoveryAgentService {
         if let goals = goals {
             userMessage += ". My goals: \(goals)"
         }
-        let response = try await runAgent(systemPrompt: systemPrompt, userMessage: userMessage)
+        let response = try await runAgent(
+            systemPrompt: systemPrompt,
+            userMessage: userMessage,
+            operation: "Event Preparation"
+        )
         return try parser.parsePrep(response)
     }
 
@@ -270,10 +238,10 @@ actor DiscoveryAgentService {
             contextParts.append("Additional notes: \(notes)")
         }
 
-        let response = try await runAgent(
+        let response = try await runSingleShot(
             systemPrompt: systemPrompt,
             userMessage: contextParts.joined(separator: "\n\n"),
-            enableTools: false
+            operation: "Event Debrief"
         )
         return try parser.parseDebriefOutcomes(response)
     }
@@ -282,7 +250,8 @@ actor DiscoveryAgentService {
         let systemPrompt = try loadPromptTemplate(named: "discovery_generate_weekly_reflection")
         return try await runAgent(
             systemPrompt: systemPrompt,
-            userMessage: "Generate my weekly job search reflection"
+            userMessage: "Generate my weekly job search reflection",
+            operation: "Weekly Reflection"
         )
     }
 
@@ -290,8 +259,7 @@ actor DiscoveryAgentService {
         jobs: [(id: UUID, company: String, role: String, description: String)],
         knowledgeContext: String,
         dossierContext: String,
-        count: Int = 5,
-        modelOverride: String? = nil
+        count: Int = 5
     ) async throws -> JobSelectionsResult {
         let systemPrompt = try loadPromptTemplate(named: "discovery_choose_best_jobs")
 
@@ -311,13 +279,126 @@ actor DiscoveryAgentService {
             """
         }
 
-        let response = try await runAgent(
+        let response = try await runSingleShot(
             systemPrompt: systemPrompt,
             userMessage: userMessage,
-            enableTools: false,
-            backend: .openRouter,
-            modelOverride: modelOverride
+            operation: "Job Selection"
         )
         return try parser.parseJobSelections(response)
+    }
+}
+
+// MARK: - Agent Loop Delegate
+
+/// One-shot delegate driving a Discovery agent task on the shared
+/// `AnthropicToolLoopRunner`. Context tools (executed by
+/// `DiscoveryToolExecutor`) feed the model; the loop terminates when the
+/// model submits its final response through the `submit_final_response`
+/// completion tool.
+@MainActor
+private final class DiscoveryAgentLoop: AnthropicToolLoopDelegate {
+    private let llmFacade: LLMFacade
+    private let toolExecutor: DiscoveryToolExecutor
+    private let modelId: String
+    private let systemPrompt: String
+    private let userMessage: String
+
+    /// Set after a no-tool turn so the next turn forces the completion tool —
+    /// pre-runner behavior treated a plain text turn as the final answer, so a
+    /// model that answers in prose is steered into resubmitting via the tool.
+    private var forceCompletionNextTurn = false
+
+    let maxTurns = 10
+    private let maxResponseTokens = 8192
+
+    init(
+        llmFacade: LLMFacade,
+        toolExecutor: DiscoveryToolExecutor,
+        modelId: String,
+        systemPrompt: String,
+        userMessage: String
+    ) {
+        self.llmFacade = llmFacade
+        self.toolExecutor = toolExecutor
+        self.modelId = modelId
+        self.systemPrompt = systemPrompt
+        self.userMessage = userMessage
+    }
+
+    var completionToolName: String { DiscoveryToolSchemas.finalResponseToolName }
+
+    func maxTurnsError() -> Error { DiscoveryAgentError.toolLoopExceeded }
+
+    func initialMessages() -> [AnthropicMessage] {
+        [.user(userMessage)]
+    }
+
+    func runModelTurn(messages: [AnthropicMessage]) async throws -> AnthropicTurnResult {
+        let toolChoice: AnthropicToolChoice = forceCompletionNextTurn
+            ? .tool(name: completionToolName)
+            : .auto
+        forceCompletionNextTurn = false
+
+        let parameters = AnthropicMessageParameter(
+            model: modelId,
+            messages: messages,
+            system: .blocks([AnthropicSystemBlock(text: fullSystemPrompt)]),
+            maxTokens: maxResponseTokens,
+            stream: false,
+            tools: DiscoveryToolSchemas.allTools,
+            toolChoice: toolChoice
+        )
+        let response = try await llmFacade.anthropicMessages(parameters: parameters)
+        let usage = response.usage
+        Logger.debug(
+            "🧭 DiscoveryAgent usage (\(modelId)): input=\(usage.inputTokens) output=\(usage.outputTokens)",
+            category: .ai
+        )
+        return AnthropicTurnResult(response: response)
+    }
+
+    func executeTools(_ toolCalls: [AnthropicToolUseResponseBlock]) async -> [String: AnthropicToolOutput] {
+        var outputs: [String: AnthropicToolOutput] = [:]
+        for call in toolCalls {
+            Logger.debug("Executing Discovery tool: \(call.name)", category: .ai)
+            let result = await toolExecutor.execute(toolName: call.name, arguments: call.input.jsonString)
+            outputs[call.id] = AnthropicToolOutput(content: result)
+        }
+        return outputs
+    }
+
+    func parseCompletion(_ call: AnthropicToolUseResponseBlock) async throws -> String {
+        guard let response = call.input["response"]?.value as? String,
+              !response.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw DiscoveryAgentError.invalidResponse
+        }
+        Logger.info("Discovery agent completed with response", category: .ai)
+        return response
+    }
+
+    func handleNoTool(turnCount: Int, consecutiveNoToolTurns: Int) -> AnthropicNoToolDecision {
+        // A plain text turn was the terminal shape before the runner migration;
+        // steer the model into resubmitting that answer through the completion
+        // tool (forced on the next turn, so this converges in one round trip).
+        forceCompletionNextTurn = true
+        return .nudge(
+            "If that was your final response, call the \(completionToolName) tool now, "
+            + "passing the complete response text as the `response` argument."
+        )
+    }
+
+    func onMaxTurnsReached(messages: [AnthropicMessage]) async throws -> String? {
+        nil  // → runner throws maxTurnsError()
+    }
+
+    private var fullSystemPrompt: String {
+        systemPrompt + """
+
+
+        ## Final Response
+        When your analysis is complete, call the `\(DiscoveryToolSchemas.finalResponseToolName)` tool exactly once, \
+        passing your complete final response — in exactly the output format requested above — as the `response` argument. \
+        Do not put the final response in a plain text message.
+        """
     }
 }

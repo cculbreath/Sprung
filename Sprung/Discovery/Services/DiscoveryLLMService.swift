@@ -2,23 +2,20 @@
 //  DiscoveryLLMService.swift
 //  Sprung
 //
-//  LLM service for Discovery. Wraps LLMFacade and manages local context
-//  for multi-turn conversations using ChatCompletions via OpenRouter.
+//  Stateless structured-request helpers for Discovery. Wraps LLMFacade.
+//  Multi-turn Discovery conversations run on the shared
+//  AnthropicToolLoopRunner (see DiscoveryAgentService / CoachingService),
+//  not through this service.
 //
 
 import Foundation
 import SwiftOpenAI
 
-/// Service for LLM interactions in Discovery module.
-/// Uses LLMFacade with ChatCompletions/OpenRouter backend.
-/// Maintains local conversation context (unlike Onboarding which uses OpenAI Responses API).
+/// Service for stateless LLM requests in the Discovery module.
 @MainActor
 final class DiscoveryLLMService {
     let llmFacade: LLMFacade
     private let settingsStore: DiscoverySettingsStore
-
-    /// Active conversations indexed by conversation ID
-    private var conversations: [UUID: DiscoveryConversation] = [:]
 
     init(llmFacade: LLMFacade, settingsStore: DiscoverySettingsStore) {
         self.llmFacade = llmFacade
@@ -117,130 +114,20 @@ final class DiscoveryLLMService {
             backend: backend
         )
     }
-
-    // MARK: - Conversation Management (Stateful)
-
-    /// Start a new conversation with optional tools
-    /// - Parameters:
-    ///   - systemPrompt: System prompt for the conversation
-    ///   - tools: Optional tools for function calling
-    ///   - overrideModelId: Override model ID (nil = use default from settings)
-    func startConversation(
-        systemPrompt: String,
-        tools: [ChatCompletionParameters.Tool] = [],
-        overrideModelId: String? = nil
-    ) -> UUID {
-        let conversationId = UUID()
-        let conversation = DiscoveryConversation(
-            id: conversationId,
-            systemPrompt: systemPrompt,
-            tools: tools,
-            modelId: overrideModelId
-        )
-        conversations[conversationId] = conversation
-        return conversationId
-    }
-
-    /// End a conversation and clean up
-    func endConversation(_ conversationId: UUID) {
-        conversations.removeValue(forKey: conversationId)
-    }
-
-    // MARK: - Single-Turn Tool Calling (No Auto-Loop)
-
-    /// Send a message and get response with tool calls (does NOT auto-execute tools)
-    /// Returns the raw message which may contain tool calls that caller must handle
-    func sendMessageSingleTurn(
-        conversationId: UUID,
-        toolChoice: ToolChoice? = nil
-    ) async throws -> ChatCompletionObject.ChatChoice.ChatMessage {
-        guard var conversation = conversations[conversationId] else {
-            throw DiscoveryLLMError.conversationNotFound
-        }
-
-        var messages: [ChatCompletionParameters.Message] = [
-            .init(role: .system, content: .text(conversation.systemPrompt))
-        ]
-        messages.append(contentsOf: conversation.messages)
-
-        let completion = try await llmFacade.executeWithTools(
-            messages: messages,
-            tools: conversation.tools,
-            toolChoice: toolChoice ?? .auto,
-            modelId: conversation.modelId ?? modelId
-        )
-
-        guard let choices = completion.choices,
-              let choice = choices.first,
-              let message = choice.message else {
-            throw DiscoveryLLMError.invalidResponse
-        }
-
-        // Add assistant message to conversation
-        let assistantContent: ChatCompletionParameters.Message.ContentType
-        if let text = message.content {
-            assistantContent = .text(text)
-        } else {
-            assistantContent = .text("")
-        }
-        conversation.messages.append(ChatCompletionParameters.Message(
-            role: .assistant,
-            content: assistantContent,
-            toolCalls: message.toolCalls
-        ))
-        conversations[conversationId] = conversation
-
-        return message
-    }
-
-    /// Add a tool result to the conversation
-    func addToolResult(conversationId: UUID, toolCallId: String, result: String) {
-        guard var conversation = conversations[conversationId] else { return }
-        conversation.messages.append(ChatCompletionParameters.Message(
-            role: .tool,
-            content: .text(result),
-            toolCallID: toolCallId
-        ))
-        conversations[conversationId] = conversation
-    }
-
-    /// Add a user message to the conversation
-    func addUserMessage(conversationId: UUID, message: String) {
-        guard var conversation = conversations[conversationId] else { return }
-        conversation.messages.append(ChatCompletionParameters.Message(
-            role: .user,
-            content: .text(message)
-        ))
-        conversations[conversationId] = conversation
-    }
 }
 
 // MARK: - Supporting Types
 
-struct DiscoveryConversation {
-    let id: UUID
-    let systemPrompt: String
-    let tools: [ChatCompletionParameters.Tool]
-    let modelId: String?  // Override model ID (nil = use default)
-    var messages: [ChatCompletionParameters.Message] = []
-}
-
 enum DiscoveryLLMError: Error, LocalizedError {
     case conversationNotFound
-    case invalidResponse
     case toolExecutionFailed(String)
-    case modelNotConfigured
 
     var errorDescription: String? {
         switch self {
         case .conversationNotFound:
             return "Conversation not found"
-        case .invalidResponse:
-            return "Invalid response from LLM"
         case .toolExecutionFailed(let reason):
             return "Tool execution failed: \(reason)"
-        case .modelNotConfigured:
-            return "No LLM model configured"
         }
     }
 }

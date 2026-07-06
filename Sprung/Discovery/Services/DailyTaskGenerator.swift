@@ -12,11 +12,9 @@ import Foundation
 @MainActor
 struct DailyTaskGenerator {
     private let dailyTaskStore: DailyTaskStore
-    private let llmService: DiscoveryLLMService
 
-    init(dailyTaskStore: DailyTaskStore, llmService: DiscoveryLLMService) {
+    init(dailyTaskStore: DailyTaskStore) {
         self.dailyTaskStore = dailyTaskStore
-        self.llmService = llmService
     }
 
     /// Map task type string from prompt to DailyTaskType enum
@@ -74,7 +72,7 @@ struct DailyTaskGenerator {
             task.estimatedMinutes = entry.estimatedMinutes
             task.isLLMGenerated = true
 
-            // Handle related_id if present
+            // Handle relatedId if present
             if let relatedIdStr = entry.relatedId,
                let relatedId = UUID(uuidString: relatedIdStr) {
                 switch taskType {
