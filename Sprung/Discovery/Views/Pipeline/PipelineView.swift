@@ -14,11 +14,22 @@ struct PipelineView: View {
     @Environment(KnowledgeCardStore.self) private var knowledgeCardStore
     @Environment(CandidateDossierStore.self) private var candidateDossierStore
     @Environment(CoverRefStore.self) private var coverRefStore
+    @Environment(ApplicantProfileStore.self) private var applicantProfileStore
 
     @State private var showingAddLead = false
     @State private var showingJobSearch = false
     @State private var isChooseBestActive = false
     @State private var isChoosingBest = false
+    @State private var showingScoutModal = false
+    /// First-run gate: the Scout button presents the existing Discovery
+    /// onboarding wizard (never a new capture flow) when preferences are
+    /// missing, then continues to the run modal.
+    @State private var showingScoutOnboarding = false
+    @State private var showingScoutReport = false
+    /// True between a run-modal launch and its completion — only manually
+    /// launched runs auto-present the report sheet (auto-runs surface through
+    /// the status pill and the modal's last-run line instead).
+    @State private var scoutManualRunInFlight = false
     /// Terminal history (Rejected/Withdrawn) stays off the working board unless
     /// the user opts in.
     @AppStorage("pipelineShowClosedColumns") private var showClosedColumns = false
@@ -61,6 +72,8 @@ struct PipelineView: View {
                         Label("Search Boards", systemImage: "magnifyingglass")
                     }
                     .help("Search Dice, ZipRecruiter, or any job site via the custom-site agent, and import results as leads")
+
+                    scoutButton
 
                     chooseBestButton
 
@@ -110,6 +123,76 @@ struct PipelineView: View {
         }
         .sheet(isPresented: $showingJobSearch) {
             JobSearchSheet(jobAppStore: coordinator.jobAppStore)
+        }
+        .sheet(isPresented: $showingScoutOnboarding) {
+            // First-run prefs capture IS the existing Discovery onboarding
+            // wizard — same init args as DailyTasksModuleView. Completing it
+            // continues straight into the run modal.
+            DiscoveryOnboardingView(
+                coordinator: coordinator,
+                candidateDossierStore: candidateDossierStore,
+                applicantProfileStore: applicantProfileStore
+            ) {
+                showingScoutOnboarding = false
+                showingScoutModal = true
+            }
+            .overlay(alignment: .topTrailing) {
+                // The wizard has no cancel affordance of its own (it normally
+                // replaces the Daily view inline); as a sheet it needs one.
+                Button("Cancel") { showingScoutOnboarding = false }
+                    .keyboardShortcut(.cancelAction)
+                    .padding(12)
+            }
+            .frame(minWidth: 640, idealWidth: 720, minHeight: 560, idealHeight: 640)
+        }
+        .sheet(isPresented: $showingScoutModal) {
+            JobScoutRunModal(coordinator: coordinator) {
+                scoutManualRunInFlight = true
+            }
+        }
+        .sheet(isPresented: $showingScoutReport) {
+            if let report = coordinator.jobScout.lastReport {
+                JobScoutReportSheet(report: report)
+            }
+        }
+        .onChange(of: coordinator.jobScout.isActive) { wasActive, isActive in
+            // Auto-present the report when a manually launched run finishes.
+            guard wasActive, !isActive, scoutManualRunInFlight else { return }
+            scoutManualRunInFlight = false
+            if coordinator.jobScout.lastReport != nil {
+                showingScoutReport = true
+            }
+        }
+    }
+
+    // MARK: - Scout
+
+    private var scoutButton: some View {
+        Button {
+            if coordinator.needsOnboarding {
+                showingScoutOnboarding = true
+            } else {
+                showingScoutModal = true
+            }
+        } label: {
+            scoutLabel
+        }
+        .disabled(coordinator.jobScout.isActive)
+        .help(
+            coordinator.jobScout.isActive
+                ? "Scout run in progress"
+                : "Have the Discovery agent scout the job boards and import recommended leads"
+        )
+    }
+
+    private var scoutLabel: some View {
+        Group {
+            if coordinator.jobScout.isActive {
+                Label("Scout", systemImage: "sparkle")
+                    .symbolEffect(.rotate.byLayer)
+            } else {
+                Label("Scout", systemImage: "binoculars")
+            }
         }
     }
 

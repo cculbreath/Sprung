@@ -21,6 +21,12 @@ struct DiscoverySettingsSection: View {
             Divider()
                 .padding(.vertical, 4)
 
+            // Job Scout
+            jobScoutSettings
+
+            Divider()
+                .padding(.vertical, 4)
+
             // Actions
             actionButtons
         } header: {
@@ -57,6 +63,87 @@ struct DiscoverySettingsSection: View {
                 .font(.footnote)
                 .foregroundStyle(.secondary)
         }
+    }
+
+    // MARK: - Job Scout Settings
+
+    private var jobScoutSettings: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Job Scout")
+                .font(.subheadline.weight(.semibold))
+
+            HStack(spacing: 16) {
+                Text("Boards:")
+                ForEach(JobScoutService.ScoutBoard.allCases) { board in
+                    Toggle(board.displayName, isOn: scoutBoardBinding(board))
+                        .toggleStyle(.checkbox)
+                }
+            }
+
+            Picker("Automatic runs", selection: scoutCadenceBinding) {
+                ForEach(DiscoverySettingsStore.ScoutCadence.allCases, id: \.self) { cadence in
+                    Text(cadence.rawValue.capitalized).tag(cadence)
+                }
+            }
+            .pickerStyle(.menu)
+            .fixedSize()
+
+            TextField(
+                "Optional standing guidance for scout runs",
+                text: Binding(
+                    get: { coordinator.settingsStore.scoutStandingGuidance },
+                    set: { newValue in
+                        coordinator.settingsStore.scoutStandingGuidance = newValue
+                    }
+                ),
+                axis: .vertical
+            )
+            .textFieldStyle(.roundedBorder)
+            .lineLimit(2...4)
+            .padding(.leading, 20)
+
+            Stepper(
+                "Recommendations per run: \(coordinator.settingsStore.scoutRecommendationCount)",
+                value: Binding(
+                    get: { coordinator.settingsStore.scoutRecommendationCount },
+                    set: { newValue in
+                        coordinator.settingsStore.scoutRecommendationCount = newValue
+                    }
+                ),
+                in: 1...10
+            )
+
+            Text("Scout runs use the Discovery Anthropic model and share LinkedIn's 30-calls-per-hour budget with manual searches. Recommended leads land in the pipeline's Identified column at high priority.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private func scoutBoardBinding(_ board: JobScoutService.ScoutBoard) -> Binding<Bool> {
+        Binding(
+            get: { coordinator.settingsStore.scoutEnabledBoards.contains(board) },
+            set: { enabled in
+                var boards = coordinator.settingsStore.scoutEnabledBoards
+                if enabled {
+                    if !boards.contains(board) { boards.append(board) }
+                } else {
+                    boards.removeAll { $0 == board }
+                }
+                // Persist in canonical case order so the stored list is stable
+                // regardless of toggle sequence.
+                coordinator.settingsStore.scoutEnabledBoards =
+                    JobScoutService.ScoutBoard.allCases.filter { boards.contains($0) }
+            }
+        )
+    }
+
+    private var scoutCadenceBinding: Binding<DiscoverySettingsStore.ScoutCadence> {
+        Binding(
+            get: { coordinator.settingsStore.scoutAutoRunCadence },
+            set: { newValue in
+                coordinator.settingsStore.scoutAutoRunCadence = newValue
+            }
+        )
     }
 
     // MARK: - Action Buttons
