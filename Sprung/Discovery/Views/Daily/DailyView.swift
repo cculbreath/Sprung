@@ -68,6 +68,12 @@ struct DailyView: View {
                     // Coaching section (always visible)
                     CoachingSectionView(coordinator: coordinator)
 
+                    // What the last task generation changed (retired/dropped
+                    // tasks are never silent)
+                    if let outcome = coordinator.dailyTaskGenerator?.lastOutcome, outcome.hasNotes {
+                        planChangesSection(outcome)
+                    }
+
                     // Time spent today
                     timeSection
 
@@ -238,6 +244,70 @@ struct DailyView: View {
         case .interviewPrep: return .red
         default: return .gray
         }
+    }
+
+    // MARK: - Plan Changes (last task generation)
+
+    private func planChangesSection(_ outcome: DailyTaskGenerationOutcome) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Label("PLAN CHANGES", systemImage: "arrow.triangle.2.circlepath")
+                    .font(.headline)
+                    .foregroundStyle(.secondary)
+
+                Spacer()
+
+                Button {
+                    coordinator.dailyTaskGenerator?.lastOutcome = nil
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .help("Dismiss")
+            }
+
+            if !outcome.summary.isEmpty {
+                Text(outcome.summary)
+                    .font(.subheadline)
+            }
+
+            Text("\(outcome.addedCount) new · \(outcome.carriedOverCount) carried over")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            if !outcome.retirements.isEmpty {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Retired:")
+                        .font(.caption)
+                        .fontWeight(.medium)
+                    ForEach(outcome.retirements.indices, id: \.self) { index in
+                        let retirement = outcome.retirements[index]
+                        Text("• \(retirement.title) — \(retirement.reason)")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+
+            if !outcome.droppedTasks.isEmpty {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Suggestions that couldn't be added:")
+                        .font(.caption)
+                        .fontWeight(.medium)
+                        .foregroundStyle(.orange)
+                    ForEach(outcome.droppedTasks.indices, id: \.self) { index in
+                        let droppedTask = outcome.droppedTasks[index]
+                        Text("• \(droppedTask.title) — \(droppedTask.reason)")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+        }
+        .padding()
+        .background(Color(.windowBackgroundColor).opacity(0.5))
+        .cornerRadius(8)
     }
 
     // MARK: - Debrief Section
@@ -421,7 +491,7 @@ struct DailyView: View {
         guard let category = regeneratingCategory else { return }
 
         do {
-            try await coordinator.coachingService?.regenerateTasksForCategory(category, feedback: feedbackText)
+            try await coordinator.regenerateDailyTasks(category: category, feedback: feedbackText)
             regeneratingCategory = nil
             feedbackText = ""
         } catch {

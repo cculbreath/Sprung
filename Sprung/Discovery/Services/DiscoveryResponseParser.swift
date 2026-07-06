@@ -11,10 +11,6 @@ struct DiscoveryResponseParser {
 
     // MARK: - Public Parsing Methods
 
-    func parseTasks(_ response: String) throws -> DailyTasksResult {
-        try decodeFromResponse(response, as: DailyTasksResult.self)
-    }
-
     func parseSources(_ response: String) throws -> JobSourcesResult {
         try decodeFromResponse(response, as: JobSourcesResult.self)
     }

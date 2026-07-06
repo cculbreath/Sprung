@@ -4,20 +4,16 @@
 //
 //  Result types and generated data structures for Discovery LLM responses.
 //
-//  Wire-key note: the daily-task and job-selection contracts are camelCase
-//  (keys we control, instructed by discovery_generate_daily_tasks.txt /
-//  discovery_choose_best_jobs.txt). The event-prep, debrief, source, and
-//  networking-event DTOs keep snake_case CodingKeys because their contracts
-//  are pinned by the corresponding prompt templates in Resources/Prompts.
+//  Wire-key note: the job-selection contract is camelCase (keys we control,
+//  instructed by discovery_choose_best_jobs.txt). The event-prep, debrief,
+//  source, and networking-event DTOs keep snake_case CodingKeys because their
+//  contracts are pinned by the corresponding prompt templates in
+//  Resources/Prompts. The daily-task contract lives in DailyTaskGenerator.
 //
 
 import Foundation
 
 // MARK: - Result Types
-
-struct DailyTasksResult: Codable {
-    let tasks: [GeneratedDailyTask]
-}
 
 struct JobSourcesResult: Codable {
     let sources: [GeneratedJobSource]
@@ -129,52 +125,6 @@ struct TargetCompanyResult: Codable {
 }
 
 // MARK: - Generated Types (from LLM responses)
-
-struct GeneratedDailyTask: Codable {
-    let taskType: String
-    let title: String
-    let description: String?
-    let priority: Int
-    let relatedId: String?
-    let estimatedMinutes: Int?
-
-    func toDailyTask() -> DailyTask {
-        let task = DailyTask()
-        task.title = title
-        task.taskDescription = description
-        task.priority = priority
-        task.estimatedMinutes = estimatedMinutes
-        task.isLLMGenerated = true
-
-        let dailyTaskType: DailyTaskType
-        switch taskType.lowercased() {
-        case "gather": dailyTaskType = .gatherLeads
-        case "customize": dailyTaskType = .customizeMaterials
-        case "apply": dailyTaskType = .submitApplication
-        case "follow_up": dailyTaskType = .followUp
-        case "networking": dailyTaskType = .networking
-        case "event_prep": dailyTaskType = .eventPrep
-        case "debrief": dailyTaskType = .eventDebrief
-        default: dailyTaskType = .gatherLeads
-        }
-        task.taskType = dailyTaskType
-
-        if let relatedId = relatedId, let uuid = UUID(uuidString: relatedId) {
-            switch dailyTaskType {
-            case .gatherLeads:
-                task.relatedJobSourceId = uuid
-            case .customizeMaterials, .submitApplication, .followUp:
-                task.relatedJobAppId = uuid
-            case .networking:
-                task.relatedContactId = uuid
-            case .eventPrep, .eventDebrief:
-                task.relatedEventId = uuid
-            }
-        }
-
-        return task
-    }
-}
 
 struct GeneratedJobSource: Codable {
     let name: String

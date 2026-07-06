@@ -3,13 +3,16 @@
 //  Sprung
 //
 //  Main orchestration service for the Job Search Coach feature.
-//  Manages the coaching flow: activity report -> questions -> recommendations.
 //
 //  The session runs as one AnthropicToolLoopRunner loop against the Messages
-//  API. Question tool calls suspend inside executeTools on a continuation
-//  until the user answers (submitAnswer / submitFollowUpAnswer resume it);
-//  background research tools execute immediately. The forced
-//  update_daily_tasks call is the loop's completion tool.
+//  API, delta-first: the coach opens with what it noticed since the last
+//  session (task completion, pipeline transitions, imminent events, streaks),
+//  asks at most ONE earned data-gathering question, shares a short plan, and
+//  finishes through the update_daily_tasks completion tool — whose directive
+//  is handed to the shared DailyTaskGenerator (the single task-generation
+//  path). Question tool calls suspend inside executeTools on a continuation
+//  until the user answers (submitAnswer resumes it); background research
+//  tools execute immediately.
 //
 
 import Foundation
@@ -32,6 +35,8 @@ final class CoachingService: AnthropicToolLoopDelegate {
     // Extracted component handlers
     private let toolHandler: CoachingToolHandler
     private let contextBuilder: CoachingContextBuilder
+    /// The single daily-task generation path, shared with the Daily view's
+    /// refresh and per-category regeneration.
     private let taskGenerator: DailyTaskGenerator
 
     /// Reference to agent service for triggering workflows like chooseBestJobs
@@ -44,36 +49,25 @@ final class CoachingService: AnthropicToolLoopDelegate {
     private(set) var currentSession: CoachingSession?
     private(set) var currentQuestion: CoachingQuestion?
 
-    private var pendingQuestions: [CoachingQuestion] = []
     private var collectedAnswers: [CoachingAnswer] = []
-    private var questionIndex: Int = 0
 
     // MARK: - Session Loop State
 
-    /// Where the session is in the coaching script; drives per-turn tool choice.
-    private enum SessionPhase {
-        /// Asking questions / researching until the model gives recommendations.
-        case gatheringAnswers
-        /// Recommendations shown; the model was asked to offer a follow-up.
-        case awaitingFollowUp
-        /// Terminal phase: the update_daily_tasks completion tool is forced.
-        case generatingTasks
-    }
-
-    private var phase: SessionPhase = .gatheringAnswers
     private var sessionSystemPrompt: String = ""
     private var sessionModelId: String = ""
+    /// Data-gathering questions asked this session (policy: at most one).
+    private var questionsAsked = 0
+    /// Set after the plan is delivered (no-tool stall or follow-up answered)
+    /// so the next turn forces the update_daily_tasks completion call.
+    private var forceCompletionNextTurn = false
     /// The running session loop; cancelled by cancelSession().
     private var sessionTask: Task<Void, Never>?
     /// Monotonic token so a cancelled session's trailing error (e.g. a
     /// URLError from a torn-down request) can't clobber a newer session's state.
     private var sessionGeneration = 0
     /// Continuation parked while a question is displayed, resumed by
-    /// submitAnswer / submitFollowUpAnswer with the user's selection.
-    private var pendingAnswer: CheckedContinuation<(value: Int, label: String), Error>?
-    /// Text of the most recent assistant turn (captured for the
-    /// recommendations no-tool turn).
-    private var lastTurnText: String = ""
+    /// submitAnswer with the user's selected option.
+    private var pendingAnswer: CheckedContinuation<QuestionOption, Error>?
 
     private static let maxResponseTokens = 8192
 
@@ -88,7 +82,8 @@ final class CoachingService: AnthropicToolLoopDelegate {
         preferencesStore: SearchPreferencesStore,
         jobAppStore: JobAppStore,
         candidateDossierStore: CandidateDossierStore,
-        knowledgeCardStore: KnowledgeCardStore
+        knowledgeCardStore: KnowledgeCardStore,
+        taskGenerator: DailyTaskGenerator
     ) {
         self.modelContext = modelContext
         self.llmFacade = llmFacade
@@ -99,11 +94,11 @@ final class CoachingService: AnthropicToolLoopDelegate {
         self.jobAppStore = jobAppStore
         self.candidateDossierStore = candidateDossierStore
         self.knowledgeCardStore = knowledgeCardStore
+        self.taskGenerator = taskGenerator
 
         // Initialize extracted components
         self.toolHandler = CoachingToolHandler(modelContext: modelContext, jobAppStore: jobAppStore)
         self.contextBuilder = CoachingContextBuilder(preferencesStore: preferencesStore, jobAppStore: jobAppStore)
-        self.taskGenerator = DailyTaskGenerator(dailyTaskStore: dailyTaskStore)
     }
 
     // MARK: - Public API
@@ -163,12 +158,10 @@ final class CoachingService: AnthropicToolLoopDelegate {
 
         // Reset state
         state = .generatingReport
-        pendingQuestions = []
         collectedAnswers = []
-        questionIndex = 0
         currentQuestion = nil
-        phase = .gatheringAnswers
-        lastTurnText = ""
+        questionsAsked = 0
+        forceCompletionNextTurn = false
 
         // Model must be user-configured — never substituted.
         guard let modelId = coachingModelId else {
@@ -202,17 +195,27 @@ final class CoachingService: AnthropicToolLoopDelegate {
         // Build knowledge cards list from KnowledgeCardStore
         let knowledgeCardsList = contextBuilder.buildKnowledgeCardsList(from: knowledgeCardStore.knowledgeCards)
 
+        // The delta the coach opens with: last task day + completion state,
+        // today's list so far, completion streak.
+        let taskDelta = contextBuilder.buildTaskDeltaSummary(
+            previousDay: dailyTaskStore.previousTaskDay(),
+            todaysTasks: dailyTaskStore.todaysTasks,
+            streakDays: dailyTaskStore.completionStreakDays()
+        )
+
         // Build system prompt with full context
         sessionSystemPrompt = contextBuilder.buildSystemPrompt(
             activitySummary: snapshot.textSummary(),
             recentHistory: sessionStore.recentHistorySummary(),
+            taskDelta: taskDelta,
+            askedCategories: sessionStore.recentAskedCategoriesSummary(),
             dossierContext: dossierContext,
             knowledgeCardsList: knowledgeCardsList,
             activeJobApps: contextBuilder.buildActiveJobAppsList()
         )
 
         // Drive the whole session as one shared tool loop. Question tool calls
-        // suspend until the user answers; the loop completes on the forced
+        // suspend until the user answers; the loop completes on the
         // update_daily_tasks call.
         sessionGeneration += 1
         let generation = sessionGeneration
@@ -230,8 +233,9 @@ final class CoachingService: AnthropicToolLoopDelegate {
         }
     }
 
-    /// Submit answer to current question
-    func submitAnswer(value: Int, label: String) async throws {
+    /// Submit the user's selected option for the current question (data
+    /// question or next-step action prompt alike).
+    func submitAnswer(option: QuestionOption) {
         guard currentQuestion != nil, let continuation = pendingAnswer else {
             Logger.warning("No current question to answer", category: .ai)
             return
@@ -242,23 +246,7 @@ final class CoachingService: AnthropicToolLoopDelegate {
         currentQuestion = nil
         state = .waitingForAnswer
 
-        continuation.resume(returning: (value: value, label: label))
-    }
-
-    /// Handle follow-up answer selection
-    func submitFollowUpAnswer(value: Int, label: String) async throws {
-        guard let question = currentQuestion,
-              question.questionType == .followUp,
-              let continuation = pendingAnswer else {
-            Logger.warning("No follow-up question to answer or missing context", category: .ai)
-            return
-        }
-
-        pendingAnswer = nil
-        currentQuestion = nil
-        state = .waitingForAnswer
-
-        continuation.resume(returning: (value: value, label: label))
+        continuation.resume(returning: option)
     }
 
     /// Regenerate by deleting current session and re-running full coaching flow
@@ -286,7 +274,6 @@ final class CoachingService: AnthropicToolLoopDelegate {
         }
         currentSession = nil
         currentQuestion = nil
-        pendingQuestions = []
         collectedAnswers = []
         state = .idle
     }
@@ -301,23 +288,17 @@ final class CoachingService: AnthropicToolLoopDelegate {
     }
 
     func initialMessages() -> [AnthropicMessage] {
-        [.user("Please start my coaching session for today. Ask me questions to understand how I'm doing.")]
+        [.user(
+            "Start today's session. Open with what you noticed since last time — "
+            + "then, only if the data warrants it, ask your one question."
+        )]
     }
 
     func runModelTurn(messages: [AnthropicMessage]) async throws -> AnthropicTurnResult {
-        // Tool choice based on conversation phase:
-        // - generating tasks: force update_daily_tasks (session terminal)
-        // - exactly 1 answer collected: force a second question
-        // - otherwise: .auto — the model can research, ask, or recommend
-        let toolChoice: AnthropicToolChoice
-        switch phase {
-        case .generatingTasks:
-            toolChoice = .tool(name: CoachingToolSchemas.updateDailyTasksToolName)
-        case .gatheringAnswers where collectedAnswers.count == 1:
-            toolChoice = .tool(name: CoachingToolSchemas.multipleChoiceToolName)
-        default:
-            toolChoice = .auto
-        }
+        let toolChoice: AnthropicToolChoice = forceCompletionNextTurn
+            ? .tool(name: CoachingToolSchemas.updateDailyTasksToolName)
+            : .auto
+        forceCompletionNextTurn = false
 
         let parameters = AnthropicMessageParameter(
             model: sessionModelId,
@@ -335,27 +316,29 @@ final class CoachingService: AnthropicToolLoopDelegate {
             category: .ai
         )
         let result = AnthropicTurnResult(response: response)
-        lastTurnText = result.textBlocks.joined(separator: "\n")
+        accumulateProse(from: result)
         return result
     }
 
     func executeTools(_ toolCalls: [AnthropicToolUseResponseBlock]) async -> [String: AnthropicToolOutput] {
         var outputs: [String: AnthropicToolOutput] = [:]
-
-        // Question tool calls in this turn, displayed one at a time (each
-        // suspends until the user answers). Count them up front so the
-        // progress indicator can show how many are queued.
-        var remainingQuestionCalls = toolCalls.filter { $0.name == CoachingToolSchemas.multipleChoiceToolName }.count
+        var questionShownThisTurn = false
 
         for call in toolCalls {
             let arguments = call.input.jsonString
 
             if call.name == CoachingToolSchemas.multipleChoiceToolName {
-                remainingQuestionCalls -= 1
-                outputs[call.id] = await handleQuestionToolCall(
-                    arguments: arguments,
-                    questionsQueuedAfter: remainingQuestionCalls
-                )
+                if questionShownThisTurn {
+                    // One question at a time; the model gets the first answer
+                    // before it may ask anything else.
+                    outputs[call.id] = AnthropicToolOutput(
+                        content: "Declined: only one question can be shown per turn. Continue from the answer you received.",
+                        isError: true
+                    )
+                    continue
+                }
+                questionShownThisTurn = true
+                outputs[call.id] = await handleQuestionToolCall(arguments: arguments)
             } else {
                 let result = await handleBackgroundTool(name: call.name, arguments: arguments)
                 outputs[call.id] = AnthropicToolOutput(content: result)
@@ -365,42 +348,51 @@ final class CoachingService: AnthropicToolLoopDelegate {
     }
 
     func parseCompletion(_ call: AnthropicToolUseResponseBlock) async throws -> Int {
-        guard phase == .generatingTasks else {
-            // Premature update_daily_tasks call — send a corrective tool_result
-            // and keep the conversation going (pre-runner behavior never let a
-            // mid-session call end the session).
+        guard let session = currentSession, !session.recommendations.isEmpty else {
+            // The coach tried to end the session without ever talking to the
+            // user — send a corrective tool_result and keep the loop going.
             throw DiscoveryAgentError.toolExecutionFailed(
-                "Not yet — continue the coaching conversation first. Daily tasks are requested at the end of the session."
+                "Not yet — share your observations and plan with the user first. "
+                + "Call update_daily_tasks only at the end of the session."
             )
         }
 
-        let count = taskGenerator.handleUpdateDailyTasksToolCall(
-            arguments: call.input.jsonString,
-            session: currentSession
-        )
+        let directive: String
+        if let data = call.input.jsonString.data(using: .utf8),
+           let args = try? JSONDecoder().decode(UpdateDailyTasksArgs.self, from: data),
+           !args.directive.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            directive = args.directive
+        } else {
+            throw DiscoveryAgentError.toolExecutionFailed(
+                "Missing `directive` — pass 2-4 concrete sentences for the task generator."
+            )
+        }
+
+        // Generate first: if generation fails, the runner sends a corrective
+        // tool_result and the model retries the completion call — the session
+        // is only finalized once tasks actually exist.
+        let outcome = try await taskGenerator.generate(.coachingSession(directive: directive))
         Logger.info("✅ Daily tasks generated from coaching session", category: .ai)
         completeSession()
-        return count
+        return outcome.addedCount + outcome.carriedOverCount
     }
 
     func handleNoTool(turnCount: Int, consecutiveNoToolTurns: Int) -> AnthropicNoToolDecision {
-        switch phase {
-        case .gatheringAnswers:
-            // A no-tool text turn is the final recommendations.
-            handleFinalRecommendations(lastTurnText)
-            phase = .awaitingFollowUp
-            return .nudge(
-                "Based on our conversation, what would be most helpful for me to do next? "
-                + "Offer me a contextual follow-up action using the coaching_multiple_choice tool."
-            )
-        case .awaitingFollowUp:
-            // No follow-up question offered — move straight to task generation.
-            phase = .generatingTasks
-            return .nudge(Self.taskGenerationPrompt)
-        case .generatingTasks:
-            // Shouldn't happen (tool choice is forced); re-issue the instruction.
+        // A no-tool text turn is the coach's observations/plan (already
+        // accumulated into session.recommendations by runModelTurn).
+        state = .showingRecommendations(recommendations: currentSession?.recommendations ?? "")
+
+        if consecutiveNoToolTurns >= 2 {
+            // Converge: force the completion tool on the next turn.
+            forceCompletionNextTurn = true
             return .nudge(Self.taskGenerationPrompt)
         }
+
+        return .nudge(
+            "If the session is complete, either offer the user a next-step choice with the "
+            + "coaching_multiple_choice tool (options with actionId \"generate_tasks\" / \"done\"), "
+            + "or call update_daily_tasks directly with your directive."
+        )
     }
 
     func onMaxTurnsReached(messages: [AnthropicMessage]) async throws -> Int? {
@@ -410,52 +402,65 @@ final class CoachingService: AnthropicToolLoopDelegate {
     // MARK: - Private Implementation
 
     private static let taskGenerationPrompt =
-        "Now generate my daily task list based on our coaching conversation. "
-        + "Use the update_daily_tasks tool to create 3-6 specific, actionable tasks."
+        "Call update_daily_tasks now with your directive for today's task list."
 
     private func encodeToJSON<T: Encodable>(_ value: T) -> String {
         (try? String(data: JSONEncoder().encode(value), encoding: .utf8)) ?? "{}"
     }
 
+    /// Append the turn's prose to the session record. Skipped for turns that
+    /// only carry research tool calls (planning chatter), kept for the opener,
+    /// question turns, plan turns, and the completion turn.
+    private func accumulateProse(from result: AnthropicTurnResult) {
+        guard let session = currentSession else { return }
+        let text = result.textBlocks
+            .joined(separator: "\n")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+
+        let keepsProse = result.toolCalls.isEmpty
+            || result.toolCalls.contains { $0.name == CoachingToolSchemas.multipleChoiceToolName }
+            || result.toolCalls.contains { $0.name == CoachingToolSchemas.updateDailyTasksToolName }
+        guard keepsProse else { return }
+
+        session.recommendations = session.recommendations.isEmpty
+            ? text
+            : session.recommendations + "\n\n" + text
+    }
+
     /// Display a question tool call and suspend until the user answers.
     /// Returns the tool output carrying the user's selection.
-    private func handleQuestionToolCall(
-        arguments: String,
-        questionsQueuedAfter: Int
-    ) async -> AnthropicToolOutput {
-        guard var question = CoachingToolSchemas.parseQuestion(from: arguments) else {
+    private func handleQuestionToolCall(arguments: String) async -> AnthropicToolOutput {
+        guard let question = CoachingToolSchemas.parseQuestion(from: arguments) else {
             return AnthropicToolOutput(
                 content: encodeToJSON(ToolErrorResult(error: "Failed to parse question")),
                 isError: true
             )
         }
 
-        let isFollowUp = phase == .awaitingFollowUp
-        if isFollowUp {
-            // Ensure it's marked as follow-up type
-            question = CoachingQuestion(
-                questionText: question.questionText,
-                options: question.options,
-                questionType: .followUp
-            )
+        if question.isActionPrompt {
             currentQuestion = question
             state = .askingFollowUp(question: question)
-            Logger.debug("Coaching: showing follow-up question", category: .ai)
+            Logger.debug("Coaching: showing next-step choice", category: .ai)
         } else {
-            pendingQuestions.append(question)
+            // Policy: at most one data-gathering question per session.
+            guard questionsAsked == 0 else {
+                return AnthropicToolOutput(
+                    content: "Declined: you already asked your one question this session. "
+                        + "Proceed to your observations and plan.",
+                    isError: true
+                )
+            }
+            questionsAsked += 1
             currentSession?.questions = (currentSession?.questions ?? []) + [question]
-            questionIndex += 1
+            currentSession?.askedCategories = (currentSession?.askedCategories ?? []) + [question.category]
             currentQuestion = question
-            state = .askingQuestion(
-                question: question,
-                index: questionIndex,
-                total: max(3, questionIndex + questionsQueuedAfter)
-            )
-            Logger.debug("Coaching: showing question \(questionIndex) (queued: \(questionsQueuedAfter) remaining)", category: .ai)
+            state = .askingQuestion(question: question)
+            Logger.debug("Coaching: showing question (category: \(question.category))", category: .ai)
         }
 
-        // Suspend until submitAnswer / submitFollowUpAnswer resumes us.
-        let selection: (value: Int, label: String)
+        // Suspend until submitAnswer resumes us.
+        let selection: QuestionOption
         do {
             selection = try await withCheckedThrowingContinuation { continuation in
                 pendingAnswer = continuation
@@ -466,8 +471,8 @@ final class CoachingService: AnthropicToolLoopDelegate {
             return AnthropicToolOutput(content: "Session cancelled before the user answered.", isError: true)
         }
 
-        if isFollowUp {
-            return followUpAnswerOutput(value: selection.value, label: selection.label)
+        if question.isActionPrompt {
+            return actionAnswerOutput(for: selection)
         }
 
         // Record answer
@@ -485,23 +490,29 @@ final class CoachingService: AnthropicToolLoopDelegate {
         )))
     }
 
-    /// Map the follow-up selection to an action, apply its side effects, and
-    /// build the tool output that steers the model into task generation.
-    private func followUpAnswerOutput(value: Int, label: String) -> AnthropicToolOutput {
-        let action = mapFollowUpAnswer(value: value, label: label)
-
-        if action == .generateTasks, let session = currentSession {
+    /// Map the next-step selection to its structured action identifier, then
+    /// steer the model into the completion call with a matching directive.
+    private func actionAnswerOutput(for selection: QuestionOption) -> AnthropicToolOutput {
+        let action = selection.actionId.flatMap { CoachingFollowUpAction(rawValue: $0) }
+        if let action {
             state = .executingFollowUp(action: action)
-            session.recommendations += "\n\n---\n**Task List**: Your daily tasks were automatically generated from this coaching session. Check the Today view to see your prioritized task list."
-            sessionStore.update(session)
         }
 
-        // Either way the session ends with task generation (pre-runner behavior).
-        phase = .generatingTasks
-        Logger.info("📋 Requesting daily tasks from coach", category: .ai)
+        // Either way the session ends with the completion call; force it so
+        // the loop converges in one more turn.
+        forceCompletionNextTurn = true
+        Logger.info("📋 Next-step choice: \(action?.rawValue ?? "unmapped") — requesting daily tasks", category: .ai)
 
-        let answerJSON = encodeToJSON(ToolAnswerResult(selectedValue: value, selectedLabel: label))
-        return AnthropicToolOutput(content: answerJSON + "\n\n" + Self.taskGenerationPrompt)
+        let answerJSON = encodeToJSON(ToolAnswerResult(selectedValue: selection.value, selectedLabel: selection.label))
+        let steer: String
+        switch action {
+        case .generateTasks, .none:
+            steer = "Call update_daily_tasks now with a directive summarizing today's focus from this conversation."
+        case .done:
+            steer = "The user is done for now. Call update_daily_tasks with a conservative directive: "
+                + "carry over open tasks, retire only what is clearly stale, add nothing new unless critical."
+        }
+        return AnthropicToolOutput(content: answerJSON + "\n\n" + steer)
     }
 
     /// Handle background research tool calls (knowledge cards, job descriptions, resumes)
@@ -529,87 +540,15 @@ final class CoachingService: AnthropicToolLoopDelegate {
         }
     }
 
-    private func handleFinalRecommendations(_ recommendations: String) {
-        guard let session = currentSession else { return }
-
-        // Store recommendations (tasks are generated via the forced
-        // update_daily_tasks completion call at the end of the session)
-        session.recommendations = recommendations
-        session.questionCount = collectedAnswers.count
-
-        state = .showingRecommendations(recommendations: recommendations)
-    }
-
-    /// Map follow-up answer to action (based on value or label matching)
-    private func mapFollowUpAnswer(value: Int, label: String) -> CoachingFollowUpAction {
-        let lowerLabel = label.lowercased()
-
-        if lowerLabel.contains("task") || lowerLabel.contains("to-do") || lowerLabel.contains("todo") {
-            return .generateTasks
-        } else if lowerLabel.contains("done") || lowerLabel.contains("good") || lowerLabel.contains("later") {
-            return .done
-        }
-
-        // Default based on value (lower values = more actionable options typically)
-        return value <= 2 ? .generateTasks : .done
-    }
-
     /// Complete the coaching session
     private func completeSession() {
         guard let session = currentSession else { return }
 
+        session.questionCount = collectedAnswers.count
         session.completedAt = Date()
         sessionStore.add(session)
 
         state = .complete(sessionId: session.id)
         Logger.info("Coaching session completed with \(collectedAnswers.count) questions", category: .ai)
-    }
-
-    // MARK: - Task Regeneration
-
-    /// Regenerate tasks for a specific category based on user feedback
-    /// Uses the coaching session's recommendations as context
-    func regenerateTasksForCategory(
-        _ category: TaskCategory,
-        feedback: String
-    ) async throws {
-        guard let session = todaysSession else {
-            throw DiscoveryLLMError.conversationNotFound
-        }
-
-        guard let modelId = coachingModelId else {
-            throw ModelConfigurationError.modelNotConfigured(
-                settingKey: DiscoveryAgentService.anthropicModelSettingKey,
-                operationName: "Task Regeneration"
-            )
-        }
-
-        Logger.info("🔄 Regenerating \(category.displayName) tasks with feedback", category: .ai)
-
-        // Build the prompt with context
-        let prompt = taskGenerator.buildRegenerationPrompt(
-            category: category,
-            feedback: feedback,
-            coachingRecommendations: session.recommendations,
-            activitySummary: session.activitySummary?.textSummary() ?? "No activity data available"
-        )
-
-        // Execute structured request against the coaching model
-        let response: TaskRegenerationResponse = try await llmFacade.executeStructuredWithAnthropicCaching(
-            systemContent: [AnthropicSystemBlock(text: """
-                You are a job search coach helping regenerate daily tasks based on user feedback.
-                Generate practical, actionable tasks that address the user's concerns.
-                Only generate tasks for the specified category: \(category.displayName).
-                """)],
-            userPrompt: prompt,
-            modelId: modelId,
-            responseType: TaskRegenerationResponse.self,
-            schema: CoachingToolSchemas.buildTaskRegenerationSchema()
-        )
-
-        // Clear existing tasks for this category and add new ones
-        taskGenerator.replaceTasksForCategory(category, with: response.tasks)
-
-        Logger.info("✅ Regenerated \(response.tasks.count) \(category.displayName) tasks", category: .ai)
     }
 }

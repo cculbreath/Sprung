@@ -17,13 +17,14 @@ import SwiftOpenAI
 struct CoachingMultipleChoiceArgs: Codable {
     let question: String
     let options: [CoachingMultipleChoiceOptionArgs]
-    let questionType: String
+    let questionCategory: String
 }
 
 struct CoachingMultipleChoiceOptionArgs: Codable {
     let value: Int
     let label: String
     let emoji: String?
+    let actionId: String?
 }
 
 struct GetKnowledgeCardArgs: Codable {
@@ -42,16 +43,9 @@ struct GetResumeArgs: Codable {
 }
 
 struct UpdateDailyTasksArgs: Codable {
-    let tasks: [UpdateDailyTaskEntry]
-}
-
-struct UpdateDailyTaskEntry: Codable {
-    let taskType: String
-    let title: String
-    let description: String
-    let priority: Int
-    let estimatedMinutes: Int
-    let relatedId: String?
+    /// The coach's directive for the shared daily-task generator: what today's
+    /// list should emphasize, grounded in the session conversation.
+    let directive: String
 }
 
 struct ChooseBestJobsArgs: Codable {
@@ -142,9 +136,9 @@ enum CoachingToolSchemas {
 
     // MARK: - Multiple Choice Question Tool
 
-    /// The coaching_multiple_choice tool lets the LLM ask the user structured
-    /// multiple-choice questions to gather context before providing coaching
-    /// recommendations.
+    /// The coaching_multiple_choice tool lets the LLM ask the user one earned
+    /// multiple-choice question, or offer the end-of-session next-step choice
+    /// (options carrying `actionId`).
     static func buildCoachingMultipleChoiceTool() -> AnthropicTool {
         let optionSchema: [String: Any] = [
             "type": "object",
@@ -152,7 +146,7 @@ enum CoachingToolSchemas {
             "properties": [
                 "value": [
                     "type": "integer",
-                    "description": "Numeric value for this option (1-10 scale recommended for motivation, 1-5 for preferences)"
+                    "description": "Numeric value for this option (1-10 scale recommended for scales, 1-5 for preferences)"
                 ],
                 "label": [
                     "type": "string",
@@ -160,10 +154,19 @@ enum CoachingToolSchemas {
                 ],
                 "emoji": [
                     "type": ["string", "null"],
-                    "description": "Optional emoji to display with this option for visual appeal"
+                    "description": "Optional emoji to display with this option, or null"
+                ],
+                "actionId": [
+                    "type": ["string", "null"],
+                    "description": """
+                        Only for the end-of-session next-step choice: "generate_tasks" \
+                        (build today's task list now) or "done" (keep the list conservative — \
+                        carry over open tasks, add nothing new unless critical). \
+                        Must be null on data-gathering questions.
+                        """
                 ]
             ],
-            "required": ["value", "label", "emoji"],
+            "required": ["value", "label", "emoji", "actionId"],
             "additionalProperties": false
         ]
 
@@ -172,35 +175,37 @@ enum CoachingToolSchemas {
             "properties": [
                 "question": [
                     "type": "string",
-                    "description": "The question to ask the user. Keep it conversational and empathetic."
+                    "description": "The question to ask the user. Plain, direct language."
                 ],
                 "options": [
                     "type": "array",
                     "description": "2-5 answer options for the user to choose from. Each should be distinct and meaningful.",
                     "items": optionSchema
                 ],
-                "questionType": [
+                "questionCategory": [
                     "type": "string",
-                    "description": "Category of question to help organize the coaching conversation",
-                    "enum": ["motivation", "challenge", "focus", "feedback"]
+                    "description": """
+                        Short snake_case category you name yourself, describing what the question \
+                        probes (examples: motivation, blockers, interview_prep, search_strategy, \
+                        time_budget, wellbeing, next_step). Categories asked in recent sessions \
+                        are listed in your context — do not reuse them unless the data warrants it. \
+                        Use "next_step" for the end-of-session action choice.
+                        """
                 ]
             ],
-            "required": ["question", "options", "questionType"],
+            "required": ["question", "options", "questionCategory"],
             "additionalProperties": false
         ]
 
         return .function(AnthropicFunctionTool(
             name: multipleChoiceToolName,
             description: """
-                Present a multiple choice question to the user to understand their current state and needs.
-                You MUST call this tool at least twice before providing recommendations.
-                Questions should gather information about:
-                - Current motivation/energy level for job searching
-                - Biggest challenges or blockers they're facing
-                - Preferred focus areas for today
-                - Feedback on recent activity or strategy
-
-                Design questions that are quick to answer but provide meaningful coaching context.
+                Present a multiple choice question to the user.
+                Two uses:
+                1. AT MOST ONE data-gathering question per session, and only when the activity \
+                data cannot answer it. Set actionId to null on every option.
+                2. The end-of-session next-step choice: after you have shared your observations \
+                and plan, offer options whose actionId is "generate_tasks" or "done".
                 Options should be clear, distinct, and cover the range of likely responses.
                 """,
             inputSchema: schema,
@@ -217,14 +222,14 @@ enum CoachingToolSchemas {
             return nil
         }
 
-        guard !args.question.isEmpty,
-              let questionType = CoachingQuestionType(rawValue: args.questionType) else {
+        let category = args.questionCategory.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !args.question.isEmpty, !category.isEmpty else {
             return nil
         }
 
         let options = args.options.compactMap { opt -> QuestionOption? in
             guard !opt.label.isEmpty else { return nil }
-            return QuestionOption(value: opt.value, label: opt.label, emoji: opt.emoji)
+            return QuestionOption(value: opt.value, label: opt.label, emoji: opt.emoji, actionId: opt.actionId)
         }
 
         guard !options.isEmpty else { return nil }
@@ -232,7 +237,7 @@ enum CoachingToolSchemas {
         return CoachingQuestion(
             questionText: args.question,
             options: options,
-            questionType: questionType
+            category: category
         )
     }
 
@@ -332,28 +337,32 @@ enum CoachingToolSchemas {
 
     // MARK: - Update Daily Tasks Tool
 
-    /// Tool for the LLM to output structured daily tasks at the end of a coaching session
+    /// Session completion tool: hands the coach's directive to the shared
+    /// daily-task generator, which owns carry-over semantics and persistence.
     static func buildUpdateDailyTasksTool() -> AnthropicTool {
         let schema: [String: Any] = [
             "type": "object",
             "properties": [
-                "tasks": [
-                    "type": "array",
-                    "description": "The daily tasks to add. Generate 3-6 tasks based on the coaching conversation.",
-                    "items": dailyTaskEntrySchema
+                "directive": [
+                    "type": "string",
+                    "description": """
+                        2-4 sentences for the task generator: what today's list should \
+                        emphasize based on this conversation (energy level, stated blockers, \
+                        deadlines, which open tasks matter most). Concrete, not generic.
+                        """
                 ]
             ],
-            "required": ["tasks"],
+            "required": ["directive"],
             "additionalProperties": false
         ]
 
         return .function(AnthropicFunctionTool(
             name: updateDailyTasksToolName,
             description: """
-                Generate the user's daily task list based on the coaching conversation.
-                Create 3-6 specific, actionable tasks that align with what was discussed.
-                Match task count/complexity to the user's stated energy level.
-                Include tasks from multiple categories when appropriate.
+                End the coaching session and hand off to the daily task generator.
+                Call this exactly once, after you have shared your observations and plan.
+                The generator sees yesterday's tasks, completion state, preferences, and
+                weekly goals — your directive adds what only this conversation revealed.
                 """,
             inputSchema: schema,
             strict: true
@@ -395,65 +404,6 @@ enum CoachingToolSchemas {
         ))
     }
 
-    // MARK: - Task Regeneration Schema
-
-    /// A single daily-task entry schema, shared by the update_daily_tasks tool
-    /// and the task-regeneration structured output.
-    private static let dailyTaskEntrySchema: [String: Any] = [
-        "type": "object",
-        "description": "A single task to add to the user's daily task list",
-        "properties": [
-            "taskType": [
-                "type": "string",
-                "description": "The type of task",
-                "enum": ["gather", "customize", "apply", "follow_up", "networking", "event_prep", "debrief"]
-            ],
-            "title": [
-                "type": "string",
-                "description": "Short, actionable title for the task (2-8 words)"
-            ],
-            "description": [
-                "type": "string",
-                "description": "Brief context or details about the task"
-            ],
-            "priority": [
-                "type": "integer",
-                "description": "Priority level: 0 (low), 1 (medium), 2 (high)"
-            ],
-            "estimatedMinutes": [
-                "type": "integer",
-                "description": "Estimated time in minutes to complete the task"
-            ],
-            "relatedId": [
-                "type": ["string", "null"],
-                "description": "UUID of related job app, event, or contact if applicable, otherwise null"
-            ]
-        ],
-        "required": ["taskType", "title", "description", "priority", "estimatedMinutes", "relatedId"],
-        "additionalProperties": false
-    ]
-
-    /// Schema (dictionary form, for Anthropic structured output) for regenerated
-    /// tasks in a specific category based on user feedback.
-    static func buildTaskRegenerationSchema() -> [String: Any] {
-        [
-            "type": "object",
-            "description": "Regenerated tasks for a specific category based on user feedback",
-            "properties": [
-                "tasks": [
-                    "type": "array",
-                    "description": "The regenerated tasks. Generate 2-5 tasks based on the user's feedback.",
-                    "items": dailyTaskEntrySchema
-                ],
-                "explanation": [
-                    "type": "string",
-                    "description": "Brief explanation of why these tasks were suggested based on the feedback"
-                ]
-            ],
-            "required": ["tasks", "explanation"],
-            "additionalProperties": false
-        ]
-    }
 }
 
 // MARK: - Task Category

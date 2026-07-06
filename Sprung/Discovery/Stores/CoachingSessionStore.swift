@@ -99,7 +99,7 @@ final class CoachingSessionStore: EntityStore {
             if !answers.isEmpty {
                 for answer in answers {
                     if let question = session.questions.first(where: { $0.id == answer.questionId }) {
-                        sessionParts.append("- \(question.questionType.displayName): \(answer.selectedLabel)")
+                        sessionParts.append("- \(question.categoryDisplayName): \(answer.selectedLabel)")
                     }
                 }
             }
@@ -114,5 +114,26 @@ final class CoachingSessionStore: EntityStore {
         }
 
         return parts.joined(separator: "\n\n")
+    }
+
+    /// Question categories asked in the most recent completed sessions, newest
+    /// first, formatted for the coaching prompt's repetition-avoidance policy.
+    func recentAskedCategoriesSummary(sessionCount: Int = 2) -> String {
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateStyle = .medium
+
+        let lines = allSessions
+            .filter { $0.isComplete }
+            .prefix(sessionCount)
+            .compactMap { session -> String? in
+                let categories = session.askedCategories
+                guard !categories.isEmpty else { return nil }
+                return "- \(dateFormatter.string(from: session.sessionDate)): \(categories.joined(separator: ", "))"
+            }
+
+        guard !lines.isEmpty else {
+            return "None — no questions asked in recent sessions."
+        }
+        return lines.joined(separator: "\n")
     }
 }

@@ -134,6 +134,9 @@ final class DiscoveryCoordinator {
 
     private(set) var coachingSessionStore: CoachingSessionStore?
     private(set) var coachingService: CoachingService?
+    /// The single daily-task generation path, shared by the coaching session,
+    /// the Daily view refresh, and per-category regeneration.
+    private(set) var dailyTaskGenerator: DailyTaskGenerator?
     private var coachingAutoStartTimer: Timer?
 
     // MARK: - Agent Service
@@ -189,13 +192,16 @@ final class DiscoveryCoordinator {
             )
             self.agentServiceStore = agentService
 
-            // Set up coaching service
-            configureCoachingService(llmService: llmService)
+            // Set up coaching service + the shared daily-task generator
+            configureCoachingService(llmService: llmService, contextProvider: contextProvider)
         }
     }
 
-    /// Configure the coaching service
-    private func configureCoachingService(llmService: DiscoveryLLMService) {
+    /// Configure the coaching service and the shared daily-task generator
+    private func configureCoachingService(
+        llmService: DiscoveryLLMService,
+        contextProvider: DiscoveryContextProviderImpl
+    ) {
         let modelContext = dailyTaskStore.modelContext
 
         // Create coaching session store
@@ -212,6 +218,18 @@ final class DiscoveryCoordinator {
             timeEntryStore: timeEntryStore
         )
 
+        // The single daily-task generation path (coaching completion, Daily
+        // view refresh, and per-category regenerate all funnel through it).
+        let generator = DailyTaskGenerator(
+            llmFacade: llmService.llmFacade,
+            dailyTaskStore: dailyTaskStore,
+            preferencesStore: preferencesStore,
+            weeklyGoalStore: weeklyGoalStore,
+            sessionStore: sessionStore,
+            contextProvider: contextProvider
+        )
+        self.dailyTaskGenerator = generator
+
         // Create coaching service
         let coaching = CoachingService(
             modelContext: modelContext,
@@ -222,7 +240,8 @@ final class DiscoveryCoordinator {
             preferencesStore: preferencesStore,
             jobAppStore: jobAppStore,
             candidateDossierStore: candidateDossierStore,
-            knowledgeCardStore: knowledgeCardStore
+            knowledgeCardStore: knowledgeCardStore,
+            taskGenerator: generator
         )
 
         // Set agent service reference for coaching tool workflows
@@ -301,23 +320,21 @@ final class DiscoveryCoordinator {
 
     // MARK: - LLM Agent Operations (delegated to sub-coordinators)
 
-    /// Generate today's tasks using LLM agent
-    func generateDailyTasks(focusArea: String = "balanced") async throws {
-        guard let agent = agentService else {
-            throw DiscoveryLLMError.toolExecutionFailed("Agent service not configured")
+    /// Refresh today's tasks through the shared daily-task generator.
+    func generateDailyTasks() async throws {
+        guard let generator = dailyTaskGenerator else {
+            throw DiscoveryLLMError.toolExecutionFailed("Task generator not configured")
         }
-        let result = try await agent.generateDailyTasks(focusArea: focusArea)
+        try await generator.generate(.refresh)
+    }
 
-        // Clear existing LLM-generated tasks for today
-        for task in dailyTaskStore.todaysTasks where task.isLLMGenerated {
-            dailyTaskStore.delete(task)
+    /// Regenerate one category of today's tasks from user feedback, through
+    /// the shared daily-task generator.
+    func regenerateDailyTasks(category: TaskCategory, feedback: String) async throws {
+        guard let generator = dailyTaskGenerator else {
+            throw DiscoveryLLMError.toolExecutionFailed("Task generator not configured")
         }
-
-        // Convert and add new tasks
-        let tasks = result.tasks.map { $0.toDailyTask() }
-        dailyTaskStore.addAll(tasks)
-
-        Logger.info("✅ Generated \(tasks.count) daily tasks", category: .ai)
+        try await generator.generate(.categoryFeedback(category: category, feedback: feedback))
     }
 
     /// Discover new job sources using LLM agent

@@ -40,8 +40,6 @@ actor DiscoveryToolExecutor {
 
         do {
             switch toolName {
-            case "generate_daily_tasks":
-                return try await executeGenerateDailyTasks(args: argsDict)
             case "prepare_for_event":
                 return try await executePrepareForEvent(args: argsDict)
             case "generate_weekly_reflection":
@@ -58,10 +56,6 @@ actor DiscoveryToolExecutor {
 
     private func stringArg(_ args: [String: Any], _ key: String, default defaultValue: String = "") -> String {
         args[key] as? String ?? defaultValue
-    }
-
-    private func intArg(_ args: [String: Any], _ key: String, default defaultValue: Int) -> Int {
-        args[key] as? Int ?? defaultValue
     }
 
     private func boolArg(_ args: [String: Any], _ key: String, default defaultValue: Bool) -> Bool {
@@ -97,26 +91,6 @@ actor DiscoveryToolExecutor {
     }
 
     // MARK: - Tool Implementations
-
-    private func executeGenerateDailyTasks(args: [String: Any]) async throws -> String {
-        let focusArea = stringArg(args, "focusArea", default: "balanced")
-        let maxTasks = intArg(args, "maxTasks", default: 8)
-
-        let context = await contextProvider.getDailyTaskContext()
-
-        return buildResult([
-            "status": "context_provided",
-            "focusArea": focusArea,
-            "maxTasks": maxTasks,
-            "context": context,
-            "instruction": """
-                Based on the context provided, generate \(maxTasks) prioritized daily tasks.
-                Focus area: \(focusArea).
-                Return tasks as a JSON array with: taskType, title, description, priority (0-2), estimatedMinutes.
-                Task types: gather, customize, apply, follow_up, networking, event_prep, debrief.
-                """
-        ], rawJsonKeys: ["context"])
-    }
 
     private func executePrepareForEvent(args: [String: Any]) async throws -> String {
         let eventId = stringArg(args, "eventId")

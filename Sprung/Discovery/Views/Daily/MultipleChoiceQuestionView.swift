@@ -9,23 +9,16 @@ import SwiftUI
 
 struct MultipleChoiceQuestionView: View {
     let question: CoachingQuestion
-    let questionNumber: Int?
-    let totalQuestions: Int?
-    let onSubmit: (Int, String) -> Void
+    let onSubmit: (QuestionOption) -> Void
 
     @State private var selectedOption: QuestionOption?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            // Progress indicator
+            // Category badge
             HStack {
-                if let num = questionNumber, let total = totalQuestions {
-                    Text("Question \(num) of \(total)+")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
                 Spacer()
-                Text(question.questionType.displayName)
+                Text(question.categoryDisplayName)
                     .font(.caption)
                     .foregroundStyle(.indigo)
                     .padding(.horizontal, 8)
@@ -53,7 +46,7 @@ struct MultipleChoiceQuestionView: View {
             // Continue button
             if let selected = selectedOption {
                 Button {
-                    onSubmit(selected.value, selected.label)
+                    onSubmit(selected)
                 } label: {
                     Text("Continue")
                         .frame(maxWidth: .infinity)

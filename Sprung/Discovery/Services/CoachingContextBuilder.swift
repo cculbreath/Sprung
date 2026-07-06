@@ -77,6 +77,8 @@ struct CoachingContextBuilder {
     func buildSystemPrompt(
         activitySummary: String,
         recentHistory: String,
+        taskDelta: String,
+        askedCategories: String,
         dossierContext: String,
         knowledgeCardsList: String,
         activeJobApps: String
@@ -88,6 +90,8 @@ struct CoachingContextBuilder {
         let substitutions: [String: String] = [
             "{{ACTIVITY_SUMMARY}}": activitySummary,
             "{{RECENT_HISTORY}}": recentHistory,
+            "{{TASK_DELTA}}": taskDelta,
+            "{{ASKED_CATEGORIES}}": askedCategories,
             "{{TARGET_SECTORS}}": preferences.targetSectors.joined(separator: ", "),
             "{{PRIMARY_LOCATION}}": preferences.primaryLocation,
             "{{REMOTE_ACCEPTABLE}}": preferences.remoteAcceptable ? "Yes" : "No",
@@ -104,6 +108,45 @@ struct CoachingContextBuilder {
         }
 
         return template
+    }
+
+    /// Format yesterday's (well, the most recent task day's) list + completion
+    /// state, today's list so far, and the completion streak — the delta the
+    /// coach opens with.
+    func buildTaskDeltaSummary(
+        previousDay: (date: Date, tasks: [DailyTask])?,
+        todaysTasks: [DailyTask],
+        streakDays: Int
+    ) -> String {
+        var parts: [String] = []
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateStyle = .medium
+
+        if let previousDay {
+            let done = previousDay.tasks.filter { $0.isCompleted }
+            parts.append("### Last task day (\(dateFormatter.string(from: previousDay.date))): \(done.count) of \(previousDay.tasks.count) completed")
+            for task in previousDay.tasks {
+                let mark = task.isCompleted ? "[done]" : "[open]"
+                parts.append("- \(mark) \(task.taskType.rawValue): \(task.title)")
+            }
+        } else {
+            parts.append("No prior task list — this may be the user's first working day in the app.")
+        }
+
+        if !todaysTasks.isEmpty {
+            let done = todaysTasks.filter { $0.isCompleted }
+            parts.append("")
+            parts.append("### Today's list so far: \(done.count) of \(todaysTasks.count) completed")
+            for task in todaysTasks {
+                let mark = task.isCompleted ? "[done]" : "[open]"
+                parts.append("- \(mark) \(task.taskType.rawValue): \(task.title)")
+            }
+        }
+
+        parts.append("")
+        parts.append("Completion streak: \(streakDays) day(s) with at least one task completed.")
+
+        return parts.joined(separator: "\n")
     }
 
     /// Load a prompt template from bundle

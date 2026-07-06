@@ -72,30 +72,38 @@ struct CoachingSectionView: View {
         case .generatingReport:
             AnimatedThinkingText(statusMessage: "Analyzing your activity...")
 
-        case .askingQuestion(let question, let index, let total):
-            MultipleChoiceQuestionView(
-                question: question,
-                questionNumber: index,
-                totalQuestions: total,
-                onSubmit: { value, label in
-                    Task {
-                        try? await service.submitAnswer(value: value, label: label)
-                    }
+        case .askingQuestion(let question):
+            VStack(alignment: .leading, spacing: 12) {
+                // The coach's opener (the delta brief) stays visible above the question
+                if let session = service.currentSession, !session.recommendations.isEmpty {
+                    MarkdownTextView(text: session.recommendations)
+
+                    Divider()
                 }
-            )
+
+                MultipleChoiceQuestionView(
+                    question: question,
+                    onSubmit: { option in
+                        service.submitAnswer(option: option)
+                    }
+                )
+            }
 
         case .waitingForAnswer:
-            AnimatedThinkingText(statusMessage: "Thinking...")
+            VStack(alignment: .leading, spacing: 12) {
+                if let session = service.currentSession, !session.recommendations.isEmpty {
+                    MarkdownTextView(text: session.recommendations)
+                }
 
-        case .generatingRecommendations:
-            AnimatedThinkingText(statusMessage: "Preparing your coaching...")
+                AnimatedThinkingText(statusMessage: "Thinking...")
+            }
 
         case .showingRecommendations(let recommendations):
             VStack(alignment: .leading, spacing: 12) {
-                // Show recommendations while loading follow-up
+                // Show the plan while the session wraps up
                 MarkdownTextView(text: recommendations)
 
-                AnimatedThinkingText(statusMessage: "Preparing follow-up options...")
+                AnimatedThinkingText(statusMessage: "Wrapping up...")
             }
 
         case .askingFollowUp(let question):
@@ -107,15 +115,11 @@ struct CoachingSectionView: View {
                     Divider()
                 }
 
-                // Show follow-up question
+                // Show next-step choice
                 MultipleChoiceQuestionView(
                     question: question,
-                    questionNumber: nil,
-                    totalQuestions: nil,
-                    onSubmit: { value, label in
-                        Task {
-                            try? await service.submitFollowUpAnswer(value: value, label: label)
-                        }
+                    onSubmit: { option in
+                        service.submitAnswer(option: option)
                     }
                 )
             }
@@ -209,7 +213,7 @@ struct TodaysRecommendationsView: View {
                             let answer = session.answers[index]
                             if let question = session.questions.first(where: { $0.id == answer.questionId }) {
                                 HStack(alignment: .top) {
-                                    Text(question.questionType.displayName + ":")
+                                    Text(question.categoryDisplayName + ":")
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
                                     Text(answer.selectedLabel)

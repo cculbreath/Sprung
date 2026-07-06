@@ -5,15 +5,16 @@
 //  Phase 5 (LLM-driven subsystem tests — pure units).
 //
 //  The Discovery agent's LLM responses decode into the Codable DTOs in
-//  DiscoveryAgentTypes.swift. Phase 1's DiscoveryResponseParserTests exercises
-//  the three top-level Result wrappers (tasks/sources/events) through the
-//  text-extraction parser; this file covers the per-item response DTOs directly
-//  — the wire-key mapping (camelCase for the daily-task/job-selection contracts
-//  we control; snake_case where the prompt templates pin it) and optional-field
-//  handling — plus the two value-type mappers (TalkingPointResult /
-//  TargetCompanyResult), which are pure. The remaining `to*()` mappers build
-//  SwiftData @Model objects (DailyTask, JobSource, NetworkingEventOpportunity)
-//  and are out of scope for a pure unit.
+//  DiscoveryAgentTypes.swift (and DailyTaskGenerator.swift for the daily-task
+//  generation contract). Phase 1's DiscoveryResponseParserTests exercises the
+//  top-level Result wrappers (sources/events) through the text-extraction
+//  parser; this file covers the per-item response DTOs directly — the wire-key
+//  mapping (camelCase for the daily-task/job-selection contracts we control;
+//  snake_case where the prompt templates pin it) and optional-field handling —
+//  plus the two value-type mappers (TalkingPointResult / TargetCompanyResult),
+//  which are pure. The remaining `to*()` mappers build SwiftData @Model
+//  objects (JobSource, NetworkingEventOpportunity) and are out of scope for a
+//  pure unit.
 //
 
 import XCTest
@@ -28,45 +29,54 @@ final class DiscoveryPureLogicTests: XCTestCase {
         return try decoder.decode(type, from: data)
     }
 
-    // MARK: - GeneratedDailyTask (camelCase keys, optionals)
+    // MARK: - DailyTaskGenerationResponse (camelCase keys — the single task-gen contract)
 
-    func testGeneratedDailyTaskDecodesCamelCaseAndOptionals() throws {
+    func testDailyTaskGenerationResponseDecodesAllSections() throws {
         let json = """
         {
-          "taskType": "follow_up",
-          "title": "Email Dana",
-          "description": "Thank-you note",
-          "priority": 2,
-          "relatedId": "B6A1...",
-          "estimatedMinutes": 15
+          "newTasks": [
+            {
+              "taskType": "follow_up",
+              "title": "Email Dana",
+              "description": "Thank-you note",
+              "priority": 2,
+              "estimatedMinutes": 15,
+              "relatedId": "B6A1..."
+            }
+          ],
+          "carryOver": ["9C0FBB2E-2455-4B37-BB9F-6F13BF3B1F14"],
+          "retired": [
+            { "taskId": "1B7B33F0-8F44-4B57-9111-31E9B76C6F60", "reason": "Event passed on Friday" }
+          ],
+          "summary": "Follow-ups first, then one application."
         }
         """
-        let task = try decode(GeneratedDailyTask.self, json)
-        XCTAssertEqual(task.taskType, "follow_up", "taskType decodes (values like follow_up stay snake_case)")
-        XCTAssertEqual(task.title, "Email Dana")
-        XCTAssertEqual(task.priority, 2)
-        XCTAssertEqual(task.relatedId, "B6A1...", "relatedId decodes")
-        XCTAssertEqual(task.estimatedMinutes, 15, "estimatedMinutes decodes")
+        let response = try decode(DailyTaskGenerationResponse.self, json)
+        XCTAssertEqual(response.newTasks.count, 1)
+        XCTAssertEqual(response.newTasks[0].taskType, "follow_up",
+                       "taskType decodes (values like follow_up stay snake_case)")
+        XCTAssertEqual(response.newTasks[0].estimatedMinutes, 15, "estimatedMinutes decodes")
+        XCTAssertEqual(response.newTasks[0].relatedId, "B6A1...", "relatedId decodes")
+        XCTAssertEqual(response.carryOver, ["9C0FBB2E-2455-4B37-BB9F-6F13BF3B1F14"])
+        XCTAssertEqual(response.retired.count, 1)
+        XCTAssertEqual(response.retired[0].reason, "Event passed on Friday",
+                       "retirement reasons are part of the wire contract — they're shown to the user")
+        XCTAssertEqual(response.summary, "Follow-ups first, then one application.")
     }
 
-    func testGeneratedDailyTaskMissingOptionalsDecodeToNil() throws {
-        let json = #"{ "taskType": "gather", "title": "Scan boards", "priority": 1 }"#
-        let task = try decode(GeneratedDailyTask.self, json)
-        XCTAssertNil(task.description)
-        XCTAssertNil(task.relatedId)
-        XCTAssertNil(task.estimatedMinutes)
-    }
-
-    func testDailyTasksResultWrapsArray() throws {
+    func testDailyTaskGenerationEntryNullRelatedIdDecodesToNil() throws {
         let json = """
-        { "tasks": [
-          { "taskType": "apply", "title": "Submit X", "priority": 1 },
-          { "taskType": "networking", "title": "DM Y", "priority": 3 }
-        ] }
+        {
+          "taskType": "gather",
+          "title": "Scan boards",
+          "description": "Check the two due sources",
+          "priority": 1,
+          "estimatedMinutes": 30,
+          "relatedId": null
+        }
         """
-        let result = try decode(DailyTasksResult.self, json)
-        XCTAssertEqual(result.tasks.count, 2)
-        XCTAssertEqual(result.tasks[1].taskType, "networking")
+        let entry = try decode(DailyTaskGenerationEntry.self, json)
+        XCTAssertNil(entry.relatedId, "explicit null relatedId decodes to nil")
     }
 
     // MARK: - GeneratedJobSource

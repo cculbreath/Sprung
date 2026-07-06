@@ -4,9 +4,10 @@
 //
 //  Pure-logic coverage for DiscoveryResponseParser: JSON extraction (fenced
 //  blocks, raw braces, raw brackets) exercised through the typed parse* methods,
-//  plus error surfacing for unparseable input. Wire keys are checked: camelCase
-//  for the daily-task contract we control; snake_case where the source/event
-//  prompt templates pin it.
+//  plus error surfacing for unparseable input. Wire keys are checked: snake_case
+//  where the source/event prompt templates pin it. (The daily-task contract
+//  moved to DailyTaskGenerator's structured output — see
+//  DiscoveryPureLogicTests.)
 //
 
 import XCTest
@@ -16,41 +17,28 @@ final class DiscoveryResponseParserTests: XCTestCase {
 
     private let parser = DiscoveryResponseParser()
 
-    // MARK: - parseTasks
+    // MARK: - Extraction shapes (exercised through parseSources)
 
-    func testParseTasksRawJSON() throws {
-        let json = #"""
-        {"tasks":[{"taskType":"apply","title":"Apply to Acme","description":"do it","priority":1,"relatedId":null,"estimatedMinutes":30}]}
-        """#
-        let result = try parser.parseTasks(json)
-        XCTAssertEqual(result.tasks.count, 1)
-        XCTAssertEqual(result.tasks.first?.title, "Apply to Acme")
-        XCTAssertEqual(result.tasks.first?.taskType, "apply", "camelCase taskType must decode")
-        XCTAssertEqual(result.tasks.first?.priority, 1)
-        XCTAssertEqual(result.tasks.first?.estimatedMinutes, 30)
-    }
-
-    func testParseTasksFromFencedBlock() throws {
+    func testParseSourcesFromFencedBlock() throws {
         // Single-line JSON inside a ```json fence (extractJSON's regex is line-oriented).
-        let response = "Here are your tasks:\n```json {\"tasks\":[]} ```\nThat's all."
-        let result = try parser.parseTasks(response)
-        XCTAssertEqual(result.tasks.count, 0)
+        let response = "Here are your sources:\n```json {\"sources\":[]} ```\nThat's all."
+        let result = try parser.parseSources(response)
+        XCTAssertEqual(result.sources.count, 0)
     }
 
-    func testParseTasksFromBracesWithSurroundingProse() throws {
-        let response = "Sure thing. {\"tasks\":[]} Hope that helps!"
-        let result = try parser.parseTasks(response)
-        XCTAssertTrue(result.tasks.isEmpty)
+    func testParseSourcesFromBracesWithSurroundingProse() throws {
+        let response = "Sure thing. {\"sources\":[]} Hope that helps!"
+        let result = try parser.parseSources(response)
+        XCTAssertTrue(result.sources.isEmpty)
     }
 
-    func testParseTasksUsesFirstBraceToLastBrace() throws {
+    func testParseSourcesUsesFirstBraceToLastBrace() throws {
         // extractJSON grabs firstIndex("{")...lastIndex("}"); trailing prose with no
         // braces is excluded, so this parses cleanly.
-        let response = "prefix {\"tasks\":[{\"taskType\":\"gather\",\"title\":\"T\",\"priority\":2}]} done"
-        let result = try parser.parseTasks(response)
-        XCTAssertEqual(result.tasks.first?.taskType, "gather")
-        XCTAssertEqual(result.tasks.first?.priority, 2)
-        XCTAssertNil(result.tasks.first?.description, "optional missing field decodes to nil")
+        let response = "prefix {\"sources\":[{\"name\":\"X\",\"url\":\"u\",\"category\":\"local\",\"relevance_reason\":\"r\"}]} done"
+        let result = try parser.parseSources(response)
+        XCTAssertEqual(result.sources.first?.name, "X")
+        XCTAssertNil(result.sources.first?.recommendedCadenceDays, "optional missing field decodes to nil")
     }
 
     // MARK: - parseSources
@@ -90,7 +78,7 @@ final class DiscoveryResponseParserTests: XCTestCase {
     // MARK: - Error surfacing
 
     func testNoJSONThrowsInvalidResponse() {
-        XCTAssertThrowsError(try parser.parseTasks("there is no json in this text")) { error in
+        XCTAssertThrowsError(try parser.parseSources("there is no json in this text")) { error in
             guard case DiscoveryAgentError.invalidResponse = error else {
                 return XCTFail("expected .invalidResponse, got \(error)")
             }
@@ -98,8 +86,8 @@ final class DiscoveryResponseParserTests: XCTestCase {
     }
 
     func testMalformedJSONThrowsInvalidResponse() {
-        // Has braces (so extraction succeeds) but the shape is wrong for DailyTasksResult.
-        XCTAssertThrowsError(try parser.parseTasks(#"{"not_tasks": 5}"#)) { error in
+        // Has braces (so extraction succeeds) but the shape is wrong for JobSourcesResult.
+        XCTAssertThrowsError(try parser.parseSources(#"{"not_sources": 5}"#)) { error in
             guard case DiscoveryAgentError.invalidResponse = error else {
                 return XCTFail("expected .invalidResponse, got \(error)")
             }
@@ -110,9 +98,9 @@ final class DiscoveryResponseParserTests: XCTestCase {
 
     func testRawBracketExtractionFailsDecodeButExercisesArrayPath() {
         // No object braces, only an array -> extractJSON returns the bracket span.
-        // DailyTasksResult expects an object, so decode fails -> invalidResponse.
+        // JobSourcesResult expects an object, so decode fails -> invalidResponse.
         // This proves the bracket branch is reached (not a nil/extraction failure).
-        XCTAssertThrowsError(try parser.parseTasks("results: [1,2,3] end")) { error in
+        XCTAssertThrowsError(try parser.parseSources("results: [1,2,3] end")) { error in
             guard case DiscoveryAgentError.invalidResponse = error else {
                 return XCTFail("expected .invalidResponse, got \(error)")
             }

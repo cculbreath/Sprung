@@ -3,11 +3,12 @@
 //  Sprung
 //
 //  Agent service for Discovery LLM interactions.
-//  Tool-loop flows (daily tasks, event prep, weekly reflection) run on the
-//  shared AnthropicToolLoopRunner against the user-selected Discovery
-//  Anthropic model; single-shot flows (debrief outcomes, choose-best-jobs)
-//  are plain Anthropic Messages calls. Web-search discovery (job sources,
-//  networking events) stays on LLMFacade.executeWithWebSearch (OpenAI).
+//  Tool-loop flows (event prep, weekly reflection) run on the shared
+//  AnthropicToolLoopRunner against the user-selected Discovery Anthropic
+//  model; single-shot flows (debrief outcomes, choose-best-jobs) are plain
+//  Anthropic Messages calls. Web-search discovery (job sources, networking
+//  events) stays on LLMFacade.executeWithWebSearch (OpenAI). Daily-task
+//  generation lives in DailyTaskGenerator — the single generation path.
 //
 
 import Foundation
@@ -138,16 +139,6 @@ final class DiscoveryAgentService {
     }
 
     // MARK: - Task Methods
-
-    func generateDailyTasks(focusArea: String = "balanced") async throws -> DailyTasksResult {
-        let systemPrompt = try loadPromptTemplate(named: "discovery_generate_daily_tasks")
-        let response = try await runAgent(
-            systemPrompt: systemPrompt,
-            userMessage: "Generate today's job search tasks. Focus area: \(focusArea)",
-            operation: "Daily Task Generation"
-        )
-        return try parser.parseTasks(response)
-    }
 
     func discoverJobSources(
         sectors: [String],

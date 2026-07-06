@@ -19,44 +19,14 @@ enum DiscoveryToolSchemas {
 
     // MARK: - Complete Tool Definitions
 
-    /// All Discovery agent tools: the three context tools plus the completion tool.
+    /// All Discovery agent tools: the two context tools plus the completion tool.
     static let allTools: [AnthropicTool] = [
-        buildGenerateDailyTasksTool(),
         buildPrepareForEventTool(),
         buildGenerateWeeklyReflectionTool(),
         buildSubmitFinalResponseTool()
     ]
 
     // MARK: - Tool Builders
-
-    private static func buildGenerateDailyTasksTool() -> AnthropicTool {
-        let schema: [String: Any] = [
-            "type": "object",
-            "properties": [
-                "focusArea": [
-                    "type": "string",
-                    "description": "Optional focus area: applications, networking, follow_ups, or balanced",
-                    "enum": ["applications", "networking", "follow_ups", "balanced"]
-                ],
-                "maxTasks": [
-                    "type": "integer",
-                    "description": "Maximum number of tasks to generate (default: 8)"
-                ]
-            ],
-            "required": [],
-            "additionalProperties": false
-        ]
-
-        return .function(AnthropicFunctionTool(
-            name: "generate_daily_tasks",
-            description: """
-                Generate prioritized daily tasks for job search based on current state.
-                Considers due sources, upcoming events, contacts needing attention, and weekly goals.
-                Returns 5-8 actionable tasks with priorities and time estimates.
-                """,
-            inputSchema: schema
-        ))
-    }
 
     private static func buildPrepareForEventTool() -> AnthropicTool {
         let schema: [String: Any] = [

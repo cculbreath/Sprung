@@ -25,6 +25,10 @@ class CoachingSession: Identifiable {
     var questionsJSON: String?
     var answersJSON: String?
 
+    // Question categories the coach asked this session (JSON-encoded [String]).
+    // Fed back into later sessions so categories aren't repeated.
+    var askedCategoriesJSON: String?
+
     // Final coaching output
     var recommendations: String = ""
 
@@ -73,6 +77,16 @@ class CoachingSession: Identifiable {
         }
         set {
             answersJSON = try? String(data: JSONEncoder().encode(newValue), encoding: .utf8)
+        }
+    }
+
+    var askedCategories: [String] {
+        get {
+            guard let json = askedCategoriesJSON else { return [] }
+            return (try? JSONDecoder().decode([String].self, from: Data(json.utf8))) ?? []
+        }
+        set {
+            askedCategoriesJSON = try? String(data: JSONEncoder().encode(newValue), encoding: .utf8)
         }
     }
 
@@ -421,34 +435,32 @@ struct ActivitySnapshot: Codable {
 
 // MARK: - Coaching Question
 
-enum CoachingQuestionType: String, Codable, CaseIterable, Equatable {
-    case motivation = "motivation"
-    case challenge = "challenge"
-    case focus = "focus"
-    case feedback = "feedback"
-    case followUp = "follow_up"
-
-    var displayName: String {
-        switch self {
-        case .motivation: return "Motivation Check"
-        case .challenge: return "Challenges"
-        case .focus: return "Today's Focus"
-        case .feedback: return "Feedback"
-        case .followUp: return "Next Steps"
-        }
-    }
-}
-
 struct CoachingQuestion: Codable, Identifiable, Equatable {
     var id: UUID = UUID()
     let questionText: String
     let options: [QuestionOption]
-    let questionType: CoachingQuestionType
+    /// Free-form question category named by the coach (e.g. "motivation",
+    /// "interview_prep", "search_strategy"). Persisted per session so later
+    /// sessions avoid repeating recently-asked categories.
+    let category: String
 
-    init(questionText: String, options: [QuestionOption], questionType: CoachingQuestionType) {
+    init(questionText: String, options: [QuestionOption], category: String) {
         self.questionText = questionText
         self.options = options
-        self.questionType = questionType
+        self.category = category
+    }
+
+    /// Human-readable form of the category for UI badges.
+    var categoryDisplayName: String {
+        category
+            .replacingOccurrences(of: "_", with: " ")
+            .capitalized
+    }
+
+    /// A next-step action prompt (options carry action identifiers) rather than
+    /// a data-gathering question.
+    var isActionPrompt: Bool {
+        options.contains { $0.actionId != nil }
     }
 }
 
@@ -457,11 +469,15 @@ struct QuestionOption: Codable, Identifiable, Equatable {
     let value: Int
     let label: String
     let emoji: String?
+    /// For next-step action prompts: the `CoachingFollowUpAction` rawValue this
+    /// option maps to. Nil for regular data-gathering questions.
+    let actionId: String?
 
-    init(value: Int, label: String, emoji: String? = nil) {
+    init(value: Int, label: String, emoji: String? = nil, actionId: String? = nil) {
         self.value = value
         self.label = label
         self.emoji = emoji
+        self.actionId = actionId
     }
 }
 
@@ -501,9 +517,8 @@ enum CoachingFollowUpAction: String, Codable, CaseIterable {
 enum CoachingState: Equatable {
     case idle
     case generatingReport
-    case askingQuestion(question: CoachingQuestion, index: Int, total: Int)
+    case askingQuestion(question: CoachingQuestion)
     case waitingForAnswer
-    case generatingRecommendations
     case showingRecommendations(recommendations: String)
     case askingFollowUp(question: CoachingQuestion)
     case executingFollowUp(action: CoachingFollowUpAction)
@@ -518,21 +533,4 @@ enum CoachingState: Equatable {
             return true
         }
     }
-}
-
-// MARK: - Task Regeneration Response
-
-/// Response from task regeneration LLM call
-struct TaskRegenerationResponse: Codable {
-    let tasks: [TaskJSON]
-}
-
-/// JSON representation of a task from LLM response
-struct TaskJSON: Codable {
-    let taskType: String
-    let title: String
-    let description: String
-    let priority: Int
-    let estimatedMinutes: Int
-    let relatedId: String?
 }
