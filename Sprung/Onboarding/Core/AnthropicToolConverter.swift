@@ -47,11 +47,14 @@ struct AnthropicToolConverter {
         }
 
         // Add server-side tools (fixed order, after sorted function tools).
-        // Types + maxUses pinned explicitly: onboarding request bytes are replay-tape
-        // and prompt-cache-prefix sensitive; migrating to the 20260209 variants is a
-        // deliberate separate change, not a dependency-bump side effect.
-        anthropicTools.append(.serverTool(.webSearch(type: "web_search_20250305", maxUses: 5)))
-        anthropicTools.append(.serverTool(.webFetch(type: "web_fetch_20250910")))
+        // Onboarding now rides the fork's current defaults (web_search_20260209 /
+        // web_fetch_20260209, GA, no beta header) — migrated off the legacy
+        // web_search_20250305 / web_fetch_20250910 pin per D-17 (deliberate,
+        // tape/cache-prefix-invalidating; live-probed 2026-07-06 to confirm both
+        // variant pairs work on the configured models before the swap).
+        // maxUses stays capped at 5 for cost control, independent of the variant.
+        anthropicTools.append(.serverTool(.webSearch(maxUses: 5)))
+        anthropicTools.append(.serverTool(.webFetch()))
 
         Logger.debug(
             "🔧 Anthropic tools: phase=\(phase.rawValue), sending \(anthropicTools.count) tools (incl. web_search, web_fetch)",
