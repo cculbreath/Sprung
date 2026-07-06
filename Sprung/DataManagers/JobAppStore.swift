@@ -32,11 +32,19 @@ final class JobAppStore: EntityStore {
     private var preprocessor: JobAppPreprocessor?
     private weak var knowledgeCardStore: KnowledgeCardStore?
 
+    /// Background full-posting fetch + deferred preprocessing for MCP-imported
+    /// leads (Dice/ZipRecruiter). Owned by the store so enrichment outlives the
+    /// search sheet that imported the lead; it calls back into this store to
+    /// persist the fetched description and drive `rerunPreprocessing`. Defined
+    /// alongside the import flow in JobMCPImportService.swift.
+    let leadEnrichment: JobLeadEnrichmentService
+
     // MARK: - Initialiser
     init(context: ModelContext, resStore: ResStore, coverLetterStore: CoverLetterStore) {
         modelContext = context
         self.resStore = resStore
         self.coverLetterStore = coverLetterStore
+        leadEnrichment = JobLeadEnrichmentService()
     }
 
     /// Set the preprocessor and KnowledgeCardStore for background job processing
@@ -145,13 +153,22 @@ final class JobAppStore: EntityStore {
         persistChanges()
         // Handle additional logic like notifying listeners as needed
     }
-    func addJobApp(_ jobApp: JobApp) -> JobApp? {
+    /// Add a job app and (unless deferred) trigger background preprocessing.
+    ///
+    /// `deferringPreprocessing: true` is for lead imports whose stored
+    /// description is a stand-in for a fuller one that arrives later — the MCP
+    /// boards' truncated/absent summaries. The lead lands instantly and
+    /// `JobLeadEnrichmentService` triggers preprocessing itself once the full
+    /// posting is fetched (or on the summary as the fallback when the fetch
+    /// fails), so preprocessing never runs on the truncated text first.
+    func addJobApp(_ jobApp: JobApp, deferringPreprocessing: Bool = false) -> JobApp? {
         modelContext.insert(jobApp)
         persistChanges()
         selectedApp = jobApp
 
         // Trigger background preprocessing (requirements + relevant cards)
-        if let preprocessor = preprocessor,
+        if !deferringPreprocessing,
+           let preprocessor = preprocessor,
            let knowledgeCardStore = knowledgeCardStore,
            !jobApp.jobDescription.isEmpty {
             preprocessor.preprocessInBackground(
