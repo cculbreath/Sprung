@@ -325,11 +325,16 @@ final class JobAppStore: EntityStore {
     /// Advance a job app to the next status in the pipeline
     func advanceStatus(_ jobApp: JobApp) {
         guard let nextStatus = jobApp.status.next else { return }
+        setStatus(jobApp, to: nextStatus)
+    }
 
-        jobApp.status = nextStatus
+    /// Set a job app to a specific status, stamping the dates that stage
+    /// implies (non-linear moves from the pipeline card menu stamp the same
+    /// milestones a step-by-step advance would).
+    func setStatus(_ jobApp: JobApp, to status: Statuses) {
+        jobApp.status = status
 
-        // Track dates
-        switch nextStatus {
+        switch status {
         case .submitted:
             jobApp.appliedDate = Date()
         case .interview:
@@ -344,17 +349,6 @@ final class JobAppStore: EntityStore {
             jobApp.closedDate = Date()
         default:
             break
-        }
-
-        persistChanges()
-    }
-
-    /// Set a job app to a specific status
-    func setStatus(_ jobApp: JobApp, to status: Statuses) {
-        jobApp.status = status
-
-        if status == .accepted || status == .rejected || status == .withdrawn {
-            jobApp.closedDate = Date()
         }
 
         persistChanges()

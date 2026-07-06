@@ -11,10 +11,31 @@ import SwiftUI
 struct PipelineView: View {
     let coordinator: DiscoveryCoordinator
 
+    @Environment(AppEnvironment.self) private var appEnvironment
+    @Environment(KnowledgeCardStore.self) private var knowledgeCardStore
+    @Environment(CandidateDossierStore.self) private var candidateDossierStore
+    @Environment(CoverRefStore.self) private var coverRefStore
+    // Optional reads: present in the main window's environment but not the
+    // Discovery window's. The Choose Best model picker requires the enabled-LLM
+    // store, so its button disables where the store is absent instead of
+    // crashing the sheet.
+    @Environment(EnabledLLMStore.self) private var enabledLLMStore: EnabledLLMStore?
+    @Environment(ReasoningStreamState.self) private var reasoningStream: ReasoningStreamState?
+
     @State private var showingAddLead = false
+    @State private var showingJobSearch = false
+    @State private var isChooseBestActive = false
+    @State private var isChoosingBest = false
+    /// Terminal history (Rejected/Withdrawn) stays off the working board unless
+    /// the user opts in.
+    @AppStorage("pipelineShowClosedColumns") private var showClosedColumns = false
 
     private var identifiedCount: Int {
         coordinator.jobAppStore.jobApps(forStatus: .new).count
+    }
+
+    private var visibleStatuses: [Statuses] {
+        Statuses.pipelineStatuses.filter { showClosedColumns || ($0 != .rejected && $0 != .withdrawn) }
     }
 
     var body: some View {
@@ -42,12 +63,19 @@ struct PipelineView: View {
                     }
 
                     Button {
-                        NotificationCenter.default.post(name: .triggerBestJobButton, object: nil)
+                        showingJobSearch = true
                     } label: {
-                        Label("Choose Best", systemImage: "trophy")
+                        Label("Search Boards", systemImage: "magnifyingglass")
                     }
-                    .disabled(identifiedCount < 1)
-                    .help("Select best \(min(5, identifiedCount)) jobs from \(identifiedCount) identified")
+                    .help("Search Dice and ZipRecruiter and import results as leads")
+
+                    chooseBestButton
+
+                    Toggle(isOn: $showClosedColumns) {
+                        Label("Closed", systemImage: "archivebox")
+                    }
+                    .toggleStyle(.button)
+                    .help("Show the Rejected and Withdrawn columns")
 
                     Button {
                         showingAddLead = true
@@ -65,12 +93,12 @@ struct PipelineView: View {
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(alignment: .top, spacing: 16) {
-                    ForEach(Statuses.pipelineStatuses, id: \.self) { status in
+                    ForEach(visibleStatuses, id: \.self) { status in
                         PipelineStatusColumn(
                             status: status,
                             leads: coordinator.jobAppStore.jobApps(forStatus: status),
-                            onAdvance: { lead in advanceLead(lead) },
-                            onReject: { lead in rejectLead(lead) },
+                            onAdvance: { lead in coordinator.jobAppStore.advanceStatus(lead) },
+                            onMove: { lead, target in coordinator.jobAppStore.setStatus(lead, to: target) },
                             onSelect: { lead in selectLead(lead) }
                         )
                     }
@@ -80,17 +108,65 @@ struct PipelineView: View {
         }
         .navigationTitle("")
         .sheet(isPresented: $showingAddLead) {
-            AddLeadView(coordinator: coordinator)
+            // Leads enter through the same URL-import path as every other job
+            // (LLM extraction + background preprocessing). JobAppStore is
+            // injected explicitly because the Discovery window does not carry
+            // it in its environment.
+            NewAppSheetView(isPresented: $showingAddLead)
+                .environment(coordinator.jobAppStore)
+        }
+        .sheet(isPresented: $showingJobSearch) {
+            JobSearchSheet(jobAppStore: coordinator.jobAppStore)
         }
     }
 
-    private func advanceLead(_ lead: JobApp) {
-        coordinator.jobAppStore.advanceStatus(lead)
+    // MARK: - Choose Best
+
+    @ViewBuilder
+    private var chooseBestButton: some View {
+        if let enabledLLMStore {
+            Button {
+                isChooseBestActive = true
+            } label: {
+                chooseBestLabel
+            }
+            .disabled(identifiedCount < 1 || isChoosingBest)
+            .help("Select best \(min(5, identifiedCount)) jobs from \(identifiedCount) identified")
+            .chooseBestJobsFlow(
+                isActive: $isChooseBestActive,
+                isProcessing: $isChoosingBest,
+                dependencies: ChooseBestJobsFlow.Dependencies(
+                    jobAppStore: coordinator.jobAppStore,
+                    knowledgeCardStore: knowledgeCardStore,
+                    candidateDossierStore: candidateDossierStore,
+                    coverRefStore: coverRefStore,
+                    llmFacade: appEnvironment.llmFacade,
+                    openRouterService: appEnvironment.openRouterService,
+                    enabledLLMStore: enabledLLMStore,
+                    reasoningStream: reasoningStream
+                )
+            )
+        } else {
+            Button {} label: {
+                chooseBestLabel
+            }
+            .disabled(true)
+            .help("Choose Best runs from the Pipeline module in the main window")
+        }
     }
 
-    private func rejectLead(_ lead: JobApp) {
-        coordinator.jobAppStore.reject(lead, reason: nil)
+    private var chooseBestLabel: some View {
+        Group {
+            if isChoosingBest {
+                Label("Choose Best", systemImage: "sparkle")
+                    .symbolEffect(.rotate.byLayer)
+            } else {
+                Label("Choose Best", systemImage: "trophy")
+            }
+        }
     }
+
+    // MARK: - Actions
 
     private func selectLead(_ lead: JobApp) {
         // Select the job in the store
@@ -111,13 +187,32 @@ struct PipelineView: View {
     }
 }
 
+// MARK: - Job Search Sheet
+
+/// Sheet wrapper around the embeddable `JobSearchView`: adds a dismiss
+/// affordance and a workable size for presentation from the kanban header.
+private struct JobSearchSheet: View {
+    let jobAppStore: JobAppStore
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        JobSearchView(jobAppStore: jobAppStore)
+            .overlay(alignment: .topTrailing) {
+                Button("Done") { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+                    .padding(12)
+            }
+            .frame(minWidth: 760, idealWidth: 860, minHeight: 620, idealHeight: 720)
+    }
+}
+
 // MARK: - Status Column
 
 struct PipelineStatusColumn: View {
     let status: Statuses
     let leads: [JobApp]
     let onAdvance: (JobApp) -> Void
-    let onReject: (JobApp) -> Void
+    let onMove: (JobApp, Statuses) -> Void
     let onSelect: (JobApp) -> Void
 
     var body: some View {
@@ -146,7 +241,7 @@ struct PipelineStatusColumn: View {
                             lead: lead,
                             status: status,
                             onAdvance: { onAdvance(lead) },
-                            onReject: { onReject(lead) },
+                            onMove: { target in onMove(lead, target) },
                             onSelect: { onSelect(lead) }
                         )
                     }
@@ -166,17 +261,32 @@ struct PipelineLeadCard: View {
     let lead: JobApp
     let status: Statuses
     let onAdvance: () -> Void
-    let onReject: () -> Void
+    let onMove: (Statuses) -> Void
     let onSelect: () -> Void
 
     @State private var isHovered = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            // Company and Role
-            Text(lead.companyName)
-                .font(.headline)
-                .lineLimit(1)
+            // Company and stage menu
+            HStack(alignment: .top) {
+                Text(lead.companyName)
+                    .font(.headline)
+                    .lineLimit(1)
+
+                Spacer()
+
+                Menu {
+                    moveMenuItems
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                        .foregroundStyle(.secondary)
+                }
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
+                .fixedSize()
+                .help("Move to any stage")
+            }
 
             if !lead.jobPosition.isEmpty {
                 Text(lead.jobPosition)
@@ -212,23 +322,13 @@ struct PipelineLeadCard: View {
                 }
             }
 
-            // Action buttons (show on hover or always on last card)
-            if isHovered && !status.isTerminal {
-                HStack {
-                    if status.canAdvance {
-                        Button("Advance") {
-                            onAdvance()
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .controlSize(.small)
-                    }
-
-                    Button("Reject") {
-                        onReject()
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
+            // Quick advance (hover); non-linear moves live in the stage menu
+            if isHovered && status.canAdvance {
+                Button("Advance") {
+                    onAdvance()
                 }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
                 .transition(.opacity)
             }
         }
@@ -252,289 +352,27 @@ struct PipelineLeadCard: View {
                 isHovered = hovering
             }
         }
+        .contextMenu {
+            moveMenuItems
+        }
         .onTapGesture {
             onSelect()
         }
         .padding(.horizontal, 8)
     }
-}
 
-// MARK: - Add Lead View
-
-struct AddLeadView: View {
-    let coordinator: DiscoveryCoordinator
-    @Environment(\.dismiss) private var dismiss
-
-    @State private var company = ""
-    @State private var role = ""
-    @State private var source = ""
-    @State private var url = ""
-    @State private var notes = ""
-    @State private var priority: JobLeadPriority = .medium
-
-    var body: some View {
-        VStack(spacing: 20) {
-            Text("Add New Lead")
-                .font(.title2)
-                .fontWeight(.semibold)
-
-            Form {
-                TextField("Company", text: $company)
-                TextField("Role", text: $role)
-                TextField("Source (e.g., LinkedIn, Indeed)", text: $source)
-                TextField("Job URL", text: $url)
-
-                Picker("Priority", selection: $priority) {
-                    ForEach(JobLeadPriority.allCases, id: \.self) { p in
-                        Text(p.rawValue).tag(p)
-                    }
-                }
-
-                TextField("Notes", text: $notes, axis: .vertical)
-                    .lineLimit(3...6)
-            }
-            .formStyle(.grouped)
-
-            ModalFooterView(
-                primaryLabel: "Add Lead",
-                isDisabled: company.isEmpty,
-                onCancel: { dismiss() },
-                onPrimary: { addLead(); dismiss() }
-            )
-        }
-        .padding()
-        .frame(width: 400, height: 400)
-    }
-
-    private func addLead() {
-        let lead = JobApp(
-            jobPosition: role,
-            jobLocation: "",
-            companyName: company,
-            companyLinkedinId: "",
-            jobPostingTime: "",
-            jobDescription: "",
-            seniorityLevel: "",
-            employmentType: "",
-            jobFunction: "",
-            industries: "",
-            jobApplyLink: "",
-            postingURL: url
-        )
-        lead.priority = priority
-        lead.source = source.isEmpty ? nil : source
-        lead.status = .new
-        lead.identifiedDate = Date()
-        if !notes.isEmpty {
-            lead.notes = notes
-        }
-        coordinator.jobAppStore.addToPipeline(lead)
-    }
-}
-
-
-// MARK: - Selection Report Sheet
-
-struct SelectionReportSheet: View {
-    let result: JobSelectionsResult
-    @Environment(\.dismiss) private var dismiss
-    @Environment(JobAppStore.self) private var jobAppStore
-
-    @State private var checkedJobIds: Set<UUID> = []
-
-    private var checkedCount: Int { checkedJobIds.count }
-
-    var body: some View {
-        VStack(spacing: 0) {
-            // Header
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Top \(result.selections.count) Job Matches")
-                        .font(.title2)
-                        .fontWeight(.semibold)
-                    Text("Check jobs to advance to Queued stage")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                HStack(spacing: 8) {
-                    Button("Cancel") { dismiss() }
-                        .buttonStyle(.bordered)
-                        .keyboardShortcut(.cancelAction)
-
-                    Button("Advance Selected (\(checkedCount))") {
-                        advanceCheckedJobs()
-                        dismiss()
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(checkedJobIds.isEmpty)
-                    .keyboardShortcut(.defaultAction)
+    /// Direct move to any other stage — pipeline reality is non-linear
+    /// (lead → interview happens), so every stage is one click away.
+    @ViewBuilder
+    private var moveMenuItems: some View {
+        Section("Move to") {
+            ForEach(Statuses.pipelineStatuses.filter { $0 != status }, id: \.self) { target in
+                Button {
+                    onMove(target)
+                } label: {
+                    Label(target.displayName, systemImage: target.icon)
                 }
             }
-            .padding()
-            .background(Color(.windowBackgroundColor))
-
-            Divider()
-
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    // Selections with checkboxes
-                    ForEach(Array(result.selections.enumerated()), id: \.element.jobId) { index, selection in
-                        HStack(alignment: .top, spacing: 8) {
-                            Toggle("", isOn: Binding(
-                                get: { checkedJobIds.contains(selection.jobId) },
-                                set: { isOn in
-                                    if isOn {
-                                        checkedJobIds.insert(selection.jobId)
-                                    } else {
-                                        checkedJobIds.remove(selection.jobId)
-                                    }
-                                }
-                            ))
-                            .toggleStyle(.checkbox)
-                            .labelsHidden()
-                            .padding(.top, 16)
-
-                            SelectionCard(selection: selection, rank: index + 1)
-                        }
-                    }
-
-                    // Overall Analysis
-                    if !result.overallAnalysis.isEmpty {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Analysis Summary")
-                                .font(.headline)
-                            Text(result.overallAnalysis)
-                                .font(.body)
-                                .foregroundStyle(.secondary)
-                        }
-                        .padding()
-                        .background(Color(.controlBackgroundColor))
-                        .cornerRadius(8)
-                    }
-
-                    // Considerations
-                    if !result.considerations.isEmpty {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Things to Consider")
-                                .font(.headline)
-                            ForEach(result.considerations, id: \.self) { consideration in
-                                HStack(alignment: .top, spacing: 8) {
-                                    Image(systemName: "lightbulb")
-                                        .foregroundStyle(.yellow)
-                                    Text(consideration)
-                                        .font(.body)
-                                }
-                            }
-                        }
-                        .padding()
-                        .background(Color(.controlBackgroundColor))
-                        .cornerRadius(8)
-                    }
-                }
-                .padding()
-            }
         }
-        .frame(width: 620, height: 700)
-        .onAppear {
-            // All selections checked by default
-            checkedJobIds = Set(result.selections.map(\.jobId))
-        }
-    }
-
-    private func advanceCheckedJobs() {
-        for selection in result.selections where checkedJobIds.contains(selection.jobId) {
-            if let job = jobAppStore.jobApps(forStatus: .new).first(where: { $0.id == selection.jobId }) {
-                jobAppStore.setStatus(job, to: .queued)
-                Logger.info("📋 Advanced '\(job.jobPosition)' at \(job.companyName) to Queued", category: .ai)
-            }
-        }
-    }
-}
-
-struct SelectionCard: View {
-    let selection: JobSelection
-    let rank: Int
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            // Rank badge
-            Text("#\(rank)")
-                .font(.headline)
-                .foregroundStyle(.white)
-                .frame(width: 36, height: 36)
-                .background(rankColor)
-                .clipShape(Circle())
-
-            VStack(alignment: .leading, spacing: 8) {
-                // Company and role
-                HStack {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(selection.company)
-                            .font(.headline)
-                        Text(selection.role)
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                    // Match score
-                    Text("\(Int(selection.matchScore * 100))%")
-                        .font(.title3)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(scoreColor)
-                }
-
-                // Reasoning
-                Text(selection.reasoning)
-                    .font(.body)
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .padding()
-        .background(Color(.controlBackgroundColor))
-        .cornerRadius(8)
-    }
-
-    private var rankColor: Color {
-        switch rank {
-        case 1: return .yellow
-        case 2: return .gray
-        case 3: return .orange
-        default: return .blue
-        }
-    }
-
-    private var scoreColor: Color {
-        if selection.matchScore >= 0.9 { return .green }
-        if selection.matchScore >= 0.7 { return .blue }
-        return .orange
-    }
-}
-
-struct SelectionErrorSheet: View {
-    let error: String
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        VStack(spacing: 20) {
-            Image(systemName: "exclamationmark.triangle")
-                .font(.system(size: 48))
-                .foregroundStyle(.red)
-
-            Text("Selection Failed")
-                .font(.title2)
-                .fontWeight(.semibold)
-
-            Text(error)
-                .font(.body)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal)
-
-            Button("Dismiss") { dismiss() }
-                .keyboardShortcut(.defaultAction)
-        }
-        .padding(40)
-        .frame(width: 400)
     }
 }
