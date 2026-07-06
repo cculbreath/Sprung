@@ -262,50 +262,30 @@ class NetworkingContact: Identifiable {
 
     // Identity
     var name: String = ""
-    var firstName: String?
-    var lastName: String?
     var company: String?
     var title: String?
-    var department: String?
 
     // Contact Information
     var email: String?
     var phone: String?
     var linkedInUrl: String?
-    var twitterHandle: String?
     var otherContactInfo: String?
 
     // Relationship Context
     var relationship: RelationshipType = RelationshipType.metAtEvent
-    var howWeMet: String?
     var metAt: String?
-    var metOn: Date?
-    var introducedById: UUID?
 
     // Relationship State
     var warmth: ContactWarmth = ContactWarmth.warm
     var lastContactAt: Date?
     var lastContactType: String?
-    var nextActionAt: Date?
-    var nextAction: String?
 
     // Notes
     var notes: String = ""
-    var conversationNotes: String?
-
-    // Value Indicators
-    var canReferToJSON: String?  // JSON encoded [String]
-    var hasOfferedToHelp: Bool = false
-    var helpOffered: String?
-    var isRecruiter: Bool = false
-    var isHiringManager: Bool = false
-    var isAtTargetCompany: Bool = false
 
     // Tracking
     var createdAt: Date = Date()
     var updatedAt: Date = Date()
-    var isFromCalendar: Bool = false
-    var linkedJobAppIdsJSON: String?  // JSON encoded [UUID]
     var totalInteractions: Int = 0
 
     // Link to event where we met
@@ -341,13 +321,6 @@ class NetworkingContact: Identifiable {
         case .dormant:
             return .dormant
         }
-    }
-
-    var displayName: String {
-        if let first = firstName, let last = lastName {
-            return "\(first) \(last)"
-        }
-        return name
     }
 
     var companyAndTitle: String? {

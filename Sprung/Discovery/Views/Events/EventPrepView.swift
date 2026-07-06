@@ -422,7 +422,6 @@ struct EventPrepView: View {
         coordinator.contactStore.allContacts.filter { contact in
             // Find contacts who might be at this event
             contact.warmth != .dormant && (
-                contact.isAtTargetCompany ||
                 contact.relationshipHealth == .healthy ||
                 contact.relationshipHealth == .needsAttention
             )
@@ -441,7 +440,7 @@ struct EventPrepView: View {
                         .foregroundStyle(healthColor(contact.relationshipHealth))
 
                     VStack(alignment: .leading) {
-                        Text(contact.displayName)
+                        Text(contact.name)
                             .fontWeight(.medium)
                         if let company = contact.company {
                             Text(company)

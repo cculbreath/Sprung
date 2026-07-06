@@ -88,6 +88,9 @@ struct AddContactSheet: View {
         let trimmedRole = role.trimmingCharacters(in: .whitespacesAndNewlines)
         contact.title = trimmedRole.isEmpty ? nil : trimmedRole
         contact.warmth = warmth
+        // A manually added contact was just reached — start the relationship
+        // clock now instead of leaving health frozen at "New" forever.
+        contact.lastContactAt = Date()
 
         let trimmedChannelValue = channelValue.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmedChannelValue.isEmpty {

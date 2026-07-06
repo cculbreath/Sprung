@@ -109,7 +109,6 @@ final class DiscoveryContextProviderImpl: @unchecked Sendable {
         var applicationTarget: Int
         var eventsAttended: Int
         var newContacts: Int
-        var timeInvestedMinutes: Int
         var eventsAttendedNames: [String]
         var newContactsCount: Int
     }
@@ -117,7 +116,6 @@ final class DiscoveryContextProviderImpl: @unchecked Sendable {
     private struct GoalProgressContext: Codable {
         var applicationProgress: Double
         var networkingProgress: Double
-        var timeProgress: Double
         var daysRemainingInWeek: Int
     }
 
@@ -146,7 +144,7 @@ final class DiscoveryContextProviderImpl: @unchecked Sendable {
             let needsAttention = coordinator.contactStore.needsAttention.prefix(5).map { contact in
                 DailyTaskContext.AttentionContact(
                     id: contact.id.uuidString,
-                    name: contact.displayName,
+                    name: contact.name,
                     company: contact.company ?? "",
                     daysSinceContact: contact.daysSinceContact ?? 999,
                     warmth: contact.warmth.rawValue
@@ -236,7 +234,7 @@ final class DiscoveryContextProviderImpl: @unchecked Sendable {
             let items = matchingContacts.map { contact in
                 CompanyContact(
                     id: contact.id.uuidString,
-                    name: contact.displayName,
+                    name: contact.name,
                     company: contact.company ?? "",
                     title: contact.title ?? "",
                     warmth: contact.warmth.rawValue
@@ -258,7 +256,6 @@ final class DiscoveryContextProviderImpl: @unchecked Sendable {
                 applicationTarget: summary.goal.applicationTarget,
                 eventsAttended: summary.goal.eventsAttendedActual,
                 newContacts: summary.goal.newContactsActual,
-                timeInvestedMinutes: summary.goal.actualMinutes,
                 eventsAttendedNames: summary.eventsAttended.map { $0.name },
                 newContactsCount: summary.newContacts.count
             )
@@ -283,7 +280,6 @@ final class DiscoveryContextProviderImpl: @unchecked Sendable {
             let context = GoalProgressContext(
                 applicationProgress: applicationProgress,
                 networkingProgress: goal.networkingProgress,
-                timeProgress: goal.timeProgress,
                 daysRemainingInWeek: daysRemaining
             )
             return encode(context)
