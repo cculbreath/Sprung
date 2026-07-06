@@ -2,21 +2,23 @@
 //  JobSearchView.swift
 //  Sprung
 //
-//  Search either MCP job board (Dice or ZipRecruiter) and import results into
-//  the pipeline as `.new` leads. Embedded as the Job Search section of the
-//  Discovery window; the thin async glue and UI state live here while the
-//  request/decode/mapping halves live in JobMCPImportService (mirroring
+//  Search either MCP job board (Dice or ZipRecruiter) — or point the agentic
+//  Custom Site search at any small "web-fetch friendly" board or careers
+//  page — and import results into the pipeline as `.new` leads. The thin
+//  async glue and UI state live here while the request/decode/mapping halves
+//  live in JobMCPImportService and SiteJobSearchService (mirroring
 //  NewAppSheetView + JobURLImportService).
 //
 
 import SwiftUI
 
-/// Which MCP job board the sheet is currently searching. Each board keeps its
-/// own search fields, results, pagination cursor, and MCP client instance —
+/// Which job source the sheet is currently searching. Each mode keeps its
+/// own search fields, results, pagination cursor, and client/agent state —
 /// they're independent search sessions, not tabs over one shared query.
 private enum JobBoard: String, CaseIterable, Identifiable, Hashable {
     case dice = "Dice"
     case zipRecruiter = "ZipRecruiter"
+    case customSite = "Custom Site"
 
     var id: String { rawValue }
 }
@@ -24,8 +26,16 @@ private enum JobBoard: String, CaseIterable, Identifiable, Hashable {
 struct JobSearchView: View {
     let jobAppStore: JobAppStore
 
+    /// Supplies the LLMFacade the Custom Site agent loop runs on. Present in
+    /// both the main and Discovery windows' environments.
+    @Environment(AppEnvironment.self) private var appEnvironment
+
     @State private var selectedBoard: JobBoard = .dice
     @State private var isSearching = false
+    /// Which mode the in-flight search belongs to — searches are single-flight
+    /// across modes, and an agent run can outlast a board switch, so the
+    /// progress display keys off this rather than `selectedBoard`.
+    @State private var searchingBoard: JobBoard?
     @State private var errorMessage: String?
     @State private var importSummary: String?
 
@@ -52,6 +62,25 @@ struct JobSearchView: View {
     @State private var zipHasSearched = false
     @State private var zipClient: MCPStreamableHTTPClient?
 
+    // MARK: Custom Site session state
+
+    @State private var siteURLText = ""
+    @State private var siteGuidance = ""
+    @State private var siteResults: [SiteJobListing] = []
+    /// The agent's honest reason for an empty submission (bot-walled site, no
+    /// matching postings) — surfaced instead of a quiet "no results".
+    @State private var siteEmptyReason: String?
+    @State private var siteHasSearched = false
+    /// Host searched by the current results, snapshotted at search time so
+    /// imports stay labeled correctly if the URL field is edited afterward.
+    @State private var siteSearchedHost = ""
+    /// Streaming per-turn progress lines from the agent loop ("Searching: …",
+    /// "Fetching: …") — the same affordance the events discovery flow surfaces.
+    @State private var siteProgressLines: [String] = []
+    /// Retained so Cancel (and view teardown) can stop the loop cooperatively
+    /// between turns via the runner's Task.checkCancellation seam.
+    @State private var siteSearchTask: Task<Void, Never>?
+
     /// Stable Dice URLs already in the pipeline — recomputed on every store
     /// mutation (the store's changeVersion invalidates this view), so rows
     /// flip to "Imported" the moment a lead lands.
@@ -75,6 +104,8 @@ struct JobSearchView: View {
             let role = zipJobRole.trimmingCharacters(in: .whitespacesAndNewlines)
             let location = zipLocation.trimmingCharacters(in: .whitespacesAndNewlines)
             return !role.isEmpty || !location.isEmpty
+        case .customSite:
+            return SiteJobSearchService.normalizedSiteURL(siteURLText) != nil
         }
     }
 
@@ -82,6 +113,7 @@ struct JobSearchView: View {
         switch selectedBoard {
         case .dice: return diceResults.isEmpty
         case .zipRecruiter: return zipResults.isEmpty
+        case .customSite: return siteResults.isEmpty
         }
     }
 
@@ -89,6 +121,7 @@ struct JobSearchView: View {
         switch selectedBoard {
         case .dice: return diceHasSearched
         case .zipRecruiter: return zipHasSearched
+        case .customSite: return siteHasSearched
         }
     }
 
@@ -98,6 +131,8 @@ struct JobSearchView: View {
             return diceResults.filter { !JobMCPImportService.isImported($0, importedURLs: importedURLs) }.count
         case .zipRecruiter:
             return zipResults.filter { !JobMCPImportService.isImported($0, importedPairs: importedTitleCompanyPairs) }.count
+        case .customSite:
+            return siteResults.filter { !SiteJobSearchService.isImported($0, importedURLs: importedURLs) }.count
         }
     }
 
@@ -116,6 +151,11 @@ struct JobSearchView: View {
             errorMessage = nil
             importSummary = nil
         }
+        .onDisappear {
+            // Cooperative cancellation: never leave the agent loop burning
+            // tokens for results nobody will see.
+            siteSearchTask?.cancel()
+        }
     }
 
     // MARK: - Header
@@ -132,7 +172,7 @@ struct JobSearchView: View {
             }
             .pickerStyle(.segmented)
             .labelsHidden()
-            .frame(maxWidth: 300)
+            .frame(maxWidth: 420)
         }
         .padding()
     }
@@ -194,6 +234,26 @@ struct JobSearchView: View {
                 .disabled(!canSearch)
             }
             .padding()
+        case .customSite:
+            VStack(spacing: 8) {
+                HStack(spacing: 8) {
+                    TextField("Site URL (e.g. austinjobs.com or a company careers page)", text: $siteURLText)
+                        .textFieldStyle(.roundedBorder)
+                        .onSubmit { searchCustomSite() }
+
+                    Button("Search") {
+                        searchCustomSite()
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(!canSearch)
+                    .help("An AI agent browses the site with web search + page fetches and submits only page-verified postings")
+                }
+
+                TextField("Keywords or guidance (optional, e.g. \"embedded firmware roles, on-site\")", text: $siteGuidance)
+                    .textFieldStyle(.roundedBorder)
+                    .onSubmit { searchCustomSite() }
+            }
+            .padding()
         }
     }
 
@@ -202,15 +262,19 @@ struct JobSearchView: View {
     @ViewBuilder
     private var resultsArea: some View {
         if isSearching {
-            VStack(spacing: 12) {
-                Spacer()
-                ProgressView()
-                Text("Searching \(selectedBoard.rawValue)…")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                Spacer()
+            if searchingBoard == .customSite {
+                siteSearchProgress
+            } else {
+                VStack(spacing: 12) {
+                    Spacer()
+                    ProgressView()
+                    Text("Searching \((searchingBoard ?? selectedBoard).rawValue)…")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                }
+                .frame(maxWidth: .infinity)
             }
-            .frame(maxWidth: .infinity)
         } else if let errorMessage {
             VStack(spacing: 12) {
                 Spacer()
@@ -227,17 +291,38 @@ struct JobSearchView: View {
             }
             .frame(maxWidth: .infinity)
         } else if currentResultsEmpty {
-            VStack(spacing: 12) {
-                Spacer()
-                Image(systemName: "magnifyingglass")
-                    .font(.system(size: 36))
-                    .foregroundStyle(.secondary)
-                Text(currentHasSearched ? "No jobs matched your search." : "Search \(selectedBoard.rawValue) and import results as pipeline leads.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                Spacer()
+            if selectedBoard == .customSite, currentHasSearched, let siteEmptyReason {
+                // The agent submitted nothing and said why — an honest failure
+                // the user must see, never a quiet "no results" success.
+                VStack(spacing: 12) {
+                    Spacer()
+                    Label(siteEmptyReason, systemImage: "exclamationmark.triangle.fill")
+                        .font(.callout)
+                        .foregroundStyle(.orange)
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: 480)
+                    Button("Try Again") {
+                        retrySearch()
+                    }
+                    .buttonStyle(.bordered)
+                    Spacer()
+                }
+                .frame(maxWidth: .infinity)
+            } else {
+                VStack(spacing: 12) {
+                    Spacer()
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 36))
+                        .foregroundStyle(.secondary)
+                    Text(emptyStateMessage)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: 480)
+                    Spacer()
+                }
+                .frame(maxWidth: .infinity)
             }
-            .frame(maxWidth: .infinity)
         } else {
             switch selectedBoard {
             case .dice:
@@ -260,8 +345,71 @@ struct JobSearchView: View {
                     }
                 }
                 .listStyle(.inset)
+            case .customSite:
+                List(siteResults) { listing in
+                    SiteListingResultRow(
+                        listing: listing,
+                        isImported: SiteJobSearchService.isImported(listing, importedURLs: importedURLs)
+                    ) {
+                        importResult(listing)
+                    }
+                }
+                .listStyle(.inset)
             }
         }
+    }
+
+    private var emptyStateMessage: String {
+        if currentHasSearched {
+            return selectedBoard == .customSite
+                ? "The agent found no matching postings on the site."
+                : "No jobs matched your search."
+        }
+        return selectedBoard == .customSite
+            ? "Point the agent at a small job board or company careers page. It browses the site, verifies each posting's page, and imports matches as pipeline leads."
+            : "Search \(selectedBoard.rawValue) and import results as pipeline leads."
+    }
+
+    /// Live agent activity while a Custom Site search runs: spinner, the
+    /// streaming per-turn progress lines, and a Cancel affordance.
+    private var siteSearchProgress: some View {
+        VStack(spacing: 12) {
+            HStack(spacing: 8) {
+                ProgressView()
+                    .controlSize(.small)
+                Text("Agent searching \(siteSearchedHost)…")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Button("Cancel") {
+                    siteSearchTask?.cancel()
+                }
+                .buttonStyle(.bordered)
+            }
+            .padding(.horizontal)
+            .padding(.top, 12)
+
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 4) {
+                        ForEach(Array(siteProgressLines.enumerated()), id: \.offset) { index, line in
+                            Text(line)
+                                .font(.caption.monospaced())
+                                .foregroundStyle(.secondary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .id(index)
+                        }
+                    }
+                    .padding(.horizontal)
+                    .padding(.bottom, 12)
+                }
+                .onChange(of: siteProgressLines.count) { _, count in
+                    guard count > 0 else { return }
+                    proxy.scrollTo(count - 1, anchor: .bottom)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     // MARK: - Footer
@@ -305,6 +453,13 @@ struct JobSearchView: View {
                     Image(systemName: "chevron.right")
                 }
                 .disabled(isSearching || !zipHasMoreResults)
+            case .customSite:
+                // No pagination — the agent submits one verified list per run.
+                if !siteResults.isEmpty {
+                    Text("\(siteResults.count) page-verified posting\(siteResults.count == 1 ? "" : "s")")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
 
             Spacer()
@@ -361,6 +516,8 @@ struct JobSearchView: View {
             searchDice(page: diceCurrentPage)
         case .zipRecruiter:
             searchZipRecruiter(offset: zipOffset)
+        case .customSite:
+            searchCustomSite()
         }
     }
 
@@ -368,6 +525,7 @@ struct JobSearchView: View {
         let trimmedKeyword = diceKeyword.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedKeyword.isEmpty, !isSearching else { return }
         isSearching = true
+        searchingBoard = .dice
         errorMessage = nil
         importSummary = nil
         Task {
@@ -392,6 +550,7 @@ struct JobSearchView: View {
                 errorMessage = error.localizedDescription
             }
             isSearching = false
+            searchingBoard = nil
         }
     }
 
@@ -400,6 +559,7 @@ struct JobSearchView: View {
         let trimmedLocation = zipLocation.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedRole.isEmpty || !trimmedLocation.isEmpty, !isSearching else { return }
         isSearching = true
+        searchingBoard = .zipRecruiter
         errorMessage = nil
         importSummary = nil
         Task {
@@ -423,6 +583,53 @@ struct JobSearchView: View {
                 errorMessage = error.localizedDescription
             }
             isSearching = false
+            searchingBoard = nil
+        }
+    }
+
+    /// Kick off the agent loop against the typed site. The search runs until
+    /// the agent submits (maxTurns-bounded, no wall-clock deadline) or the
+    /// user cancels; per-turn progress streams into `siteProgressLines`.
+    private func searchCustomSite() {
+        guard let siteURL = SiteJobSearchService.normalizedSiteURL(siteURLText), !isSearching else { return }
+        isSearching = true
+        searchingBoard = .customSite
+        errorMessage = nil
+        importSummary = nil
+        siteEmptyReason = nil
+        siteProgressLines = []
+        siteResults = []
+        siteSearchedHost = siteURL.host ?? siteURL.absoluteString
+        let guidance = siteGuidance
+        siteSearchTask = Task {
+            do {
+                let submission = try await SiteJobSearchService.run(
+                    siteURL: siteURL,
+                    guidance: guidance,
+                    llmFacade: appEnvironment.llmFacade,
+                    onProgress: { line in
+                        siteProgressLines.append(line)
+                    }
+                )
+                siteResults = submission.listings
+                if submission.listings.isEmpty {
+                    // Honest empty result — surface the agent's reason (or a
+                    // clear default) rather than presenting a quiet success.
+                    siteEmptyReason = submission.emptyReason
+                        ?? "The agent submitted no postings — the site may be bot-walled or have no matching listings."
+                }
+                siteHasSearched = true
+            } catch is CancellationError {
+                errorMessage = "Search cancelled."
+            } catch {
+                // A cancelled in-flight request can surface as a URL error
+                // rather than CancellationError — report it as the user's
+                // cancellation, not a failure.
+                errorMessage = Task.isCancelled ? "Search cancelled." : error.localizedDescription
+            }
+            isSearching = false
+            searchingBoard = nil
+            siteSearchTask = nil
         }
     }
 
@@ -437,6 +644,13 @@ struct JobSearchView: View {
         importSummary = nil
         if case .skipped(let reason) = JobMCPImportService.importAsLead(result, into: jobAppStore) {
             errorMessage = "Couldn't import \"\(result.title ?? "job")\": \(reason)"
+        }
+    }
+
+    private func importResult(_ listing: SiteJobListing) {
+        importSummary = nil
+        if case .skipped(let reason) = SiteJobSearchService.importAsLead(listing, siteHost: siteSearchedHost, into: jobAppStore) {
+            errorMessage = "Couldn't import \"\(listing.title)\": \(reason)"
         }
     }
 
@@ -456,6 +670,14 @@ struct JobSearchView: View {
         case .zipRecruiter:
             for result in zipResults {
                 switch JobMCPImportService.importAsLead(result, into: jobAppStore) {
+                case .imported: imported += 1
+                case .duplicate: duplicates += 1
+                case .skipped: skipped += 1
+                }
+            }
+        case .customSite:
+            for listing in siteResults {
+                switch SiteJobSearchService.importAsLead(listing, siteHost: siteSearchedHost, into: jobAppStore) {
                 case .imported: imported += 1
                 case .duplicate: duplicates += 1
                 case .skipped: skipped += 1
@@ -544,6 +766,84 @@ private struct JobSearchResultRow: View {
                     NSWorkspace.shared.open(url)
                 } label: {
                     Label("Open on Dice", systemImage: "safari")
+                }
+            }
+        }
+    }
+
+    private func detailTag(_ text: String) -> some View {
+        Text(text)
+            .font(.caption)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(Color.secondary.opacity(0.1))
+            .cornerRadius(4)
+            .lineLimit(1)
+    }
+}
+
+// MARK: - Custom Site listing row
+
+private struct SiteListingResultRow: View {
+    let listing: SiteJobListing
+    let isImported: Bool
+    let onImport: () -> Void
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(listing.title)
+                    .font(.headline)
+
+                HStack(spacing: 6) {
+                    Text(listing.company)
+                    if let location = listing.location, !location.isEmpty {
+                        Text("•")
+                        Text(location)
+                    }
+                }
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+
+                if !listing.summary.isEmpty {
+                    Text(listing.summary)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(3)
+                }
+
+                HStack(spacing: 8) {
+                    if let salary = listing.salary, !salary.isEmpty {
+                        detailTag(salary)
+                    }
+                    if let postedDate = listing.postedDate, !postedDate.isEmpty {
+                        Text(postedDate)
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+            }
+
+            Spacer()
+
+            if isImported {
+                Label("Imported", systemImage: "checkmark.circle.fill")
+                    .font(.caption)
+                    .foregroundStyle(.green)
+            } else {
+                Button("Import") {
+                    onImport()
+                }
+                .buttonStyle(.bordered)
+            }
+        }
+        .padding(.vertical, 4)
+        .contextMenu {
+            if let url = URL(string: listing.url) {
+                Button {
+                    NSWorkspace.shared.open(url)
+                } label: {
+                    Label("Open Posting", systemImage: "safari")
                 }
             }
         }
