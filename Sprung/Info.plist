@@ -4,6 +4,8 @@
 <dict>
 	<key>NSContactsUsageDescription</key>
 	<string>Sprung uses your contacts to prefill your applicant profile.</string>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>Sprung uses Calendar access to add networking events and interviews you save to your calendar.</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>

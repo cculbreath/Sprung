@@ -41,6 +41,29 @@ final class CalendarIntegrationService {
         }
     }
 
+    /// Request full access to calendar events if not already determined, then refresh status.
+    private func requestAccessIfNeeded() async throws {
+        authorizationStatus = EKEventStore.authorizationStatus(for: .event)
+
+        guard authorizationStatus == .notDetermined else {
+            updateAuthorizationStatus()
+            return
+        }
+
+        do {
+            let granted = try await eventStore.requestFullAccessToEvents()
+            authorizationStatus = EKEventStore.authorizationStatus(for: .event)
+            isAuthorized = granted && authorizationStatus == .fullAccess
+
+            if isAuthorized {
+                loadCalendars()
+            }
+        } catch {
+            updateAuthorizationStatus()
+            throw error
+        }
+    }
+
     // MARK: - Calendar Management
 
     /// Load available calendars
@@ -63,6 +86,8 @@ final class CalendarIntegrationService {
 
     /// Create a calendar event for a networking event
     func createCalendarEvent(for networkingEvent: NetworkingEventOpportunity) async throws -> String {
+        try await requestAccessIfNeeded()
+
         guard isAuthorized else {
             throw CalendarError.notAuthorized
         }
