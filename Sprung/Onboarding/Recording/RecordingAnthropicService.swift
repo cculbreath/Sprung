@@ -60,9 +60,18 @@ final class RecordingAnthropicService: AnthropicService {
         let requestJSON = encodeRequest(parameters)
         await recorder.recordRequest(turnIndex: turnIndex, prefixHash: nil, requestJSON: requestJSON)
 
-        // Open the real upstream stream. Any error here propagates to the caller
-        // exactly as without the decorator (nothing to record yet).
-        let upstream = try await wrapped.messagesStream(parameters: parameters)
+        // Open the real upstream stream. An error here (the fork validates the
+        // HTTP status before returning the stream, so 4xx/5xx throw at open)
+        // must roll back the claimed turn index — otherwise any retry above
+        // this decorator (transient-retry, budget pause/resume) shifts the
+        // recorded turn numbering and order-based replay hits noRecordedTurn.
+        let upstream: AsyncThrowingStream<AnthropicStreamEvent, Error>
+        do {
+            upstream = try await wrapped.messagesStream(parameters: parameters)
+        } catch {
+            await recorder.discardClaimedModelTurn(turnIndex)
+            throw error
+        }
 
         let recorder = self.recorder
         return AsyncThrowingStream<AnthropicStreamEvent, Error> { continuation in
