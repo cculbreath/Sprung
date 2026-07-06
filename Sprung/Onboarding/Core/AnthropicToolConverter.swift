@@ -46,9 +46,12 @@ struct AnthropicToolConverter {
             anthropicTools.append(convertToAnthropicTool(funcTool))
         }
 
-        // Add server-side tools (fixed order, after sorted function tools)
-        anthropicTools.append(.serverTool(.webSearch()))
-        anthropicTools.append(.serverTool(.webFetch()))
+        // Add server-side tools (fixed order, after sorted function tools).
+        // Types + maxUses pinned explicitly: onboarding request bytes are replay-tape
+        // and prompt-cache-prefix sensitive; migrating to the 20260209 variants is a
+        // deliberate separate change, not a dependency-bump side effect.
+        anthropicTools.append(.serverTool(.webSearch(type: "web_search_20250305", maxUses: 5)))
+        anthropicTools.append(.serverTool(.webFetch(type: "web_fetch_20250910")))
 
         Logger.debug(
             "🔧 Anthropic tools: phase=\(phase.rawValue), sending \(anthropicTools.count) tools (incl. web_search, web_fetch)",

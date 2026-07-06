@@ -66,6 +66,10 @@ struct AnthropicTurnResult {
             switch block {
             case .text(let textBlock): texts.append(textBlock.text)
             case .toolUse(let toolUse): calls.append(toolUse)
+            case .serverToolUse, .webSearchToolResult, .webFetchToolResult:
+                // Server-side tool blocks execute on Anthropic's side — nothing to run
+                // locally. Delegates that declare server tools own echoing them back.
+                break
             }
         }
         self.init(textBlocks: texts, toolCalls: calls, usage: response.usage, stopReason: response.stopReason)

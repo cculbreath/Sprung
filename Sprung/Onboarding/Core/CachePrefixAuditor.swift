@@ -170,6 +170,21 @@ final class CachePrefixAuditor: @unchecked Sendable {
                 "tool_result(\(toolResult.toolUseId.prefix(12))…)",
                 "\(toolResult.toolUseId)|\(toolResult.isError ?? false)|\(toolResult.content)"
             )
+        case .serverToolUse(let serverToolUse):
+            let input = (try? encoder.encode(serverToolUse.input))
+                .flatMap { String(data: $0, encoding: .utf8) } ?? "unencodable-input"
+            return (
+                "server_tool_use(\(serverToolUse.id.prefix(12))…)",
+                "\(serverToolUse.id)|\(serverToolUse.name)|\(input)"
+            )
+        case .webSearchToolResult(let result):
+            let content = (try? encoder.encode(result))
+                .flatMap { String(data: $0, encoding: .utf8) } ?? "unencodable-web-search-result"
+            return ("web_search_tool_result(\(result.toolUseId.prefix(12))…)", content)
+        case .webFetchToolResult(let result):
+            let content = (try? encoder.encode(result))
+                .flatMap { String(data: $0, encoding: .utf8) } ?? "unencodable-web-fetch-result"
+            return ("web_fetch_tool_result(\(result.toolUseId.prefix(12))…)", content)
         }
     }
 

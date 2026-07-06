@@ -210,7 +210,7 @@ struct AnthropicCacheBreakpointPlanner {
                 isError: resultBlock.isError ?? false,
                 cacheControl: cacheControl
             ))
-        case .toolUse:
+        case .toolUse, .serverToolUse, .webSearchToolResult, .webFetchToolResult:
             return nil
         }
     }

@@ -45,7 +45,7 @@ final class AnthropicCacheBreakpointPlannerTests: XCTestCase {
         case .image(let b): return b.cacheControl
         case .document(let b): return b.cacheControl
         case .toolResult(let b): return b.cacheControl
-        case .toolUse: return nil
+        case .toolUse, .serverToolUse, .webSearchToolResult, .webFetchToolResult: return nil
         }
     }
 

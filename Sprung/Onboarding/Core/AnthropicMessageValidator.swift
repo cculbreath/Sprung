@@ -78,6 +78,12 @@ enum AnthropicMessageValidator {
                         return "image"
                     case .document:
                         return "document"
+                    case .serverToolUse(let stu):
+                        return "server_tool_use(\(stu.name), id:\(stu.id.prefix(8)))"
+                    case .webSearchToolResult(let wsr):
+                        return "web_search_tool_result(id:\(wsr.toolUseId.prefix(8)))"
+                    case .webFetchToolResult(let wfr):
+                        return "web_fetch_tool_result(id:\(wfr.toolUseId.prefix(8)))"
                     }
                 }
                 contentDesc = "[\(blockDescs.joined(separator: ", "))]"
@@ -100,6 +106,9 @@ enum AnthropicMessageValidator {
                 case .toolResult(let tr): return "tool_result(\(tr.toolUseId.prefix(8)))"
                 case .image: return "image"
                 case .document: return "document"
+                case .serverToolUse(let stu): return "server_tool_use(\(stu.name))"
+                case .webSearchToolResult: return "web_search_tool_result"
+                case .webFetchToolResult: return "web_fetch_tool_result"
                 }
             }
             return "blocks: [\(types.joined(separator: ", "))]"

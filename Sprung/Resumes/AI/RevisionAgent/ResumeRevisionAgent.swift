@@ -1826,6 +1826,9 @@ class ResumeRevisionAgent {
                     case .toolUse(let tu): return "tool_use(\(tu.name))"
                     case .image: return "image"
                     case .document: return "document"
+                    case .serverToolUse(let stu): return "server_tool_use(\(stu.name))"
+                    case .webSearchToolResult: return "web_search_tool_result"
+                    case .webFetchToolResult: return "web_fetch_tool_result"
                     }
                 }
                 let extra = blocks.count > 5 ? " + \(blocks.count - 5) more" : ""

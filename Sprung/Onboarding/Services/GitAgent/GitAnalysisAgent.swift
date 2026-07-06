@@ -577,6 +577,9 @@ class GitAnalysisAgent: AnthropicToolLoopDelegate {
                     name: toolUse.name,
                     input: toolUse.input.mapValues { $0.value }
                 )))
+            case .serverToolUse, .webSearchToolResult, .webFetchToolResult:
+                // Git analysis declares no server tools; nothing to echo.
+                break
             }
         }
         if blocks.isEmpty {
