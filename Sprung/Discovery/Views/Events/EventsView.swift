@@ -39,13 +39,12 @@ enum EventWeekBucket {
 struct EventsView: View {
     let coordinator: DiscoveryCoordinator
     @Binding var triggerEventDiscovery: Bool
-    @Binding var viewMode: EventsViewMode
+    @State private var viewMode: EventsViewMode = .list
     @State private var selectedEventType: NetworkingEventType?
 
-    init(coordinator: DiscoveryCoordinator, triggerEventDiscovery: Binding<Bool> = .constant(false), viewMode: Binding<EventsViewMode> = .constant(.list)) {
+    init(coordinator: DiscoveryCoordinator, triggerEventDiscovery: Binding<Bool> = .constant(false)) {
         self.coordinator = coordinator
         self._triggerEventDiscovery = triggerEventDiscovery
-        self._viewMode = viewMode
     }
 
     // MARK: - Filtered Collections
@@ -91,6 +90,7 @@ struct EventsView: View {
             } else if coordinator.eventStore.allEvents.isEmpty {
                 emptyStateView
             } else {
+                controlBar
                 switch viewMode {
                 case .list:
                     eventListView
@@ -107,6 +107,29 @@ struct EventsView: View {
                 coordinator.startEventDiscovery()
             }
         }
+    }
+
+    /// List/Calendar mode switch plus the discover trigger. Lives inside
+    /// EventsView so every host gets both; the guidance popover on
+    /// DiscoverEventsButton is the single discovery entry point.
+    private var controlBar: some View {
+        HStack {
+            Picker("View Mode", selection: $viewMode) {
+                ForEach(EventsViewMode.allCases, id: \.self) { mode in
+                    Label(mode.rawValue, systemImage: mode.icon)
+                        .tag(mode)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .frame(width: 180)
+
+            Spacer()
+
+            DiscoverEventsButton(coordinator: coordinator)
+        }
+        .padding(.horizontal)
+        .padding(.top, 8)
     }
 
     private var emptyStateView: some View {
@@ -157,14 +180,6 @@ struct EventsView: View {
 
     private var eventListView: some View {
         VStack(spacing: 0) {
-            // Discover trigger (with optional one-run guidance)
-            HStack {
-                Spacer()
-                DiscoverEventsButton(coordinator: coordinator)
-            }
-            .padding(.horizontal)
-            .padding(.top, 8)
-
             // Event type filter bar
             if availableEventTypes.count > 1 {
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -457,7 +472,6 @@ struct EventRowView: View {
         case .attended: return .teal
         case .debriefed: return .gray
         case .skipped: return .secondary
-        case .cancelled: return .red
         case .missed: return .red
         }
     }

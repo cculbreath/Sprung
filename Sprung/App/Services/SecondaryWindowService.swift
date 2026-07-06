@@ -34,7 +34,6 @@ final class SecondaryWindowService {
     var templateEditorWindow: NSWindow?
     var onboardingInterviewWindow: NSWindow?
     var experienceEditorWindow: NSWindow?
-    var searchOpsWindow: NSWindow?
     var debugLogsWindow: NSWindow?
     var seedGenerationWindow: NSWindow?
     var resumeRevisionWindow: NSWindow?
@@ -317,74 +316,6 @@ final class SecondaryWindowService {
             NSApp.activate(ignoringOtherApps: true)
         }
         Logger.info("Onboarding interview window presented", category: .ui)
-    }
-
-    // MARK: - Discovery Window
-
-    func showDiscovery(
-        section: DiscoverySection? = nil,
-        startOnboarding: Bool = false,
-        triggerEventDiscovery: Bool = false,
-        triggerTaskGeneration: Bool = false,
-        triggerWeeklyReflection: Bool = false
-    ) {
-        Logger.info("showDiscoveryWindow invoked (section: \(section?.rawValue ?? "nil"), onboarding: \(startOnboarding))", category: .ui)
-        guard let deps else {
-            Logger.error("Discovery window requested before app services were configured", category: .ui)
-            return
-        }
-        if let window = searchOpsWindow, !window.isVisible {
-            searchOpsWindow = nil
-        }
-        if searchOpsWindow == nil {
-            let appEnvironment = deps.appEnvironment
-            let root = DiscoveryMainView()
-                .modelContainer(deps.modelContainer)
-                .environment(appEnvironment)
-                .environment(appEnvironment.appState)
-                .environment(deps.searchOpsCoordinator)
-                .environment(deps.coverRefStore)
-                .environment(deps.knowledgeCardStore)
-                .environment(deps.applicantProfileStore)
-                .environment(deps.guidanceStore)
-                .environment(deps.candidateDossierStore)
-            searchOpsWindow = makeWindow(
-                WindowSpec(
-                    title: "Discovery", width: 900, height: 700,
-                    minSize: NSSize(width: 700, height: 500)
-                ),
-                content: toastHosted(root)
-            )
-        }
-        searchOpsWindow?.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
-
-        // Post notifications for navigation and AI actions after window is shown
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
-            if startOnboarding {
-                NotificationCenter.default.post(name: .discoveryStartOnboarding, object: nil)
-            }
-            if let section {
-                NotificationCenter.default.post(name: .discoveryNavigateToSection, object: nil, userInfo: ["section": section])
-            }
-            if triggerEventDiscovery {
-                NotificationCenter.default.post(name: .discoveryTriggerEventDiscovery, object: nil)
-            }
-            if triggerTaskGeneration {
-                NotificationCenter.default.post(name: .discoveryTriggerTaskGeneration, object: nil)
-            }
-            if triggerWeeklyReflection, let coordinator = self?.deps?.searchOpsCoordinator {
-                Task { @MainActor in
-                    do {
-                        try await coordinator.generateWeeklyReflection()
-                    } catch {
-                        Logger.error("Failed to generate weekly reflection: \(error)", category: .ai)
-                        ToastCenter.shared.show(.error("Weekly reflection failed — \(error.localizedDescription)"))
-                    }
-                }
-            }
-        }
-        Logger.info("Discovery window presented", category: .ui)
     }
 
     // MARK: - Experience Editor Window

@@ -72,8 +72,7 @@ final class WindowCoordinator {
 
     private func findMainWindow() -> NSWindow? {
         NSApp.windows.first { window in
-            window.identifier?.rawValue == "myApp" ||
-            (window.title.isEmpty && !window.title.contains("Discovery"))
+            window.identifier?.rawValue == "myApp" || window.title.isEmpty
         }
     }
 }

@@ -37,16 +37,6 @@ extension Notification.Name {
     static let rerunAllJobPreprocessing = Notification.Name("rerunAllJobPreprocessing")
     // Interview Commands
     static let startOnboardingInterview = Notification.Name("startOnboardingInterview")
-    // Discovery Commands (renamed from Discovery)
-    static let showDiscovery = Notification.Name("showDiscovery")
-    static let startDiscoveryInterview = Notification.Name("startDiscoveryInterview")
-    static let discoverNetworkingEvents = Notification.Name("discoverNetworkingEvents")
-    static let generateDailyTasks = Notification.Name("generateDailyTasks")
-    static let generateWeeklyReflection = Notification.Name("generateWeeklyReflection")
-    static let showDiscoveryContacts = Notification.Name("showDiscoveryContacts")
-    static let showDiscoveryEvents = Notification.Name("showDiscoveryEvents")
-    static let showDiscoveryDailyBriefing = Notification.Name("showDiscoveryDailyBriefing")
-    static let showDiscoveryWeeklyReview = Notification.Name("showDiscoveryWeeklyReview")
     // Panel Toggle Commands
     static let toggleJobAppPane = Notification.Name("toggleJobAppPane")
 
@@ -83,9 +73,9 @@ extension Notification.Name {
     static let showSetupWizard = Notification.Name("showSetupWizard")
     // Resume Creation
     static let createNewResume = Notification.Name("createNewResume")
-    // Internal Discovery Window Notifications (for navigation and AI triggers)
+    // Discovery module triggers — each has exactly one observer in the
+    // main-window module shell (DailyTasksModuleView / EventsModuleView).
     static let discoveryStartOnboarding = Notification.Name("discoveryStartOnboarding")
-    static let discoveryNavigateToSection = Notification.Name("discoveryNavigateToSection")
     static let discoveryTriggerEventDiscovery = Notification.Name("discoveryTriggerEventDiscovery")
     static let discoveryTriggerTaskGeneration = Notification.Name("discoveryTriggerTaskGeneration")
     // Toolbar Validation

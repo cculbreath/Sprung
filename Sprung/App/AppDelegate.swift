@@ -161,26 +161,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         windowManager.showBackgroundActivity()
     }
 
-    @objc func showDiscoveryWindow() {
-        windowManager.showDiscovery()
-    }
-
-    func showDiscoveryWindow(
-        section: DiscoverySection? = nil,
-        startOnboarding: Bool = false,
-        triggerEventDiscovery: Bool = false,
-        triggerTaskGeneration: Bool = false,
-        triggerWeeklyReflection: Bool = false
-    ) {
-        windowManager.showDiscovery(
-            section: section,
-            startOnboarding: startOnboarding,
-            triggerEventDiscovery: triggerEventDiscovery,
-            triggerTaskGeneration: triggerTaskGeneration,
-            triggerWeeklyReflection: triggerWeeklyReflection
-        )
-    }
-
     @objc private func handleShowDebugLogs(_ notification: Notification) {
         Logger.info("Debug logs notification received", category: .ui)
         guard let coordinator = notification.object as? OnboardingInterviewCoordinator else {

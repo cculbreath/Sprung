@@ -299,7 +299,10 @@ struct SprungApp: App {
                 .keyboardShortcut("d", modifiers: [.command, .shift])
                 Divider()
                 Button("Start Discovery Interview...") {
-                    NotificationCenter.default.post(name: .startDiscoveryInterview, object: nil)
+                    NotificationCenter.default.post(name: .navigateToModule, object: nil, userInfo: ["module": AppModule.dailyTasks.rawValue])
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        NotificationCenter.default.post(name: .discoveryStartOnboarding, object: nil)
+                    }
                 }
                 Divider()
                 Button("Discover Networking Events") {
