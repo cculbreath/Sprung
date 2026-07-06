@@ -546,6 +546,13 @@ final class JobLeadEnrichmentService {
 
     private var pending: [PendingLead] = []
     private var activeCount = 0
+    private weak var activityTracker: BackgroundActivityTracker?
+
+    /// Set the tracker that surfaces per-lead enrichment in the Background
+    /// Activity window and the main-window indicator.
+    func setActivityTracker(_ tracker: BackgroundActivityTracker) {
+        self.activityTracker = tracker
+    }
 
     /// True when the process hosts the XCTest bundle. Mirrors
     /// `DiscoveryCoordinator.isRunningUnitTests`: the test suite launches the
@@ -600,6 +607,17 @@ final class JobLeadEnrichmentService {
         let leadName = "\(jobApp.jobPosition) at \(jobApp.companyName)"
         let postingURL = jobApp.postingURL
 
+        // Surface the fetch in the background-activity UI: one operation per
+        // lead. The preprocessing pass it hands off to is tracked separately
+        // (as `.preprocessing`) by JobAppPreprocessor.
+        let operationId = UUID().uuidString
+        activityTracker?.trackOperation(
+            id: operationId,
+            type: .leadEnrichment,
+            name: "\(jobApp.jobPosition) — \(jobApp.companyName)"
+        )
+        activityTracker?.updatePhase(operationId: operationId, phase: "Fetching full posting")
+
         do {
             let fullDescription = try await fetchFullDescription(
                 postingURL: postingURL,
@@ -609,14 +627,28 @@ final class JobLeadEnrichmentService {
             guard let liveJobApp = store.jobApp(byId: lead.jobAppID),
                   liveJobApp.jobDescription == lead.descriptionAtEnqueue else {
                 Logger.info("ℹ️ [LeadEnrichment] Lead changed while fetching \(leadName) — discarding fetched description", category: .ai)
+                activityTracker?.appendTranscript(
+                    operationId: operationId,
+                    entryType: .system,
+                    content: "Lead edited while fetching — fetched description discarded"
+                )
+                activityTracker?.markCompleted(operationId: operationId)
                 return
             }
             liveJobApp.jobDescription = fullDescription
             store.updateJobApp(liveJobApp)
             Logger.info("✅ [LeadEnrichment] Full posting fetched for \(leadName) (\(lead.descriptionAtEnqueue.count) → \(fullDescription.count) chars)", category: .ai)
+            activityTracker?.appendTranscript(
+                operationId: operationId,
+                entryType: .system,
+                content: "Full posting fetched (\(lead.descriptionAtEnqueue.count) → \(fullDescription.count) chars)"
+            )
+            activityTracker?.updatePhase(operationId: operationId, phase: "Queued for preprocessing")
             store.rerunPreprocessing(for: liveJobApp)
+            activityTracker?.markCompleted(operationId: operationId)
         } catch {
             Logger.error("❌ [LeadEnrichment] Full-posting fetch failed for \(leadName) (\(postingURL)): \(error.localizedDescription)", category: .ai)
+            activityTracker?.markFailed(operationId: operationId, error: error.localizedDescription)
             // Fall back only when the lead still exists with its imported
             // summary intact (an edit mid-fetch already drove preprocessing).
             guard let liveJobApp = store.jobApp(byId: lead.jobAppID),

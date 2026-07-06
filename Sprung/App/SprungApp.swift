@@ -102,6 +102,7 @@ struct SprungApp: App {
                 .environment(appDependencies.moduleNavigation)
                 .environment(appDependencies.focusState)
                 .environment(appDependencies.windowCoordinator)
+                .environment(appDependencies.backgroundActivityTracker)
                 .onAppear {
                     // Hand the composition root to the window manager (one-shot)
                     // so every secondary window resolves its dependencies from it.

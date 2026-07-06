@@ -44,5 +44,12 @@ struct ModuleContentView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .id(module) // Force view recreation on module change
+        // Global background-AI-activity indicator: visible in every module
+        // whenever any tracked operation is running, hidden otherwise.
+        // Placed outside .id(module) so it survives module switches.
+        .overlay(alignment: .bottomTrailing) {
+            BackgroundActivityIndicator()
+                .padding(12)
+        }
     }
 }

@@ -25,6 +25,7 @@ final class DiscoveryAgentService {
     private let llmFacade: LLMFacade
     private let toolExecutor: DiscoveryToolExecutor
     private let parser = DiscoveryResponseParser()
+    private weak var activityTracker: BackgroundActivityTracker?
 
     // MARK: - Model Configuration
 
@@ -40,6 +41,12 @@ final class DiscoveryAgentService {
     ) {
         self.llmFacade = llmFacade
         self.toolExecutor = DiscoveryToolExecutor(contextProvider: contextProvider)
+    }
+
+    /// Set the tracker that surfaces background discovery runs in the
+    /// Background Activity window and the main-window indicator.
+    func setActivityTracker(_ tracker: BackgroundActivityTracker) {
+        self.activityTracker = tracker
     }
 
     /// The user-selected Anthropic model for Discovery agent flows.
@@ -125,18 +132,43 @@ final class DiscoveryAgentService {
 
         await statusCallback?(.webSearching(context: "networking events"))
 
+        // Surface the run in the background-activity UI: one operation per
+        // discovery run, with the loop's per-turn progress lines
+        // ("Searching: …", "Fetching: …") as the live phase.
+        let tracker = activityTracker
+        let operationId = UUID().uuidString
+        let trimmedLocation = location.trimmingCharacters(in: .whitespacesAndNewlines)
+        tracker?.trackOperation(
+            id: operationId,
+            type: .eventDiscovery,
+            name: trimmedLocation.isEmpty ? "Networking events" : "Networking events — \(trimmedLocation)"
+        )
+        tracker?.updatePhase(operationId: operationId, phase: "Searching the web")
+
         let loop = EventDiscoveryLoop(
             llmFacade: llmFacade,
             modelId: modelId,
             systemPrompt: systemPrompt,
             userMessage: userMessage,
-            onProgress: reasoningCallback.map { callback in
-                { line in await callback(line + "\n") }
+            onProgress: { line in
+                tracker?.updatePhase(operationId: operationId, phase: line)
+                await reasoningCallback?(line + "\n")
             }
         )
-        let events = try await AnthropicToolLoopRunner(delegate: loop).run()
-        await statusCallback?(.webSearchComplete)
-        return events
+        do {
+            let events = try await AnthropicToolLoopRunner(delegate: loop).run()
+            await statusCallback?(.webSearchComplete)
+            tracker?.appendTranscript(
+                operationId: operationId,
+                entryType: .system,
+                content: "Completed with \(events.count) verified event\(events.count == 1 ? "" : "s")"
+            )
+            tracker?.markCompleted(operationId: operationId)
+            return events
+        } catch {
+            tracker?.markFailed(operationId: operationId, error: error.localizedDescription)
+            throw error
+        }
     }
 
     // MARK: - Event-Discovery Context Assembly (pure — covered by EventDiscoveryLoopTests)

@@ -11,17 +11,22 @@ import Foundation
 /// Type of background operation being tracked
 enum BackgroundOperationType: String, Codable, CaseIterable {
     case preprocessing = "preprocessing"
-    // Future: coverLetterGeneration, resumeOptimization, etc.
+    case eventDiscovery = "eventDiscovery"
+    case leadEnrichment = "leadEnrichment"
 
     var displayName: String {
         switch self {
         case .preprocessing: return "Preprocessing"
+        case .eventDiscovery: return "Event Discovery"
+        case .leadEnrichment: return "Lead Enrichment"
         }
     }
 
     var icon: String {
         switch self {
         case .preprocessing: return "doc.text.magnifyingglass"
+        case .eventDiscovery: return "antenna.radiowaves.left.and.right"
+        case .leadEnrichment: return "arrow.down.doc"
         }
     }
 }
@@ -200,8 +205,14 @@ final class BackgroundActivityTracker {
 
     // MARK: - Queries
 
+    /// The operations currently running, newest first (drives the main-window
+    /// indicator's tooltip).
+    var runningOperations: [TrackedOperation] {
+        operations.filter { $0.status == .running }
+    }
+
     var runningCount: Int {
-        operations.filter { $0.status == .running }.count
+        runningOperations.count
     }
 
     var hasRunningOperations: Bool {
