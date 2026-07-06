@@ -309,6 +309,12 @@ final class DiscoveryCoordinator {
         agentServiceStore
     }
 
+    /// Surface agent runs (event discovery etc.) in the background-activity UI.
+    /// Call after `configureLLMService`, which creates the agent service.
+    func setActivityTracker(_ tracker: BackgroundActivityTracker) {
+        agentServiceStore?.setActivityTracker(tracker)
+    }
+
     // MARK: - LLM Agent Operations (delegated to sub-coordinators)
 
     /// Refresh today's tasks through the shared daily-task generator.
@@ -374,13 +380,18 @@ final class DiscoveryCoordinator {
 
     /// Kick off a networking-event discovery run when the last successful one
     /// (see `DiscoverySettingsStore.lastSuccessfulEventDiscoveryAt`) is 7+ days
-    /// old or has never happened. Non-blocking — `startEventDiscovery` runs the
-    /// loop in its own task. Skipped under XCTest, before Discovery onboarding,
-    /// while a discovery is already active, and when no Discovery Anthropic
-    /// model is configured (an automatic run at launch must not surface the
-    /// model picker; a manual run does).
+    /// old or has never happened. Gated on `settingsStore.eventDiscoveryAutoRunEnabled`
+    /// (default off) — unattended LLM spend must be an explicit opt-in, so a
+    /// first launch never fires a surprise run. Non-blocking — `startEventDiscovery`
+    /// runs the loop in its own task. Skipped under XCTest, before Discovery
+    /// onboarding, while a discovery is already active, and when no Discovery
+    /// Anthropic model is configured (an automatic run at launch must not surface
+    /// the model picker; a manual run does). When it does fire, it applies the
+    /// user's standing guidance (`settingsStore.eventDiscoveryStandingGuidance`)
+    /// rather than any per-run guidance, which only applies to manual runs.
     func autoRunWeeklyEventDiscoveryIfNeeded() {
         guard !Self.isRunningUnitTests else { return }
+        guard settingsStore.eventDiscoveryAutoRunEnabled else { return }
         guard !needsOnboarding else { return }
         guard !eventsDiscovery.isActive else { return }
         guard (try? ModelConfigResolver.resolve(
@@ -396,7 +407,8 @@ final class DiscoveryCoordinator {
             + "\(settingsStore.lastSuccessfulEventDiscoveryAt.map { "\($0)" } ?? "never"))",
             category: .ai
         )
-        startEventDiscovery()
+        let guidance = settingsStore.eventDiscoveryStandingGuidance.trimmingCharacters(in: .whitespacesAndNewlines)
+        startEventDiscovery(guidance: guidance)
     }
 
     /// Cancel ongoing event discovery
