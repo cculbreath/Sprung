@@ -171,6 +171,8 @@ final class DiscoveryAgentService {
         location: String,
         candidateContext: String = "",
         knownEventsContext: String = "",
+        attendedHistoryContext: String = "",
+        operatorGuidance: String = "",
         daysAhead: Int = 42,
         statusCallback: (@MainActor @Sendable (DiscoveryStatus) async -> Void)? = nil,
         reasoningCallback: (@MainActor @Sendable (String) async -> Void)? = nil
@@ -178,25 +180,16 @@ final class DiscoveryAgentService {
         let systemPrompt = try loadPromptTemplate(named: "discovery_discover_events")
         let modelId = try anthropicModelId(operation: "Event Discovery")
 
-        let dateFormatter = DateFormatter()
-        dateFormatter.locale = Locale(identifier: "en_US_POSIX")
-        dateFormatter.dateFormat = "yyyy-MM-dd"
-        let today = Date()
-        let windowEnd = Calendar.current.date(byAdding: .day, value: daysAhead, to: today) ?? today
-
-        var userMessage = """
-            Find networking events for this job seeker.
-
-            Target sectors: \(sectors.joined(separator: ", "))
-            Location: \(location)
-            Date window: \(dateFormatter.string(from: today)) through \(dateFormatter.string(from: windowEnd))
-            """
-        if !candidateContext.isEmpty {
-            userMessage += "\n\n\(candidateContext)"
-        }
-        if !knownEventsContext.isEmpty {
-            userMessage += "\n\n## ALREADY KNOWN EVENTS (do not resubmit)\n\(knownEventsContext)"
-        }
+        let userMessage = Self.eventDiscoveryUserMessage(
+            sectors: sectors,
+            location: location,
+            candidateContext: candidateContext,
+            knownEventsContext: knownEventsContext,
+            attendedHistoryContext: attendedHistoryContext,
+            operatorGuidance: operatorGuidance,
+            today: Date(),
+            daysAhead: daysAhead
+        )
 
         await statusCallback?(.webSearching(context: "networking events"))
 
@@ -212,6 +205,76 @@ final class DiscoveryAgentService {
         let events = try await AnthropicToolLoopRunner(delegate: loop).run()
         await statusCallback?(.webSearchComplete)
         return events
+    }
+
+    // MARK: - Event-Discovery Context Assembly (pure — covered by EventDiscoveryLoopTests)
+
+    /// Most recent attended events kept as taste signal; older history adds
+    /// tokens without sharpening the signal.
+    static let attendedHistoryLimit = 10
+
+    /// Format most-recent-first attended-event records into the agent's
+    /// taste-signal block, capped at `attendedHistoryLimit`. Empty when there
+    /// is no history.
+    static func attendedHistoryContext(_ records: [AttendedEventRecord]) -> String {
+        records.prefix(attendedHistoryLimit).map { record in
+            var line = "- \(record.name) — \(record.eventType)"
+            if let organizer = record.organizer, !organizer.isEmpty {
+                line += ", organizer: \(organizer)"
+            }
+            if let rating = record.rating {
+                line += ", rated \(rating)/5"
+            }
+            return line
+        }.joined(separator: "\n")
+    }
+
+    /// Build the event-discovery task message: today's date plus the two
+    /// windows the prompt keys on (PRIORITY WINDOW = next 7 days, the core
+    /// deliverable of a weekly run; FULL WINDOW = `daysAhead`), then the
+    /// optional context blocks. Attended history (taste signal) stays distinct
+    /// from known events (do-not-resubmit); operator guidance is delimited so
+    /// the prompt can scope it to steering, never to waiving verification.
+    static func eventDiscoveryUserMessage(
+        sectors: [String],
+        location: String,
+        candidateContext: String,
+        knownEventsContext: String,
+        attendedHistoryContext: String,
+        operatorGuidance: String,
+        today: Date,
+        daysAhead: Int
+    ) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyy-MM-dd"
+        let calendar = Calendar.current
+        let priorityEnd = calendar.date(byAdding: .day, value: 7, to: today) ?? today
+        let windowEnd = calendar.date(byAdding: .day, value: daysAhead, to: today) ?? today
+
+        var message = """
+            Find networking events for this job seeker.
+
+            Target sectors: \(sectors.joined(separator: ", "))
+            Location: \(location)
+            Today: \(formatter.string(from: today))
+            PRIORITY WINDOW (next 7 days): \(formatter.string(from: today)) through \(formatter.string(from: priorityEnd))
+            FULL WINDOW: \(formatter.string(from: today)) through \(formatter.string(from: windowEnd))
+            """
+        if !candidateContext.isEmpty {
+            message += "\n\n\(candidateContext)"
+        }
+        if !attendedHistoryContext.isEmpty {
+            message += "\n\n## ATTENDED EVENT HISTORY (what the user actually shows up to)\n\(attendedHistoryContext)"
+        }
+        if !knownEventsContext.isEmpty {
+            message += "\n\n## ALREADY KNOWN EVENTS (do not resubmit)\n\(knownEventsContext)"
+        }
+        let guidance = operatorGuidance.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !guidance.isEmpty {
+            message += "\n\n## OPERATOR GUIDANCE FOR THIS RUN\n\(guidance)"
+        }
+        return message
     }
 
     func prepareForEvent(eventId: UUID, focusCompanies: [String] = [], goals: String? = nil) async throws -> EventPrepResult {

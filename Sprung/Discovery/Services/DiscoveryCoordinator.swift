@@ -194,6 +194,11 @@ final class DiscoveryCoordinator {
 
             // Set up coaching service + the shared daily-task generator
             configureCoachingService(llmService: llmService, contextProvider: contextProvider)
+
+            // Coordinator startup is the weekly checkpoint for automatic
+            // event discovery (the developer runs the app far more often
+            // than weekly, so launch-time is a sufficient trigger).
+            autoRunWeeklyEventDiscoveryIfNeeded()
         }
     }
 
@@ -363,9 +368,12 @@ final class DiscoveryCoordinator {
         }
     }
 
-    /// Discover networking events using the Anthropic web-search agent loop
+    /// Discover networking events using the Anthropic web-search agent loop.
+    /// `guidance` is optional one-run operator steering, threaded into the
+    /// agent's task message; empty means a plain run.
     func discoverNetworkingEvents(
         daysAhead: Int = 42,
+        guidance: String = "",
         streamCallback: (@MainActor @Sendable (DiscoveryStatus, String?) async -> Void)? = nil
     ) async throws {
         guard let agent = agentService else {
@@ -378,19 +386,57 @@ final class DiscoveryCoordinator {
             sectors: prefs.targetSectors,
             location: prefs.primaryLocation,
             candidateContext: candidateContext,
+            guidance: guidance,
             daysAhead: daysAhead,
             streamCallback: streamCallback
         )
     }
 
     /// Start event discovery with state managed by coordinator (persists across navigation)
-    func startEventDiscovery() {
+    func startEventDiscovery(guidance: String = "") {
         eventsDiscovery.start { [weak self] callback in
             guard let self = self else { return }
-            try await self.discoverNetworkingEvents { status, reasoning in
+            try await self.discoverNetworkingEvents(guidance: guidance) { status, reasoning in
                 callback(status, reasoning)
             }
         }
+    }
+
+    // MARK: - Weekly Event-Discovery Auto-Run
+
+    /// True when the process hosts the XCTest bundle. Mirrors the private
+    /// `SprungApp.isRunningUnitTests` guard: the test suite launches the full
+    /// app, so automatic LLM work must never fire under XCTest.
+    private static var isRunningUnitTests: Bool {
+        ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+            || NSClassFromString("XCTestCase") != nil
+    }
+
+    /// Kick off a networking-event discovery run when the last successful one
+    /// (see `DiscoverySettingsStore.lastSuccessfulEventDiscoveryAt`) is 7+ days
+    /// old or has never happened. Non-blocking — `startEventDiscovery` runs the
+    /// loop in its own task. Skipped under XCTest, before Discovery onboarding,
+    /// while a discovery is already active, and when no Discovery Anthropic
+    /// model is configured (an automatic run at launch must not surface the
+    /// model picker; a manual run does).
+    func autoRunWeeklyEventDiscoveryIfNeeded() {
+        guard !Self.isRunningUnitTests else { return }
+        guard !needsOnboarding else { return }
+        guard !eventsDiscovery.isActive else { return }
+        guard (try? ModelConfigResolver.resolve(
+            key: DiscoveryAgentService.anthropicModelSettingKey,
+            operation: "Event Discovery"
+        )) != nil else { return }
+        if let last = settingsStore.lastSuccessfulEventDiscoveryAt {
+            let days = Calendar.current.dateComponents([.day], from: last, to: Date()).day ?? 0
+            guard days >= 7 else { return }
+        }
+        Logger.info(
+            "Weekly event-discovery auto-run starting (last success: "
+            + "\(settingsStore.lastSuccessfulEventDiscoveryAt.map { "\($0)" } ?? "never"))",
+            category: .ai
+        )
+        startEventDiscovery()
     }
 
     /// Cancel ongoing event discovery
@@ -566,6 +612,7 @@ final class DiscoveryCoordinator {
         sectors: [String],
         location: String,
         candidateContext: String = "",
+        guidance: String = "",
         daysAhead: Int = 42,
         streamCallback: (@MainActor @Sendable (DiscoveryStatus, String?) async -> Void)? = nil
     ) async throws {
@@ -574,6 +621,8 @@ final class DiscoveryCoordinator {
             location: location,
             candidateContext: candidateContext,
             knownEventsContext: knownEventsContext(),
+            attendedHistoryContext: DiscoveryAgentService.attendedHistoryContext(attendedEventHistory()),
+            operatorGuidance: guidance,
             daysAhead: daysAhead,
             statusCallback: { status in
                 await streamCallback?(status, nil)
@@ -589,6 +638,10 @@ final class DiscoveryCoordinator {
         )
 
         eventStore.addMultiple(newEvents)
+
+        // Only a run that got this far counts for the weekly auto-run clock —
+        // a thrown (failed/cancelled) run never reaches this line.
+        settingsStore.recordSuccessfulEventDiscovery()
 
         await streamCallback?(.complete(added: newEvents.count, filtered: discovered.count - newEvents.count), nil)
 
@@ -607,6 +660,23 @@ final class DiscoveryCoordinator {
         return known
             .map { "- \($0.name) — \(formatter.string(from: $0.date))" }
             .joined(separator: "\n")
+    }
+
+    /// Attended/debriefed events, most recent first, as taste-signal records
+    /// for the discovery agent (capped and formatted by
+    /// `DiscoveryAgentService.attendedHistoryContext`).
+    private func attendedEventHistory() -> [AttendedEventRecord] {
+        eventStore.allEvents
+            .filter { $0.status == .attended || $0.status == .debriefed }
+            .sorted { ($0.attendedAt ?? $0.date) > ($1.attendedAt ?? $1.date) }
+            .map {
+                AttendedEventRecord(
+                    name: $0.name,
+                    eventType: $0.eventType.rawValue,
+                    organizer: $0.organizer,
+                    rating: $0.eventRating?.rawValue
+                )
+            }
     }
 
     /// Run event preparation via the LLM agent and persist the full result —

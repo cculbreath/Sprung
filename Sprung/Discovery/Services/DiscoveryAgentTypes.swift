@@ -26,6 +26,18 @@ struct EventDiscoverySubmission: Codable {
     let events: [DiscoveredEvent]
 }
 
+/// One previously attended (or debriefed) event, fed to the event-discovery
+/// agent as a taste signal — evidence of what the user actually shows up to.
+/// Built most-recent-first by DiscoveryCoordinator; capped and formatted by
+/// `DiscoveryAgentService.attendedHistoryContext`.
+struct AttendedEventRecord {
+    let name: String
+    let eventType: String
+    let organizer: String?
+    /// User rating 1–5 (`EventRating.rawValue`) where the debrief recorded one.
+    let rating: Int?
+}
+
 struct JobSelectionsResult: Codable {
     let selections: [JobSelection]
     let overallAnalysis: String

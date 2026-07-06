@@ -294,4 +294,101 @@ final class EventDiscoveryLoopTests: XCTestCase {
             return nil
         }
     }
+
+    // MARK: - 4. Task-message assembly (7-day focus, taste signal, guidance)
+
+    /// Midnight local on a fixed date, through the same parser that pins the
+    /// submission date contract.
+    private var fixedToday: Date {
+        DiscoveredEvent.parseEventDate("2026-07-06")!
+    }
+
+    private func userMessage(
+        candidateContext: String = "",
+        knownEventsContext: String = "",
+        attendedHistoryContext: String = "",
+        operatorGuidance: String = "",
+        daysAhead: Int = 42
+    ) -> String {
+        DiscoveryAgentService.eventDiscoveryUserMessage(
+            sectors: ["Photonics", "Embedded Systems"],
+            location: "Huntsville, AL",
+            candidateContext: candidateContext,
+            knownEventsContext: knownEventsContext,
+            attendedHistoryContext: attendedHistoryContext,
+            operatorGuidance: operatorGuidance,
+            today: fixedToday,
+            daysAhead: daysAhead
+        )
+    }
+
+    func testUserMessageCarriesTodayPriorityAndFullWindows() {
+        let message = userMessage()
+        XCTAssertTrue(message.contains("Today: 2026-07-06"))
+        XCTAssertTrue(message.contains("PRIORITY WINDOW (next 7 days): 2026-07-06 through 2026-07-13"),
+                      "the next-7-days window is the core deliverable of a weekly run")
+        XCTAssertTrue(message.contains("FULL WINDOW: 2026-07-06 through 2026-08-17"),
+                      "42-day forward sweep window")
+        XCTAssertTrue(message.contains("Target sectors: Photonics, Embedded Systems"))
+        XCTAssertTrue(message.contains("Location: Huntsville, AL"))
+    }
+
+    func testUserMessageGuidanceBlockPresentOnlyWhenProvided() {
+        let plain = userMessage()
+        XCTAssertFalse(plain.contains("OPERATOR GUIDANCE"), "empty guidance = plain run")
+
+        let whitespace = userMessage(operatorGuidance: "  \n ")
+        XCTAssertFalse(whitespace.contains("OPERATOR GUIDANCE"), "whitespace-only guidance = plain run")
+
+        let steered = userMessage(operatorGuidance: "Virtual events only this week.")
+        XCTAssertTrue(steered.contains("## OPERATOR GUIDANCE FOR THIS RUN\nVirtual events only this week."),
+                      "guidance arrives as a clearly delimited steering block")
+    }
+
+    func testUserMessageKeepsTasteSignalDistinctFromKnownEvents() throws {
+        let message = userMessage(
+            knownEventsContext: "- Rocket City Mixer — 2026-07-09",
+            attendedHistoryContext: "- Optics Symposium — Conference, rated 5/5"
+        )
+        let historyRange = try XCTUnwrap(
+            message.range(of: "## ATTENDED EVENT HISTORY (what the user actually shows up to)")
+        )
+        let knownRange = try XCTUnwrap(message.range(of: "## ALREADY KNOWN EVENTS (do not resubmit)"))
+        XCTAssertLessThan(historyRange.lowerBound, knownRange.lowerBound,
+                          "taste signal and do-not-resubmit list are separate, distinctly framed blocks")
+        XCTAssertTrue(message.contains("- Optics Symposium — Conference, rated 5/5"))
+        XCTAssertTrue(message.contains("- Rocket City Mixer — 2026-07-09"))
+    }
+
+    func testAttendedHistoryContextCapsAtTenMostRecent() {
+        let records = (1...12).map { index in
+            AttendedEventRecord(name: "Event \(index)", eventType: "Meetup", organizer: nil, rating: nil)
+        }
+        let context = DiscoveryAgentService.attendedHistoryContext(records)
+        let lines = context.split(separator: "\n")
+        XCTAssertEqual(lines.count, 10, "history is capped at the 10 most recent records")
+        XCTAssertTrue(context.contains("- Event 1 — Meetup"), "caller orders most-recent-first; cap keeps the head")
+        XCTAssertTrue(context.contains("- Event 10 — Meetup"))
+        XCTAssertFalse(context.contains("Event 11"))
+        XCTAssertFalse(context.contains("Event 12"))
+    }
+
+    func testAttendedHistoryContextFormatsOrganizerAndRating() {
+        let context = DiscoveryAgentService.attendedHistoryContext([
+            AttendedEventRecord(name: "Photonics West", eventType: "Conference", organizer: "SPIE", rating: 5),
+            AttendedEventRecord(name: "Hardware Meetup", eventType: "Meetup", organizer: nil, rating: nil),
+            AttendedEventRecord(name: "Career Fair", eventType: "Career Fair", organizer: "", rating: 2)
+        ])
+        let lines = context.split(separator: "\n").map(String.init)
+        XCTAssertEqual(lines, [
+            "- Photonics West — Conference, organizer: SPIE, rated 5/5",
+            "- Hardware Meetup — Meetup",
+            "- Career Fair — Career Fair, rated 2/5"
+        ], "organizer and rating render only when present; empty organizer is omitted")
+    }
+
+    func testAttendedHistoryContextEmptyWithNoRecords() {
+        XCTAssertEqual(DiscoveryAgentService.attendedHistoryContext([]), "",
+                       "no history means no taste-signal block in the task message")
+    }
 }

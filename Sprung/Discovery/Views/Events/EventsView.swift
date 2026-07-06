@@ -95,10 +95,7 @@ struct EventsView: View {
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: 400)
 
-            Button("Discover Events") {
-                coordinator.startEventDiscovery()
-            }
-            .buttonStyle(.borderedProminent)
+            DiscoverEventsButton(coordinator: coordinator, prominent: true)
         }
     }
 
@@ -132,6 +129,14 @@ struct EventsView: View {
 
     private var eventListView: some View {
         VStack(spacing: 0) {
+            // Discover trigger (with optional one-run guidance)
+            HStack {
+                Spacer()
+                DiscoverEventsButton(coordinator: coordinator)
+            }
+            .padding(.horizontal)
+            .padding(.top, 8)
+
             // Event type filter bar
             if availableEventTypes.count > 1 {
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -259,6 +264,63 @@ struct EventsView: View {
             coordinator.eventStore.delete(event)
         } label: {
             Label("Delete Event", systemImage: "trash")
+        }
+    }
+}
+
+/// Discover-events trigger with an optional one-run guidance popover.
+/// Leaving the field empty runs plain discovery; guidance steers the agent's
+/// searches and selection but never waives page verification.
+private struct DiscoverEventsButton: View {
+    let coordinator: DiscoveryCoordinator
+    var prominent = false
+
+    @State private var showPopover = false
+    @State private var guidanceText = ""
+
+    var body: some View {
+        Group {
+            if prominent {
+                Button("Discover Events") {
+                    showPopover = true
+                }
+                .buttonStyle(.borderedProminent)
+            } else {
+                Button {
+                    showPopover = true
+                } label: {
+                    Label("Discover", systemImage: "magnifyingglass")
+                }
+                .buttonStyle(.bordered)
+            }
+        }
+        .popover(isPresented: $showPopover, arrowEdge: .bottom) {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Discover Networking Events")
+                    .font(.headline)
+
+                TextField("Optional guidance for this run", text: $guidanceText, axis: .vertical)
+                    .textFieldStyle(.roundedBorder)
+                    .lineLimit(2...4)
+
+                Text("e.g. \"virtual events only\" or \"focus on the optics conference season\"")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                HStack {
+                    Spacer()
+                    Button("Discover") {
+                        showPopover = false
+                        let guidance = guidanceText.trimmingCharacters(in: .whitespacesAndNewlines)
+                        guidanceText = ""
+                        coordinator.startEventDiscovery(guidance: guidance)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .keyboardShortcut(.defaultAction)
+                }
+            }
+            .padding()
+            .frame(width: 340)
         }
     }
 }
