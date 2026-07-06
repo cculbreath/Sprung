@@ -316,9 +316,16 @@ final class SeedGenerationOrchestrator {
         case .objective:
             return GeneratedContent(type: .objective(summary: editedText.trimmingCharacters(in: .whitespacesAndNewlines)))
 
+        case .skillGroups:
+            // Round-trips the review sheet's editable format
+            // ("Category Name: skill1, skill2" per line) back into groups.
+            return GeneratedContent(type: .skillGroups(SkillGroup.parse(editableText: editedText)))
+
         default:
-            // For types we don't handle, return original
-            Logger.warning("Unhandled content type for edited content: \(originalContent.type)", category: .ai)
+            // Unreachable via UI: ReviewItemCard only offers Edit for types
+            // handled above. Surface loudly if that invariant ever breaks,
+            // because falling back to the original discards the user's edit.
+            Logger.error("Unhandled content type for edited content — applying ORIGINAL, user edit discarded: \(originalContent.type)", category: .ai)
             return originalContent
         }
     }

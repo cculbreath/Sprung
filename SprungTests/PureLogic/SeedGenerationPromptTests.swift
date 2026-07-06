@@ -3,9 +3,15 @@
 //  SprungTests
 //
 //  Pure-logic coverage for GenerationOptions (defaults, bulletConstraintText,
-//  Equatable) and PromptCacheService prompt assembly + caching. Contexts are
-//  built with empty knowledge-card / skill arrays so no SwiftData model is
-//  instantiated — only the string-composition and caching logic is exercised.
+//  Equatable) and PromptCacheService prompt assembly + caching. KnowledgeCard
+//  and Skill @Model instances are constructed standalone (never inserted into
+//  a container) — only the string-composition and caching logic is exercised.
+//
+//  Preamble contract (pinned below): the cached role preamble includes EVERY
+//  knowledge card and EVERY skill (no silent truncation), its bytes are
+//  deterministic for a given input set regardless of store fetch order (it is
+//  a prompt-cache prefix), and the memoization key covers content — not just
+//  counts — so editing a card mid-session can never reuse a stale digest.
 //
 //  NOTE: GenerationOptions.load()/save() hit UserDefaults.standard directly,
 //  so they are NOT exercised here (would mutate the shared domain).
@@ -61,6 +67,8 @@ final class SeedGenerationPromptTests: XCTestCase {
 
     private func makeContext(
         profile: ApplicantProfileDraft = ApplicantProfileDraft(),
+        cards: [KnowledgeCard] = [],
+        skills: [Skill] = [],
         writersVoice: String = "",
         dossier: JSON? = nil
     ) -> SeedGenerationContext {
@@ -68,8 +76,8 @@ final class SeedGenerationPromptTests: XCTestCase {
             applicantProfile: profile,
             skeletonTimeline: JSON(["experiences": []]),
             sectionConfig: SectionConfig(),
-            knowledgeCards: [],
-            skills: [],
+            knowledgeCards: cards,
+            skills: skills,
             writersVoice: writersVoice,
             voiceSummary: "",
             dossier: dossier,
@@ -143,5 +151,87 @@ final class SeedGenerationPromptTests: XCTestCase {
         let b = service.buildPreamble(context: makeContext(profile: profileB))
         XCTAssertNotEqual(a, b, "a different applicant name must invalidate the cached preamble")
         XCTAssertTrue(b.contains("Bob Bbb"))
+    }
+
+    // MARK: - Preamble completeness (no silent truncation)
+
+    func testPreambleIncludesEveryKnowledgeCard() {
+        // 25 cards previously silently truncated to prefix(20). The contract
+        // is now that EVERY card appears in the evidence base.
+        let cards = (1...25).map {
+            KnowledgeCard(title: "Card-Title-\($0)", narrative: "narrative \($0)")
+        }
+        let service = PromptCacheService(backend: .openRouter)
+        let preamble = service.buildPreamble(context: makeContext(cards: cards))
+        for card in cards {
+            XCTAssertTrue(preamble.contains("### \(card.title)"),
+                          "every knowledge card must appear in the preamble: missing \(card.title)")
+        }
+        XCTAssertFalse(preamble.contains("more knowledge cards"),
+                       "the silent-truncation trailer must be gone")
+    }
+
+    func testPreambleIncludesEverySkill() {
+        // 120 skills previously silently truncated to an alphabetical
+        // prefix(100) — while the prompt told the model the list was
+        // exhaustive. The contract is now that EVERY skill appears.
+        let skills = (1...120).map {
+            Skill(canonical: String(format: "Skill-%03d", $0), category: "technical")
+        }
+        let service = PromptCacheService(backend: .openRouter)
+        let preamble = service.buildPreamble(context: makeContext(skills: skills))
+        XCTAssertTrue(preamble.contains("- Skill-001"))
+        XCTAssertTrue(preamble.contains("- Skill-120"),
+                      "skills past the old prefix(100) cap must be present")
+        XCTAssertFalse(preamble.contains("more skills"),
+                       "the silent-truncation trailer must be gone")
+    }
+
+    // MARK: - Preamble byte-stability (prompt-cache prefix)
+
+    func testPreambleByteStableAcrossInputOrdering() {
+        // Store fetch order is arbitrary; the preamble is a prompt-cache
+        // prefix so one input set must always yield identical bytes.
+        let cards = (1...5).map {
+            KnowledgeCard(title: "Card-\($0)", narrative: "n", organization: "Org-\($0)")
+        }
+        let skills = (1...5).map {
+            Skill(canonical: "Skill-\($0)", category: "technical")
+        }
+        let a = PromptCacheService(backend: .openRouter)
+            .buildPreamble(context: makeContext(cards: cards, skills: skills))
+        let b = PromptCacheService(backend: .openRouter)
+            .buildPreamble(context: makeContext(cards: cards.reversed(), skills: skills.reversed()))
+        XCTAssertEqual(a, b, "preamble bytes must not depend on store fetch order")
+    }
+
+    // MARK: - Cache key covers content, not just counts
+
+    func testCachedPreambleInvalidatedByCardContentChange() {
+        // Same card COUNT, different content: the old count-based hash reused
+        // the stale digest here, so mid-session card edits never surfaced.
+        let service = PromptCacheService(backend: .openRouter)
+        let card = KnowledgeCard(title: "Original Card Title", narrative: "n")
+        let first = service.buildPreamble(context: makeContext(cards: [card]))
+        XCTAssertTrue(first.contains("Original Card Title"))
+
+        card.title = "Edited Card Title"
+        let second = service.buildPreamble(context: makeContext(cards: [card]))
+        XCTAssertTrue(second.contains("Edited Card Title"),
+                      "an edited card must invalidate the cached preamble")
+        XCTAssertFalse(second.contains("Original Card Title"))
+    }
+
+    func testCachedPreambleInvalidatedBySkillRename() {
+        let service = PromptCacheService(backend: .openRouter)
+        let skill = Skill(canonical: "OldSkillName", category: "technical")
+        let first = service.buildPreamble(context: makeContext(skills: [skill]))
+        XCTAssertTrue(first.contains("OldSkillName"))
+
+        skill.canonical = "NewSkillName"
+        let second = service.buildPreamble(context: makeContext(skills: [skill]))
+        XCTAssertTrue(second.contains("NewSkillName"),
+                      "a renamed skill must invalidate the cached preamble")
+        XCTAssertFalse(second.contains("OldSkillName"))
     }
 }

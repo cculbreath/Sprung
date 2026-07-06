@@ -37,6 +37,20 @@ struct ReviewItemCard: View {
         }
     }
 
+    /// Whether the Edit affordance can round-trip for this content type.
+    /// Types without a lossless editable representation (e.g. title sets,
+    /// which are managed in the Title Library) must not offer Edit — saving
+    /// would silently discard the user's changes at apply time.
+    private var isEditSupported: Bool {
+        switch item.generatedContent.type {
+        case .workHighlights, .volunteerDescription, .projectDescription,
+             .objective, .skillGroups:
+            return true
+        default:
+            return false
+        }
+    }
+
     /// Extract the array elements from the content
     private var contentArray: [String] {
         switch item.generatedContent.type {
@@ -239,6 +253,12 @@ struct ReviewItemCard: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
+            if case .skillGroups = item.generatedContent.type {
+                Text("One group per line — Category Name: skill1, skill2, skill3")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
+
             TextEditor(text: $editedText)
                 .font(.body)
                 .frame(minHeight: 100)
@@ -353,17 +373,19 @@ struct ReviewItemCard: View {
                     .buttonStyle(.borderedProminent)
                     .tint(.green)
 
-                    Button {
-                        isEditing = true
-                        if isArrayContent {
-                            editedItems = contentArray
-                        } else {
-                            editedText = extractEditableText()
+                    if isEditSupported {
+                        Button {
+                            isEditing = true
+                            if isArrayContent {
+                                editedItems = contentArray
+                            } else {
+                                editedText = extractEditableText()
+                            }
+                        } label: {
+                            Label("Edit", systemImage: "pencil")
                         }
-                    } label: {
-                        Label("Edit", systemImage: "pencil")
+                        .buttonStyle(.bordered)
                     }
-                    .buttonStyle(.bordered)
 
                     Button {
                         rejectionLineTarget = targetBulletLines
@@ -393,18 +415,20 @@ struct ReviewItemCard: View {
                 .buttonStyle(.borderedProminent)
                 .tint(.green)
 
-                Button {
-                    isEditing = true
-                    if isArrayContent {
-                        // Initialize with existing array elements
-                        editedItems = contentArray
-                    } else {
-                        editedText = extractEditableText()
+                if isEditSupported {
+                    Button {
+                        isEditing = true
+                        if isArrayContent {
+                            // Initialize with existing array elements
+                            editedItems = contentArray
+                        } else {
+                            editedText = extractEditableText()
+                        }
+                    } label: {
+                        Label("Edit", systemImage: "pencil")
                     }
-                } label: {
-                    Label("Edit", systemImage: "pencil")
+                    .buttonStyle(.bordered)
                 }
-                .buttonStyle(.bordered)
 
                 Button {
                     rejectionLineTarget = targetBulletLines
@@ -515,6 +539,8 @@ struct ReviewItemCard: View {
                 parts.append(highlights.map { "- \($0)" }.joined(separator: "\n"))
             }
             return parts.joined(separator: "\n\n")
+        case .skillGroups(let groups):
+            return SkillGroup.editableText(for: groups)
         default:
             return ""
         }

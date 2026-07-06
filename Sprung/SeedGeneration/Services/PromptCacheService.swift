@@ -73,6 +73,11 @@ final class PromptCacheService {
         let preamble = sections.joined(separator: "\n\n---\n\n")
         cachedPreamble = preamble
         cachedContextHash = contextHash
+        Logger.info(
+            "SGM preamble built: \(context.knowledgeCards.count) knowledge cards, "
+                + "\(context.skills.count) skills, \(preamble.count) chars",
+            category: .ai
+        )
         return preamble
     }
 
@@ -195,7 +200,16 @@ final class PromptCacheService {
             for generated content.
             """)
 
-        for card in cards.prefix(20) { // Limit to prevent token overflow
+        // EVERY card is included — the preamble is the evidence base the model
+        // is told to ground all claims in, so silently dropping cards degrades
+        // generation quality with no signal. Store fetch order is arbitrary,
+        // so sort deterministically: the preamble is a prompt-cache prefix and
+        // must be byte-identical for a given card set.
+        let sortedCards = cards.sorted {
+            ($0.title, $0.id.uuidString) < ($1.title, $1.id.uuidString)
+        }
+
+        for card in sortedCards {
             lines.append("")
             lines.append("### \(card.title)")
             if let org = card.organization, !org.isEmpty {
@@ -205,7 +219,9 @@ final class PromptCacheService {
                 lines.append("**Period:** \(dateRange)")
             }
 
-            // Include facts
+            // Per-card digest caps (deliberate): the preamble carries a summary
+            // of each card, not its full narrative — generators that need deeper
+            // evidence (e.g. work highlights) do per-entry KC matching themselves.
             let kcFacts = card.facts
             if !kcFacts.isEmpty {
                 lines.append("**Key Facts:**")
@@ -214,7 +230,6 @@ final class PromptCacheService {
                 }
             }
 
-            // Include suggested bullets if available
             let bullets = card.suggestedBullets
             if !bullets.isEmpty {
                 lines.append("**Highlights:**")
@@ -222,10 +237,6 @@ final class PromptCacheService {
                     lines.append("- \(bullet)")
                 }
             }
-        }
-
-        if cards.count > 20 {
-            lines.append("\n*... and \(cards.count - 20) more knowledge cards*")
         }
 
         return lines.joined(separator: "\n")
@@ -239,21 +250,20 @@ final class PromptCacheService {
             Only use skills from this list - do not fabricate additional skills.
             """)
 
-        // Group skills by source or just list them
+        // EVERY skill is included — the model is explicitly told this list is
+        // exhaustive ("do not fabricate additional skills"), so an A–M slice
+        // would silently forbid most of the bank. Alphabetical order keeps the
+        // prompt-cache prefix bytes deterministic for a given skill set.
         let sortedSkills = skills.sorted { $0.canonical < $1.canonical }
 
         var currentLetter = ""
-        for skill in sortedSkills.prefix(100) { // Limit to prevent overflow
+        for skill in sortedSkills {
             let firstLetter = String(skill.canonical.prefix(1)).uppercased()
             if firstLetter != currentLetter {
                 currentLetter = firstLetter
                 lines.append("\n**\(currentLetter)**")
             }
             lines.append("- \(skill.canonical)")
-        }
-
-        if skills.count > 100 {
-            lines.append("\n*... and \(skills.count - 100) more skills*")
         }
 
         return lines.joined(separator: "\n")
@@ -292,14 +302,43 @@ final class PromptCacheService {
 
     // MARK: - Hashing
 
+    /// Hash every input the preamble is built from. The cached preamble is
+    /// returned verbatim while this hash matches, so any field that can alter
+    /// preamble bytes MUST be combined here — keying on card/skill counts
+    /// alone previously reused a stale digest after a card was edited.
     private func hashContext(_ context: SeedGenerationContext) -> Int {
-        // Simple hash combining key elements
         var hasher = Hasher()
-        hasher.combine(context.applicantProfile.name)
-        hasher.combine(context.applicantProfile.email)
-        hasher.combine(context.knowledgeCards.count)
-        hasher.combine(context.skills.count)
+
+        let profile = context.applicantProfile
+        hasher.combine(profile.name)
+        hasher.combine(profile.email)
+        hasher.combine(profile.city)
+        hasher.combine(profile.state)
+        hasher.combine(profile.summary)
+
         hasher.combine(context.writersVoice)
+
+        for card in context.knowledgeCards {
+            hasher.combine(card.id)
+            hasher.combine(card.title)
+            hasher.combine(card.organization)
+            hasher.combine(card.dateRange)
+            hasher.combine(card.factsJSON)
+            hasher.combine(card.suggestedBulletsJSON)
+        }
+
+        for skill in context.skills {
+            hasher.combine(skill.canonical)
+        }
+
+        if let dossier = context.dossier {
+            hasher.combine(dossier["jobSearchContext"].string)
+            hasher.combine(dossier["careerThroughLines"].string)
+            hasher.combine(dossier["strengthsToEmphasize"].string)
+            hasher.combine(dossier["pitfallsToAvoid"].string)
+            hasher.combine(dossier["notes"].string)
+        }
+
         return hasher.finalize()
     }
 }

@@ -142,6 +142,45 @@ struct SkillGroup: Equatable, Codable {
     }
 }
 
+// MARK: - Skill Group Review Editing
+
+extension SkillGroup {
+    /// Render groups as user-editable text for the review sheet: one group per
+    /// line, `Category Name: skill1, skill2, skill3`.
+    /// `parse(editableText:)` reverses this format exactly, so a saved edit is
+    /// what gets applied — never the original grouping.
+    static func editableText(for groups: [SkillGroup]) -> String {
+        groups.map { group in
+            "\(group.name): \(group.keywords.joined(separator: ", "))"
+        }.joined(separator: "\n")
+    }
+
+    /// Parse user-edited text back into skill groups.
+    /// Each non-empty line becomes one group: the text before the FIRST colon
+    /// is the category name, the remainder is a comma-separated keyword list.
+    /// A line without a colon becomes a name-only group; empty keywords are
+    /// dropped; whitespace is trimmed throughout.
+    static func parse(editableText: String) -> [SkillGroup] {
+        editableText
+            .components(separatedBy: .newlines)
+            .compactMap { line -> SkillGroup? in
+                let trimmed = line.trimmingCharacters(in: .whitespaces)
+                guard !trimmed.isEmpty else { return nil }
+                guard let colonIndex = trimmed.firstIndex(of: ":") else {
+                    return SkillGroup(name: trimmed, keywords: [])
+                }
+                let name = String(trimmed[..<colonIndex])
+                    .trimmingCharacters(in: .whitespaces)
+                let keywords = trimmed[trimmed.index(after: colonIndex)...]
+                    .components(separatedBy: ",")
+                    .map { $0.trimmingCharacters(in: .whitespaces) }
+                    .filter { !$0.isEmpty }
+                guard !name.isEmpty || !keywords.isEmpty else { return nil }
+                return SkillGroup(name: name, keywords: keywords)
+            }
+    }
+}
+
 /// Language entry with fluency
 struct LanguageEntry: Equatable, Codable {
     var language: String
