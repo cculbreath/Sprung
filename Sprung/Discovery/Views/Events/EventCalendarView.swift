@@ -327,15 +327,6 @@ struct CalendarDayCell: View {
     }
 
     private func eventColor(for event: NetworkingEventOpportunity) -> Color {
-        if let recommendation = event.llmRecommendation {
-            switch recommendation {
-            case .strongYes: return .green
-            case .yes: return .teal
-            case .maybe: return .yellow
-            case .skip: return .gray
-            }
-        }
-
         switch event.status {
         case .planned: return .blue
         case .attended, .debriefed: return .green

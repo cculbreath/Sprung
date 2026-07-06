@@ -292,10 +292,6 @@ final class ActivityReportService {
             switch event.status {
             case .discovered:
                 breakdown.discovered += 1
-            case .evaluating:
-                breakdown.evaluating += 1
-            case .recommended:
-                breakdown.recommended += 1
             case .planned:
                 breakdown.planned += 1
             case .attended:
@@ -314,18 +310,18 @@ final class ActivityReportService {
         return breakdown
     }
 
-    /// Get detailed info for upcoming events (planned/recommended) and events attended in context period
+    /// Get detailed info for upcoming planned events and events attended in context period
     private func getEventDetails(since: Date) -> [ActivitySnapshot.EventDetail] {
         var details: [ActivitySnapshot.EventDetail] = []
         let now = Date()
 
         for event in eventStore.allEvents {
-            // Include: future events that are planned/recommended, OR attended within context period
+            // Include: future events that are planned, OR attended within context period
             let isFuture = event.date > now
-            let isPlannedOrRecommended = event.status == .planned || event.status == .recommended || event.status == .evaluating
+            let isPlanned = event.status == .planned
             let wasRecentlyAttended = event.attended && (event.attendedAt ?? Date.distantPast) >= since
 
-            guard (isFuture && isPlannedOrRecommended) || wasRecentlyAttended else { continue }
+            guard (isFuture && isPlanned) || wasRecentlyAttended else { continue }
 
             details.append(ActivitySnapshot.EventDetail(
                 eventId: event.id,
@@ -338,8 +334,6 @@ final class ActivityReportService {
                 status: event.status.rawValue,
                 organizer: event.organizer,
                 estimatedAttendance: event.estimatedAttendance.rawValue,
-                llmRecommendation: event.llmRecommendation?.rawValue,
-                llmRationale: event.llmRationale,
                 goal: event.goal,
                 attended: event.attended,
                 contactCount: event.attended ? event.contactCount : nil,

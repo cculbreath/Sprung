@@ -3,7 +3,8 @@
 //  Sprung
 //
 //  Event preparation view for networking events.
-//  Shows event details, research, elevator pitch, and goals.
+//  Shows event details, elevator pitch, goals, talking points,
+//  target companies, conversation starters, and things to avoid.
 //
 
 import SwiftUI
@@ -13,11 +14,10 @@ struct EventPrepView: View {
     let coordinator: DiscoveryCoordinator
 
     @Environment(\.dismiss) private var dismiss
-    @State private var isGeneratingPitch = false
-    @State private var isGeneratingGoals = false
+    @State private var isGeneratingPrep = false
     @State private var pitchText: String = ""
     @State private var goalText: String = ""
-    @State private var pitchError: String?
+    @State private var prepError: String?
     @State private var calendarError: String?
 
     var body: some View {
@@ -33,6 +33,11 @@ struct EventPrepView: View {
 
                 Divider()
 
+                // AI Prep Generation
+                prepGenerationSection
+
+                Divider()
+
                 // Elevator Pitch
                 elevatorPitchSection
 
@@ -40,6 +45,27 @@ struct EventPrepView: View {
 
                 // Goals
                 goalsSection
+
+                // AI Prep Results
+                if let talkingPoints = event.talkingPoints, !talkingPoints.isEmpty {
+                    Divider()
+                    talkingPointsSection(talkingPoints)
+                }
+
+                if let targetCompanies = event.targetCompanies, !targetCompanies.isEmpty {
+                    Divider()
+                    targetCompaniesSection(targetCompanies)
+                }
+
+                if let starters = event.conversationStarters, !starters.isEmpty {
+                    Divider()
+                    conversationStartersSection(starters)
+                }
+
+                if let thingsToAvoid = event.thingsToAvoid, !thingsToAvoid.isEmpty {
+                    Divider()
+                    thingsToAvoidSection(thingsToAvoid)
+                }
 
                 Divider()
 
@@ -66,13 +92,13 @@ struct EventPrepView: View {
             pitchText = event.pitchScript ?? ""
             goalText = event.goal ?? ""
         }
-        .alert("Pitch Generation Failed", isPresented: Binding(
-            get: { pitchError != nil },
-            set: { if !$0 { pitchError = nil } }
+        .alert("Prep Generation Failed", isPresented: Binding(
+            get: { prepError != nil },
+            set: { if !$0 { prepError = nil } }
         )) {
-            Button("OK") { pitchError = nil }
+            Button("OK") { prepError = nil }
         } message: {
-            Text(pitchError ?? "")
+            Text(prepError ?? "")
         }
         .alert("Couldn't Add to Calendar", isPresented: Binding(
             get: { calendarError != nil },
@@ -104,10 +130,6 @@ struct EventPrepView: View {
                 }
 
                 Spacer()
-
-                if let recommendation = event.llmRecommendation {
-                    RecommendationBadge(recommendation: recommendation)
-                }
             }
 
             if let description = event.eventDescription {
@@ -201,30 +223,44 @@ struct EventPrepView: View {
         .cornerRadius(8)
     }
 
-    // MARK: - Elevator Pitch
+    // MARK: - AI Prep Generation
 
-    private var elevatorPitchSection: some View {
+    private var prepGenerationSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("ELEVATOR PITCH")
+                Text("AI EVENT PREP")
                     .font(.headline)
                     .foregroundStyle(.secondary)
 
                 Spacer()
 
                 Button {
-                    Task { await generatePitch() }
+                    Task { await generatePrep() }
                 } label: {
-                    if isGeneratingPitch {
+                    if isGeneratingPrep {
                         ProgressView()
                             .controlSize(.small)
                     } else {
-                        Label("Generate", systemImage: "sparkles")
+                        Label("Generate Prep", systemImage: "sparkles")
                     }
                 }
                 .buttonStyle(.bordered)
-                .disabled(isGeneratingPitch)
+                .disabled(isGeneratingPrep)
             }
+
+            Text("Generates a goal, elevator pitch, talking points, target companies, conversation starters, and things to avoid for this event.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    // MARK: - Elevator Pitch
+
+    private var elevatorPitchSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("ELEVATOR PITCH")
+                .font(.headline)
+                .foregroundStyle(.secondary)
 
             TextEditor(text: $pitchText)
                 .frame(minHeight: 100, maxHeight: 150)
@@ -251,26 +287,9 @@ struct EventPrepView: View {
 
     private var goalsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("YOUR GOALS")
-                    .font(.headline)
-                    .foregroundStyle(.secondary)
-
-                Spacer()
-
-                Button {
-                    Task { await generateGoals() }
-                } label: {
-                    if isGeneratingGoals {
-                        ProgressView()
-                            .controlSize(.small)
-                    } else {
-                        Label("Suggest", systemImage: "lightbulb")
-                    }
-                }
-                .buttonStyle(.bordered)
-                .disabled(isGeneratingGoals)
-            }
+            Text("YOUR GOALS")
+                .font(.headline)
+                .foregroundStyle(.secondary)
 
             TextEditor(text: $goalText)
                 .frame(minHeight: 80, maxHeight: 120)
@@ -291,6 +310,110 @@ struct EventPrepView: View {
                 .controlSize(.small)
             }
         }
+    }
+
+    // MARK: - Talking Points
+
+    private func talkingPointsSection(_ talkingPoints: [TalkingPoint]) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("TALKING POINTS")
+                .font(.headline)
+                .foregroundStyle(.secondary)
+
+            ForEach(talkingPoints) { point in
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(point.topic)
+                        .fontWeight(.medium)
+                    Text(point.relevance)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Text("Your angle: \(point.yourAngle)")
+                        .font(.caption)
+                }
+                .padding(.vertical, 4)
+            }
+        }
+        .padding()
+        .background(Color(.windowBackgroundColor).opacity(0.5))
+        .cornerRadius(8)
+    }
+
+    // MARK: - Target Companies
+
+    private func targetCompaniesSection(_ targetCompanies: [TargetCompanyContext]) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("TARGET COMPANIES")
+                .font(.headline)
+                .foregroundStyle(.secondary)
+
+            ForEach(targetCompanies) { company in
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(company.company)
+                        .fontWeight(.medium)
+                    Text(company.whyRelevant)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    if let news = company.recentNews, !news.isEmpty {
+                        Text("Recent news: \(news)")
+                            .font(.caption)
+                    }
+                    if let roles = company.openRoles, !roles.isEmpty {
+                        Text("Open roles: \(roles.joined(separator: ", "))")
+                            .font(.caption)
+                    }
+                    if !company.possibleOpeners.isEmpty {
+                        ForEach(company.possibleOpeners, id: \.self) { opener in
+                            Label(opener, systemImage: "bubble.left")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                .padding(.vertical, 4)
+            }
+        }
+        .padding()
+        .background(Color(.windowBackgroundColor).opacity(0.5))
+        .cornerRadius(8)
+    }
+
+    // MARK: - Conversation Starters
+
+    private func conversationStartersSection(_ starters: [String]) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("CONVERSATION STARTERS")
+                .font(.headline)
+                .foregroundStyle(.secondary)
+
+            ForEach(starters, id: \.self) { starter in
+                Label(starter, systemImage: "bubble.left.and.bubble.right")
+                    .font(.body)
+                    .padding(.vertical, 2)
+            }
+        }
+        .padding()
+        .background(Color(.windowBackgroundColor).opacity(0.5))
+        .cornerRadius(8)
+    }
+
+    // MARK: - Things to Avoid
+
+    private func thingsToAvoidSection(_ thingsToAvoid: [String]) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("THINGS TO AVOID")
+                .font(.headline)
+                .foregroundStyle(.secondary)
+
+            ForEach(thingsToAvoid, id: \.self) { item in
+                Label(item, systemImage: "exclamationmark.triangle")
+                    .font(.body)
+                    .foregroundStyle(.secondary)
+                    .padding(.vertical, 2)
+            }
+        }
+        .padding()
+        .background(Color(.windowBackgroundColor).opacity(0.5))
+        .cornerRadius(8)
     }
 
     // MARK: - Contacts Section
@@ -417,31 +540,18 @@ struct EventPrepView: View {
 
     // MARK: - Actions
 
-    private func generatePitch() async {
-        isGeneratingPitch = true
-        defer { isGeneratingPitch = false }
+    private func generatePrep() async {
+        isGeneratingPrep = true
+        defer { isGeneratingPrep = false }
 
         do {
-            if let generated = try await coordinator.generateEventPitch(for: event) {
-                pitchText = generated
-            }
+            try await coordinator.prepareEvent(event)
+            pitchText = event.pitchScript ?? ""
+            goalText = event.goal ?? ""
         } catch {
-            Logger.error("Failed to generate pitch: \(error)", category: .ai)
-            pitchError = "Couldn't generate pitch — \(error.localizedDescription)"
+            Logger.error("Failed to generate event prep: \(error)", category: .ai)
+            prepError = "Couldn't generate event prep — \(error.localizedDescription)"
         }
-    }
-
-    private func generateGoals() async {
-        isGeneratingGoals = true
-        defer { isGeneratingGoals = false }
-
-        // Use a reasonable default goal suggestion
-        goalText = """
-        1. Meet 3-5 new contacts in my target industry
-        2. Get at least 2 business cards/LinkedIn connections
-        3. Learn about current trends in the field
-        4. Practice my elevator pitch
-        """
     }
 
     private func savePitch() {
@@ -509,34 +619,6 @@ struct EventPrepView: View {
         case .warm: return .orange
         case .cold: return .blue
         case .dormant: return .gray
-        }
-    }
-}
-
-// MARK: - Supporting Views
-
-struct RecommendationBadge: View {
-    let recommendation: AttendanceRecommendation
-
-    var body: some View {
-        HStack(spacing: 4) {
-            Image(systemName: recommendation.icon)
-            Text(recommendation.rawValue)
-        }
-        .font(.caption)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .background(backgroundColor.opacity(0.2))
-        .foregroundStyle(backgroundColor)
-        .cornerRadius(8)
-    }
-
-    private var backgroundColor: Color {
-        switch recommendation {
-        case .strongYes: return .green
-        case .yes: return .teal
-        case .maybe: return .yellow
-        case .skip: return .gray
         }
     }
 }

@@ -90,7 +90,7 @@ struct EventsView: View {
             Text("Networking Events")
                 .font(.title)
 
-            Text("Discover, evaluate, and prepare for networking events.\nTrack attendance and debrief after each event.")
+            Text("Discover and prepare for networking events.\nTrack attendance and debrief after each event.")
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: 400)
@@ -203,7 +203,7 @@ struct EventsView: View {
     @ViewBuilder
     private func eventContextMenu(for event: NetworkingEventOpportunity) -> some View {
         // Status transitions
-        if event.status == .discovered || event.status == .recommended || event.status == .evaluating {
+        if event.status == .discovered {
             Button {
                 coordinator.eventStore.markAsPlanned(event)
             } label: {
@@ -302,11 +302,6 @@ struct EventRowView: View {
 
             Spacer()
 
-            if let recommendation = event.llmRecommendation {
-                Image(systemName: recommendation.icon)
-                    .foregroundStyle(recommendation == .strongYes ? .green : .secondary)
-            }
-
             // Status transition button
             statusButton(for: event)
 
@@ -337,7 +332,7 @@ struct EventRowView: View {
     @ViewBuilder
     private func statusButton(for event: NetworkingEventOpportunity) -> some View {
         switch event.status {
-        case .discovered, .recommended, .evaluating:
+        case .discovered:
             Button("Plan") {
                 store.markAsPlanned(event)
             }
@@ -357,8 +352,6 @@ struct EventRowView: View {
     private func statusColor(for status: EventPipelineStatus) -> Color {
         switch status {
         case .discovered: return .blue
-        case .evaluating: return .purple
-        case .recommended: return .green
         case .planned: return .orange
         case .attended: return .teal
         case .debriefed: return .gray

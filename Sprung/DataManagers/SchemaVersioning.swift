@@ -46,7 +46,6 @@ enum SprungSchema {
         NetworkingEventOpportunity.self,
         NetworkingContact.self,
         NetworkingInteraction.self,
-        EventFeedback.self,
         // Job Search Coach Models
         CoachingSession.self,
         // Inference Guidance

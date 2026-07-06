@@ -53,8 +53,6 @@ enum AttendanceSize: String, Codable, CaseIterable {
 
 enum EventPipelineStatus: String, Codable, CaseIterable {
     case discovered = "Discovered"
-    case evaluating = "Evaluating"
-    case recommended = "Recommended"
     case planned = "Planned"
     case skipped = "Skipped"
     case attended = "Attended"
@@ -64,26 +62,10 @@ enum EventPipelineStatus: String, Codable, CaseIterable {
 
     var isActive: Bool {
         switch self {
-        case .discovered, .evaluating, .recommended, .planned:
+        case .discovered, .planned:
             return true
         default:
             return false
-        }
-    }
-}
-
-enum AttendanceRecommendation: String, Codable, CaseIterable {
-    case strongYes = "Strongly Recommend"
-    case yes = "Recommend"
-    case maybe = "Consider"
-    case skip = "Skip"
-
-    var icon: String {
-        switch self {
-        case .strongYes: return "star.fill"
-        case .yes: return "checkmark.circle"
-        case .maybe: return "questionmark.circle"
-        case .skip: return "xmark.circle"
         }
     }
 }
@@ -134,12 +116,6 @@ class NetworkingEventOpportunity: Identifiable {
     // Pipeline Status
     var status: EventPipelineStatus = EventPipelineStatus.discovered
 
-    // LLM Evaluation
-    var llmRecommendation: AttendanceRecommendation?
-    var llmRationale: String?
-    var expectedValue: String?
-    var concernsJSON: String?  // JSON encoded [String]
-
     // Planning
     var goal: String?
     var pitchScript: String?
@@ -184,16 +160,6 @@ class NetworkingEventOpportunity: Identifiable {
     }
 
     // JSON decode helpers
-    var concerns: [String]? {
-        get {
-            guard let json = concernsJSON else { return nil }
-            return try? JSONDecoder().decode([String].self, from: Data(json.utf8))
-        }
-        set {
-            concernsJSON = newValue.flatMap { try? String(data: JSONEncoder().encode($0), encoding: .utf8) }
-        }
-    }
-
     var conversationStarters: [String]? {
         get {
             guard let json = conversationStartersJSON else { return nil }
@@ -454,36 +420,6 @@ class NetworkingInteraction: Identifiable {
         self.interactionType = type
         self.date = date
     }
-}
-
-// MARK: - Event Feedback (for learning)
-
-@Model
-class EventFeedback: Identifiable {
-    @Attribute(.unique) var id: UUID = UUID()
-
-    var eventOpportunityId: UUID = UUID()
-
-    // Denormalized for analysis
-    var eventType: NetworkingEventType = NetworkingEventType.meetup
-    var organizer: String?
-    var attendanceSize: AttendanceSize = AttendanceSize.medium
-    var wasVirtual: Bool = false
-    var cost: String?
-
-    // Outcomes
-    var rating: EventRating = EventRating.okay
-    var contactsMade: Int = 0
-    var qualityContactsMade: Int = 0
-    var leadsGenerated: Int = 0
-    var wouldRecommend: Bool = false
-
-    var whatWorked: String?
-    var whatDidntWork: String?
-
-    var createdAt: Date = Date()
-
-    init() {}
 }
 
 // MARK: - Supporting Structs (for JSON encoding in models)

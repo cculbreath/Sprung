@@ -114,7 +114,6 @@ final class DiscoveryCoordinator {
     let eventStore: NetworkingEventStore
     let contactStore: NetworkingContactStore
     let interactionStore: NetworkingInteractionStore
-    let feedbackStore: EventFeedbackStore
 
     // MARK: - Services
 
@@ -169,7 +168,6 @@ final class DiscoveryCoordinator {
         self.eventStore = NetworkingEventStore(context: modelContext)
         self.contactStore = NetworkingContactStore(context: modelContext)
         self.interactionStore = NetworkingInteractionStore(context: modelContext)
-        self.feedbackStore = EventFeedbackStore(context: modelContext)
         self.urlValidationService = URLValidationService()
         // Private dependencies
         self.candidateDossierStore = candidateDossierStore
@@ -451,12 +449,13 @@ final class DiscoveryCoordinator {
         sourcesDiscovery.cancel()
     }
 
-    /// Generate an elevator pitch for an event using LLM agent
-    func generateEventPitch(for event: NetworkingEventOpportunity) async throws -> String? {
+    /// Generate full event preparation (goal, pitch, talking points, target companies,
+    /// conversation starters, things to avoid) using LLM agent and persist it on the event.
+    func prepareEvent(_ event: NetworkingEventOpportunity) async throws {
         guard let agent = agentService else {
             throw DiscoveryLLMError.toolExecutionFailed("Agent service not configured")
         }
-        return try await performEventPitch(for: event, using: agent)
+        try await performEventPrep(for: event, using: agent)
     }
 
     /// Generate debrief outcomes and suggested next steps using LLM agent
@@ -577,15 +576,22 @@ final class DiscoveryCoordinator {
         Logger.info("✅ Discovered \(newEvents.count) new events", category: .ai)
     }
 
-    /// Generate an elevator pitch for an event using the LLM agent.
-    /// (Merged from the former networking sub-coordinator.)
-    private func performEventPitch(for event: NetworkingEventOpportunity, using agentService: DiscoveryAgentService) async throws -> String? {
+    /// Run event preparation via the LLM agent and persist the full result —
+    /// goal, pitch script, talking points, target companies, conversation
+    /// starters, and things to avoid — on the event.
+    private func performEventPrep(for event: NetworkingEventOpportunity, using agentService: DiscoveryAgentService) async throws {
         let result = try await agentService.prepareForEvent(
             eventId: event.id,
             focusCompanies: [],
             goals: nil
         )
-        return result.pitchScript
+        event.goal = result.goal
+        event.pitchScript = result.pitchScript
+        event.talkingPoints = result.talkingPoints.map { $0.toTalkingPoint() }
+        event.targetCompanies = result.targetCompanies.map { $0.toTargetCompanyContext() }
+        event.conversationStarters = result.conversationStarters
+        event.thingsToAvoid = result.thingsToAvoid
+        eventStore.update(event)
     }
 
     // MARK: - Summary Data Helpers (merged from networking sub-coordinator)
