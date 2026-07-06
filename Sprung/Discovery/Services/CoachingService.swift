@@ -587,16 +587,8 @@ final class CoachingService {
     private func mapFollowUpAnswer(value: Int, label: String) -> CoachingFollowUpAction {
         let lowerLabel = label.lowercased()
 
-        if lowerLabel.contains("focus job") || lowerLabel.contains("prioritize") || lowerLabel.contains("pick") {
-            return .chooseFocusJobs
-        } else if lowerLabel.contains("task") || lowerLabel.contains("to-do") || lowerLabel.contains("todo") {
+        if lowerLabel.contains("task") || lowerLabel.contains("to-do") || lowerLabel.contains("todo") {
             return .generateTasks
-        } else if lowerLabel.contains("stale") || lowerLabel.contains("follow-up") || lowerLabel.contains("followup") {
-            return .staleAppCheck
-        } else if lowerLabel.contains("network") || lowerLabel.contains("contact") || lowerLabel.contains("reach out") {
-            return .networkingSuggestions
-        } else if lowerLabel.contains("quick") || lowerLabel.contains("momentum") || lowerLabel.contains("easy") {
-            return .quickWins
         } else if lowerLabel.contains("done") || lowerLabel.contains("good") || lowerLabel.contains("later") {
             return .done
         }
@@ -609,26 +601,11 @@ final class CoachingService {
     private func executeFollowUpAction(_ action: CoachingFollowUpAction) async throws {
         guard let session = currentSession else { return }
 
-        // For now, append action result to recommendations
-        // In future, these could trigger actual tool executions
-
         let actionResult: String
 
         switch action {
-        case .chooseFocusJobs:
-            actionResult = "\n\n---\n**Focus Jobs**: I'll help you pick your top focus jobs. Check the Pipeline view to see AI-recommended priorities."
-
         case .generateTasks:
             actionResult = "\n\n---\n**Task List**: Your daily tasks were automatically generated from this coaching session. Check the Today view to see your prioritized task list."
-
-        case .staleAppCheck:
-            actionResult = "\n\n---\n**Stale Applications**: Review applications in the Pipeline view - filter by 'Applied' stage and sort by date to find ones needing follow-up."
-
-        case .networkingSuggestions:
-            actionResult = "\n\n---\n**Networking**: Check your Contacts view for relationship health indicators. Reach out to any marked as 'Needs Attention'."
-
-        case .quickWins:
-            actionResult = "\n\n---\n**Quick Wins**:\n• Update your LinkedIn headline\n• Star 3 promising saved jobs\n• Send one brief check-in message\n• Review one pending application status"
 
         case .done:
             actionResult = ""

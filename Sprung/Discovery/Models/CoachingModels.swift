@@ -168,8 +168,6 @@ struct ActivitySnapshot: Codable {
         let status: String
         let organizer: String?
         let estimatedAttendance: String?
-        let llmRecommendation: String?
-        let llmRationale: String?
         let goal: String?
         let attended: Bool
         let contactCount: Int?
@@ -183,8 +181,6 @@ struct ActivitySnapshot: Codable {
 
     struct EventStatusBreakdown: Codable {
         var discovered: Int = 0      // Just found, not yet evaluated
-        var evaluating: Int = 0      // Deciding whether to attend
-        var recommended: Int = 0     // AI recommended attending
         var planned: Int = 0         // User committed to attend (on calendar)
         var attended: Int = 0        // User attended
         var debriefed: Int = 0       // Captured contacts/notes after attending
@@ -193,18 +189,9 @@ struct ActivitySnapshot: Codable {
         var missed: Int = 0          // User missed it
 
         var total: Int {
-            discovered + evaluating + recommended + planned + attended + debriefed + skipped + cancelled + missed
+            discovered + planned + attended + debriefed + skipped + cancelled + missed
         }
 
-        /// Events user has committed to (on calendar)
-        var confirmedTotal: Int {
-            planned + attended + debriefed
-        }
-
-        /// Events still being considered
-        var pendingTotal: Int {
-            discovered + evaluating + recommended
-        }
     }
 
     // Pace
@@ -320,9 +307,6 @@ struct ActivitySnapshot: Codable {
             if events.discovered > 0 {
                 parts.append("- Discovered (not yet evaluated): \(events.discovered)")
             }
-            if events.evaluating > 0 || events.recommended > 0 {
-                parts.append("- Considering: \(events.evaluating + events.recommended)")
-            }
             if events.planned > 0 {
                 parts.append("- Planned to attend (on calendar): \(events.planned)")
             }
@@ -381,13 +365,6 @@ struct ActivitySnapshot: Codable {
                 parts.append("- Status: \(event.status)")
                 if let organizer = event.organizer {
                     parts.append("- Organizer: \(organizer)")
-                }
-                if let recommendation = event.llmRecommendation {
-                    parts.append("- AI Recommendation: \(recommendation)")
-                }
-                if let rationale = event.llmRationale, !rationale.isEmpty {
-                    let truncated = rationale.count > 200 ? String(rationale.prefix(200)) + "..." : rationale
-                    parts.append("- Rationale: \(truncated)")
                 }
                 if let goal = event.goal, !goal.isEmpty {
                     parts.append("- Goal: \(goal)")
@@ -508,20 +485,12 @@ struct CoachingAnswer: Codable {
 
 /// Actions the coach can offer after providing recommendations
 enum CoachingFollowUpAction: String, Codable, CaseIterable {
-    case chooseFocusJobs = "choose_focus_jobs"
     case generateTasks = "generate_tasks"
-    case staleAppCheck = "stale_app_check"
-    case networkingSuggestions = "networking_suggestions"
-    case quickWins = "quick_wins"
     case done = "done"
 
     var displayName: String {
         switch self {
-        case .chooseFocusJobs: return "Pick my focus jobs for today"
         case .generateTasks: return "View my task list"
-        case .staleAppCheck: return "Check for stale applications"
-        case .networkingSuggestions: return "Suggest networking actions"
-        case .quickWins: return "Give me some quick wins"
         case .done: return "I'm good for now"
         }
     }
