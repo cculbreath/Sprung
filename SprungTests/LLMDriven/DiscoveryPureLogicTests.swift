@@ -170,25 +170,54 @@ final class DiscoveryPureLogicTests: XCTestCase {
                      "missing recent_news decodes and maps to nil")
     }
 
-    // MARK: - DebriefOutcomesResult
+    // MARK: - DebriefOutcomesResult (camelCase keys — pinned by discovery_debrief_outcomes.txt)
 
-    func testDebriefOutcomesResultDecodesFollowUpActions() throws {
+    func testDebriefOutcomesResultDecodesCamelCaseContract() throws {
         let json = """
         {
           "summary": "Good event.",
-          "key_takeaways": ["Met 3 leads"],
-          "follow_up_actions": [
-            { "contact_name": "Dana", "action": "Email resume", "deadline": "tomorrow", "priority": "high" }
+          "keyTakeaways": ["Met 3 leads"],
+          "followUpActions": [
+            { "contactName": "Dana", "action": "Email resume", "deadline": "tomorrow", "priority": "high" }
           ],
-          "opportunities_identified": ["Referral"],
-          "next_steps": ["Send notes"]
+          "opportunitiesIdentified": ["Referral"],
+          "nextSteps": ["Send notes"]
         }
         """
         let result = try decode(DebriefOutcomesResult.self, json)
-        XCTAssertEqual(result.keyTakeaways, ["Met 3 leads"], "key_takeaways -> keyTakeaways")
+        XCTAssertEqual(result.keyTakeaways, ["Met 3 leads"])
         XCTAssertEqual(result.followUpActions.count, 1)
-        XCTAssertEqual(result.followUpActions[0].contactName, "Dana", "contact_name -> contactName")
+        XCTAssertEqual(result.followUpActions[0].contactName, "Dana")
         XCTAssertEqual(result.followUpActions[0].priority, "high")
-        XCTAssertEqual(result.nextSteps, ["Send notes"], "next_steps -> nextSteps")
+        XCTAssertEqual(result.nextSteps, ["Send notes"])
+    }
+
+    // MARK: - DebriefFollowUpAction.dueDate (deadline text -> concrete date)
+
+    private func makeAction(deadline: String) -> DebriefFollowUpAction {
+        DebriefFollowUpAction(contactName: "Dana", action: "Email", deadline: deadline, priority: "high")
+    }
+
+    private func days(from reference: Date, to date: Date) -> Int? {
+        Calendar.current.dateComponents([.day], from: reference, to: date).day
+    }
+
+    func testDueDateParsesHoursWeeksAndBareNumbers() throws {
+        let reference = try XCTUnwrap(ISO8601DateFormatter().date(from: "2026-07-06T12:00:00Z"))
+
+        XCTAssertEqual(days(from: reference, to: makeAction(deadline: "within 24 hours").dueDate(from: reference)), 1)
+        XCTAssertEqual(days(from: reference, to: makeAction(deadline: "within 48 hours").dueDate(from: reference)), 2,
+                       "hour quantities round up to whole days")
+        XCTAssertEqual(days(from: reference, to: makeAction(deadline: "within 2 weeks").dueDate(from: reference)), 14)
+        XCTAssertEqual(days(from: reference, to: makeAction(deadline: "within 3 days").dueDate(from: reference)), 3)
+    }
+
+    func testDueDateHandlesWordOnlyDeadlines() throws {
+        let reference = try XCTUnwrap(ISO8601DateFormatter().date(from: "2026-07-06T12:00:00Z"))
+
+        XCTAssertEqual(days(from: reference, to: makeAction(deadline: "tomorrow").dueDate(from: reference)), 1)
+        XCTAssertEqual(days(from: reference, to: makeAction(deadline: "this week").dueDate(from: reference)), 7)
+        XCTAssertEqual(days(from: reference, to: makeAction(deadline: "no rush").dueDate(from: reference)), 3,
+                       "an unreadable timeframe lands three days out — the follow-up stays alive")
     }
 }

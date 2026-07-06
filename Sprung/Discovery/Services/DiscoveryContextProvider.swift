@@ -38,6 +38,7 @@ final class DiscoveryContextProviderImpl: @unchecked Sendable {
     private struct DailyTaskContext: Codable {
         var upcomingEvents: [UpcomingEvent]
         var needsDebrief: [DebriefEvent]
+        var pendingFollowUps: [PendingFollowUp]
         var contactsNeedingAttention: [AttentionContact]
         var weeklyProgress: WeeklyProgress
 
@@ -51,6 +52,16 @@ final class DiscoveryContextProviderImpl: @unchecked Sendable {
         struct DebriefEvent: Codable {
             var id: String
             var name: String
+        }
+
+        /// A networking follow-up the user committed to (debrief toggle or an
+        /// accepted AI-suggested action) that hasn't been completed yet.
+        struct PendingFollowUp: Codable {
+            var contactId: String
+            var contactName: String
+            var action: String
+            var dueDate: String
+            var isOverdue: Bool
         }
 
         struct AttentionContact: Codable {
@@ -141,6 +152,20 @@ final class DiscoveryContextProviderImpl: @unchecked Sendable {
                 )
             }
 
+            let overdueIds = Set(coordinator.interactionStore.overdueFollowUps.map(\.id))
+            let pendingFollowUps = coordinator.interactionStore.pendingFollowUps
+                .sorted { ($0.followUpDate ?? Date.distantFuture) < ($1.followUpDate ?? Date.distantFuture) }
+                .prefix(8)
+                .map { interaction in
+                    DailyTaskContext.PendingFollowUp(
+                        contactId: interaction.contactId.uuidString,
+                        contactName: coordinator.contactStore.contact(byId: interaction.contactId)?.name ?? "Unknown contact",
+                        action: interaction.followUpAction ?? "Follow up",
+                        dueDate: interaction.followUpDate.map { isoFormatter.string(from: $0) } ?? "unscheduled",
+                        isOverdue: overdueIds.contains(interaction.id)
+                    )
+                }
+
             let needsAttention = coordinator.contactStore.needsAttention.prefix(5).map { contact in
                 DailyTaskContext.AttentionContact(
                     id: contact.id.uuidString,
@@ -164,11 +189,21 @@ final class DiscoveryContextProviderImpl: @unchecked Sendable {
             let context = DailyTaskContext(
                 upcomingEvents: Array(upcomingEvents),
                 needsDebrief: Array(needsDebrief),
+                pendingFollowUps: Array(pendingFollowUps),
                 contactsNeedingAttention: Array(needsAttention),
                 weeklyProgress: weeklyProgress
             )
             return encode(context)
         }
+    }
+
+    /// Whether a UUID from the daily-task context names a networking contact.
+    /// Lets DailyTaskGenerator route a follow_up task's relatedId to
+    /// `relatedContactId` (networking follow-up) vs `relatedJobAppId`
+    /// (application follow-up). Synchronous — the generator is @MainActor.
+    @MainActor
+    func isContactId(_ id: UUID) -> Bool {
+        coordinator?.contactStore.contact(byId: id) != nil
     }
 
     // MARK: - Preferences Context

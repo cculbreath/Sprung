@@ -44,4 +44,38 @@ final class NetworkingInteractionStore: EntityStore {
             return dueDate < Date()
         }
     }
+
+    /// The single writer for follow-up commitments (debrief per-contact toggle
+    /// and accepted AI-suggested actions). Sets `followUpNeeded` so the row
+    /// actually surfaces in `pendingFollowUps`/`overdueFollowUps`.
+    @discardableResult
+    func recordFollowUp(
+        contactId: UUID,
+        action: String,
+        dueDate: Date,
+        eventId: UUID? = nil,
+        type: InteractionType = .email
+    ) -> NetworkingInteraction {
+        let interaction = NetworkingInteraction(contactId: contactId, type: type)
+        interaction.eventId = eventId
+        interaction.followUpNeeded = true
+        interaction.followUpAction = action
+        interaction.followUpDate = dueDate
+        add(interaction)
+        return interaction
+    }
+
+    /// Completing a Follow Up daily task clears the matching commitment: the
+    /// contact's pending follow-up with the earliest due date (undated ones
+    /// last). Returns the cleared interaction, or nil when none was pending.
+    @discardableResult
+    func completeNearestPendingFollowUp(forContactId contactId: UUID) -> NetworkingInteraction? {
+        let pending = pendingFollowUps
+            .filter { $0.contactId == contactId }
+            .sorted { ($0.followUpDate ?? Date.distantFuture) < ($1.followUpDate ?? Date.distantFuture) }
+        guard let nearest = pending.first else { return nil }
+        nearest.followUpCompleted = true
+        update(nearest)
+        return nearest
+    }
 }

@@ -199,11 +199,10 @@ struct ActivitySnapshot: Codable {
         var attended: Int = 0        // User attended
         var debriefed: Int = 0       // Captured contacts/notes after attending
         var skipped: Int = 0         // User decided not to attend
-        var cancelled: Int = 0       // Event was cancelled
-        var missed: Int = 0          // User missed it
+        var missed: Int = 0          // Planned but the date passed unattended
 
         var total: Int {
-            discovered + planned + attended + debriefed + skipped + cancelled + missed
+            discovered + planned + attended + debriefed + skipped + missed
         }
 
     }
@@ -326,8 +325,8 @@ struct ActivitySnapshot: Codable {
             if events.debriefed > 0 {
                 parts.append("- Fully debriefed: \(events.debriefed)")
             }
-            if events.skipped > 0 || events.cancelled > 0 || events.missed > 0 {
-                parts.append("- Skipped/cancelled/missed: \(events.skipped + events.cancelled + events.missed)")
+            if events.skipped > 0 || events.missed > 0 {
+                parts.append("- Skipped/missed: \(events.skipped + events.missed)")
             }
         }
 

@@ -23,7 +23,11 @@ struct DebriefView: View {
     @State private var isSaving = false
     @State private var isGeneratingOutcomes = false
     @State private var generatedOutcomes: DebriefOutcomesResult?
+    /// Indices into `generatedOutcomes.followUpActions` the user has accepted.
+    /// Accepted actions become NetworkingInteraction follow-up rows on submit.
+    @State private var acceptedFollowUpIndices: Set<Int> = []
     @State private var outcomeError: String?
+    @State private var hasLoadedExistingDebrief = false
 
     var body: some View {
         ScrollView {
@@ -67,6 +71,7 @@ struct DebriefView: View {
             .padding()
         }
         .navigationTitle("Event Debrief")
+        .onAppear { loadExistingDebrief() }
         .alert("Outcome Generation Failed", isPresented: Binding(
             get: { outcomeError != nil },
             set: { if !$0 { outcomeError = nil } }
@@ -302,15 +307,31 @@ struct DebriefView: View {
                     .cornerRadius(8)
                 }
 
-                // Follow-up Actions
+                // Follow-up Actions (checked ones become tracked follow-ups on submit)
                 if !outcomes.followUpActions.isEmpty {
                     VStack(alignment: .leading, spacing: 6) {
                         Text("Follow-up Actions")
                             .font(.subheadline)
                             .fontWeight(.medium)
 
-                        ForEach(outcomes.followUpActions, id: \.contactName) { action in
+                        Text("Checked actions are tracked as follow-ups when you complete the debrief.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+
+                        ForEach(Array(outcomes.followUpActions.enumerated()), id: \.offset) { index, action in
                             HStack(alignment: .top, spacing: 8) {
+                                Toggle("", isOn: Binding(
+                                    get: { acceptedFollowUpIndices.contains(index) },
+                                    set: { accepted in
+                                        if accepted {
+                                            acceptedFollowUpIndices.insert(index)
+                                        } else {
+                                            acceptedFollowUpIndices.remove(index)
+                                        }
+                                    }
+                                ))
+                                .toggleStyle(.checkbox)
+                                .labelsHidden()
                                 Image(systemName: priorityIcon(action.priority))
                                     .foregroundStyle(priorityColor(action.priority))
                                     .font(.caption)
@@ -421,17 +442,41 @@ struct DebriefView: View {
 
     // MARK: - Actions
 
+    /// Reopening the debrief for an already-debriefed event seeds the form
+    /// from the persisted columns, so re-submitting can't blank them out.
+    /// Saved AI outcomes come back with nothing pre-accepted — their accepted
+    /// follow-ups already became interaction rows on the first submit.
+    private func loadExistingDebrief() {
+        guard !hasLoadedExistingDebrief else { return }
+        hasLoadedExistingDebrief = true
+
+        if let notes = event.eventNotes, !notes.isEmpty { overallNotes = notes }
+        if let insights = event.keyInsights { keyInsights = insights }
+        if let actions = event.followUpActions { followUpActions = actions }
+        if let savedRating = event.eventRating { rating = savedRating.rawValue }
+        if let recommend = event.wouldRecommend { wouldRecommend = recommend }
+        if let saved = event.debriefOutcomes {
+            generatedOutcomes = saved
+            acceptedFollowUpIndices = []
+        }
+    }
+
     private func submitDebrief() async {
         isSaving = true
         defer { isSaving = false }
 
-        // Update event with debrief info
+        // Persist every field the sheet captures.
         event.status = .debriefed
         event.eventNotes = overallNotes
         event.eventRating = EventRating(rawValue: rating)
+        event.wouldRecommend = wouldRecommend
+        event.keyInsights = keyInsights.isEmpty ? nil : keyInsights
+        event.followUpActions = followUpActions.isEmpty ? nil : followUpActions
+        event.debriefOutcomes = generatedOutcomes
         coordinator.eventStore.update(event)
 
         // Create contacts from entries
+        var contactsByName: [String: NetworkingContact] = [:]
         for entry in newContacts where !entry.name.isEmpty {
             let contact = NetworkingContact(
                 name: entry.name,
@@ -447,19 +492,22 @@ struct DebriefView: View {
             contact.warmth = ContactWarmth.hot // Just met them!
 
             coordinator.contactStore.add(contact)
+            contactsByName[normalizedName(contact.name)] = contact
 
-            // Create follow-up task if they want to follow up
+            // The per-contact "schedule follow-up" toggle becomes a tracked
+            // follow-up commitment (followUpNeeded — feeds the daily-task loop).
             if entry.wantsFollowUp {
                 let followUpDate = Calendar.current.date(byAdding: .day, value: 2, to: Date()) ?? Date()
-                let interaction = NetworkingInteraction(
+                coordinator.interactionStore.recordFollowUp(
                     contactId: contact.id,
-                    type: .email  // Use email as the follow-up type
+                    action: "Send follow-up message after meeting at \(event.name)",
+                    dueDate: followUpDate,
+                    eventId: event.id
                 )
-                interaction.followUpDate = followUpDate
-                interaction.followUpAction = "Send follow-up message after meeting at \(event.name)"
-                coordinator.interactionStore.add(interaction)
             }
         }
+
+        recordAcceptedFollowUps(contactsByName: contactsByName)
 
         // Update weekly goals
         coordinator.weeklyGoalStore.incrementEventsAttended()
@@ -468,6 +516,43 @@ struct DebriefView: View {
         Logger.info("Completed debrief for \(event.name) with \(newContacts.count) new contacts", category: .ai)
 
         dismiss()
+    }
+
+    /// Accepted AI-suggested follow-up actions become tracked follow-up
+    /// commitments. The contact is resolved by name against the contacts just
+    /// created, then the existing store; a name with no match gets a minimal
+    /// contact row — the user accepting "follow up with X" makes X a contact.
+    private func recordAcceptedFollowUps(contactsByName: [String: NetworkingContact]) {
+        guard let outcomes = generatedOutcomes else { return }
+
+        for (index, action) in outcomes.followUpActions.enumerated()
+        where acceptedFollowUpIndices.contains(index) {
+            let key = normalizedName(action.contactName)
+            let contact: NetworkingContact
+            if let known = contactsByName[key] {
+                contact = known
+            } else if let existing = coordinator.contactStore.allContacts.first(where: { normalizedName($0.name) == key }) {
+                contact = existing
+            } else {
+                let created = NetworkingContact(name: action.contactName)
+                created.metAt = event.name
+                created.metAtEventId = event.id
+                created.lastContactAt = Date()
+                coordinator.contactStore.add(created)
+                contact = created
+            }
+
+            coordinator.interactionStore.recordFollowUp(
+                contactId: contact.id,
+                action: action.action,
+                dueDate: action.dueDate(),
+                eventId: event.id
+            )
+        }
+    }
+
+    private func normalizedName(_ name: String) -> String {
+        name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
     }
 
     private func generateOutcomes() async {
@@ -492,6 +577,8 @@ struct DebriefView: View {
                 contactsMade: contactNames,
                 notes: overallNotes
             )
+            // Fresh outcomes start fully accepted; unchecking opts out.
+            acceptedFollowUpIndices = Set(generatedOutcomes?.followUpActions.indices ?? 0..<0)
         } catch {
             Logger.error("Failed to generate debrief outcomes: \(error)", category: .ai)
             outcomeError = "Couldn't generate debrief outcomes — \(error.localizedDescription)"

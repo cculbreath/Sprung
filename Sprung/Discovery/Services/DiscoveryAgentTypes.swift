@@ -4,12 +4,13 @@
 //
 //  Result types and generated data structures for Discovery LLM responses.
 //
-//  Wire-key note: the job-selection and event-discovery contracts are
-//  camelCase (keys we control; event discovery is pinned by the strict
-//  submit_events tool schema in EventDiscoveryToolSchemas). The event-prep
-//  and debrief DTOs keep snake_case CodingKeys because their contracts are
-//  pinned by the corresponding prompt templates in Resources/Prompts. The
-//  daily-task contract lives in DailyTaskGenerator.
+//  Wire-key note: the job-selection, event-discovery, and debrief contracts
+//  are camelCase (keys we control; event discovery is pinned by the strict
+//  submit_events tool schema in EventDiscoveryToolSchemas, debrief by the
+//  discovery_debrief_outcomes prompt template). The event-prep DTOs keep
+//  snake_case CodingKeys because their contract is pinned by the
+//  discovery_prepare_for_event prompt template. The daily-task contract
+//  lives in DailyTaskGenerator.
 //
 
 import Foundation
@@ -66,20 +67,15 @@ struct EventPrepResult: Codable {
     }
 }
 
+/// Debrief-outcomes contract (camelCase keys we control — pinned by the
+/// discovery_debrief_outcomes prompt template). Also persisted verbatim on
+/// `NetworkingEventOpportunity.debriefOutcomesJSON`.
 struct DebriefOutcomesResult: Codable {
     let summary: String
     let keyTakeaways: [String]
     let followUpActions: [DebriefFollowUpAction]
     let opportunitiesIdentified: [String]
     let nextSteps: [String]
-
-    enum CodingKeys: String, CodingKey {
-        case summary
-        case keyTakeaways = "key_takeaways"
-        case followUpActions = "follow_up_actions"
-        case opportunitiesIdentified = "opportunities_identified"
-        case nextSteps = "next_steps"
-    }
 }
 
 struct DebriefFollowUpAction: Codable {
@@ -88,9 +84,39 @@ struct DebriefFollowUpAction: Codable {
     let deadline: String
     let priority: String
 
-    enum CodingKeys: String, CodingKey {
-        case contactName = "contact_name"
-        case action, deadline, priority
+    /// Concrete due date for the free-text deadline the model produced
+    /// ("within 24 hours", "within 2 weeks", ...). Reads the first number and
+    /// its unit; a deadline with no readable timeframe lands three days out —
+    /// close enough to keep the follow-up alive without inventing urgency.
+    func dueDate(from reference: Date = Date()) -> Date {
+        let calendar = Calendar.current
+        let lowered = deadline.lowercased()
+
+        let digits = lowered.components(separatedBy: CharacterSet.decimalDigits.inverted)
+            .first { !$0.isEmpty }
+        let quantity = digits.flatMap { Int($0) }
+
+        let days: Int
+        if let quantity {
+            if lowered.contains("hour") {
+                days = max(1, Int((Double(quantity) / 24.0).rounded(.up)))
+            } else if lowered.contains("week") {
+                days = quantity * 7
+            } else if lowered.contains("month") {
+                days = quantity * 30
+            } else {
+                days = quantity
+            }
+        } else if lowered.contains("tomorrow") {
+            days = 1
+        } else if lowered.contains("week") {
+            days = 7
+        } else if lowered.contains("month") {
+            days = 30
+        } else {
+            days = 3
+        }
+        return calendar.date(byAdding: .day, value: days, to: reference) ?? reference
     }
 }
 

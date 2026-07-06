@@ -57,7 +57,8 @@ enum EventPipelineStatus: String, Codable, CaseIterable {
     case skipped = "Skipped"
     case attended = "Attended"
     case debriefed = "Debriefed"
-    case cancelled = "Cancelled"
+    /// Set only by `NetworkingEventStore.sweepMissedEvents()` — a planned event
+    /// whose date passed more than a day ago without being marked attended.
     case missed = "Missed"
 
     var isActive: Bool {
@@ -135,9 +136,11 @@ class NetworkingEventOpportunity: Identifiable {
     var eventNotes: String?
     var eventRating: EventRating?
     var wouldRecommend: Bool?
-    var whatWorked: String?
-    var whatDidntWork: String?
-    var followUpActionsJSON: String?  // JSON encoded [FollowUpAction]
+    var keyInsights: String?
+    /// Free-text follow-up actions the user typed at debrief. Accepted
+    /// AI-suggested follow-ups live as NetworkingInteraction rows instead.
+    var followUpActions: String?
+    var debriefOutcomesJSON: String?  // JSON encoded DebriefOutcomesResult
 
     // Discovery Metadata
     var discoveredAt: Date = Date()
@@ -200,13 +203,15 @@ class NetworkingEventOpportunity: Identifiable {
         }
     }
 
-    var followUpActions: [FollowUpAction]? {
+    /// AI-generated debrief outcomes, persisted verbatim so the debrief payoff
+    /// survives the sheet being dismissed (camelCase JSON — keys we control).
+    var debriefOutcomes: DebriefOutcomesResult? {
         get {
-            guard let json = followUpActionsJSON else { return nil }
-            return try? JSONDecoder().decode([FollowUpAction].self, from: Data(json.utf8))
+            guard let json = debriefOutcomesJSON else { return nil }
+            return try? JSONDecoder().decode(DebriefOutcomesResult.self, from: Data(json.utf8))
         }
         set {
-            followUpActionsJSON = newValue.flatMap { try? String(data: JSONEncoder().encode($0), encoding: .utf8) }
+            debriefOutcomesJSON = newValue.flatMap { try? String(data: JSONEncoder().encode($0), encoding: .utf8) }
         }
     }
 }
@@ -413,20 +418,3 @@ struct TargetCompanyContext: Codable, Identifiable {
     var possibleOpeners: [String]
 }
 
-struct FollowUpAction: Codable, Identifiable {
-    var id: UUID = UUID()
-    var contactId: UUID?
-    var contactName: String
-    var action: String
-    var deadline: FollowUpDeadline
-    var completed: Bool = false
-    var completedAt: Date?
-}
-
-enum FollowUpDeadline: String, Codable {
-    case within24Hours = "Within 24 hours"
-    case within3Days = "Within 3 days"
-    case thisWeek = "This week"
-    case nextWeek = "Next week"
-    case noRush = "No rush"
-}

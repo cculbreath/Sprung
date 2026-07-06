@@ -20,6 +20,10 @@ final class NetworkingEventStore: EntityStore {
 
     init(context: ModelContext) {
         modelContext = context
+        // The one honest `.missed` writer. Runs once per launch (the store is
+        // created once, in DiscoveryCoordinator init) — cheap, idempotent, and
+        // keeps the pipeline truthful without a background timer.
+        sweepMissedEvents()
     }
 
     var allEvents: [NetworkingEventOpportunity] {
@@ -87,4 +91,20 @@ final class NetworkingEventStore: EntityStore {
         persistChanges()
     }
 
+    /// Auto-mark planned events whose date is more than a day past and that
+    /// were never marked attended as `.missed`. Only `.planned` qualifies —
+    /// the user committed to those; a stale `.discovered` event was never a
+    /// commitment, so it just ages out of the upcoming list. Idempotent: a
+    /// swept event is `.missed` and never matches again; saves only when
+    /// something changed.
+    func sweepMissedEvents(now: Date = Date()) {
+        guard let cutoff = Calendar.current.date(byAdding: .day, value: -1, to: now) else { return }
+        let missed = allEvents.filter { $0.status == .planned && $0.date < cutoff }
+        guard !missed.isEmpty else { return }
+        for event in missed {
+            event.status = .missed
+        }
+        persistChanges()
+        Logger.info("Marked \(missed.count) past planned event(s) as missed", category: .storage)
+    }
 }

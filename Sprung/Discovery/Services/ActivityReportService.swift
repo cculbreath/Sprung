@@ -293,8 +293,6 @@ final class ActivityReportService {
                 breakdown.debriefed += 1
             case .skipped:
                 breakdown.skipped += 1
-            case .cancelled:
-                breakdown.cancelled += 1
             case .missed:
                 breakdown.missed += 1
             }

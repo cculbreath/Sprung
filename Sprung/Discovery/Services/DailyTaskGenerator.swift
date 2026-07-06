@@ -406,8 +406,17 @@ final class DailyTaskGenerator {
         switch task.taskType {
         case .gatherLeads:
             break  // gather tasks have no related entity
-        case .customizeMaterials, .submitApplication, .followUp:
+        case .customizeMaterials, .submitApplication:
             task.relatedJobAppId = relatedId
+        case .followUp:
+            // Follow-ups come in two flavors: networking follow-ups reference
+            // a contact (from the pendingFollowUps context section),
+            // application follow-ups reference a job app.
+            if contextProvider.isContactId(relatedId) {
+                task.relatedContactId = relatedId
+            } else {
+                task.relatedJobAppId = relatedId
+            }
         case .networking:
             task.relatedContactId = relatedId
         case .eventPrep, .eventDebrief:

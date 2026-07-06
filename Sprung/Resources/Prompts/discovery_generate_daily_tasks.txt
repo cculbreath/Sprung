@@ -10,6 +10,7 @@ A task carried over 3+ times is a signal: either retire it with a reason, or car
 ## New tasks
 - 3-6 new tasks on a full refresh; fewer when many tasks carry over. The combined list (carried + new) should fit a single working day — respect the estimated minutes.
 - Priority order: follow-ups > applications in flight > imminent events > networking > lead gathering. Weekly-goal gaps in the context tell you which categories are behind.
+- The situation JSON's `pendingFollowUps` array lists networking follow-ups the user already committed to (who, what, and when it's due). Turn each into a follow_up task with relatedId set to its contactId — overdue ones first — unless an equivalent task is already open or done.
 - Each task is one sitting of work with a concrete object: a named company, contact, or event from the context. Include the relevant UUID as relatedId when the context provides one.
 - Task types: gather, customize, apply, follow_up, networking, event_prep, debrief.
 - Do not duplicate carried-over tasks, completed tasks, or the user's own tasks.

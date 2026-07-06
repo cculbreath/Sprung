@@ -426,7 +426,9 @@ struct DailyView: View {
     // MARK: - Actions
 
     /// Mark a task done. Completing an outreach task IS the interaction —
-    /// advance the contact's relationship clock so the attention nag clears.
+    /// advance the contact's relationship clock so the attention nag clears,
+    /// and a completed Follow Up also clears the contact's nearest pending
+    /// follow-up commitment (the row the debrief created).
     private func completeTask(_ task: DailyTask) {
         guard !task.isCompleted else { return }
         coordinator.dailyTaskStore.complete(task)
@@ -435,6 +437,10 @@ struct DailyView: View {
            let contactId = task.relatedContactId,
            let contact = coordinator.contactStore.contact(byId: contactId) {
             coordinator.contactStore.recordInteraction(contact, type: task.taskType.rawValue)
+
+            if task.taskType == .followUp {
+                coordinator.interactionStore.completeNearestPendingFollowUp(forContactId: contactId)
+            }
         }
     }
 
