@@ -16,6 +16,7 @@ struct WeeklyReviewView: View {
     @State private var challengesText = ""
     @State private var nextWeekFocusText = ""
     @State private var isGeneratingReflection = false
+    @State private var reflectionError: String?
     @State private var showSaveConfirmation = false
 
     private var currentGoal: WeeklyGoal? {
@@ -114,14 +115,6 @@ struct WeeklyReviewView: View {
                         icon: "person.2",
                         color: .green
                     )
-
-                    GoalProgressCard(
-                        title: "Follow-ups Sent",
-                        current: goal.followUpsSent,
-                        target: goal.followUpsTarget,
-                        icon: "envelope",
-                        color: .orange
-                    )
                 }
             } else {
                 Text("No goals set for this week")
@@ -200,12 +193,20 @@ struct WeeklyReviewView: View {
                         ProgressView()
                             .controlSize(.small)
                     } else {
-                        Label("Generate Insights", systemImage: "sparkles")
+                        Label("Generate Reflection", systemImage: "sparkles")
                     }
                 }
                 .buttonStyle(.bordered)
                 .disabled(isGeneratingReflection)
             }
+
+            if let reflectionError {
+                Text(reflectionError)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
+
+            generatedReflectionCard
 
             VStack(alignment: .leading, spacing: 12) {
                 ReflectionField(
@@ -235,6 +236,29 @@ struct WeeklyReviewView: View {
         }
     }
 
+    private var generatedReflectionCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if let goal = currentGoal, let reflection = goal.llmReflection, !reflection.isEmpty {
+                Text(reflection)
+                    .font(.body)
+
+                if let generatedAt = goal.reflectionGeneratedAt {
+                    Text("Generated \(generatedAt.formatted(date: .abbreviated, time: .shortened))")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            } else {
+                Text("No reflection generated yet. Tap Generate Reflection for an AI-written summary of your week.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding()
+        .background(Color(.windowBackgroundColor).opacity(0.5))
+        .cornerRadius(8)
+    }
+
     // MARK: - Actions
 
     private var actionButtonsSection: some View {
@@ -258,47 +282,21 @@ struct WeeklyReviewView: View {
 
     private func generateReflection() async {
         isGeneratingReflection = true
+        reflectionError = nil
         defer { isGeneratingReflection = false }
 
-        // Generate insights based on the week's data
-        let insights = buildWeeklyInsights()
-        reflectionText = insights
-    }
-
-    private func buildWeeklyInsights() -> String {
-        var insights: [String] = []
-
-        if let goal = currentGoal {
-            let appsSubmitted = coordinator.weeklyGoalStore.applicationsSubmittedThisWeek()
-            if appsSubmitted >= goal.applicationsTarget {
-                insights.append("Met application target - great consistency!")
-            } else if appsSubmitted > 0 {
-                insights.append("Made progress on applications but didn't hit target.")
-            }
-
-            if goal.eventsAttended >= goal.eventsTarget {
-                insights.append("Networking goal achieved!")
-            }
-
-            if goal.newContacts >= goal.newContactsTarget {
-                insights.append("Expanded professional network as planned.")
-            }
+        do {
+            try await coordinator.generateWeeklyReflection()
+        } catch {
+            Logger.error("Failed to generate weekly reflection: \(error)", category: .ai)
+            reflectionError = "Couldn't generate reflection — \(error.localizedDescription)"
         }
-
-        let timeMinutes = coordinator.timeEntryStore.totalMinutesThisWeek
-        if timeMinutes >= 600 { // 10+ hours
-            insights.append("Invested significant time in job search.")
-        } else if timeMinutes >= 300 { // 5+ hours
-            insights.append("Maintained consistent effort on job search.")
-        }
-
-        return insights.joined(separator: "\n")
     }
 
     private func saveReview() {
         // Save reflection to current goal
         if let goal = currentGoal {
-            goal.reflectionNotes = """
+            goal.userNotes = """
             Wins: \(winsText)
             Challenges: \(challengesText)
             Learnings: \(reflectionText)

@@ -390,13 +390,6 @@ struct DailyView: View {
                     target: goal.newContactsTarget,
                     color: .green
                 )
-
-                ProgressIndicator(
-                    label: "Follow-ups",
-                    current: goal.followUpsSentActual,
-                    target: goal.followUpsSentTarget,
-                    color: .purple
-                )
             }
         }
         .padding()

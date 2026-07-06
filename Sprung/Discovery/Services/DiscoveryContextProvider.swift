@@ -76,8 +76,6 @@ final class DiscoveryContextProviderImpl: @unchecked Sendable {
             var eventsTarget: Int
             var contactsActual: Int
             var contactsTarget: Int
-            var followUpsActual: Int
-            var followUpsTarget: Int
         }
     }
 
@@ -104,8 +102,6 @@ final class DiscoveryContextProviderImpl: @unchecked Sendable {
         var estimatedAttendance: String
         var cost: String
         var status: String
-        var recommendation: String?
-        var rationale: String
     }
 
     private struct CompanyContact: Codable {
@@ -121,7 +117,6 @@ final class DiscoveryContextProviderImpl: @unchecked Sendable {
         var applicationTarget: Int
         var eventsAttended: Int
         var newContacts: Int
-        var followUpsSent: Int
         var timeInvestedMinutes: Int
         var topSources: [String]
         var eventsAttendedNames: [String]
@@ -183,9 +178,7 @@ final class DiscoveryContextProviderImpl: @unchecked Sendable {
                 eventsActual: goal.eventsAttendedActual,
                 eventsTarget: goal.eventsAttendedTarget,
                 contactsActual: goal.newContactsActual,
-                contactsTarget: goal.newContactsTarget,
-                followUpsActual: goal.followUpsSentActual,
-                followUpsTarget: goal.followUpsSentTarget
+                contactsTarget: goal.newContactsTarget
             )
 
             let context = DailyTaskContext(
@@ -241,9 +234,7 @@ final class DiscoveryContextProviderImpl: @unchecked Sendable {
                 eventType: event.eventType.rawValue,
                 estimatedAttendance: event.estimatedAttendance.rawValue,
                 cost: event.cost ?? "Free",
-                status: event.status.rawValue,
-                recommendation: event.llmRecommendation?.rawValue,
-                rationale: event.llmRationale ?? ""
+                status: event.status.rawValue
             )
             return encode(context)
         }
@@ -286,7 +277,6 @@ final class DiscoveryContextProviderImpl: @unchecked Sendable {
                 applicationTarget: summary.goal.applicationTarget,
                 eventsAttended: summary.goal.eventsAttendedActual,
                 newContacts: summary.goal.newContactsActual,
-                followUpsSent: summary.goal.followUpsSentActual,
                 timeInvestedMinutes: summary.goal.actualMinutes,
                 topSources: summary.topSources.map { $0.name },
                 eventsAttendedNames: summary.eventsAttended.map { $0.name },

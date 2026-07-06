@@ -128,12 +128,6 @@ final class WeeklyGoalStore: SwiftDataStore {
         saveContext()
     }
 
-    func incrementFollowUpsSent() {
-        let goal = currentWeek()
-        goal.followUpsSentActual += 1
-        saveContext()
-    }
-
     func addTimeMinutes(_ minutes: Int) {
         let goal = currentWeek()
         goal.actualMinutes += minutes
@@ -178,7 +172,6 @@ final class WeeklyGoalStore: SwiftDataStore {
         let goal = currentWeek()
         goal.eventsAttendedActual = 0
         goal.newContactsActual = 0
-        goal.followUpsSentActual = 0
         goal.actualMinutes = 0
         goal.userNotes = nil
         goal.llmReflection = nil

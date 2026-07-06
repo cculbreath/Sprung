@@ -318,8 +318,6 @@ class WeeklyGoal: Identifiable {
     var eventsAttendedActual: Int = 0
     var newContactsTarget: Int = 3
     var newContactsActual: Int = 0
-    var followUpsSentTarget: Int = 5
-    var followUpsSentActual: Int = 0
 
     // Time tracking
     var targetHours: Double = 20.0
@@ -339,9 +337,9 @@ class WeeklyGoal: Identifiable {
     }
 
     var networkingProgress: Double {
-        let total = eventsAttendedTarget + newContactsTarget + followUpsSentTarget
+        let total = eventsAttendedTarget + newContactsTarget
         guard total > 0 else { return 0 }
-        let actual = eventsAttendedActual + newContactsActual + followUpsSentActual
+        let actual = eventsAttendedActual + newContactsActual
         return min(1.0, Double(actual) / Double(total))
     }
 
@@ -356,12 +354,4 @@ class WeeklyGoal: Identifiable {
     var eventsAttended: Int { eventsAttendedActual }
     var eventsTarget: Int { eventsAttendedTarget }
     var newContacts: Int { newContactsActual }
-    var followUpsSent: Int { followUpsSentActual }
-    var followUpsTarget: Int { followUpsSentTarget }
-
-    /// Reflection notes (stored in userNotes)
-    var reflectionNotes: String? {
-        get { userNotes }
-        set { userNotes = newValue }
-    }
 }
