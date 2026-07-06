@@ -208,10 +208,6 @@ struct ActivitySnapshot: Codable {
 
     }
 
-    // Pace
-    var daysSinceLastOpen: Int = 0
-    var totalActiveMinutesToday: Int = 0
-
     struct StageChange: Codable {
         let jobAppId: UUID
         let company: String
@@ -406,23 +402,6 @@ struct ActivitySnapshot: Codable {
                 }
                 parts.append("")
             }
-        }
-
-        // Time
-        if totalActiveMinutesToday > 0 {
-            parts.append("")
-            let hours = totalActiveMinutesToday / 60
-            let minutes = totalActiveMinutesToday % 60
-            if hours > 0 {
-                parts.append("Time spent in app today: \(hours)h \(minutes)m")
-            } else {
-                parts.append("Time spent in app today: \(minutes)m")
-            }
-        }
-
-        // Pace
-        if daysSinceLastOpen > 1 {
-            parts.append("Days since last app usage: \(daysSinceLastOpen)")
         }
 
         if parts.isEmpty {

@@ -155,64 +155,6 @@ class DailyTask: Identifiable {
     }
 }
 
-// MARK: - Time Entry
-
-enum ActivityType: String, Codable, CaseIterable {
-    case gathering = "Gathering Leads"
-    case customizing = "Customizing Materials"
-    case applying = "Submitting Applications"
-    case researching = "Company Research"
-    case interviewPrep = "Interview Prep"
-    case networking = "Networking"
-    case llmChat = "AI Assistance"
-    case appActive = "Sprung Active"
-    case other = "Other"
-}
-
-enum TrackingSource: String, Codable {
-    case appForeground = "App Foreground"
-    case viewActivity = "View Activity"
-    case calendarEvent = "Calendar Event"
-    case manual = "Manual Entry"
-}
-
-@Model
-class TimeEntry: Identifiable {
-    @Attribute(.unique) var id: UUID = UUID()
-
-    var activityType: ActivityType = ActivityType.other
-    var startTime: Date = Date()
-    var endTime: Date?
-    var durationSeconds: Int = 0
-
-    var isAutomatic: Bool = true
-    var trackingSource: TrackingSource = TrackingSource.appForeground
-    var notes: String?
-
-    var relatedJobAppId: UUID?
-    var relatedTaskId: UUID?
-
-    init() {}
-
-    init(activityType: ActivityType, startTime: Date) {
-        self.activityType = activityType
-        self.startTime = startTime
-    }
-
-    var durationMinutes: Int {
-        durationSeconds / 60
-    }
-
-    var formattedDuration: String {
-        let hours = durationSeconds / 3600
-        let minutes = (durationSeconds % 3600) / 60
-        if hours > 0 {
-            return "\(hours)h \(minutes)m"
-        }
-        return "\(minutes)m"
-    }
-}
-
 // MARK: - Weekly Goal
 
 @Model
@@ -229,10 +171,6 @@ class WeeklyGoal: Identifiable {
     var eventsAttendedActual: Int = 0
     var newContactsTarget: Int = 3
     var newContactsActual: Int = 0
-
-    // Time tracking
-    var targetHours: Double = 20.0
-    var actualMinutes: Int = 0
 
     // Reflection
     var llmReflection: String?
@@ -252,12 +190,6 @@ class WeeklyGoal: Identifiable {
         guard total > 0 else { return 0 }
         let actual = eventsAttendedActual + newContactsActual
         return min(1.0, Double(actual) / Double(total))
-    }
-
-    var timeProgress: Double {
-        guard targetHours > 0 else { return 0 }
-        let actualHours = Double(actualMinutes) / 60.0
-        return min(1.0, actualHours / targetHours)
     }
 
     // Convenience aliases for cleaner access

@@ -18,22 +18,19 @@ final class ActivityReportService {
     private let eventStore: NetworkingEventStore
     private let contactStore: NetworkingContactStore
     private let interactionStore: NetworkingInteractionStore
-    private let timeEntryStore: TimeEntryStore
 
     init(
         modelContext: ModelContext,
         jobAppStore: JobAppStore,
         eventStore: NetworkingEventStore,
         contactStore: NetworkingContactStore,
-        interactionStore: NetworkingInteractionStore,
-        timeEntryStore: TimeEntryStore
+        interactionStore: NetworkingInteractionStore
     ) {
         self.modelContext = modelContext
         self.jobAppStore = jobAppStore
         self.eventStore = eventStore
         self.contactStore = contactStore
         self.interactionStore = interactionStore
-        self.timeEntryStore = timeEntryStore
     }
 
     // MARK: - Snapshot Generation
@@ -78,10 +75,6 @@ final class ActivityReportService {
         // Contacts and Interactions
         snapshot.contactsAdded = getContactsAddedSince(since)
         snapshot.interactionsLogged = getInteractionsLoggedSince(since)
-
-        // Time and Pace
-        snapshot.totalActiveMinutesToday = timeEntryStore.totalMinutesForDate(Date())
-        snapshot.daysSinceLastOpen = calculateDaysSinceLastOpen()
 
         return snapshot
     }
@@ -358,22 +351,5 @@ final class ActivityReportService {
 
     private func getInteractionsLoggedSince(_ since: Date) -> Int {
         interactionStore.allInteractions.filter { $0.date >= since }.count
-    }
-
-    // MARK: - Time & Pace Queries
-
-    private func calculateDaysSinceLastOpen() -> Int {
-        // Find the most recent time entry before today
-        let today = Calendar.current.startOfDay(for: Date())
-        let entries = timeEntryStore.allEntries.filter {
-            $0.startTime < today
-        }.sorted { $0.startTime > $1.startTime }
-
-        guard let lastEntry = entries.first else {
-            return 0
-        }
-
-        let calendar = Calendar.current
-        return calendar.dateComponents([.day], from: lastEntry.startTime, to: today).day ?? 0
     }
 }

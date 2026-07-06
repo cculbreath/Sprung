@@ -56,7 +56,7 @@ enum AppModule: String, CaseIterable, Identifiable, Codable {
         switch self {
         case .pipeline: return "Kanban board for job applications"
         case .resumeEditor: return "Create and customize resumes"
-        case .dailyTasks: return "Today's tasks and time tracking"
+        case .dailyTasks: return "Today's tasks and coaching"
         case .events: return "Networking events pipeline"
         case .contacts: return "Professional contacts CRM"
         case .weeklyReview: return "Goals progress and reflection"

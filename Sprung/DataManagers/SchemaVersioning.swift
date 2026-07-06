@@ -39,7 +39,6 @@ enum SprungSchema {
         // Discovery Models (SearchPreferences and DiscoverySettings moved to UserDefaults)
         CandidateDossier.self,
         DailyTask.self,
-        TimeEntry.self,
         WeeklyGoal.self,
         // Networking Coach Models
         NetworkingEventOpportunity.self,
