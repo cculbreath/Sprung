@@ -13,11 +13,14 @@
 //     optionals (strict tool use sends null, not absent), malformed payloads,
 //     and the unparseable-date rejection that feeds the runner's corrective
 //     retry.
-//  3. Assistant-echo assembly: the runner's own echo drops server-tool
-//     blocks, so the delegate's echo must preserve EVERY response content
-//     block verbatim (including encrypted_content) — and the conversation
-//     reconciliation must substitute those full echoes for the runner's
-//     lossy ones in order.
+//  3. Assistant-echo fidelity: the runner echoes every response content block
+//     verbatim (`AnthropicTurnResult.assistantEchoes` — D-16 promoted this
+//     from a delegate-side reconciliation seam). These tests pin the contract
+//     this loop depends on: server-tool blocks (including encrypted_content)
+//     survive the echo byte-for-byte, and pause_turn segments each keep their
+//     own assistant message.
+//  4. Prompt-cache breakpoints: system block + moving tail that walks past
+//     server-tool blocks; 2 of Anthropic's 4 breakpoints.
 //
 
 import XCTest
@@ -91,7 +94,7 @@ final class EventDiscoveryLoopTests: XCTestCase {
 
         // web_fetch: 20260209 variant with fetch budget and content-token bound.
         XCTAssertTrue(json.contains(#""type":"web_fetch_20260209""#))
-        XCTAssertTrue(json.contains(#""max_uses":10"#))
+        XCTAssertTrue(json.contains(#""max_uses":25"#))
         XCTAssertTrue(json.contains(#""max_content_tokens":8000"#))
 
         // Completion tool: strict.
@@ -170,7 +173,7 @@ final class EventDiscoveryLoopTests: XCTestCase {
         XCTAssertNil(DiscoveredEvent.parseEventDate("soon"))
     }
 
-    // MARK: - 3. Assistant echo (server-tool block preservation)
+    // MARK: - 3. Assistant echo (runner-level, server-tool block preservation)
 
     /// A response mid-research: text + web_search round-trip + web_fetch
     /// round-trip + a client tool call, stopped with pause_turn.
@@ -194,7 +197,9 @@ final class EventDiscoveryLoopTests: XCTestCase {
         let response = try decodeResponse(researchResponseJSON)
         XCTAssertEqual(response.stopReason, "pause_turn", "pause_turn must pass through undamaged")
 
-        let echo = EventDiscoveryLoop.assistantEcho(from: response)
+        let echoes = AnthropicTurnResult(response: response).assistantEchoes
+        XCTAssertEqual(echoes.count, 1, "a single response segment echoes as one assistant message")
+        let echo = echoes[0]
         XCTAssertEqual(echo.role, "assistant")
 
         guard case .blocks(let blocks) = echo.content else {
@@ -221,7 +226,7 @@ final class EventDiscoveryLoopTests: XCTestCase {
 
     func testAssistantEchoReencodesServerToolPayloadsVerbatim() throws {
         let response = try decodeResponse(researchResponseJSON)
-        let echo = EventDiscoveryLoop.assistantEcho(from: response)
+        let echo = AnthropicTurnResult(response: response).assistantEchoes[0]
         let json = try encodedJSON(echo)
 
         // The opaque search payload — what lets the model keep citing pages
@@ -244,7 +249,7 @@ final class EventDiscoveryLoopTests: XCTestCase {
          "stop_reason":"end_turn","stop_sequence":null,
          "usage":{"input_tokens":1,"output_tokens":1}}
         """#)
-        let echo = EventDiscoveryLoop.assistantEcho(from: response)
+        let echo = AnthropicTurnResult(response: response).assistantEchoes[0]
         guard case .blocks(let blocks) = echo.content, case .text(let text) = blocks.first else {
             return XCTFail("expected a single text block")
         }
@@ -252,50 +257,88 @@ final class EventDiscoveryLoopTests: XCTestCase {
         XCTAssertEqual(text.text, "(continuing)", "the API rejects empty assistant messages")
     }
 
-    // MARK: - 3b. Conversation reconciliation
+    // MARK: - 3b. pause_turn segments
 
-    func testReconciledSubstitutesFullEchoesForLossyAssistantTurns() {
-        // Runner history: task, lossy echo 1, nudge, lossy echo 2, tool results.
-        let messages: [AnthropicMessage] = [
-            .user("find events"),
-            .assistant("lossy turn 1"),
-            .user("nudge"),
-            .assistant("lossy turn 2"),
-            AnthropicMessage(role: "user", content: .blocks([
-                .toolResult(AnthropicToolResultBlock(toolUseId: "tu_1", content: "err", isError: true))
-            ]))
-        ]
-        // Turn 1 paused once (two full-echo segments); turn 2 was a single segment.
-        let turnEchoes: [[AnthropicMessage]] = [
-            [.assistant("full 1a"), .assistant("full 1b")],
-            [.assistant("full 2")]
-        ]
+    func testPausedSegmentsBecomeConsecutiveAssistantEchoes() throws {
+        // A turn that paused once mid-research and then submitted: the paused
+        // segment and the final response each keep their own assistant message
+        // in the runner's history — the exact shape runPausableRequest already
+        // sent on the wire for the continuation — while the derived fields
+        // (toolCalls) come from the final response only.
+        let paused = try decodeResponse(researchResponseJSON)
+        let final = try decodeResponse(#"""
+        {"id":"msg_03","type":"message","role":"assistant","model":"claude-x","content":[
+          {"type":"text","text":"Verification complete."},
+          {"type":"tool_use","id":"tu_2","name":"submit_events","input":{"events":[]}}
+        ],"stop_reason":"tool_use","stop_sequence":null,
+        "usage":{"input_tokens":1,"output_tokens":1}}
+        """#)
+        let result = AnthropicTurnResult(response: final, pausedSegments: [paused.content])
 
-        let reconciled = EventDiscoveryLoop.reconciled(messages, turnEchoes: turnEchoes)
+        XCTAssertEqual(result.toolCalls.map(\.id), ["tu_2"],
+                       "client tool calls are derived from the final segment only")
 
-        XCTAssertEqual(reconciled.count, 6, "turn 1's pause segment adds one message")
-        XCTAssertEqual(texts(of: reconciled), [
-            "find events", "full 1a", "full 1b", "nudge", "full 2", nil
-        ], "assistant turns replaced in order; user messages pass through")
-        XCTAssertEqual(reconciled.map(\.role), ["user", "assistant", "assistant", "user", "assistant", "user"])
-    }
-
-    func testReconciledPassesThroughWhenNoEchoesStashed() {
-        let messages: [AnthropicMessage] = [.user("find events")]
-        let reconciled = EventDiscoveryLoop.reconciled(messages, turnEchoes: [])
-        XCTAssertEqual(reconciled.count, 1)
-        XCTAssertEqual(texts(of: reconciled), ["find events"])
-    }
-
-    /// Text of each message when it is simple `.text` content; nil for block content.
-    private func texts(of messages: [AnthropicMessage]) -> [String?] {
-        messages.map { message in
-            if case .text(let text) = message.content { return text }
-            return nil
+        let echoes = result.assistantEchoes
+        XCTAssertEqual(echoes.count, 2, "one assistant message per segment (paused + final)")
+        XCTAssertEqual(echoes.map(\.role), ["assistant", "assistant"])
+        guard case .blocks(let pausedBlocks) = echoes[0].content,
+              case .blocks(let finalBlocks) = echoes[1].content else {
+            return XCTFail("expected block content")
         }
+        XCTAssertEqual(pausedBlocks.count, 6, "the paused segment survives in full fidelity")
+        XCTAssertEqual(finalBlocks.count, 2)
     }
 
-    // MARK: - 4. Task-message assembly (7-day focus, taste signal, guidance)
+    // MARK: - 4. Prompt-cache breakpoints
+
+    func testSystemContentCarriesEphemeralBreakpoint() {
+        guard case .blocks(let blocks) = EventDiscoveryLoop.systemContent("SYS") else {
+            return XCTFail("expected block-form system content")
+        }
+        XCTAssertEqual(blocks.count, 1)
+        XCTAssertEqual(blocks[0].text, "SYS")
+        XCTAssertEqual(blocks[0].cacheControl?.type, "ephemeral",
+                       "the system breakpoint caches tools + system across turns")
+        XCTAssertNil(blocks[0].cacheControl?.ttl, "default 5m TTL — turns run back-to-back within a run")
+    }
+
+    func testMovingBreakpointMarksTrailingUserMessage() throws {
+        let marked = EventDiscoveryLoop.applyingMovingCacheBreakpoint(to: [.user("find events")])
+        let json = try encodedJSON(marked)
+        XCTAssertEqual(occurrences(of: #""cache_control""#, in: json), 1,
+                       "exactly one message-tier breakpoint (1 system + 1 message = 2 of Anthropic's 4)")
+        guard case .blocks(let blocks) = marked[0].content, case .text(let text) = blocks[0] else {
+            return XCTFail("expected the marked text block")
+        }
+        XCTAssertEqual(text.text, "find events")
+        XCTAssertEqual(text.cacheControl?.type, "ephemeral")
+    }
+
+    func testMovingBreakpointWalksPastServerToolTail() throws {
+        // A continuation request's history ends with a full-fidelity echo whose
+        // tail is server-tool + tool_use blocks — none can carry cache_control
+        // in the fork's types. The moving breakpoint must walk back to the
+        // echo's leading text block instead of being silently dropped.
+        let echo = AnthropicTurnResult(response: try decodeResponse(researchResponseJSON)).assistantEchoes[0]
+        let marked = EventDiscoveryLoop.applyingMovingCacheBreakpoint(to: [.user("find events"), echo])
+        let json = try encodedJSON(marked)
+        XCTAssertEqual(occurrences(of: #""cache_control""#, in: json), 1)
+        guard case .blocks(let blocks) = marked[1].content, case .text(let text) = blocks[0] else {
+            return XCTFail("expected the echo's leading text block to carry the mark")
+        }
+        XCTAssertEqual(text.text, "Searching for events.")
+        XCTAssertEqual(text.cacheControl?.type, "ephemeral")
+        guard case .text(let userText) = marked[0].content else {
+            return XCTFail("expected the untouched user message")
+        }
+        XCTAssertEqual(userText, "find events", "earlier messages stay unmarked")
+    }
+
+    private func occurrences(of needle: String, in haystack: String) -> Int {
+        haystack.components(separatedBy: needle).count - 1
+    }
+
+    // MARK: - 5. Task-message assembly (7-day focus, taste signal, guidance)
 
     /// Midnight local on a fixed date, through the same parser that pins the
     /// submission date contract.

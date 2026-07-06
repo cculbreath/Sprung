@@ -9,26 +9,30 @@
 //  when the agent submits its verified list through the strict
 //  `submit_events` tool.
 //
-//  Server-tool mechanics this delegate owns (the runner is agnostic to them):
-//
-//  - Full-fidelity assistant echo. `AnthropicTurnResult` drops server-tool
-//    blocks, so the runner's own echo would lose `server_tool_use` /
-//    `web_search_tool_result` / `web_fetch_tool_result` blocks — including the
-//    `encrypted_content` the model needs to keep citing pages across turns.
-//    This delegate stashes a verbatim echo of EVERY response content block per
-//    turn and, on each request, rebuilds the conversation by substituting the
-//    stashed echoes for the runner's lossy ones (`reconciled(_:turnEchoes:)`).
+//  The runner's echo is full-fidelity (every response content block verbatim,
+//  via `AnthropicTurnResult.assistantEchoes`), so its stored history IS the
+//  wire conversation — server_tool_use / web_search_tool_result /
+//  web_fetch_tool_result blocks, including the `encrypted_content` the model
+//  needs to keep citing pages across turns, survive without any delegate-side
+//  bookkeeping. Server-tool mechanics this delegate still owns:
 //
 //  - pause_turn. When a response stops with "pause_turn" the server-side tool
 //    loop paused mid-turn: re-send the conversation with the assistant turn
 //    appended — no extra user message, never a tool_result for a
-//    server_tool_use. Handled inside `runModelTurn`, so the runner never
-//    counts a paused turn as a no-tool stall.
+//    server_tool_use. Handled inside `runModelTurn` (so the runner never
+//    counts a paused turn as a no-tool stall); the paused segments ride back
+//    to the runner in the turn result so its history echoes each one.
 //
 //  - No-tool policy. A turn that only ran server tools surfaces to the runner
 //    as "no tool calls" (server blocks aren't client tool_use). Those turns
 //    are working turns, not stalls — the delegate tracks genuinely idle turns
 //    itself and only forces completion after repeated idleness.
+//
+//  - Prompt-cache breakpoints. One on the system block (caches tools +
+//    system) plus a moving tail breakpoint on the last cache-controllable
+//    message block, applied per request (GitAnalysisAgent's pattern) — turn
+//    N+1 reads the conversation prefix turn N wrote instead of re-paying the
+//    fetched-page-heavy history every turn. 2 of Anthropic's 4 breakpoints.
 //
 
 import Foundation
@@ -42,10 +46,6 @@ final class EventDiscoveryLoop: AnthropicToolLoopDelegate {
     private let userMessage: String
     /// Terse progress lines for the discovery UI ("Searching: …", "Fetching: …").
     private let onProgress: (@MainActor (String) async -> Void)?
-
-    /// Full-fidelity assistant echoes, one entry per completed runner turn
-    /// (each entry holds the pause_turn continuation echoes plus the final one).
-    private var turnEchoes: [[AnthropicMessage]] = []
 
     /// Set after repeated idle turns so the next turn forces `submit_events`.
     private var forceCompletionNextTurn = false
@@ -92,14 +92,12 @@ final class EventDiscoveryLoop: AnthropicToolLoopDelegate {
             : .auto
         forceCompletionNextTurn = false
 
-        let conversation = Self.reconciled(messages, turnEchoes: turnEchoes)
-        let (response, echoes, hadServerActivity) = try await runPausableRequest(
-            conversation: conversation,
+        let (response, pausedSegments, hadServerActivity) = try await runPausableRequest(
+            conversation: messages,
             toolChoice: toolChoice
         )
-        turnEchoes.append(echoes)
 
-        let result = AnthropicTurnResult(response: response)
+        let result = AnthropicTurnResult(response: response, pausedSegments: pausedSegments)
         if hadServerActivity || !result.toolCalls.isEmpty {
             idleNoToolTurns = 0
         }
@@ -146,7 +144,7 @@ final class EventDiscoveryLoop: AnthropicToolLoopDelegate {
         // Don't discard the run's research: force one submit_events call from
         // the conversation so far. Nil (schema-invalid forced payload) falls
         // back to the runner throwing maxTurnsError().
-        var conversation = Self.reconciled(messages, turnEchoes: turnEchoes)
+        var conversation = messages
         conversation.append(.user(
             "You are out of research turns. Call \(completionToolName) NOW with every event you "
             + "have page-verified so far — an empty list if none. Do not call any other tool."
@@ -178,22 +176,27 @@ final class EventDiscoveryLoop: AnthropicToolLoopDelegate {
     /// Send the conversation, transparently continuing while the server-side
     /// tool loop pauses (`stop_reason == "pause_turn"`): each paused assistant
     /// turn is appended verbatim and the request re-sent, with no user message
-    /// in between. Returns the final response, the full-fidelity echoes of
-    /// every segment (paused + final), and whether any segment ran server tools.
+    /// in between. Returns the final response, the content of every paused
+    /// segment (for the runner's full-fidelity echoes), and whether any
+    /// segment ran server tools.
     private func runPausableRequest(
         conversation: [AnthropicMessage],
         toolChoice: AnthropicToolChoice
-    ) async throws -> (response: AnthropicMessageResponse, echoes: [AnthropicMessage], hadServerActivity: Bool) {
+    ) async throws -> (
+        response: AnthropicMessageResponse,
+        pausedSegments: [[AnthropicResponseContentBlock]],
+        hadServerActivity: Bool
+    ) {
         var conversation = conversation
-        var echoes: [AnthropicMessage] = []
+        var pausedSegments: [[AnthropicResponseContentBlock]] = []
         var hadServerActivity = false
         var pauseContinuations = 0
 
         while true {
             let parameters = AnthropicMessageParameter(
                 model: modelId,
-                messages: conversation,
-                system: .blocks([AnthropicSystemBlock(text: systemPrompt)]),
+                messages: Self.applyingMovingCacheBreakpoint(to: conversation),
+                system: Self.systemContent(systemPrompt),
                 maxTokens: maxResponseTokens,
                 stream: false,
                 tools: EventDiscoveryToolSchemas.allTools,
@@ -210,7 +213,9 @@ final class EventDiscoveryLoop: AnthropicToolLoopDelegate {
             let usage = response.usage
             let serverUsage = usage.serverToolUse
             Logger.debug(
-                "🌐 EventDiscovery usage (\(modelId)): input=\(usage.inputTokens) output=\(usage.outputTokens) "
+                "🌐 EventDiscovery usage (\(modelId)): input=\(usage.inputTokens) "
+                + "cache_read=\(usage.cacheReadInputTokens ?? 0) cache_create=\(usage.cacheCreationInputTokens ?? 0) "
+                + "output=\(usage.outputTokens) "
                 + "searches=\(serverUsage?.webSearchRequests ?? 0) fetches=\(serverUsage?.webFetchRequests ?? 0)",
                 category: .ai
             )
@@ -218,12 +223,10 @@ final class EventDiscoveryLoop: AnthropicToolLoopDelegate {
             let sawServerBlocks = await reportServerToolActivity(response.content)
             hadServerActivity = hadServerActivity || sawServerBlocks
 
-            let echo = Self.assistantEcho(from: response)
-            echoes.append(echo)
-
             if response.stopReason == "pause_turn", pauseContinuations < maxPauseContinuations {
                 pauseContinuations += 1
-                conversation.append(echo)
+                pausedSegments.append(response.content)
+                conversation.append(AnthropicTurnResult.assistantEcho(of: response.content))
                 continue
             }
             if response.stopReason == "pause_turn" {
@@ -231,8 +234,44 @@ final class EventDiscoveryLoop: AnthropicToolLoopDelegate {
                 // discarding the research; the runner's no-tool path re-engages.
                 Logger.warning("Event discovery: pause_turn continuation cap reached; treating turn as final", category: .ai)
             }
-            return (response, echoes, hadServerActivity)
+            return (response, pausedSegments, hadServerActivity)
         }
+    }
+
+    // MARK: - Prompt-Cache Breakpoints (static — covered by EventDiscoveryLoopTests)
+
+    /// System block with a cache breakpoint (caches tools + system — tools
+    /// render before system in the prompt). Turns run back-to-back within a
+    /// weekly run, so the 5-minute ephemeral TTL is the right one.
+    static func systemContent(_ prompt: String) -> AnthropicSystemContent {
+        .blocks([AnthropicSystemBlock(text: prompt, cacheControl: .ephemeral)])
+    }
+
+    /// Place the moving conversation breakpoint on the last content block that
+    /// can carry cache_control, walking back past the server-tool blocks that
+    /// dominate this loop's tails (the fork's types take cache_control on
+    /// text / tool_result but not on server_tool_use / web_*_tool_result).
+    /// Applied to a per-request copy ONLY — the runner's stored history stays
+    /// clean, so the breakpoint moves naturally each turn and turn N+1 reads
+    /// the prefix turn N wrote. Total: 1 system + 1 message breakpoint = 2 of
+    /// Anthropic's 4. (Single-tail placement, GitAnalysisAgent's pattern: a
+    /// fetch-heavy turn that adds >20 blocks re-writes the prefix once, then
+    /// the chain resumes.)
+    static func applyingMovingCacheBreakpoint(to messages: [AnthropicMessage]) -> [AnthropicMessage] {
+        guard !messages.isEmpty else { return messages }
+        var result = messages
+        for messageIndex in result.indices.reversed() {
+            let blocks = AnthropicCacheBreakpointPlanner.contentBlocks(of: result[messageIndex])
+            for blockIndex in blocks.indices.reversed() {
+                guard let marked = AnthropicCacheBreakpointPlanner.addingCacheControl(
+                    to: blocks[blockIndex], cacheControl: .ephemeral) else { continue }
+                var newBlocks = blocks
+                newBlocks[blockIndex] = marked
+                result[messageIndex] = AnthropicMessage(role: result[messageIndex].role, content: .blocks(newBlocks))
+                return result
+            }
+        }
+        return result
     }
 
     /// Emit terse progress lines for each server-tool invocation and surface
@@ -275,62 +314,6 @@ final class EventDiscoveryLoop: AnthropicToolLoopDelegate {
     }
 
     // MARK: - Pure Helpers (static — covered by EventDiscoveryLoopTests)
-
-    /// Build the assistant echo preserving EVERY response content block
-    /// verbatim — server-tool blocks (`server_tool_use`,
-    /// `web_search_tool_result`, `web_fetch_tool_result`) are the same Codable
-    /// values decoded from the wire, so re-encoding is byte-faithful (including
-    /// `encrypted_content` and fetched documents). Whitespace-only text blocks
-    /// are dropped (the API rejects empty text).
-    static func assistantEcho(from response: AnthropicMessageResponse) -> AnthropicMessage {
-        var blocks: [AnthropicContentBlock] = []
-        for block in response.content {
-            switch block {
-            case .text(let textBlock):
-                if !textBlock.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    blocks.append(.text(textBlock))
-                }
-            case .toolUse(let call):
-                blocks.append(.toolUse(AnthropicToolUseBlock(
-                    id: call.id,
-                    name: call.name,
-                    input: call.input.mapValues { $0.value }
-                )))
-            case .serverToolUse(let serverToolUse):
-                blocks.append(.serverToolUse(serverToolUse))
-            case .webSearchToolResult(let result):
-                blocks.append(.webSearchToolResult(result))
-            case .webFetchToolResult(let result):
-                blocks.append(.webFetchToolResult(result))
-            }
-        }
-        if blocks.isEmpty {
-            // The API rejects empty assistant messages.
-            blocks.append(.text(AnthropicTextBlock(text: "(continuing)")))
-        }
-        return AnthropicMessage(role: "assistant", content: .blocks(blocks))
-    }
-
-    /// Rebuild the true conversation from the runner's stored history: the
-    /// runner's assistant echoes drop server-tool blocks, so each one is
-    /// replaced (in order) by the stashed full-fidelity echo sequence for that
-    /// turn. User messages (initial, tool results, nudges) pass through.
-    static func reconciled(
-        _ messages: [AnthropicMessage],
-        turnEchoes: [[AnthropicMessage]]
-    ) -> [AnthropicMessage] {
-        var result: [AnthropicMessage] = []
-        var turnIndex = 0
-        for message in messages {
-            if message.role == "assistant", turnIndex < turnEchoes.count {
-                result.append(contentsOf: turnEchoes[turnIndex])
-                turnIndex += 1
-            } else {
-                result.append(message)
-            }
-        }
-        return result
-    }
 
     /// Decode and validate a `submit_events` payload. Throws (with a
     /// corrective message the runner relays as the tool_result) on decode

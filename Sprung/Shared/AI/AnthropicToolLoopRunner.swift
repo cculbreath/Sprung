@@ -11,7 +11,8 @@
 //  The runner owns the parts that are identical across agents and the parts that
 //  are easy to get subtly wrong:
 //  - turn counting / maxTurns / timeout
-//  - the assistant-echo turn (text blocks + tool_use blocks)
+//  - the assistant-echo turn (full fidelity: every response content block
+//    verbatim, including server-tool blocks — see AnthropicTurnResult.assistantEcho)
 //  - the no-tool nudge / abort branch
 //  - the completion-tool check (terminate, or answer-and-continue on parse error)
 //  - tool_result assembly with the every-tool_use-answered guarantee
@@ -40,10 +41,20 @@ import SwiftOpenAI
 struct AnthropicTurnResult {
     /// Text blocks in response order (raw, untrimmed).
     let textBlocks: [String]
-    /// Tool-use blocks in response order.
+    /// Client tool-use blocks in response order.
     let toolCalls: [AnthropicToolUseResponseBlock]
     let usage: AnthropicUsage
     let stopReason: String?
+    /// Complete content of every API response consumed this turn, one segment
+    /// per response. Delegates that transparently continue `pause_turn`
+    /// server-tool segments inside `runModelTurn` (EventDiscoveryLoop) supply
+    /// each paused segment ahead of the final one; everyone else has exactly
+    /// one segment. The runner echoes each segment verbatim as its own
+    /// assistant message (`assistantEchoes`), so stored history keeps full
+    /// fidelity — server_tool_use / web_search_tool_result /
+    /// web_fetch_tool_result blocks (including `encrypted_content`) survive
+    /// across turns.
+    let contentSegments: [[AnthropicResponseContentBlock]]
 
     init(
         textBlocks: [String],
@@ -55,11 +66,20 @@ struct AnthropicTurnResult {
         self.toolCalls = toolCalls
         self.usage = usage
         self.stopReason = stopReason
+        // Producers without wire content (tests; a streaming assembler) get a
+        // synthesized single segment whose echo is identical to one built from
+        // a text + tool_use response.
+        self.contentSegments = [
+            textBlocks.map { .text(AnthropicTextBlock(text: $0)) } + toolCalls.map { .toolUse($0) }
+        ]
     }
 
-    /// Build from a non-streaming Messages API response, splitting content into
-    /// text and tool_use blocks.
-    init(response: AnthropicMessageResponse) {
+    /// Build from a non-streaming Messages API response. `pausedSegments`
+    /// carries the content of any `pause_turn` responses the delegate already
+    /// continued within this turn, in consumption order; the derived fields
+    /// (`textBlocks`, `toolCalls`, `usage`, `stopReason`) come from the final
+    /// response only.
+    init(response: AnthropicMessageResponse, pausedSegments: [[AnthropicResponseContentBlock]] = []) {
         var texts: [String] = []
         var calls: [AnthropicToolUseResponseBlock] = []
         for block in response.content {
@@ -67,12 +87,77 @@ struct AnthropicTurnResult {
             case .text(let textBlock): texts.append(textBlock.text)
             case .toolUse(let toolUse): calls.append(toolUse)
             case .serverToolUse, .webSearchToolResult, .webFetchToolResult:
-                // Server-side tool blocks execute on Anthropic's side — nothing to run
-                // locally. Delegates that declare server tools own echoing them back.
+                // Server-side tool blocks execute on Anthropic's side — nothing to
+                // run locally. They still ride into `contentSegments`, so the
+                // runner's echo preserves them verbatim.
                 break
             }
         }
-        self.init(textBlocks: texts, toolCalls: calls, usage: response.usage, stopReason: response.stopReason)
+        self.textBlocks = texts
+        self.toolCalls = calls
+        self.usage = response.usage
+        self.stopReason = response.stopReason
+        self.contentSegments = pausedSegments + [response.content]
+    }
+}
+
+// MARK: - Assistant Echo (full fidelity)
+
+extension AnthropicTurnResult {
+    /// The assistant messages the runner appends to history for this turn —
+    /// one full-fidelity echo per response segment (a turn has several only
+    /// when the delegate continued `pause_turn` segments inside
+    /// `runModelTurn`; consecutive assistant messages are valid, the API
+    /// combines them into one turn).
+    var assistantEchoes: [AnthropicMessage] {
+        contentSegments.map(Self.assistantEcho(of:))
+    }
+
+    /// Echo one response segment with every content block preserved in
+    /// response order: text blocks are kept verbatim (whitespace-only ones
+    /// dropped — the API rejects empty text), tool_use response blocks are
+    /// converted to request blocks, and server-tool blocks
+    /// (`server_tool_use`, `web_search_tool_result`, `web_fetch_tool_result`)
+    /// are the same Codable values decoded from the wire, so re-encoding is
+    /// byte-faithful — including `encrypted_content` and fetched documents.
+    /// A placeholder keeps a fully-empty segment API-valid.
+    ///
+    /// Neutrality for delegates whose responses never contain server-tool
+    /// blocks (no server tools declared: GitAnalysisAgent — the byte-gated
+    /// onboarding surface — CardMergeAgent, and the Discovery agent/coaching
+    /// loops): their responses order text blocks before tool_use blocks, so
+    /// this order-preserving echo emits exactly what the previous
+    /// text-then-tool_use echo did, and a decoded `AnthropicTextBlock` holds
+    /// exactly {type:"text", text, cacheControl:nil} — echoing it verbatim
+    /// encodes the same bytes as reconstructing it from its text.
+    /// (AnthropicToolLoopRunnerTests pins this equivalence.)
+    static func assistantEcho(of segment: [AnthropicResponseContentBlock]) -> AnthropicMessage {
+        var blocks: [AnthropicContentBlock] = []
+        for block in segment {
+            switch block {
+            case .text(let textBlock):
+                if !textBlock.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    blocks.append(.text(textBlock))
+                }
+            case .toolUse(let call):
+                blocks.append(.toolUse(AnthropicToolUseBlock(
+                    id: call.id,
+                    name: call.name,
+                    input: call.input.mapValues { $0.value }
+                )))
+            case .serverToolUse(let serverToolUse):
+                blocks.append(.serverToolUse(serverToolUse))
+            case .webSearchToolResult(let result):
+                blocks.append(.webSearchToolResult(result))
+            case .webFetchToolResult(let result):
+                blocks.append(.webFetchToolResult(result))
+            }
+        }
+        if blocks.isEmpty {
+            // The API rejects empty assistant messages.
+            blocks.append(.text(AnthropicTextBlock(text: "(continuing)")))
+        }
+        return AnthropicMessage(role: "assistant", content: .blocks(blocks))
     }
 }
 
@@ -208,9 +293,11 @@ final class AnthropicToolLoopRunner<Delegate: AnthropicToolLoopDelegate> {
 
             let result = try await delegate.runModelTurn(messages: messages)
 
-            // Echo the assistant turn so every tool_use has its tool_result in the
-            // next user message and role alternation holds.
-            messages.append(Self.assistantEcho(from: result))
+            // Echo the assistant turn — full fidelity, one message per response
+            // segment — so every tool_use has its tool_result in the next user
+            // message, role alternation holds, and server-tool blocks survive
+            // into the next request.
+            messages.append(contentsOf: result.assistantEchoes)
 
             // No tool calls → delegate policy (nudge or abort).
             if result.toolCalls.isEmpty {
@@ -297,28 +384,6 @@ final class AnthropicToolLoopRunner<Delegate: AnthropicToolLoopDelegate> {
             orderedToolCallIds: toolCalls.map(\.id),
             turnCount: turnCount
         )
-    }
-
-    /// Build the assistant echo: each non-empty (after trim) text block kept as
-    /// its own block (original text), then tool_use blocks. A placeholder keeps a
-    /// fully-empty turn API-valid.
-    static func assistantEcho(from result: AnthropicTurnResult) -> AnthropicMessage {
-        var blocks: [AnthropicContentBlock] = []
-        for text in result.textBlocks where !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            blocks.append(.text(AnthropicTextBlock(text: text)))
-        }
-        for call in result.toolCalls {
-            blocks.append(.toolUse(AnthropicToolUseBlock(
-                id: call.id,
-                name: call.name,
-                input: call.input.mapValues { $0.value }
-            )))
-        }
-        if blocks.isEmpty {
-            // The API rejects empty assistant messages.
-            blocks.append(.text(AnthropicTextBlock(text: "(continuing)")))
-        }
-        return AnthropicMessage(role: "assistant", content: .blocks(blocks))
     }
 
     /// Assemble tool_result blocks in tool_use order, guaranteeing every id is

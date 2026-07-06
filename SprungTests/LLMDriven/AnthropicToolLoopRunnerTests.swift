@@ -48,6 +48,16 @@ private func toolResultIds(of message: AnthropicMessage) -> [String] {
     return blocks.compactMap { if case .toolResult(let r) = $0 { return r.toolUseId } else { return nil } }
 }
 
+private func decodeResponse(_ json: String) throws -> AnthropicMessageResponse {
+    try JSONDecoder().decode(AnthropicMessageResponse.self, from: Data(json.utf8))
+}
+
+private func sortedJSON<T: Encodable>(_ value: T) throws -> String {
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.sortedKeys]
+    return String(decoding: try encoder.encode(value), as: UTF8.self)
+}
+
 @MainActor
 private final class FakeLoopDelegate: AnthropicToolLoopDelegate {
     typealias Output = String
@@ -181,11 +191,13 @@ final class AnthropicToolLoopRunnerTests: XCTestCase {
         XCTAssertTrue(c2.content.contains("Duplicate"), "duplicate completion call is answered, not orphaned")
     }
 
-    // MARK: assistantEcho
+    // MARK: assistantEcho (full fidelity — one message per response segment)
 
     func testAssistantEchoKeepsTextAndToolBlocks() {
         let result = turn(text: ["  ", "hello"], tools: [makeToolCall(id: "a", name: "read")])
-        guard case .blocks(let blocks) = Runner.assistantEcho(from: result).content else { return XCTFail() }
+        let echoes = result.assistantEchoes
+        XCTAssertEqual(echoes.count, 1, "a single-segment turn echoes as exactly one assistant message")
+        guard case .blocks(let blocks) = echoes[0].content else { return XCTFail() }
         // The whitespace-only block is dropped; "hello" + the tool_use survive.
         XCTAssertEqual(blocks.count, 2)
         guard case .text(let t) = blocks[0], case .toolUse(let u) = blocks[1] else { return XCTFail() }
@@ -194,10 +206,71 @@ final class AnthropicToolLoopRunnerTests: XCTestCase {
     }
 
     func testAssistantEchoPlaceholderWhenEmpty() {
-        guard case .blocks(let blocks) = Runner.assistantEcho(from: turn()).content else { return XCTFail() }
+        guard case .blocks(let blocks) = turn().assistantEchoes[0].content else { return XCTFail() }
         XCTAssertEqual(blocks.count, 1)
         guard case .text(let t) = blocks[0] else { return XCTFail() }
         XCTAssertEqual(t.text, "(continuing)", "an all-empty turn gets a placeholder so the API does not 400")
+    }
+
+    func testResponseEchoMatchesManualEchoByteForByte() throws {
+        // Neutrality pin for the full-fidelity echo promotion (D-16): for a
+        // response containing only text + tool_use blocks — every delegate
+        // that declares no server tools, including GitAnalysisAgent on the
+        // byte-gated onboarding surface — the echo built verbatim from the
+        // wire response encodes the SAME BYTES as the previous
+        // text-then-tool_use assembly (preserved as the manual init's
+        // synthesized segment).
+        let response = try decodeResponse(#"""
+        {"id":"msg_1","type":"message","role":"assistant","model":"m","content":[
+          {"type":"text","text":"scanning the repo"},
+          {"type":"tool_use","id":"t1","name":"read_file","input":{"path":"Sources/App.swift"}}
+        ],"stop_reason":"tool_use","stop_sequence":null,
+        "usage":{"input_tokens":1,"output_tokens":1}}
+        """#)
+        let fromResponse = AnthropicTurnResult(response: response)
+        let manual = AnthropicTurnResult(
+            textBlocks: fromResponse.textBlocks,
+            toolCalls: fromResponse.toolCalls,
+            usage: makeUsage()
+        )
+        XCTAssertEqual(
+            try sortedJSON(fromResponse.assistantEchoes),
+            try sortedJSON(manual.assistantEchoes),
+            "wire-verbatim echo and reconstructed echo must be byte-identical for text+tool_use responses"
+        )
+    }
+
+    func testPausedSegmentsEchoAsTheirOwnAssistantMessages() throws {
+        // pause_turn delegates supply each paused segment's content ahead of
+        // the final response; the echo keeps one assistant message per segment
+        // (matching what was already sent on the wire for the continuation),
+        // while the derived fields come from the final response only.
+        let paused = try decodeResponse(#"""
+        {"id":"msg_p","type":"message","role":"assistant","model":"m",
+         "content":[{"type":"text","text":"still searching"}],
+         "stop_reason":"pause_turn","stop_sequence":null,
+         "usage":{"input_tokens":1,"output_tokens":1}}
+        """#)
+        let final = try decodeResponse(#"""
+        {"id":"msg_f","type":"message","role":"assistant","model":"m","content":[
+          {"type":"tool_use","id":"c","name":"complete","input":{}}
+        ],"stop_reason":"tool_use","stop_sequence":null,
+        "usage":{"input_tokens":1,"output_tokens":1}}
+        """#)
+        let result = AnthropicTurnResult(response: final, pausedSegments: [paused.content])
+
+        XCTAssertEqual(result.toolCalls.map(\.id), ["c"], "derived tool calls come from the final response only")
+        let echoes = result.assistantEchoes
+        XCTAssertEqual(echoes.count, 2, "one assistant echo per segment (paused + final)")
+        XCTAssertEqual(echoes.map(\.role), ["assistant", "assistant"])
+        guard case .blocks(let pausedBlocks) = echoes[0].content,
+              case .text(let pausedText) = pausedBlocks[0],
+              case .blocks(let finalBlocks) = echoes[1].content,
+              case .toolUse(let call) = finalBlocks[0] else {
+            return XCTFail("unexpected echo shape")
+        }
+        XCTAssertEqual(pausedText.text, "still searching")
+        XCTAssertEqual(call.id, "c")
     }
 
     // MARK: run() — completion
@@ -226,6 +299,40 @@ final class AnthropicToolLoopRunnerTests: XCTestCase {
         XCTAssertEqual(delegate.appendedResults.first?.messageIndex, 2,
                        "[user start, assistant echo, user tool_results] -> index 2")
         XCTAssertEqual(delegate.prunedTurns, [1], "pruneBeforeResults fires on the tool turn")
+    }
+
+    func testRunStoresOneAssistantMessagePerSegment() async throws {
+        // A pause_turn-continuing delegate (EventDiscoveryLoop) returns paused
+        // segments alongside its final response. The runner's stored history
+        // must echo each segment as its own assistant message — the exact
+        // shape already sent on the wire during the continuation — so the
+        // next request needs no delegate-side reconciliation.
+        let paused = try decodeResponse(#"""
+        {"id":"msg_p","type":"message","role":"assistant","model":"m",
+         "content":[{"type":"text","text":"searching"}],
+         "stop_reason":"pause_turn","stop_sequence":null,
+         "usage":{"input_tokens":1,"output_tokens":1}}
+        """#)
+        let final = try decodeResponse(#"""
+        {"id":"msg_f","type":"message","role":"assistant","model":"m","content":[
+          {"type":"tool_use","id":"r","name":"read","input":{}}
+        ],"stop_reason":"tool_use","stop_sequence":null,
+        "usage":{"input_tokens":1,"output_tokens":1}}
+        """#)
+        let delegate = FakeLoopDelegate(turns: [
+            AnthropicTurnResult(response: final, pausedSegments: [paused.content]),
+            turn(tools: [makeToolCall(id: "c", name: "complete")])
+        ])
+        let output = try await Runner(delegate: delegate).run()
+        XCTAssertEqual(output, "completed:c")
+
+        let secondTurnMessages = delegate.receivedMessagesPerTurn[1]
+        XCTAssertEqual(secondTurnMessages.map(\.role), ["user", "assistant", "assistant", "user"],
+                       "paused + final segments each stored as their own assistant message")
+        XCTAssertEqual(toolResultIds(of: secondTurnMessages.last!), ["r"],
+                       "the final segment's tool_use is still answered in the next user message")
+        XCTAssertEqual(delegate.appendedResults.first?.messageIndex, 3,
+                       "[user start, paused echo, final echo, user tool_results] -> index 3")
     }
 
     func testCompletionExecutesPendingToolsWhenConfigured() async throws {

@@ -26,8 +26,9 @@ enum EventDiscoveryToolSchemas {
     static let webSearchMaxUses = 12
 
     /// Server-side web_fetch invocations per request — one per candidate page
-    /// verified in Phase B.
-    static let webFetchMaxUses = 10
+    /// verified in Phase B. Generous on purpose: fetch budget is what caps how
+    /// many candidates survive verification, and the loop only runs ~weekly.
+    static let webFetchMaxUses = 25
 
     /// Token cap per fetched page. Event pages are small; verifying
     /// date/venue/format/registration never needs a whole conference site.
