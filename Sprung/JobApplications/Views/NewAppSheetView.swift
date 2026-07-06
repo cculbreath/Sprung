@@ -363,8 +363,23 @@ struct NewAppSheetView: View {
                 return
             }
 
-            // Check for duplicates
-            if let existingJob = jobAppStore.jobApps.first(where: { $0.postingURL == url.absoluteString }) {
+            // Check for duplicates. Compare the pasted URL both as-is and in
+            // its Dice-normalized form (utm_* tracking query + fragment
+            // stripped) — Dice/MCP imports already store `postingURL`
+            // normalized this way (see JobMCPImportService.normalizedPostingURL),
+            // so a utm-tagged Dice URL pasted here would otherwise bypass that
+            // dedup. Query params are NOT stripped wholesale: some ATS URLs
+            // (e.g. Greenhouse `gh_jid`) need them for identity, so only this
+            // known-safe normalization is applied, and only for comparison —
+            // falls back to JobAppStore's title+company match.
+            let rawURLString = url.absoluteString
+            let diceNormalizedURLString = JobMCPImportService.normalizedPostingURL(rawURLString)
+            let existingJob = jobAppStore.findDuplicateJobApp(
+                url: rawURLString,
+                title: jobApp.jobPosition,
+                company: jobApp.companyName
+            ) ?? jobAppStore.jobApps.first(where: { $0.postingURL == diceNormalizedURLString })
+            if let existingJob {
                 Logger.info("📋 [LLM] Job already exists, selecting it", category: .ai)
                 await MainActor.run {
                     jobAppStore.selectedApp = existingJob
