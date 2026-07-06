@@ -168,7 +168,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func showDiscoveryWindow(
         section: DiscoverySection? = nil,
         startOnboarding: Bool = false,
-        triggerDiscovery: Bool = false,
         triggerEventDiscovery: Bool = false,
         triggerTaskGeneration: Bool = false,
         triggerWeeklyReflection: Bool = false
@@ -176,7 +175,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         windowManager.showDiscovery(
             section: section,
             startOnboarding: startOnboarding,
-            triggerDiscovery: triggerDiscovery,
             triggerEventDiscovery: triggerEventDiscovery,
             triggerTaskGeneration: triggerTaskGeneration,
             triggerWeeklyReflection: triggerWeeklyReflection

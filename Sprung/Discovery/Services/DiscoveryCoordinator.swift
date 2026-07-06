@@ -14,9 +14,8 @@ import SwiftData
 enum DiscoveryStatus: Equatable {
     case idle
     case starting
-    case webSearching(context: String = "job sources")
+    case webSearching(context: String)
     case webSearchComplete
-    case validatingURLs(count: Int)
     case complete(added: Int, filtered: Int)
     case error(String)
 
@@ -26,14 +25,13 @@ enum DiscoveryStatus: Equatable {
         case .starting: return "Starting discovery..."
         case .webSearching(let context): return "Searching the web for \(context)..."
         case .webSearchComplete: return "Processing search results..."
-        case .validatingURLs(let count): return "Validating \(count) URLs..."
         case .complete(let added, let filtered):
             if added == 0 && filtered == 0 {
-                return "No new sources found"
+                return "No new events found"
             } else if filtered > 0 {
-                return "Added \(added) sources (\(filtered) invalid filtered)"
+                return "Added \(added) events (\(filtered) duplicates skipped)"
             } else {
-                return "Added \(added) sources"
+                return "Added \(added) events"
             }
         case .error(let msg): return msg
         }
@@ -110,7 +108,6 @@ final class DiscoveryCoordinator {
     let dailyTaskStore: DailyTaskStore
     let timeEntryStore: TimeEntryStore
     let weeklyGoalStore: WeeklyGoalStore
-    let jobSourceStore: JobSourceStore
     let eventStore: NetworkingEventStore
     let contactStore: NetworkingContactStore
     let interactionStore: NetworkingInteractionStore
@@ -119,15 +116,9 @@ final class DiscoveryCoordinator {
 
     private(set) var llmService: DiscoveryLLMService?
     private(set) var calendarService: CalendarIntegrationService?
-    private let urlValidationService: URLValidationService
-
-    // MARK: - Discovery Status
-
-    private(set) var discoveryStatus: DiscoveryStatus = .idle
 
     // MARK: - Discovery State (persists across navigation)
 
-    let sourcesDiscovery = DiscoveryState()
     let eventsDiscovery = DiscoveryState()
 
     // MARK: - Coaching
@@ -167,11 +158,9 @@ final class DiscoveryCoordinator {
         self.weeklyGoalStore = WeeklyGoalStore(context: modelContext, jobAppStore: jobAppStore)
         self.calendarService = CalendarIntegrationService()
         // Networking stores
-        self.jobSourceStore = JobSourceStore(context: modelContext)
         self.eventStore = NetworkingEventStore(context: modelContext)
         self.contactStore = NetworkingContactStore(context: modelContext)
         self.interactionStore = NetworkingInteractionStore(context: modelContext)
-        self.urlValidationService = URLValidationService()
         // Private dependencies
         self.candidateDossierStore = candidateDossierStore
         self.knowledgeCardStore = knowledgeCardStore
@@ -187,8 +176,7 @@ final class DiscoveryCoordinator {
             let contextProvider = DiscoveryContextProviderImpl(coordinator: self)
             let agentService = DiscoveryAgentService(
                 llmFacade: llmService.llmFacade,
-                contextProvider: contextProvider,
-                settingsStore: settingsStore
+                contextProvider: contextProvider
             )
             self.agentServiceStore = agentService
 
@@ -303,7 +291,6 @@ final class DiscoveryCoordinator {
 
     struct WeeklySummary {
         let goal: WeeklyGoal
-        let topSources: [JobSource]
         let eventsAttended: [NetworkingEventOpportunity]
         let newContacts: [NetworkingContact]
     }
@@ -311,7 +298,6 @@ final class DiscoveryCoordinator {
     func thisWeeksSummary() -> WeeklySummary {
         WeeklySummary(
             goal: weeklyGoalStore.currentWeek(),
-            topSources: jobSourceStore.topSourcesByEffectiveness(limit: 3),
             eventsAttended: eventsAttendedThisWeek(),
             newContacts: newContactsThisWeek()
         )
@@ -340,32 +326,6 @@ final class DiscoveryCoordinator {
             throw DiscoveryLLMError.toolExecutionFailed("Task generator not configured")
         }
         try await generator.generate(.categoryFeedback(category: category, feedback: feedback))
-    }
-
-    /// Discover new job sources using LLM agent
-    func discoverJobSources() async throws {
-        guard let agent = agentService else {
-            throw DiscoveryLLMError.toolExecutionFailed("Agent service not configured")
-        }
-
-        discoveryStatus = .starting
-
-        do {
-            let prefs = preferencesStore.current()
-            let candidateContext = buildCandidateContext()
-            try await performJobSourceDiscovery(
-                using: agent,
-                sectors: prefs.targetSectors,
-                location: prefs.primaryLocation,
-                candidateContext: candidateContext,
-                statusCallback: { @MainActor [weak self] status in
-                    self?.discoveryStatus = status
-                }
-            )
-        } catch {
-            discoveryStatus = .error(error.localizedDescription)
-            throw error
-        }
     }
 
     /// Discover networking events using the Anthropic web-search agent loop.
@@ -485,33 +445,6 @@ final class DiscoveryCoordinator {
         return parts.joined(separator: "\n\n")
     }
 
-    /// Start sources discovery with state managed by coordinator (persists across navigation)
-    func startSourcesDiscovery() {
-        sourcesDiscovery.start { [weak self] callback in
-            guard let self = self else { return }
-            guard let agent = self.agentService else {
-                throw DiscoveryLLMError.toolExecutionFailed("Agent service not configured")
-            }
-
-            let prefs = self.preferencesStore.current()
-            let candidateContext = self.buildCandidateContext()
-            try await self.performJobSourceDiscovery(
-                using: agent,
-                sectors: prefs.targetSectors,
-                location: prefs.primaryLocation,
-                candidateContext: candidateContext,
-                statusCallback: { status in
-                    callback(status, nil)
-                }
-            )
-        }
-    }
-
-    /// Cancel ongoing sources discovery
-    func cancelSourcesDiscovery() {
-        sourcesDiscovery.cancel()
-    }
-
     /// Generate full event preparation (goal, pitch, talking points, target companies,
     /// conversation starters, things to avoid) using LLM agent and persist it on the event.
     func prepareEvent(_ event: NetworkingEventOpportunity) async throws {
@@ -551,58 +484,6 @@ final class DiscoveryCoordinator {
     }
 
     // MARK: - Merged Sub-Coordinator Operations
-
-    /// Discover new job sources using the LLM agent, validate their URLs, and
-    /// persist the valid ones. (Merged from the former networking sub-coordinator.)
-    private func performJobSourceDiscovery(
-        using agentService: DiscoveryAgentService,
-        sectors: [String],
-        location: String,
-        candidateContext: String = "",
-        statusCallback: (@MainActor @Sendable (DiscoveryStatus) async -> Void)? = nil
-    ) async throws {
-        let result = try await agentService.discoverJobSources(
-            sectors: sectors,
-            location: location,
-            candidateContext: candidateContext,
-            statusCallback: statusCallback
-        )
-
-        await statusCallback?(.webSearchComplete)
-
-        // Filter duplicates
-        let candidateSources = result.sources.filter { generated in
-            !jobSourceStore.exists(url: generated.url)
-        }
-
-        guard !candidateSources.isEmpty else {
-            Logger.info("📋 No new sources to validate", category: .ai)
-            await statusCallback?(.complete(added: 0, filtered: 0))
-            return
-        }
-
-        // Validate URLs before adding
-        await statusCallback?(.validatingURLs(count: candidateSources.count))
-        Logger.info("🔍 Validating \(candidateSources.count) candidate sources", category: .ai)
-        let urls = candidateSources.map { $0.url }
-        let validationResults = await urlValidationService.validateBatch(urls)
-
-        // Create a set of valid URLs for fast lookup
-        let validUrls = Set(validationResults.filter { $0.isValid }.map { $0.url })
-
-        // Filter to only valid sources and convert
-        let validSources = candidateSources.filter { validUrls.contains($0.url) }.map { $0.toJobSource() }
-        let invalidCount = candidateSources.count - validSources.count
-
-        if invalidCount > 0 {
-            Logger.warning("⚠️ Filtered out \(invalidCount) sources with invalid URLs", category: .ai)
-        }
-
-        jobSourceStore.addMultiple(validSources)
-
-        await statusCallback?(.complete(added: validSources.count, filtered: invalidCount))
-        Logger.info("✅ Discovered \(validSources.count) new job sources", category: .ai)
-    }
 
     /// Discover networking events using the Anthropic web-search agent loop
     /// and persist new ones. The agent receives the currently known events so

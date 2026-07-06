@@ -8,8 +8,7 @@
 //  user-selected Discovery Anthropic model — event discovery additionally
 //  carries Anthropic's server-side web_search/web_fetch tools (see
 //  EventDiscoveryLoop). Single-shot flows (debrief outcomes,
-//  choose-best-jobs) are plain Anthropic Messages calls. Job-source
-//  discovery stays on LLMFacade.executeWithWebSearch (OpenAI). Daily-task
+//  choose-best-jobs) are plain Anthropic Messages calls. Daily-task
 //  generation lives in DailyTaskGenerator — the single generation path.
 //
 
@@ -25,7 +24,6 @@ final class DiscoveryAgentService {
 
     private let llmFacade: LLMFacade
     private let toolExecutor: DiscoveryToolExecutor
-    private let settingsStore: DiscoverySettingsStore
     private let parser = DiscoveryResponseParser()
 
     // MARK: - Model Configuration
@@ -38,28 +36,16 @@ final class DiscoveryAgentService {
 
     init(
         llmFacade: LLMFacade,
-        contextProvider: DiscoveryContextProviderImpl,
-        settingsStore: DiscoverySettingsStore
+        contextProvider: DiscoveryContextProviderImpl
     ) {
         self.llmFacade = llmFacade
         self.toolExecutor = DiscoveryToolExecutor(contextProvider: contextProvider)
-        self.settingsStore = settingsStore
     }
 
     /// The user-selected Anthropic model for Discovery agent flows.
     /// Throws `ModelConfigurationError` when unset — never substitutes a default.
     private func anthropicModelId(operation: String) throws -> String {
         try ModelConfigResolver.resolve(key: Self.anthropicModelSettingKey, operation: operation)
-    }
-
-    // MARK: - Web-Search Model Configuration (OpenAI Responses path)
-
-    private var webSearchModelId: String {
-        settingsStore.current().llmModelId
-    }
-
-    private var reasoningEffort: String {
-        settingsStore.current().reasoningEffort
     }
 
     // MARK: - Prompt Loading
@@ -107,61 +93,7 @@ final class DiscoveryAgentService {
         )
     }
 
-    // MARK: - OpenAI Responses API (web search, via LLMFacade)
-
-    private func runOpenAIRequest(
-        systemPrompt: String,
-        userMessage: String,
-        modelId: String,
-        reasoningEffort: String = "low",
-        webSearchLocation: String? = nil,
-        statusCallback: (@MainActor @Sendable (DiscoveryStatus) async -> Void)? = nil
-    ) async throws -> String {
-        do {
-            return try await llmFacade.executeWithWebSearch(
-                systemPrompt: systemPrompt,
-                userMessage: userMessage,
-                modelId: modelId,
-                reasoningEffort: reasoningEffort,
-                webSearchLocation: webSearchLocation,
-                onWebSearching: statusCallback.map { callback in
-                    { @Sendable in await callback(.webSearching(context: "job sources")) }
-                },
-                onWebSearchComplete: statusCallback.map { callback in
-                    { @Sendable in await callback(.webSearchComplete) }
-                }
-            )
-        } catch let error as LLMError {
-            // Convert LLMError to DiscoveryAgentError for consistency
-            throw DiscoveryAgentError.llmError(error.localizedDescription)
-        }
-    }
-
     // MARK: - Task Methods
-
-    func discoverJobSources(
-        sectors: [String],
-        location: String,
-        candidateContext: String = "",
-        statusCallback: (@MainActor @Sendable (DiscoveryStatus) async -> Void)? = nil
-    ) async throws -> JobSourcesResult {
-        let systemPrompt = try loadPromptTemplate(named: "discovery_discover_job_sources")
-
-        var userMessage = "Discover job sources for sectors: \(sectors.joined(separator: ", ")) in \(location)"
-        if !candidateContext.isEmpty {
-            userMessage += "\n\n\(candidateContext)"
-        }
-
-        let response = try await runOpenAIRequest(
-            systemPrompt: systemPrompt,
-            userMessage: userMessage,
-            modelId: webSearchModelId,
-            reasoningEffort: reasoningEffort,
-            webSearchLocation: location,
-            statusCallback: statusCallback
-        )
-        return try parser.parseSources(response)
-    }
 
     /// Discover networking events via a multi-turn Anthropic agent loop with
     /// server-side web_search + web_fetch (EventDiscoveryLoop). Every returned

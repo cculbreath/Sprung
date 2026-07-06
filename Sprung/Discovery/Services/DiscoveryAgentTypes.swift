@@ -6,19 +6,15 @@
 //
 //  Wire-key note: the job-selection and event-discovery contracts are
 //  camelCase (keys we control; event discovery is pinned by the strict
-//  submit_events tool schema in EventDiscoveryToolSchemas). The event-prep,
-//  debrief, and source DTOs keep snake_case CodingKeys because their
-//  contracts are pinned by the corresponding prompt templates in
-//  Resources/Prompts. The daily-task contract lives in DailyTaskGenerator.
+//  submit_events tool schema in EventDiscoveryToolSchemas). The event-prep
+//  and debrief DTOs keep snake_case CodingKeys because their contracts are
+//  pinned by the corresponding prompt templates in Resources/Prompts. The
+//  daily-task contract lives in DailyTaskGenerator.
 //
 
 import Foundation
 
 // MARK: - Result Types
-
-struct JobSourcesResult: Codable {
-    let sources: [GeneratedJobSource]
-}
 
 /// Payload of the strict `submit_events` completion tool (camelCase keys we
 /// control — see EventDiscoveryToolSchemas.submitEventsSchema).
@@ -140,47 +136,6 @@ struct TargetCompanyResult: Codable {
 }
 
 // MARK: - Generated Types (from LLM responses)
-
-struct GeneratedJobSource: Codable {
-    let name: String
-    let url: String
-    let category: String
-    let relevanceReason: String
-    let recommendedCadenceDays: Int?
-
-    enum CodingKeys: String, CodingKey {
-        case name, url, category
-        case relevanceReason = "relevance_reason"
-        case recommendedCadenceDays = "recommended_cadence_days"
-    }
-
-    func toJobSource() -> JobSource {
-        let source = JobSource()
-        source.name = name
-        source.url = url
-        source.notes = relevanceReason
-        source.isLLMGenerated = true
-
-        switch category.lowercased() {
-        case "local": source.category = .local
-        case "industry": source.category = .industry
-        case "company_direct": source.category = .companyDirect
-        case "aggregator": source.category = .aggregator
-        case "startup": source.category = .startup
-        case "staffing": source.category = .staffing
-        case "networking": source.category = .networking
-        default: source.category = .aggregator
-        }
-
-        if let days = recommendedCadenceDays {
-            source.recommendedCadenceDays = days
-        } else {
-            source.recommendedCadenceDays = source.category.defaultCadenceDays
-        }
-
-        return source
-    }
-}
 
 /// One page-verified networking event, as submitted by the discovery agent
 /// through the strict `submit_events` tool. All keys camelCase; nullable

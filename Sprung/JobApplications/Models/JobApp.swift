@@ -181,9 +181,6 @@ extension Statuses {
     /// Source where the lead was discovered (e.g., LinkedIn, Indeed)
     var source: String?
 
-    /// Reference to JobSource where this job was found
-    var jobSourceId: UUID?
-
     // MARK: - Pipeline Dates
 
     var createdAt: Date = Date()

@@ -3,7 +3,7 @@
 //  Sprung
 //
 //  Onboarding flow for Discovery module. Collects job search preferences
-//  needed for LLM-powered task generation and source discovery.
+//  needed for LLM-powered task generation.
 //
 
 import SwiftUI
@@ -61,7 +61,6 @@ struct DiscoveryOnboardingView: View {
                         )
                     case 4:
                         DiscoverySetupStepView(
-                            coordinator: coordinator,
                             isDiscovering: isDiscovering,
                             discoveryError: discoveryError,
                             selectedSectors: selectedSectors,
@@ -173,14 +172,13 @@ struct DiscoveryOnboardingView: View {
         goal.applicationTarget = weeklyApplicationTarget
         goal.eventsAttendedTarget = weeklyNetworkingTarget
 
-        // Try to discover sources and generate tasks
+        // Try to generate the first daily task list
         do {
-            try await coordinator.discoverJobSources()
             try await coordinator.generateDailyTasks()
             completeOnboarding()
         } catch {
             Logger.error("Onboarding setup failed: \(error)", category: .ai)
-            discoveryError = "Could not connect to AI service. You can discover sources manually later."
+            discoveryError = "Could not connect to AI service. You can generate daily tasks manually later."
         }
 
         isDiscovering = false

@@ -23,9 +23,6 @@ struct ModuleContentView: View {
             case .dailyTasks:
                 DailyTasksModuleView()
 
-            case .sources:
-                SourcesModuleView()
-
             case .events:
                 EventsModuleView()
 

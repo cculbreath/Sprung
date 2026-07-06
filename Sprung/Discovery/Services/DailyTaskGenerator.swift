@@ -254,7 +254,7 @@ final class DailyTaskGenerator {
             sections.append("## Today's Coaching Notes\n\(excerpt)")
         }
 
-        // Pipeline situation (due sources, upcoming events, contacts needing attention).
+        // Pipeline situation (upcoming events, contacts needing attention).
         let situationJSON = await contextProvider.getDailyTaskContext()
         sections.append("## Current Situation (JSON)\n\(situationJSON)")
 
@@ -381,7 +381,6 @@ final class DailyTaskGenerator {
         clone.priority = task.priority
         clone.estimatedMinutes = task.estimatedMinutes
         clone.isLLMGenerated = true
-        clone.relatedJobSourceId = task.relatedJobSourceId
         clone.relatedJobAppId = task.relatedJobAppId
         clone.relatedContactId = task.relatedContactId
         clone.relatedEventId = task.relatedEventId
@@ -406,7 +405,7 @@ final class DailyTaskGenerator {
         guard let relatedIdString, let relatedId = UUID(uuidString: relatedIdString) else { return }
         switch task.taskType {
         case .gatherLeads:
-            task.relatedJobSourceId = relatedId
+            break  // gather tasks have no related entity
         case .customizeMaterials, .submitApplication, .followUp:
             task.relatedJobAppId = relatedId
         case .networking:
@@ -451,7 +450,7 @@ final class DailyTaskGenerator {
                         ],
                         "relatedId": [
                             "type": ["string", "null"],
-                            "description": "UUID of a related job app, source, event, or contact from the context, otherwise null"
+                            "description": "UUID of a related job app, event, or contact from the context, otherwise null"
                         ]
                     ],
                     "required": ["taskType", "title", "description", "priority", "estimatedMinutes", "relatedId"],

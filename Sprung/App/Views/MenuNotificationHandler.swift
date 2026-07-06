@@ -232,17 +232,6 @@ class MenuNotificationHandler {
             }
         }
         NotificationCenter.default.addObserver(
-            forName: .discoverJobSources,
-            object: nil,
-            queue: .main
-        ) { _ in
-            Task { @MainActor in
-                if let appDelegate = NSApplication.shared.delegate as? AppDelegate {
-                    appDelegate.showDiscoveryWindow(section: .sources, triggerDiscovery: true)
-                }
-            }
-        }
-        NotificationCenter.default.addObserver(
             forName: .discoverNetworkingEvents,
             object: nil,
             queue: .main
@@ -272,17 +261,6 @@ class MenuNotificationHandler {
             Task { @MainActor in
                 if let appDelegate = NSApplication.shared.delegate as? AppDelegate {
                     appDelegate.showDiscoveryWindow(triggerWeeklyReflection: true)
-                }
-            }
-        }
-        NotificationCenter.default.addObserver(
-            forName: .showDiscoveryJobSources,
-            object: nil,
-            queue: .main
-        ) { _ in
-            Task { @MainActor in
-                if let appDelegate = NSApplication.shared.delegate as? AppDelegate {
-                    appDelegate.showDiscoveryWindow(section: .sources)
                 }
             }
         }

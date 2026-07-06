@@ -11,7 +11,6 @@ import SwiftUI
 enum AppModule: String, CaseIterable, Identifiable, Codable {
     case resumeEditor = "resumeEditor"
     case pipeline = "pipeline"
-    case sources = "sources"
     case dailyTasks = "dailyTasks"
     case weeklyReview = "weeklyReview"
     case events = "events"
@@ -28,7 +27,6 @@ enum AppModule: String, CaseIterable, Identifiable, Codable {
         case .pipeline: return "square.stack.3d.down.forward"
         case .resumeEditor: return "pencil.and.list.clipboard"
         case .dailyTasks: return "figure.mind.and.body"
-        case .sources: return "signpost.right.and.left"
         case .events: return "person.line.dotted.person.fill"
         case .contacts: return "teletype.answer"
         case .weeklyReview: return "calendar.day.timeline.left"
@@ -44,7 +42,6 @@ enum AppModule: String, CaseIterable, Identifiable, Codable {
         case .pipeline: return "Pipeline"
         case .resumeEditor: return "Resume Editor"
         case .dailyTasks: return "Daily Tasks"
-        case .sources: return "Job Sources"
         case .events: return "Events"
         case .contacts: return "Contacts"
         case .weeklyReview: return "Weekly Review"
@@ -60,7 +57,6 @@ enum AppModule: String, CaseIterable, Identifiable, Codable {
         case .pipeline: return "Kanban board for job applications"
         case .resumeEditor: return "Create and customize resumes"
         case .dailyTasks: return "Today's tasks and time tracking"
-        case .sources: return "Job boards and career sites"
         case .events: return "Networking events pipeline"
         case .contacts: return "Professional contacts CRM"
         case .weeklyReview: return "Goals progress and reflection"
@@ -70,19 +66,18 @@ enum AppModule: String, CaseIterable, Identifiable, Codable {
         }
     }
 
-    /// Keyboard shortcut number (1-9, 0)
+    /// Keyboard shortcut number (1-9) — must match IconBarKeyboardShortcuts
     var shortcutNumber: String {
         switch self {
-        case .resumeEditor: return "1"
-        case .pipeline: return "2"
-        case .sources: return "3"
-        case .dailyTasks: return "4"
-        case .weeklyReview: return "5"
-        case .events: return "6"
-        case .contacts: return "7"
-        case .profile: return "8"
-        case .experience: return "9"
-        case .references: return "0"
+        case .pipeline: return "1"
+        case .resumeEditor: return "2"
+        case .dailyTasks: return "3"
+        case .events: return "4"
+        case .contacts: return "5"
+        case .weeklyReview: return "6"
+        case .references: return "7"
+        case .experience: return "8"
+        case .profile: return "9"
         }
     }
 
@@ -90,7 +85,7 @@ enum AppModule: String, CaseIterable, Identifiable, Codable {
     static var iconBarSections: [[AppModule]] {
         [
             [.dailyTasks, .weeklyReview],
-            [.resumeEditor, .pipeline, .sources],
+            [.resumeEditor, .pipeline],
             [.events, .contacts],
             [.profile, .experience, .references],
         ]

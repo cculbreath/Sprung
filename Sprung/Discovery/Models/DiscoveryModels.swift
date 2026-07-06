@@ -111,93 +111,6 @@ struct DiscoverySettings: Codable {
     }
 }
 
-// MARK: - Source Category
-
-enum SourceCategory: String, Codable, CaseIterable {
-    case local = "Local Boards"
-    case industry = "Industry-Specific"
-    case companyDirect = "Company Careers"
-    case aggregator = "Aggregators"
-    case startup = "Startup Boards"
-    case staffing = "Staffing Agencies"
-    case networking = "Networking Events"
-
-    var defaultCadenceDays: Int {
-        switch self {
-        case .local, .aggregator: return 3
-        case .industry, .startup: return 4
-        case .companyDirect: return 5
-        case .staffing, .networking: return 7
-        }
-    }
-}
-
-// MARK: - Job Source
-
-@Model
-class JobSource: Identifiable {
-    @Attribute(.unique) var id: UUID = UUID()
-
-    var name: String = ""
-    var url: String = ""
-    var category: SourceCategory = SourceCategory.aggregator
-    var isActive: Bool = true
-
-    var recommendedCadenceDays: Int = 7
-    var lastVisitedAt: Date?
-
-    var totalVisits: Int = 0
-    var openingsCaptured: Int = 0
-
-    var notes: String = ""
-    var isLLMGenerated: Bool = true
-
-    // URL Validation
-    var urlLastVerified: Date?
-    var urlValid: Bool = true
-    var consecutiveFailures: Int = 0
-    var firstFailureAt: Date?
-
-    var createdAt: Date = Date()
-
-    init() {}
-
-    init(name: String, url: String, category: SourceCategory) {
-        self.name = name
-        self.url = url
-        self.category = category
-        self.recommendedCadenceDays = category.defaultCadenceDays
-    }
-
-    var daysSinceVisit: Int? {
-        guard let last = lastVisitedAt else { return nil }
-        return Calendar.current.dateComponents([.day], from: last, to: Date()).day
-    }
-
-    var isDue: Bool {
-        guard let days = daysSinceVisit else { return true }
-        return days >= recommendedCadenceDays
-    }
-
-    var effectiveness: Double? {
-        guard totalVisits > 0 else { return nil }
-        return Double(openingsCaptured) / Double(totalVisits)
-    }
-
-    var needsRevalidation: Bool {
-        guard let lastCheck = urlLastVerified else { return true }
-        let daysSinceCheck = Calendar.current.dateComponents([.day], from: lastCheck, to: Date()).day ?? 0
-        return daysSinceCheck >= 7
-    }
-
-    var shouldSuggestRemoval: Bool {
-        guard consecutiveFailures >= 2 else { return false }
-        guard let firstFailure = firstFailureAt else { return false }
-        let days = Calendar.current.dateComponents([.day], from: firstFailure, to: Date()).day ?? 0
-        return days >= 14
-    }
-}
-
 // MARK: - Daily Task
 
 enum DailyTaskType: String, Codable, CaseIterable {
@@ -221,7 +134,6 @@ class DailyTask: Identifiable {
     var completedAt: Date?
 
     // Relationships
-    var relatedJobSourceId: UUID?
     var relatedJobAppId: UUID?
     var relatedContactId: UUID?
     var relatedEventId: UUID?
@@ -260,7 +172,6 @@ enum ActivityType: String, Codable, CaseIterable {
 enum TrackingSource: String, Codable {
     case appForeground = "App Foreground"
     case viewActivity = "View Activity"
-    case sourceVisit = "Source Visit"
     case calendarEvent = "Calendar Event"
     case manual = "Manual Entry"
 }

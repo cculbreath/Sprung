@@ -5,7 +5,6 @@
 //  Pure-logic coverage for small value types:
 //   - CardMetadata.defaults(fromFilename:) — extension/underscore/hyphen cleanup
 //   - SearchPreferences / DiscoverySettings — defaults + Codable round-trip
-//   - SourceCategory.defaultCadenceDays — pure enum mapping
 //
 //  NOTE: SearchPreferences.load()/save() and DiscoverySettings.load()/save()
 //  hardcode UserDefaults.standard, so they are NOT exercised here (would mutate
@@ -95,23 +94,5 @@ final class SmallModelsTests: XCTestCase {
         XCTAssertEqual(decoded.reasoningEffort, "high")
         XCTAssertEqual(decoded.dailyBriefingHour, 7)
         XCTAssertEqual(decoded.jobSearchCalendarIdentifier, "cal-123")
-    }
-
-    // MARK: - SourceCategory.defaultCadenceDays
-
-    func testSourceCategoryCadenceMapping() {
-        XCTAssertEqual(SourceCategory.local.defaultCadenceDays, 3)
-        XCTAssertEqual(SourceCategory.aggregator.defaultCadenceDays, 3)
-        XCTAssertEqual(SourceCategory.industry.defaultCadenceDays, 4)
-        XCTAssertEqual(SourceCategory.startup.defaultCadenceDays, 4)
-        XCTAssertEqual(SourceCategory.companyDirect.defaultCadenceDays, 5)
-        XCTAssertEqual(SourceCategory.staffing.defaultCadenceDays, 7)
-        XCTAssertEqual(SourceCategory.networking.defaultCadenceDays, 7)
-    }
-
-    func testSourceCategoryEveryCaseHasPositiveCadence() {
-        for category in SourceCategory.allCases {
-            XCTAssertGreaterThan(category.defaultCadenceDays, 0, "\(category) needs a positive cadence")
-        }
     }
 }

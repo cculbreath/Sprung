@@ -38,7 +38,6 @@ enum SprungSchema {
         TranscriptionChunkCheckpoint.self,
         // Discovery Models (SearchPreferences and DiscoverySettings moved to UserDefaults)
         CandidateDossier.self,
-        JobSource.self,
         DailyTask.self,
         TimeEntry.self,
         WeeklyGoal.self,

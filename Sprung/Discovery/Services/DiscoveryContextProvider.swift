@@ -36,18 +36,10 @@ final class DiscoveryContextProviderImpl: @unchecked Sendable {
     // MARK: - Codable Context Types
 
     private struct DailyTaskContext: Codable {
-        var dueSources: [DueSource]
         var upcomingEvents: [UpcomingEvent]
         var needsDebrief: [DebriefEvent]
         var contactsNeedingAttention: [AttentionContact]
         var weeklyProgress: WeeklyProgress
-
-        struct DueSource: Codable {
-            var id: String
-            var name: String
-            var daysSinceVisit: Int
-            var category: String
-        }
 
         struct UpcomingEvent: Codable {
             var id: String
@@ -118,7 +110,6 @@ final class DiscoveryContextProviderImpl: @unchecked Sendable {
         var eventsAttended: Int
         var newContacts: Int
         var timeInvestedMinutes: Int
-        var topSources: [String]
         var eventsAttendedNames: [String]
         var newContactsCount: Int
     }
@@ -135,15 +126,6 @@ final class DiscoveryContextProviderImpl: @unchecked Sendable {
     func getDailyTaskContext() async -> String {
         await MainActor.run {
             guard let coordinator = coordinator else { return "{}" }
-
-            let dueSources = coordinator.jobSourceStore.dueSources.prefix(10).map { source in
-                DailyTaskContext.DueSource(
-                    id: source.id.uuidString,
-                    name: source.name,
-                    daysSinceVisit: source.daysSinceVisit ?? 999,
-                    category: source.category.rawValue
-                )
-            }
 
             let upcomingEvents = coordinator.eventStore.upcomingEvents.prefix(5).map { event in
                 DailyTaskContext.UpcomingEvent(
@@ -182,7 +164,6 @@ final class DiscoveryContextProviderImpl: @unchecked Sendable {
             )
 
             let context = DailyTaskContext(
-                dueSources: Array(dueSources),
                 upcomingEvents: Array(upcomingEvents),
                 needsDebrief: Array(needsDebrief),
                 contactsNeedingAttention: Array(needsAttention),
@@ -278,7 +259,6 @@ final class DiscoveryContextProviderImpl: @unchecked Sendable {
                 eventsAttended: summary.goal.eventsAttendedActual,
                 newContacts: summary.goal.newContactsActual,
                 timeInvestedMinutes: summary.goal.actualMinutes,
-                topSources: summary.topSources.map { $0.name },
                 eventsAttendedNames: summary.eventsAttended.map { $0.name },
                 newContactsCount: summary.newContacts.count
             )

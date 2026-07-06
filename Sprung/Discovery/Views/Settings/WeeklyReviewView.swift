@@ -147,12 +147,6 @@ struct WeeklyReviewView: View {
                     value: "\(completedTasksThisWeek)",
                     icon: "checkmark.circle"
                 )
-
-                StatBlock(
-                    label: "Sources Checked",
-                    value: "\(sourcesCheckedThisWeek)",
-                    icon: "link"
-                )
             }
         }
     }
@@ -169,10 +163,6 @@ struct WeeklyReviewView: View {
 
     private var completedTasksThisWeek: Int {
         coordinator.dailyTaskStore.completedThisWeek().count
-    }
-
-    private var sourcesCheckedThisWeek: Int {
-        coordinator.jobSourceStore.checkedThisWeek().count
     }
 
     // MARK: - Reflection

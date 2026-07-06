@@ -519,34 +519,6 @@ final class LLMFacade {
 
     // MARK: - OpenAI Responses API (Specialized)
 
-    func executeWithWebSearch(
-        systemPrompt: String,
-        userMessage: String,
-        modelId: String,
-        reasoningEffort: String? = nil,
-        webSearchLocation: String? = nil,
-        onWebSearching: (@MainActor @Sendable () async -> Void)? = nil,
-        onWebSearchComplete: (@MainActor @Sendable () async -> Void)? = nil,
-        onTextDelta: (@MainActor @Sendable (String) async -> Void)? = nil
-    ) async throws -> String {
-        let start = ContinuousClock.now
-        let result = try await specializedAPIs.executeWithWebSearch(
-            systemPrompt: systemPrompt,
-            userMessage: userMessage,
-            modelId: modelId,
-            reasoningEffort: reasoningEffort,
-            webSearchLocation: webSearchLocation,
-            onWebSearching: onWebSearching,
-            onWebSearchComplete: onWebSearchComplete,
-            onTextDelta: onTextDelta
-        )
-        LLMTranscriptLogger.logTextCall(
-            method: "executeWithWebSearch", modelId: modelId, backend: "OpenAI",
-            prompt: "System: \(systemPrompt)\nUser: \(userMessage)", response: result, durationMs: elapsedMs(from: start)
-        )
-        return result
-    }
-
     func responseCreateStream(
         parameters: ModelResponseParameter
     ) async throws -> AsyncThrowingStream<ResponseStreamEvent, Error> {

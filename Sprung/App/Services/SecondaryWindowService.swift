@@ -324,7 +324,6 @@ final class SecondaryWindowService {
     func showDiscovery(
         section: DiscoverySection? = nil,
         startOnboarding: Bool = false,
-        triggerDiscovery: Bool = false,
         triggerEventDiscovery: Bool = false,
         triggerTaskGeneration: Bool = false,
         triggerWeeklyReflection: Bool = false
@@ -367,9 +366,6 @@ final class SecondaryWindowService {
             }
             if let section {
                 NotificationCenter.default.post(name: .discoveryNavigateToSection, object: nil, userInfo: ["section": section])
-            }
-            if triggerDiscovery {
-                NotificationCenter.default.post(name: .discoveryTriggerSourceDiscovery, object: nil)
             }
             if triggerEventDiscovery {
                 NotificationCenter.default.post(name: .discoveryTriggerEventDiscovery, object: nil)

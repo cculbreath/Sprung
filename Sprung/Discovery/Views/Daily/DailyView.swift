@@ -407,10 +407,6 @@ struct DailyView: View {
             isRegenerating: regeneratingCategory == .gather,
             onComplete: { task in
                 coordinator.dailyTaskStore.complete(task)
-                if let sourceId = task.relatedJobSourceId,
-                   let source = coordinator.jobSourceStore.source(byId: sourceId) {
-                    coordinator.jobSourceStore.markVisited(source)
-                }
             },
             onRegenerate: { startRegeneration(for: .gather) }
         )

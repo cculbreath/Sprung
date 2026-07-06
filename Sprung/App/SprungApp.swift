@@ -301,12 +301,6 @@ struct SprungApp: App {
                     NotificationCenter.default.post(name: .startDiscoveryInterview, object: nil)
                 }
                 Divider()
-                Button("Discover Job Sources") {
-                    NotificationCenter.default.post(name: .navigateToModule, object: nil, userInfo: ["module": AppModule.sources.rawValue])
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                        NotificationCenter.default.post(name: .discoveryTriggerSourceDiscovery, object: nil)
-                    }
-                }
                 Button("Discover Networking Events") {
                     NotificationCenter.default.post(name: .navigateToModule, object: nil, userInfo: ["module": AppModule.events.rawValue])
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
@@ -323,9 +317,6 @@ struct SprungApp: App {
                     NotificationCenter.default.post(name: .navigateToModule, object: nil, userInfo: ["module": AppModule.weeklyReview.rawValue])
                 }
                 Divider()
-                Button("Job Sources") {
-                    NotificationCenter.default.post(name: .navigateToModule, object: nil, userInfo: ["module": AppModule.sources.rawValue])
-                }
                 Button("Contacts & Network") {
                     NotificationCenter.default.post(name: .navigateToModule, object: nil, userInfo: ["module": AppModule.contacts.rawValue])
                 }

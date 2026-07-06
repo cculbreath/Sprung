@@ -13,17 +13,16 @@ struct IconBarKeyboardShortcuts: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            // Module shortcuts 1-9, 0
+            // Module shortcuts 1-9 — must match AppModule.shortcutNumber
             .keyboardShortcut("1", modifiers: .command) { navigation.selectModule(.pipeline) }
             .keyboardShortcut("2", modifiers: .command) { navigation.selectModule(.resumeEditor) }
             .keyboardShortcut("3", modifiers: .command) { navigation.selectModule(.dailyTasks) }
-            .keyboardShortcut("4", modifiers: .command) { navigation.selectModule(.sources) }
-            .keyboardShortcut("5", modifiers: .command) { navigation.selectModule(.events) }
-            .keyboardShortcut("6", modifiers: .command) { navigation.selectModule(.contacts) }
-            .keyboardShortcut("7", modifiers: .command) { navigation.selectModule(.weeklyReview) }
-            .keyboardShortcut("8", modifiers: .command) { navigation.selectModule(.references) }
-            .keyboardShortcut("9", modifiers: .command) { navigation.selectModule(.experience) }
-            .keyboardShortcut("0", modifiers: .command) { navigation.selectModule(.profile) }
+            .keyboardShortcut("4", modifiers: .command) { navigation.selectModule(.events) }
+            .keyboardShortcut("5", modifiers: .command) { navigation.selectModule(.contacts) }
+            .keyboardShortcut("6", modifiers: .command) { navigation.selectModule(.weeklyReview) }
+            .keyboardShortcut("7", modifiers: .command) { navigation.selectModule(.references) }
+            .keyboardShortcut("8", modifiers: .command) { navigation.selectModule(.experience) }
+            .keyboardShortcut("9", modifiers: .command) { navigation.selectModule(.profile) }
 
             // Navigation shortcuts
             .keyboardShortcut("[", modifiers: .command) { navigation.selectPreviousModule() }

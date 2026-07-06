@@ -3,7 +3,7 @@
 //  Sprung
 //
 //  Main window view for Job Search Operations module.
-//  Provides sidebar navigation to Daily, Sources, Events, and Contacts views.
+//  Provides sidebar navigation to Daily, Job Search, Events, and Contacts views.
 //
 
 import SwiftUI
@@ -11,7 +11,7 @@ import SwiftUI
 enum DiscoverySection: String, CaseIterable, Identifiable {
     case daily = "Daily"
     case pipeline = "Pipeline"
-    case sources = "Sources"
+    case jobSearch = "Job Search"
     case events = "Events"
     case contacts = "Contacts"
     case weeklyReview = "Weekly Review"
@@ -22,7 +22,7 @@ enum DiscoverySection: String, CaseIterable, Identifiable {
         switch self {
         case .daily: return "calendar.day.timeline.leading"
         case .pipeline: return "square.stack.3d.down.forward"
-        case .sources: return "signpost.right.and.left"
+        case .jobSearch: return "magnifyingglass"
         case .events: return "person.line.dotted.person.fill"
         case .contacts: return "teletype.answer"
         case .weeklyReview: return "book.pages"
@@ -33,7 +33,7 @@ enum DiscoverySection: String, CaseIterable, Identifiable {
         switch self {
         case .daily: return "Today's tasks and time tracking"
         case .pipeline: return "Application stages kanban"
-        case .sources: return "Job boards and career sites"
+        case .jobSearch: return "Search job boards for leads"
         case .events: return "Networking events pipeline"
         case .contacts: return "Professional contacts CRM"
         case .weeklyReview: return "Goals progress and reflection"
@@ -48,7 +48,6 @@ struct DiscoveryMainView: View {
     @State private var selectedSection: DiscoverySection = .daily
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @State private var showOnboarding: Bool = false
-    @State private var triggerSourceDiscovery: Bool = false
     @State private var triggerEventDiscovery: Bool = false
     @State private var triggerTaskGeneration: Bool = false
 
@@ -76,10 +75,6 @@ struct DiscoveryMainView: View {
             if let section = notification.userInfo?["section"] as? DiscoverySection {
                 selectedSection = section
             }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .discoveryTriggerSourceDiscovery)) { _ in
-            selectedSection = .sources
-            triggerSourceDiscovery = true
         }
         .onReceive(NotificationCenter.default.publisher(for: .discoveryTriggerEventDiscovery)) { _ in
             selectedSection = .events
@@ -132,8 +127,8 @@ struct DiscoveryMainView: View {
             DailyView(coordinator: coordinator, triggerTaskGeneration: $triggerTaskGeneration)
         case .pipeline:
             PipelineView(coordinator: coordinator)
-        case .sources:
-            SourcesView(coordinator: coordinator, triggerDiscovery: $triggerSourceDiscovery)
+        case .jobSearch:
+            JobSearchView(jobAppStore: coordinator.jobAppStore)
         case .events:
             NavigationStack {
                 EventsView(coordinator: coordinator, triggerEventDiscovery: $triggerEventDiscovery)

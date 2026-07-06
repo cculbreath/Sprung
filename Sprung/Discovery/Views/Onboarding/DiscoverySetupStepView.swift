@@ -8,7 +8,6 @@
 import SwiftUI
 
 struct DiscoverySetupStepView: View {
-    let coordinator: DiscoveryCoordinator
     let isDiscovering: Bool
     let discoveryError: String?
     let selectedSectors: Set<String>
@@ -20,13 +19,11 @@ struct DiscoverySetupStepView: View {
     var body: some View {
         VStack(spacing: 24) {
             if isDiscovering {
-                AnimatedThinkingText(statusMessage: "Discovering job sources and generating tasks...")
+                AnimatedThinkingText(statusMessage: "Generating your first daily tasks...")
 
-                // Show dynamic status from coordinator
-                Text(coordinator.discoveryStatus.message.isEmpty ? "Setting up your job search" : coordinator.discoveryStatus.message)
+                Text("Setting up your job search")
                     .font(.title3)
                     .padding(.top, 8)
-                    .animation(.easeInOut(duration: 0.3), value: coordinator.discoveryStatus.message)
             } else if let error = discoveryError {
                 Image(systemName: "exclamationmark.triangle")
                     .font(.system(size: 48))
@@ -62,7 +59,7 @@ struct DiscoverySetupStepView: View {
                 .background(Color.secondary.opacity(0.1))
                 .cornerRadius(8)
 
-                Text("Click \"Get Started\" to discover job sources and generate your first daily tasks.")
+                Text("Click \"Get Started\" to generate your first daily tasks.")
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
             }

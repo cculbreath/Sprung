@@ -7,15 +7,15 @@
 //  The Discovery agent's LLM responses decode into the Codable DTOs in
 //  DiscoveryAgentTypes.swift (and DailyTaskGenerator.swift for the daily-task
 //  generation contract). Phase 1's DiscoveryResponseParserTests exercises the
-//  top-level Result wrappers (sources) through the text-extraction parser;
+//  top-level Result wrappers through the text-extraction parser;
 //  EventDiscoveryLoopTests covers the strict submit_events event-discovery
 //  contract. This file covers the per-item response DTOs directly — the
 //  wire-key mapping (camelCase for the daily-task/job-selection contracts we
 //  control; snake_case where the prompt templates pin it) and optional-field
 //  handling — plus the two value-type mappers (TalkingPointResult /
-//  TargetCompanyResult), which are pure. The remaining `to*()` mappers build
-//  SwiftData @Model objects (JobSource, NetworkingEventOpportunity) and are
-//  out of scope for a pure unit.
+//  TargetCompanyResult), which are pure. The remaining `to*()` mapper builds
+//  a SwiftData @Model object (NetworkingEventOpportunity) and is out of scope
+//  for a pure unit.
 //
 
 import XCTest
@@ -78,25 +78,6 @@ final class DiscoveryPureLogicTests: XCTestCase {
         """
         let entry = try decode(DailyTaskGenerationEntry.self, json)
         XCTAssertNil(entry.relatedId, "explicit null relatedId decodes to nil")
-    }
-
-    // MARK: - GeneratedJobSource
-
-    func testGeneratedJobSourceDecodesWithAndWithoutCadence() throws {
-        let withCadence = try decode(GeneratedJobSource.self, """
-        { "name": "ACME Careers", "url": "https://acme.example/jobs", "category": "company_direct",
-          "relevance_reason": "Hiring backend", "recommended_cadence_days": 7 }
-        """)
-        XCTAssertEqual(withCadence.name, "ACME Careers")
-        XCTAssertEqual(withCadence.relevanceReason, "Hiring backend", "relevance_reason -> relevanceReason")
-        XCTAssertEqual(withCadence.recommendedCadenceDays, 7)
-
-        let withoutCadence = try decode(GeneratedJobSource.self, """
-        { "name": "Board", "url": "https://b.example", "category": "aggregator",
-          "relevance_reason": "Broad coverage" }
-        """)
-        XCTAssertNil(withoutCadence.recommendedCadenceDays,
-                     "missing recommended_cadence_days decodes to nil")
     }
 
     // MARK: - JobSelection / JobSelectionsResult

@@ -3,10 +3,10 @@
 //  Sprung
 //
 //  Search either MCP job board (Dice or ZipRecruiter) and import results into
-//  the pipeline as `.new` leads. Presented as a sheet from SourcesView; the
-//  thin async glue and UI state live here while the request/decode/mapping
-//  halves live in JobMCPImportService (mirroring NewAppSheetView +
-//  JobURLImportService).
+//  the pipeline as `.new` leads. Embedded as the Job Search section of the
+//  Discovery window; the thin async glue and UI state live here while the
+//  request/decode/mapping halves live in JobMCPImportService (mirroring
+//  NewAppSheetView + JobURLImportService).
 //
 
 import SwiftUI
@@ -23,7 +23,6 @@ private enum JobBoard: String, CaseIterable, Identifiable, Hashable {
 
 struct JobSearchView: View {
     let jobAppStore: JobAppStore
-    @Environment(\.dismiss) private var dismiss
 
     @State private var selectedBoard: JobBoard = .dice
     @State private var isSearching = false
@@ -112,7 +111,7 @@ struct JobSearchView: View {
             Divider()
             footer
         }
-        .frame(width: 700, height: 640)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onChange(of: selectedBoard) { _, _ in
             errorMessage = nil
             importSummary = nil
@@ -123,23 +122,8 @@ struct JobSearchView: View {
 
     private var header: some View {
         VStack(spacing: 8) {
-            HStack {
-                Button("Close") {
-                    dismiss()
-                }
-                .keyboardShortcut(.cancelAction)
-
-                Spacer()
-
-                Text("Search Job Boards")
-                    .font(.headline)
-
-                Spacer()
-
-                // Balance the Close button so the title stays centered
-                Button("Close") { }
-                    .hidden()
-            }
+            Text("Search Job Boards")
+                .font(.headline)
 
             Picker("Job Board", selection: $selectedBoard) {
                 ForEach(JobBoard.allCases) { board in

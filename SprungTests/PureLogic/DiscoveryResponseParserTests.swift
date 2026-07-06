@@ -4,8 +4,7 @@
 //
 //  Pure-logic coverage for DiscoveryResponseParser: JSON extraction (fenced
 //  blocks, raw braces, raw brackets) exercised through the typed parse* methods,
-//  plus error surfacing for unparseable input. Wire keys are checked: snake_case
-//  where the source prompt template pins it. (The daily-task contract moved to
+//  plus error surfacing for unparseable input. (The daily-task contract moved to
 //  DailyTaskGenerator's structured output — see DiscoveryPureLogicTests; the
 //  event-discovery contract is the strict submit_events tool — see
 //  EventDiscoveryLoopTests.)
@@ -18,54 +17,40 @@ final class DiscoveryResponseParserTests: XCTestCase {
 
     private let parser = DiscoveryResponseParser()
 
-    // MARK: - Extraction shapes (exercised through parseSources)
+    /// Minimal valid JobSelectionsResult body (camelCase keys we control).
+    private let emptySelectionsJSON = #"{"selections":[],"overallAnalysis":"none","considerations":[]}"#
 
-    func testParseSourcesFromFencedBlock() throws {
+    // MARK: - Extraction shapes (exercised through parseJobSelections)
+
+    func testParseJobSelectionsFromFencedBlock() throws {
         // Single-line JSON inside a ```json fence (extractJSON's regex is line-oriented).
-        let response = "Here are your sources:\n```json {\"sources\":[]} ```\nThat's all."
-        let result = try parser.parseSources(response)
-        XCTAssertEqual(result.sources.count, 0)
+        let response = "Here are your selections:\n```json \(emptySelectionsJSON) ```\nThat's all."
+        let result = try parser.parseJobSelections(response)
+        XCTAssertTrue(result.selections.isEmpty)
+        XCTAssertEqual(result.overallAnalysis, "none")
     }
 
-    func testParseSourcesFromBracesWithSurroundingProse() throws {
-        let response = "Sure thing. {\"sources\":[]} Hope that helps!"
-        let result = try parser.parseSources(response)
-        XCTAssertTrue(result.sources.isEmpty)
+    func testParseJobSelectionsFromBracesWithSurroundingProse() throws {
+        let response = "Sure thing. \(emptySelectionsJSON) Hope that helps!"
+        let result = try parser.parseJobSelections(response)
+        XCTAssertTrue(result.selections.isEmpty)
     }
 
-    func testParseSourcesUsesFirstBraceToLastBrace() throws {
+    func testParseJobSelectionsUsesFirstBraceToLastBrace() throws {
         // extractJSON grabs firstIndex("{")...lastIndex("}"); trailing prose with no
         // braces is excluded, so this parses cleanly.
-        let response = "prefix {\"sources\":[{\"name\":\"X\",\"url\":\"u\",\"category\":\"local\",\"relevance_reason\":\"r\"}]} done"
-        let result = try parser.parseSources(response)
-        XCTAssertEqual(result.sources.first?.name, "X")
-        XCTAssertNil(result.sources.first?.recommendedCadenceDays, "optional missing field decodes to nil")
-    }
-
-    // MARK: - parseSources
-
-    func testParseSourcesRawJSON() throws {
-        let json = #"""
-        {"sources":[{"name":"LinkedIn","url":"https://x","category":"aggregator","relevance_reason":"big","recommended_cadence_days":7}]}
-        """#
-        let result = try parser.parseSources(json)
-        XCTAssertEqual(result.sources.count, 1)
-        XCTAssertEqual(result.sources.first?.name, "LinkedIn")
-        XCTAssertEqual(result.sources.first?.relevanceReason, "big",
-                       "snake_case relevance_reason must map to relevanceReason")
-        XCTAssertEqual(result.sources.first?.recommendedCadenceDays, 7)
-    }
-
-    func testParseSourcesOptionalCadenceMissing() throws {
-        let json = #"{"sources":[{"name":"X","url":"u","category":"local","relevance_reason":"r"}]}"#
-        let result = try parser.parseSources(json)
-        XCTAssertNil(result.sources.first?.recommendedCadenceDays)
+        let uuid = UUID().uuidString
+        let json = #"{"selections":[{"jobId":"\#(uuid)","company":"X","role":"Eng","matchScore":0.5,"reasoning":"fit"}],"overallAnalysis":"one","considerations":["Comp"]}"#
+        let response = "prefix \(json) done"
+        let result = try parser.parseJobSelections(response)
+        XCTAssertEqual(result.selections.first?.company, "X")
+        XCTAssertEqual(result.considerations, ["Comp"])
     }
 
     // MARK: - Error surfacing
 
     func testNoJSONThrowsInvalidResponse() {
-        XCTAssertThrowsError(try parser.parseSources("there is no json in this text")) { error in
+        XCTAssertThrowsError(try parser.parseJobSelections("there is no json in this text")) { error in
             guard case DiscoveryAgentError.invalidResponse = error else {
                 return XCTFail("expected .invalidResponse, got \(error)")
             }
@@ -73,8 +58,8 @@ final class DiscoveryResponseParserTests: XCTestCase {
     }
 
     func testMalformedJSONThrowsInvalidResponse() {
-        // Has braces (so extraction succeeds) but the shape is wrong for JobSourcesResult.
-        XCTAssertThrowsError(try parser.parseSources(#"{"not_sources": 5}"#)) { error in
+        // Has braces (so extraction succeeds) but the shape is wrong for JobSelectionsResult.
+        XCTAssertThrowsError(try parser.parseJobSelections(#"{"not_selections": 5}"#)) { error in
             guard case DiscoveryAgentError.invalidResponse = error else {
                 return XCTFail("expected .invalidResponse, got \(error)")
             }
@@ -85,9 +70,9 @@ final class DiscoveryResponseParserTests: XCTestCase {
 
     func testRawBracketExtractionFailsDecodeButExercisesArrayPath() {
         // No object braces, only an array -> extractJSON returns the bracket span.
-        // JobSourcesResult expects an object, so decode fails -> invalidResponse.
+        // JobSelectionsResult expects an object, so decode fails -> invalidResponse.
         // This proves the bracket branch is reached (not a nil/extraction failure).
-        XCTAssertThrowsError(try parser.parseSources("results: [1,2,3] end")) { error in
+        XCTAssertThrowsError(try parser.parseJobSelections("results: [1,2,3] end")) { error in
             guard case DiscoveryAgentError.invalidResponse = error else {
                 return XCTFail("expected .invalidResponse, got \(error)")
             }
