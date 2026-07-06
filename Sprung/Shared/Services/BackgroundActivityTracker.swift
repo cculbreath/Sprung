@@ -13,12 +13,14 @@ enum BackgroundOperationType: String, Codable, CaseIterable {
     case preprocessing = "preprocessing"
     case eventDiscovery = "eventDiscovery"
     case leadEnrichment = "leadEnrichment"
+    case jobScout = "jobScout"
 
     var displayName: String {
         switch self {
         case .preprocessing: return "Preprocessing"
         case .eventDiscovery: return "Event Discovery"
         case .leadEnrichment: return "Lead Enrichment"
+        case .jobScout: return "Job Scout"
         }
     }
 
@@ -27,6 +29,7 @@ enum BackgroundOperationType: String, Codable, CaseIterable {
         case .preprocessing: return "doc.text.magnifyingglass"
         case .eventDiscovery: return "antenna.radiowaves.left.and.right"
         case .leadEnrichment: return "arrow.down.doc"
+        case .jobScout: return "binoculars"
         }
     }
 }

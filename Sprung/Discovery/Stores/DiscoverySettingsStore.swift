@@ -55,4 +55,135 @@ final class DiscoverySettingsStore {
         get { defaults.string(forKey: Self.eventDiscoveryStandingGuidanceKey) ?? "" }
         set { defaults.set(newValue, forKey: Self.eventDiscoveryStandingGuidanceKey) }
     }
+
+    // MARK: - Job-Scout Auto-Run Cadence
+
+    /// How often the Job Scout auto-runs at coordinator startup. Defaults to
+    /// `.off` — like the events auto-run, unattended LLM spend must be an
+    /// explicit opt-in.
+    enum ScoutCadence: String, CaseIterable {
+        case off
+        case daily
+        case weekly
+
+        var displayName: String {
+            switch self {
+            case .off: return "Off"
+            case .daily: return "Daily"
+            case .weekly: return "Weekly"
+            }
+        }
+
+        /// Days that must have passed since the last successful run before an
+        /// auto-run fires again. Nil = never auto-runs.
+        var minimumDaysBetweenRuns: Int? {
+            switch self {
+            case .off: return nil
+            case .daily: return 1
+            case .weekly: return 7
+            }
+        }
+
+        /// Whether enough time has passed since `lastRun` for an auto-run.
+        /// A never-run history counts as elapsed (except for `.off`). Same
+        /// calendar-day math as the events auto-run guard.
+        func hasElapsed(since lastRun: Date?, now: Date = Date()) -> Bool {
+            guard let minimumDays = minimumDaysBetweenRuns else { return false }
+            guard let lastRun else { return true }
+            let days = Calendar.current.dateComponents([.day], from: lastRun, to: now).day ?? 0
+            return days >= minimumDays
+        }
+    }
+
+    private static let scoutAutoRunCadenceKey = "discoveryScoutAutoRunCadence"
+
+    var scoutAutoRunCadence: ScoutCadence {
+        get {
+            defaults.string(forKey: Self.scoutAutoRunCadenceKey)
+                .flatMap(ScoutCadence.init(rawValue:)) ?? .off
+        }
+        set { defaults.set(newValue.rawValue, forKey: Self.scoutAutoRunCadenceKey) }
+    }
+
+    // MARK: - Job-Scout Boards + Run Parameters
+
+    private static let scoutEnabledBoardsKey = "discoveryScoutEnabledBoards"
+
+    /// Boards the scout searches by default (persistent toggles; the run
+    /// modal can override per run). Defaults to all three until the user
+    /// saves a choice — including an explicitly-saved empty selection.
+    var scoutEnabledBoards: [JobScoutService.ScoutBoard] {
+        get {
+            guard let raw = defaults.array(forKey: Self.scoutEnabledBoardsKey) as? [String] else {
+                return JobScoutService.ScoutBoard.allCases
+            }
+            return raw.compactMap(JobScoutService.ScoutBoard.init(rawValue:))
+        }
+        set { defaults.set(newValue.map(\.rawValue), forKey: Self.scoutEnabledBoardsKey) }
+    }
+
+    private static let scoutStandingGuidanceKey = "discoveryScoutStandingGuidance"
+
+    /// Standing guidance applied to every automatic scout run (manual runs
+    /// pre-fill from it but pass their own per-run text). Empty = none.
+    var scoutStandingGuidance: String {
+        get { defaults.string(forKey: Self.scoutStandingGuidanceKey) ?? "" }
+        set { defaults.set(newValue, forKey: Self.scoutStandingGuidanceKey) }
+    }
+
+    private static let scoutRecommendationCountKey = "discoveryScoutRecommendationCount"
+
+    /// How many recommendations a scout run may submit. Default 5.
+    var scoutRecommendationCount: Int {
+        get {
+            guard defaults.object(forKey: Self.scoutRecommendationCountKey) != nil else { return 5 }
+            return defaults.integer(forKey: Self.scoutRecommendationCountKey)
+        }
+        set { defaults.set(newValue, forKey: Self.scoutRecommendationCountKey) }
+    }
+
+    // MARK: - Job-Scout Run History
+
+    private static let lastSuccessfulScoutRunKey = "discoveryLastSuccessfulScoutRunAt"
+
+    /// The last SUCCESSFUL scout run (manual or automatic — both funnel
+    /// through the same completion point). Failed or cancelled runs never
+    /// update it.
+    var lastSuccessfulScoutRunAt: Date? {
+        defaults.object(forKey: Self.lastSuccessfulScoutRunKey) as? Date
+    }
+
+    func recordSuccessfulScoutRun(at date: Date = Date()) {
+        defaults.set(date, forKey: Self.lastSuccessfulScoutRunKey)
+    }
+
+    private static let lastScoutReportKey = "discoveryLastScoutReport"
+
+    /// The most recent completed run's full report, persisted as a JSON blob
+    /// so the run modal's last-run summary survives relaunches. Codec
+    /// failures are logged, never silent: a decode failure reads as "no
+    /// report", an encode failure leaves the previous report in place.
+    var lastScoutReport: JobScoutService.ScoutRunReport? {
+        get {
+            guard let data = defaults.data(forKey: Self.lastScoutReportKey) else { return nil }
+            do {
+                return try JSONDecoder().decode(JobScoutService.ScoutRunReport.self, from: data)
+            } catch {
+                Logger.error("❌ [DiscoverySettings] Couldn't decode the stored scout report: \(error.localizedDescription)", category: .data)
+                return nil
+            }
+        }
+        set {
+            guard let newValue else {
+                defaults.removeObject(forKey: Self.lastScoutReportKey)
+                return
+            }
+            do {
+                let data = try JSONEncoder().encode(newValue)
+                defaults.set(data, forKey: Self.lastScoutReportKey)
+            } catch {
+                Logger.error("❌ [DiscoverySettings] Couldn't encode the scout report: \(error.localizedDescription)", category: .data)
+            }
+        }
+    }
 }

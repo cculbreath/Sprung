@@ -213,6 +213,11 @@ final class AppDependencies {
         // runs before init returns, so it's in place before the launch-time
         // weekly auto-run's Task gets a chance to start.
         searchOpsCoordinator.setActivityTracker(backgroundActivityTracker)
+        // Job Scout: the LinkedIn board participates only through the
+        // app-lifetime MCP server (consent flag + lifecycle) — same setter
+        // pattern as lead enrichment below. Wired before the auto-run's Task
+        // body can execute, like the tracker above.
+        searchOpsCoordinator.jobScout.setLinkedInServerService(linkedInMCPServer)
 
         // Single-entry refinement reuses the SGM generators; built here where every
         // store it needs (and the facade) already exists.

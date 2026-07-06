@@ -119,6 +119,14 @@ final class DiscoveryCoordinator {
 
     let eventsDiscovery = DiscoveryState()
 
+    // MARK: - Job Scout
+
+    /// The Job Scout engine (automatic sourcing + triage of new postings).
+    /// Constructed with the coordinator's stores; LLM wiring lands in
+    /// `configureLLMService`, and AppDependencies injects the LinkedIn MCP
+    /// server via `jobScout.setLinkedInServerService`.
+    let jobScout: JobScoutService
+
     // MARK: - Coaching
 
     private(set) var coachingSessionStore: CoachingSessionStore?
@@ -150,7 +158,8 @@ final class DiscoveryCoordinator {
         // Pipeline stores
         let preferencesStore = SearchPreferencesStore()
         self.preferencesStore = preferencesStore
-        self.settingsStore = DiscoverySettingsStore()
+        let settingsStore = DiscoverySettingsStore()
+        self.settingsStore = settingsStore
         self.jobAppStore = jobAppStore
         self.dailyTaskStore = DailyTaskStore(context: modelContext)
         self.weeklyGoalStore = WeeklyGoalStore(
@@ -167,6 +176,14 @@ final class DiscoveryCoordinator {
         self.candidateDossierStore = candidateDossierStore
         self.knowledgeCardStore = knowledgeCardStore
         self.skillStore = skillStore
+        // Job Scout engine
+        self.jobScout = JobScoutService(
+            jobAppStore: jobAppStore,
+            knowledgeCardStore: knowledgeCardStore,
+            candidateDossierStore: candidateDossierStore,
+            preferencesStore: preferencesStore,
+            settingsStore: settingsStore
+        )
     }
 
     /// Configure the Discovery LLM services. Must be called after initialization with LLMFacade.
@@ -182,10 +199,16 @@ final class DiscoveryCoordinator {
         // Set up coaching service + the shared daily-task generator
         configureCoachingService(llmFacade: llmFacade, contextProvider: contextProvider)
 
+        // Job Scout gets the same facade (its model resolves per run from
+        // the shared Discovery Anthropic setting).
+        jobScout.configure(llmFacade: llmFacade)
+
         // Coordinator startup is the weekly checkpoint for automatic
         // event discovery (the developer runs the app far more often
         // than weekly, so launch-time is a sufficient trigger).
         autoRunWeeklyEventDiscoveryIfNeeded()
+        // …and the cadence checkpoint for the Job Scout auto-run.
+        autoRunScoutIfNeeded()
     }
 
     /// Configure the coaching service and the shared daily-task generator
@@ -310,10 +333,12 @@ final class DiscoveryCoordinator {
         agentServiceStore
     }
 
-    /// Surface agent runs (event discovery etc.) in the background-activity UI.
-    /// Call after `configureLLMService`, which creates the agent service.
+    /// Surface agent runs (event discovery, job scout, etc.) in the
+    /// background-activity UI. Call after `configureLLMService`, which
+    /// creates the agent service.
     func setActivityTracker(_ tracker: BackgroundActivityTracker) {
         agentServiceStore?.setActivityTracker(tracker)
+        jobScout.setActivityTracker(tracker)
     }
 
     // MARK: - LLM Agent Operations (delegated to sub-coordinators)
@@ -415,6 +440,48 @@ final class DiscoveryCoordinator {
     /// Cancel ongoing event discovery
     func cancelEventDiscovery() {
         eventsDiscovery.cancel()
+    }
+
+    // MARK: - Job-Scout Auto-Run
+
+    /// Kick off a scout run when the configured cadence has elapsed since the
+    /// last successful one (see `DiscoverySettingsStore.lastSuccessfulScoutRunAt`;
+    /// daily = 1+ day, weekly = 7+ days, never-run counts as elapsed). Gated on
+    /// `settingsStore.scoutAutoRunCadence` (default `.off`) — unattended LLM
+    /// spend must be an explicit opt-in. Non-blocking — `JobScoutService.start`
+    /// runs the loop in its own task. Skipped under XCTest, before Discovery
+    /// onboarding (never auto-presents the wizard — the run is silently
+    /// skipped until preferences exist), while a scout run is already active,
+    /// and when no Discovery Anthropic model is configured (an automatic run
+    /// at launch must not surface the model picker; a manual run does). Uses
+    /// the persistent settings: enabled boards, target sectors as keywords,
+    /// primary location, standing guidance, and the recommendation count.
+    /// LinkedIn without accepted consent is dropped inside the service with a
+    /// report note — an auto-run never prompts for consent.
+    func autoRunScoutIfNeeded() {
+        guard !Self.isRunningUnitTests else { return }
+        let cadence = settingsStore.scoutAutoRunCadence
+        guard cadence != .off else { return }
+        guard !needsOnboarding else { return }
+        guard (try? ModelConfigResolver.resolve(
+            key: DiscoveryAgentService.anthropicModelSettingKey,
+            operation: "Job Scout"
+        )) != nil else { return }
+        guard !jobScout.isActive else { return }
+        guard cadence.hasElapsed(since: settingsStore.lastSuccessfulScoutRunAt) else { return }
+        Logger.info(
+            "Job-scout auto-run starting (\(cadence.rawValue); last success: "
+            + "\(settingsStore.lastSuccessfulScoutRunAt.map { "\($0)" } ?? "never"))",
+            category: .ai
+        )
+        let prefs = preferencesStore.current()
+        jobScout.start(config: JobScoutService.ScoutRunConfig(
+            boards: Set(settingsStore.scoutEnabledBoards),
+            keywords: prefs.targetSectors,
+            location: prefs.primaryLocation,
+            guidance: settingsStore.scoutStandingGuidance.trimmingCharacters(in: .whitespacesAndNewlines),
+            recommendationCount: settingsStore.scoutRecommendationCount
+        ))
     }
 
     /// Build a concise candidate context summary from knowledge cards and skills bank
