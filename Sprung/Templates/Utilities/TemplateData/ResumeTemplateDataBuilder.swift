@@ -32,13 +32,6 @@ private final class Implementation {
         fontScaler: fontScaler
     )
     private lazy var titleRenderer = TitleTemplateRenderer()
-    private lazy var sectionBuilder: SectionBuilder = {
-        SectionBuilder(
-            resume: resume,
-            sectionNodeProvider: { self.sectionNode(named: $0) },
-            nodeValueProvider: { self.buildNodeValue($0) }
-        )
-    }()
     private lazy var descriptorInterpreter: DescriptorInterpreter = {
         DescriptorInterpreter(
             resume: resume,
@@ -47,10 +40,7 @@ private final class Implementation {
             titleRenderer: titleRenderer,
             sectionNodeProvider: { self.sectionNode(named: $0) },
             nodeValueProvider: { self.buildNodeValue($0) },
-            fontSizesFallback: { self.buildFontSizesSection() },
-            rawSectionBuilder: { sectionName, sectionType in
-                self.sectionBuilder.buildSection(named: sectionName, type: sectionType)
-            }
+            fontSizesFallback: { self.buildFontSizesSection() }
         )
     }()
     init(resume: Resume, rootNode: TreeNode, manifest: TemplateManifest?) {
@@ -93,14 +83,17 @@ private final class Implementation {
             return override
         }
         if let manifest,
-           let section = manifest.section(for: sectionName),
-           manifest.isFieldMetadataSynthesized(for: sectionName) == false,
-           let value = descriptorInterpreter.buildSection(named: sectionName, section: section) {
-            return value
-        }
-        if let manifestKind = manifest?.section(for: sectionName)?.type,
-            let sectionType = SectionType(manifestKind: manifestKind) {
-            return buildSection(named: sectionName, type: sectionType)
+           let section = manifest.section(for: sectionName) {
+            if let value = descriptorInterpreter.buildSection(named: sectionName, section: section) {
+                return value
+            }
+            if let sectionNode = sectionNode(named: sectionName),
+               buildNodeValue(sectionNode) != nil {
+                Logger.error(
+                    "ResumeTemplateDataBuilder: DescriptorInterpreter produced no value for section '\(sectionName)' (type '\(section.type.rawValue)') in manifest '\(manifest.slug)' despite tree data — section renders empty"
+                )
+            }
+            return nil
         }
         return nodeValue(named: sectionName)
     }
@@ -165,15 +158,6 @@ private final class Implementation {
             return styling.isEmpty ? nil : styling
         case .metadata, .applicantProfile:
             return nil
-        }
-    }
-    private func buildSection(named sectionName: String, type: SectionType) -> Any? {
-        switch type {
-        case .fontSizes:
-            guard let fontSizes = buildFontSizesSection() else { return nil }
-            return fontScaler.scaleFontSizes(fontSizes)
-        default:
-            return sectionBuilder.buildSection(named: sectionName, type: type)
         }
     }
     // MARK: Section Builders

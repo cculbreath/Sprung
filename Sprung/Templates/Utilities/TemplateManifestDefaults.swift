@@ -628,7 +628,6 @@ private extension TemplateManifest.Section {
             type: type,
             defaultValue: TemplateManifest.JSONValue(value: dictionary),
             fields: fields,
-            fieldMetadataSource: fieldMetadataSource,
             behavior: behavior,
             hiddenFields: hiddenFields
         )
@@ -638,7 +637,6 @@ private extension TemplateManifest.Section {
             type: type,
             defaultValue: defaultValue,
             fields: fields,
-            fieldMetadataSource: fieldMetadataSource,
             behavior: behavior,
             hiddenFields: override.hiddenFields ?? hiddenFields
         )

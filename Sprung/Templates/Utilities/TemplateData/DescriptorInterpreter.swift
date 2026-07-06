@@ -7,21 +7,16 @@ struct DescriptorInterpreter {
     let sectionNodeProvider: (String) -> TreeNode?
     let nodeValueProvider: (TreeNode) -> Any?
     let fontSizesFallback: () -> [String: String]?
-    let rawSectionBuilder: (String, SectionType) -> Any?
     func buildSection(named sectionName: String, section: TemplateManifest.Section) -> Any? {
         let sectionNode = sectionNodeProvider(sectionName)
         let descriptors = section.fields
         switch section.type {
         case .string:
-            guard let descriptor = descriptors.first else {
-                return rawBuild(sectionName, kind: section.type)
-            }
+            guard let descriptor = descriptors.first else { return nil }
             let valueNode = node(for: descriptor, in: sectionNode)
             return buildValue(for: descriptor, node: valueNode)
         case .array, .arrayOfObjects:
-            guard let descriptor = descriptors.first else {
-                return rawBuild(sectionName, kind: section.type)
-            }
+            guard let descriptor = descriptors.first else { return nil }
             let arrayNode = node(for: descriptor, in: sectionNode)
             return buildValue(for: descriptor, node: arrayNode)
         case .mapOfStrings:
@@ -47,11 +42,16 @@ struct DescriptorInterpreter {
             return fontScaler.scaleFontSizes(result)
         case .object:
             guard let sectionNode else { return nil }
+            // Object sections render straight from the tree: descriptors drive the
+            // editor, but live object sections (e.g. `custom`) routinely carry
+            // user-added children that no descriptor declares.
             var result: [String: Any] = [:]
-            for descriptor in descriptors where descriptor.key != "*" {
-                let childNode = node(for: descriptor, in: sectionNode)
-                if let value = buildValue(for: descriptor, node: childNode) {
-                    result[descriptor.key] = value
+            for child in sectionNode.orderedChildren {
+                guard !child.name.isEmpty else { continue }
+                if let nested = nodeValueProvider(child) {
+                    result[child.name] = nested
+                } else if !child.value.isEmpty {
+                    result[child.name] = child.value
                 }
             }
             return result.isEmpty ? nil : result
@@ -84,10 +84,6 @@ struct DescriptorInterpreter {
             }
             return nil
         }
-    }
-    private func rawBuild(_ sectionName: String, kind: TemplateManifest.Section.Kind) -> Any? {
-        guard let sectionType = SectionType(manifestKind: kind) else { return nil }
-        return rawSectionBuilder(sectionName, sectionType)
     }
     private func node(
         for descriptor: TemplateManifest.Section.FieldDescriptor,

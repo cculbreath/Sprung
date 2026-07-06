@@ -203,12 +203,6 @@ struct TemplateManifest: Codable {
                 try container.encodeIfPresent(sourceKey, forKey: .sourceKey)
             }
         }
-        /// Tracks whether section metadata was declared in the manifest or
-        /// synthesized at runtime for legacy templates (schema < v2024.09).
-        enum FieldMetadataSource {
-            case declared
-            case synthesized
-        }
         private enum CodingKeys: String, CodingKey {
             case type
             case defaultValue = "default"
@@ -219,7 +213,6 @@ struct TemplateManifest: Codable {
         let type: Kind
         let defaultValue: JSONValue?
         var fields: [FieldDescriptor]
-        var fieldMetadataSource: FieldMetadataSource
         let behavior: Behavior?
         /// Keys to hide from the tree editor. Use for fields the template doesn't render.
         /// For example, if a template uses `highlights` but not `description`, add `"description"`
@@ -229,14 +222,12 @@ struct TemplateManifest: Codable {
             type: Kind,
             defaultValue: JSONValue?,
             fields: [FieldDescriptor] = [],
-            fieldMetadataSource: FieldMetadataSource = .declared,
             behavior: Behavior? = nil,
             hiddenFields: [String]? = nil
         ) {
             self.type = type
             self.defaultValue = defaultValue
             self.fields = fields
-            self.fieldMetadataSource = fieldMetadataSource
             self.behavior = behavior
             self.hiddenFields = hiddenFields
         }
@@ -245,7 +236,6 @@ struct TemplateManifest: Codable {
             type = try container.decode(Kind.self, forKey: .type)
             defaultValue = try container.decodeIfPresent(JSONValue.self, forKey: .defaultValue)
             fields = try container.decodeIfPresent([FieldDescriptor].self, forKey: .fields) ?? []
-            fieldMetadataSource = fields.isEmpty ? .synthesized : .declared
             behavior = try container.decodeIfPresent(Behavior.self, forKey: .behavior)
             hiddenFields = try container.decodeIfPresent([String].self, forKey: .hiddenFields)
         }
@@ -261,13 +251,11 @@ struct TemplateManifest: Codable {
         }
         mutating func ensureFieldDescriptors(for sectionKey: String) {
             guard fields.isEmpty else { return }
-            let synthesized = FieldDescriptorFactory.descriptors(
+            fields = FieldDescriptorFactory.descriptors(
                 forSectionKey: sectionKey,
                 kind: type,
                 defaultValue: defaultValue?.value
             )
-            fields = synthesized
-            fieldMetadataSource = .synthesized
             Logger.debug(
                 "TemplateManifest: synthesized field descriptors for section \(sectionKey)"
             )
@@ -378,7 +366,6 @@ struct TemplateManifest: Codable {
     let schemaVersion: Int
     let sectionOrder: [String]
     private(set) var sections: [String: Section]
-    private(set) var synthesizedSectionKeys: Set<String>
     let editorLabels: [String: String]?
     let keysInEditor: [String]?
     let sectionVisibilityDefaults: [String: Bool]?
@@ -444,16 +431,11 @@ struct TemplateManifest: Codable {
         self.editorPanels = editorPanels
         self.pageLimit = pageLimit
         var normalized: [String: Section] = [:]
-        var synthesized: Set<String> = []
         for (key, var section) in sections {
             section.ensureFieldDescriptors(for: key)
-            if section.fieldMetadataSource == .synthesized {
-                synthesized.insert(key)
-            }
             normalized[key] = section
         }
         self.sections = normalized
-        synthesizedSectionKeys = synthesized
     }
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -471,16 +453,11 @@ struct TemplateManifest: Codable {
         pageLimit = try container.decodeIfPresent(Int.self, forKey: .pageLimit)
         let decodedSections = try container.decode([String: Section].self, forKey: .sections)
         var normalized: [String: Section] = [:]
-        var synthesized: Set<String> = []
         for (key, var section) in decodedSections {
             section.ensureFieldDescriptors(for: key)
-            if section.fieldMetadataSource == .synthesized {
-                synthesized.insert(key)
-            }
             normalized[key] = section
         }
         sections = normalized
-        synthesizedSectionKeys = synthesized
     }
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
@@ -505,9 +482,6 @@ struct TemplateManifest: Codable {
     }
     func behavior(forSection key: String) -> Section.Behavior? {
         sections[key]?.behavior
-    }
-    func isFieldMetadataSynthesized(for key: String) -> Bool {
-        synthesizedSectionKeys.contains(key)
     }
     func customFieldKeyPaths() -> Set<String> {
         guard let customSection = sections["custom"] else { return [] }
