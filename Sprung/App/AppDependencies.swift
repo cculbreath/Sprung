@@ -37,6 +37,11 @@ final class AppDependencies {
     let titleSetStore: TitleSetStore
     let backgroundActivityTracker: BackgroundActivityTracker
     let experienceEntryRefinementService: ExperienceEntryRefinementService
+    /// App-managed LinkedIn MCP server (uvx child process) + the LinkedIn
+    /// board's one-time risk-consent flag. Started lazily via
+    /// `ensureRunning()` on first search; stopped in
+    /// `AppDelegate.applicationWillTerminate`.
+    let linkedInMCPServer: LinkedInMCPServerService
     // MARK: - UI State
     let dragInfo: DragInfo
     let debugSettingsStore: DebugSettingsStore
@@ -189,6 +194,10 @@ final class AppDependencies {
         let backgroundActivityTracker = BackgroundActivityTracker()
         self.backgroundActivityTracker = backgroundActivityTracker
 
+        // LinkedIn MCP server lifecycle (no child process is spawned here —
+        // only ensureRunning() ever starts it).
+        self.linkedInMCPServer = LinkedInMCPServerService()
+
         // Discovery Coordinator
         let searchOpsCoordinator = DiscoveryCoordinator(
             modelContext: modelContext,
@@ -228,8 +237,10 @@ final class AppDependencies {
         jobAppPreprocessor.setActivityTracker(backgroundActivityTracker)
         jobAppStore.setPreprocessor(jobAppPreprocessor, knowledgeCardStore: knowledgeCardStore)
         // Lead enrichment (the background full-posting fetch for MCP-imported
-        // leads) reports per-lead progress to the same tracker.
+        // leads) reports per-lead progress to the same tracker. LinkedIn leads
+        // enrich through the local MCP server rather than web fetch (authwall).
         jobAppStore.leadEnrichment.setActivityTracker(backgroundActivityTracker)
+        jobAppStore.leadEnrichment.setLinkedInServerService(linkedInMCPServer)
 
         self.appEnvironment = AppEnvironment(
             appState: appState,

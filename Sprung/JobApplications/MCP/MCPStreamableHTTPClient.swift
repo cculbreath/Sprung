@@ -54,6 +54,10 @@ actor MCPStreamableHTTPClient {
     /// "Bearer <token>" for a future OAuth-protected server). Neither Dice nor
     /// ZipRecruiter needs one.
     private let authorizationHeader: String?
+    /// Per-request `timeoutInterval`. Dice/ZipRecruiter keep the 30 s default;
+    /// the LinkedIn board passes 180 because its server drives a real browser
+    /// per call (and a cold start is slower still).
+    private let requestTimeout: TimeInterval
 
     private var nextRequestID = 1
     private var isInitialized = false
@@ -63,10 +67,16 @@ actor MCPStreamableHTTPClient {
     /// an error.
     private var sessionID: String?
 
-    init(endpoint: URL, authorizationHeader: String? = nil, session: URLSession = .shared) {
+    init(
+        endpoint: URL,
+        authorizationHeader: String? = nil,
+        session: URLSession = .shared,
+        requestTimeout: TimeInterval = 30
+    ) {
         self.endpoint = endpoint
         self.authorizationHeader = authorizationHeader
         self.session = session
+        self.requestTimeout = requestTimeout
     }
 
     // MARK: - Public API
@@ -147,7 +157,7 @@ actor MCPStreamableHTTPClient {
     private func post(_ envelope: [String: Any]) async throws -> (Data, HTTPURLResponse) {
         var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
-        request.timeoutInterval = 30
+        request.timeoutInterval = requestTimeout
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("application/json, text/event-stream", forHTTPHeaderField: "Accept")
         if let authorizationHeader {

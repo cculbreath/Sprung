@@ -87,6 +87,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         )
     }
 
+    func applicationWillTerminate(_: Notification) {
+        // The LinkedIn MCP server is an app-managed child process (uvx →
+        // headless browser); SIGTERM it so nothing outlives the app.
+        windowManager.deps?.linkedInMCPServer.stop()
+    }
+
     // MARK: - Toolbar
 
     /// Attach a pure AppKit NSToolbar to the main window, bypassing SwiftUI's broken toolbar(id:).
