@@ -185,6 +185,10 @@ final class AppDependencies {
         )
         self.onboardingCoordinator = onboardingCoordinator
 
+        // Background Activity Tracker (for monitoring LLM operations)
+        let backgroundActivityTracker = BackgroundActivityTracker()
+        self.backgroundActivityTracker = backgroundActivityTracker
+
         // Discovery Coordinator
         let searchOpsCoordinator = DiscoveryCoordinator(
             modelContext: modelContext,
@@ -195,10 +199,11 @@ final class AppDependencies {
         )
         searchOpsCoordinator.configureLLMService(llmFacade: llmFacade)
         self.searchOpsCoordinator = searchOpsCoordinator
-
-        // Background Activity Tracker (for monitoring LLM operations)
-        let backgroundActivityTracker = BackgroundActivityTracker()
-        self.backgroundActivityTracker = backgroundActivityTracker
+        // Surface event-discovery runs in the background-activity UI. Must
+        // follow configureLLMService (which creates the agent service) and
+        // runs before init returns, so it's in place before the launch-time
+        // weekly auto-run's Task gets a chance to start.
+        searchOpsCoordinator.setActivityTracker(backgroundActivityTracker)
 
         // Single-entry refinement reuses the SGM generators; built here where every
         // store it needs (and the facade) already exists.
@@ -222,6 +227,9 @@ final class AppDependencies {
         jobAppPreprocessor.setSkillStore(skillStore)
         jobAppPreprocessor.setActivityTracker(backgroundActivityTracker)
         jobAppStore.setPreprocessor(jobAppPreprocessor, knowledgeCardStore: knowledgeCardStore)
+        // Lead enrichment (the background full-posting fetch for MCP-imported
+        // leads) reports per-lead progress to the same tracker.
+        jobAppStore.leadEnrichment.setActivityTracker(backgroundActivityTracker)
 
         self.appEnvironment = AppEnvironment(
             appState: appState,
