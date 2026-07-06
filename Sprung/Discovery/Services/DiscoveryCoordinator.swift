@@ -303,7 +303,10 @@ final class DiscoveryCoordinator {
 
     // MARK: - Agent Service Access
 
-    private var agentService: DiscoveryAgentService? {
+    /// The Discovery agent service, available once `configureLLMService` has
+    /// run. Exposed for UI flows (e.g. Choose Best) that call agent
+    /// operations directly rather than through a coordinator wrapper.
+    var agentService: DiscoveryAgentService? {
         agentServiceStore
     }
 

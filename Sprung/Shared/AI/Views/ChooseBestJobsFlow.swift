@@ -2,36 +2,36 @@
 //  ChooseBestJobsFlow.swift
 //  Sprung
 //
-//  Shared "Choose Best Jobs" flow: model-picker sheet → OpenRouter streaming
-//  selection over the Identified column → report/error sheet. Attached by both
-//  entry points (the main-window BestJobButton toolbar item and the pipeline
-//  kanban header) so the report always appears in the window that asked for it.
+//  Shared "Choose Best Jobs" flow: runs the single job-triage implementation
+//  (DiscoveryAgentService.chooseBestJobs, on the user-selected Discovery
+//  Anthropic model) over the Identified column, then presents the report/error
+//  sheet. Attached by both entry points (the main-window BestJobButton toolbar
+//  item and the pipeline kanban header) so the report always appears in the
+//  window that asked for it.
 //
 
 import SwiftUI
 
-/// View modifier owning the Choose Best Jobs run: presents the model picker,
-/// streams the selection via OpenRouter, and presents the resulting report
-/// locally on whatever view it is attached to.
+/// View modifier owning the Choose Best Jobs run: kicks off the selection when
+/// `isActive` flips true and presents the resulting report locally on whatever
+/// view it is attached to.
 struct ChooseBestJobsFlow: ViewModifier {
     /// Everything the run and its sheets need. Passed explicitly (rather than
     /// read from `@Environment`) because the flow can be hosted in windows
     /// whose environments differ — the Discovery window, for example, does not
-    /// carry `JobAppStore`/`EnabledLLMStore`/`OpenRouterService`.
+    /// carry `JobAppStore`.
     struct Dependencies {
         let jobAppStore: JobAppStore
         let knowledgeCardStore: KnowledgeCardStore
         let candidateDossierStore: CandidateDossierStore
         let coverRefStore: CoverRefStore
-        let llmFacade: LLMFacade
-        let openRouterService: OpenRouterService
-        let enabledLLMStore: EnabledLLMStore
-        /// Reasoning overlay state; optional because only the main window
-        /// hosts the overlay and injects this into its environment.
-        let reasoningStream: ReasoningStreamState?
+        /// Discovery coordinator hosting the agent service that runs the
+        /// selection. The model comes from the Discovery Anthropic model
+        /// setting — there is no per-run picker.
+        let coordinator: DiscoveryCoordinator
     }
 
-    /// Shows the model-picker sheet when set true.
+    /// Set true by the attaching view to start a run; reset immediately.
     @Binding var isActive: Bool
     /// Mirrors the run state so the attaching view can style/disable its trigger.
     @Binding var isProcessing: Bool
@@ -39,38 +39,48 @@ struct ChooseBestJobsFlow: ViewModifier {
 
     @State private var selectionResult: JobSelectionsResult?
     @State private var selectionError: String?
+    @State private var errorNeedsModelSettings = false
     @State private var showSelectionReport = false
 
     func body(content: Content) -> some View {
         content
-            .sheet(isPresented: $isActive) {
-                // DropdownModelPicker inside the sheet reads these from the
-                // environment; inject explicitly so the flow also works in
-                // windows that don't carry them (see Dependencies doc).
-                ChooseBestJobsSheet(
-                    isPresented: $isActive,
-                    onModelSelected: { modelId in
-                        isActive = false
-                        isProcessing = true
-                        Task { await chooseBestJobs(modelId: modelId) }
-                    }
-                )
-                .environment(dependencies.openRouterService)
-                .environment(dependencies.enabledLLMStore)
+            .onChange(of: isActive) { _, active in
+                guard active else { return }
+                isActive = false
+                guard !isProcessing else { return }
+                isProcessing = true
+                Task { await chooseBestJobs() }
             }
             .sheet(isPresented: $showSelectionReport) {
                 if let result = selectionResult {
                     SelectionReportSheet(result: result)
                         .environment(dependencies.jobAppStore)
                 } else if let error = selectionError {
-                    SelectionErrorSheet(error: error)
+                    SelectionErrorSheet(
+                        error: error,
+                        needsModelSettings: errorNeedsModelSettings
+                    )
                 }
             }
     }
 
     @MainActor
-    private func chooseBestJobs(modelId: String) async {
+    private func chooseBestJobs() async {
+        selectionResult = nil
         selectionError = nil
+        errorNeedsModelSettings = false
+        defer { isProcessing = false }
+
+        let identifiedJobs = dependencies.jobAppStore.jobApps(forStatus: .new)
+        guard !identifiedJobs.isEmpty else {
+            presentError("No jobs in Identified status to choose from")
+            return
+        }
+
+        guard let agent = dependencies.coordinator.agentService else {
+            presentError("The Discovery agent service isn't configured yet. Try again in a moment.")
+            return
+        }
 
         // Build knowledge context from KnowledgeCards
         let knowledgeContext = dependencies.knowledgeCardStore.knowledgeCards
@@ -95,93 +105,42 @@ struct ChooseBestJobsFlow: ViewModifier {
         }
         let dossierContext = dossierParts.joined(separator: "\n\n")
 
-        // Build prompt (same as DiscoveryAgentService.chooseBestJobs)
-        let identifiedJobs = dependencies.jobAppStore.jobApps(forStatus: .new)
-        guard !identifiedJobs.isEmpty else {
-            selectionError = "No jobs in Identified status to choose from"
-            showSelectionReport = true
-            isProcessing = false
-            return
-        }
-
-        guard let systemPrompt = loadPromptTemplate(named: "discovery_choose_best_jobs") else {
-            selectionError = "Couldn't load the job-matching prompt template. The app may need to be reinstalled."
-            showSelectionReport = true
-            isProcessing = false
-            return
-        }
-        var userMessage = "Please select the top 5 jobs from the following opportunities.\n\n"
-        userMessage += "## CANDIDATE KNOWLEDGE CARDS\n\(knowledgeContext)\n\n"
-        userMessage += "## CANDIDATE DOSSIER\n\(dossierContext)\n\n"
-        userMessage += "## JOB OPPORTUNITIES\n"
-        for job in identifiedJobs {
-            userMessage += """
-            ---
-            ID: \(job.id.uuidString)
-            Company: \(job.companyName)
-            Role: \(job.jobPosition)
-            Description: \(job.jobDescription)
-
-            """
-        }
-
         do {
-            // Start reasoning stream overlay (hosted by the main window)
-            dependencies.reasoningStream?.startReasoning(modelName: modelId)
-
-            // Stream via OpenRouter with reasoning
-            let handle = try await dependencies.llmFacade.startConversationStreaming(
-                systemPrompt: systemPrompt,
-                userMessage: userMessage,
-                modelId: modelId,
-                reasoning: .init(effort: "high"),
-                backend: .openRouter
+            let result = try await agent.chooseBestJobs(
+                jobs: identifiedJobs.map {
+                    (id: $0.id, company: $0.companyName, role: $0.jobPosition, description: $0.jobDescription)
+                },
+                knowledgeContext: knowledgeContext,
+                dossierContext: dossierContext
             )
-
-            // Process stream: forward reasoning, collect response
-            var fullResponse = ""
-            for try await chunk in handle.stream {
-                if let reasoningContent = chunk.allReasoningText {
-                    dependencies.reasoningStream?.appendReasoning(reasoningContent)
-                }
-                if let content = chunk.content {
-                    fullResponse += content
-                }
-                if chunk.isFinished {
-                    dependencies.reasoningStream?.isStreaming = false
-                    dependencies.reasoningStream?.isVisible = false
-                }
-            }
-
-            // Parse the JSON response
-            let parser = DiscoveryResponseParser()
-            let result = try parser.parseJobSelections(fullResponse)
-
             selectionResult = result
             showSelectionReport = true
             Logger.info("✅ Choose Best Jobs: selected \(result.selections.count) jobs", category: .ai)
+        } catch let error as ModelConfigurationError {
+            // Missing Discovery model configuration: route the user to the
+            // model settings picker instead of failing with a bare message.
+            Logger.error("Choose Best Jobs: \(error.localizedDescription)")
+            var message = error.localizedDescription
+            if let suggestion = error.recoverySuggestion {
+                message += "\n\n\(suggestion)"
+            }
+            presentError(message, needsModelSettings: true)
         } catch {
             Logger.error("Choose Best Jobs Error: \(error)")
-            dependencies.reasoningStream?.showError(error.localizedDescription)
-            selectionError = error.localizedDescription
-            showSelectionReport = true
+            presentError(error.localizedDescription)
         }
-
-        isProcessing = false
     }
 
-    private func loadPromptTemplate(named name: String) -> String? {
-        guard let url = Bundle.main.url(forResource: name, withExtension: "txt", subdirectory: "Prompts"),
-              let content = try? String(contentsOf: url, encoding: .utf8) else {
-            Logger.error("Failed to load prompt template: \(name)", category: .ai)
-            return nil
-        }
-        return content
+    @MainActor
+    private func presentError(_ message: String, needsModelSettings: Bool = false) {
+        selectionError = message
+        errorNeedsModelSettings = needsModelSettings
+        showSelectionReport = true
     }
 }
 
 extension View {
-    /// Attaches the Choose Best Jobs flow (model picker → run → local report).
+    /// Attaches the Choose Best Jobs flow (run on activation → local report).
     func chooseBestJobsFlow(
         isActive: Binding<Bool>,
         isProcessing: Binding<Bool>,
@@ -375,6 +334,9 @@ struct SelectionCard: View {
 
 struct SelectionErrorSheet: View {
     let error: String
+    /// True when the failure is a missing/unavailable model configuration —
+    /// adds a direct route to the model settings picker.
+    var needsModelSettings: Bool = false
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -393,8 +355,17 @@ struct SelectionErrorSheet: View {
                 .multilineTextAlignment(.center)
                 .padding(.horizontal)
 
-            Button("Dismiss") { dismiss() }
-                .keyboardShortcut(.defaultAction)
+            HStack(spacing: 12) {
+                if needsModelSettings {
+                    Button("Open Model Settings") {
+                        NotificationCenter.default.post(name: .showSettings, object: nil)
+                        dismiss()
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
+                Button("Dismiss") { dismiss() }
+                    .keyboardShortcut(needsModelSettings ? .cancelAction : .defaultAction)
+            }
         }
         .padding(40)
         .frame(width: 400)

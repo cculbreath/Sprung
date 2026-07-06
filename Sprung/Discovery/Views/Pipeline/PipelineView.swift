@@ -11,16 +11,9 @@ import SwiftUI
 struct PipelineView: View {
     let coordinator: DiscoveryCoordinator
 
-    @Environment(AppEnvironment.self) private var appEnvironment
     @Environment(KnowledgeCardStore.self) private var knowledgeCardStore
     @Environment(CandidateDossierStore.self) private var candidateDossierStore
     @Environment(CoverRefStore.self) private var coverRefStore
-    // Optional reads: present in the main window's environment but not the
-    // Discovery window's. The Choose Best model picker requires the enabled-LLM
-    // store, so its button disables where the store is absent instead of
-    // crashing the sheet.
-    @Environment(EnabledLLMStore.self) private var enabledLLMStore: EnabledLLMStore?
-    @Environment(ReasoningStreamState.self) private var reasoningStream: ReasoningStreamState?
 
     @State private var showingAddLead = false
     @State private var showingJobSearch = false
@@ -67,7 +60,7 @@ struct PipelineView: View {
                     } label: {
                         Label("Search Boards", systemImage: "magnifyingglass")
                     }
-                    .help("Search Dice and ZipRecruiter and import results as leads")
+                    .help("Search Dice, ZipRecruiter, or any job site via the custom-site agent, and import results as leads")
 
                     chooseBestButton
 
@@ -122,37 +115,25 @@ struct PipelineView: View {
 
     // MARK: - Choose Best
 
-    @ViewBuilder
     private var chooseBestButton: some View {
-        if let enabledLLMStore {
-            Button {
-                isChooseBestActive = true
-            } label: {
-                chooseBestLabel
-            }
-            .disabled(identifiedCount < 1 || isChoosingBest)
-            .help("Select best \(min(5, identifiedCount)) jobs from \(identifiedCount) identified")
-            .chooseBestJobsFlow(
-                isActive: $isChooseBestActive,
-                isProcessing: $isChoosingBest,
-                dependencies: ChooseBestJobsFlow.Dependencies(
-                    jobAppStore: coordinator.jobAppStore,
-                    knowledgeCardStore: knowledgeCardStore,
-                    candidateDossierStore: candidateDossierStore,
-                    coverRefStore: coverRefStore,
-                    llmFacade: appEnvironment.llmFacade,
-                    openRouterService: appEnvironment.openRouterService,
-                    enabledLLMStore: enabledLLMStore,
-                    reasoningStream: reasoningStream
-                )
-            )
-        } else {
-            Button {} label: {
-                chooseBestLabel
-            }
-            .disabled(true)
-            .help("Choose Best runs from the Pipeline module in the main window")
+        Button {
+            isChooseBestActive = true
+        } label: {
+            chooseBestLabel
         }
+        .disabled(identifiedCount < 1 || isChoosingBest)
+        .help("Select best \(min(5, identifiedCount)) jobs from \(identifiedCount) identified")
+        .chooseBestJobsFlow(
+            isActive: $isChooseBestActive,
+            isProcessing: $isChoosingBest,
+            dependencies: ChooseBestJobsFlow.Dependencies(
+                jobAppStore: coordinator.jobAppStore,
+                knowledgeCardStore: knowledgeCardStore,
+                candidateDossierStore: candidateDossierStore,
+                coverRefStore: coverRefStore,
+                coordinator: coordinator
+            )
+        )
     }
 
     private var chooseBestLabel: some View {

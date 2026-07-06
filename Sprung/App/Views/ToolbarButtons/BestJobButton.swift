@@ -6,10 +6,7 @@ struct BestJobButton: View {
     @Environment(KnowledgeCardStore.self) private var knowledgeCardStore
     @Environment(CandidateDossierStore.self) private var candidateDossierStore
     @Environment(CoverRefStore.self) private var coverRefStore
-    @Environment(LLMFacade.self) private var llmFacade
-    @Environment(OpenRouterService.self) private var openRouterService
-    @Environment(EnabledLLMStore.self) private var enabledLLMStore
-    @Environment(ReasoningStreamState.self) private var reasoningStreamManager
+    @Environment(DiscoveryCoordinator.self) private var discoveryCoordinator
 
     @State private var isFlowActive = false
     @State private var isProcessing = false
@@ -38,10 +35,7 @@ struct BestJobButton: View {
                 knowledgeCardStore: knowledgeCardStore,
                 candidateDossierStore: candidateDossierStore,
                 coverRefStore: coverRefStore,
-                llmFacade: llmFacade,
-                openRouterService: openRouterService,
-                enabledLLMStore: enabledLLMStore,
-                reasoningStream: reasoningStreamManager
+                coordinator: discoveryCoordinator
             )
         )
         .onReceive(NotificationCenter.default.publisher(for: .triggerBestJobButton)) { _ in

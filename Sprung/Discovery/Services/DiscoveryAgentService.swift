@@ -304,6 +304,12 @@ final class DiscoveryAgentService {
         )
     }
 
+    /// The single job-triage ("Choose Best Jobs") implementation. Serves both
+    /// consumers — the Choose Best Jobs UI flow (toolbar + pipeline header)
+    /// and the coaching `choose_best_jobs` tool — on the Discovery Anthropic
+    /// model. Single-shot call; the report contract (per-job reasoning,
+    /// overall analysis, considerations) is pinned by the
+    /// discovery_choose_best_jobs prompt template.
     func chooseBestJobs(
         jobs: [(id: UUID, company: String, role: String, description: String)],
         knowledgeContext: String,
@@ -311,7 +317,29 @@ final class DiscoveryAgentService {
         count: Int = 5
     ) async throws -> JobSelectionsResult {
         let systemPrompt = try loadPromptTemplate(named: "discovery_choose_best_jobs")
+        let response = try await runSingleShot(
+            systemPrompt: systemPrompt,
+            userMessage: Self.chooseBestJobsUserMessage(
+                jobs: jobs,
+                knowledgeContext: knowledgeContext,
+                dossierContext: dossierContext,
+                count: count
+            ),
+            operation: "Job Selection"
+        )
+        return try parser.parseJobSelections(response)
+    }
 
+    /// Build the choose-best-jobs task message (pure — unit-testable request
+    /// half). Every candidate job is listed with its UUID; the model echoes
+    /// the chosen ids back as `jobId`, which is how selections are matched to
+    /// `JobApp` records.
+    static func chooseBestJobsUserMessage(
+        jobs: [(id: UUID, company: String, role: String, description: String)],
+        knowledgeContext: String,
+        dossierContext: String,
+        count: Int
+    ) -> String {
         var userMessage = "Please select the top \(count) jobs from the following opportunities.\n\n"
         userMessage += "## CANDIDATE KNOWLEDGE CARDS\n\(knowledgeContext)\n\n"
         userMessage += "## CANDIDATE DOSSIER\n\(dossierContext)\n\n"
@@ -327,13 +355,7 @@ final class DiscoveryAgentService {
 
             """
         }
-
-        let response = try await runSingleShot(
-            systemPrompt: systemPrompt,
-            userMessage: userMessage,
-            operation: "Job Selection"
-        )
-        return try parser.parseJobSelections(response)
+        return userMessage
     }
 
     // MARK: - Onboarding Structured Calls (single-shot, structured output)
