@@ -12,6 +12,7 @@ struct SourcesView: View {
     let coordinator: DiscoveryCoordinator
     @Binding var triggerDiscovery: Bool
     @State private var showingAddSheet = false
+    @State private var showingJobSearch = false
     @State private var editingSource: JobSource?
     @State private var selectedCategory: SourceCategory?
 
@@ -95,11 +96,32 @@ struct SourcesView: View {
                             showingAddSheet = true
                         }
                         .buttonStyle(.bordered)
+
+                        Button("Search Job Boards") {
+                            showingJobSearch = true
+                        }
+                        .buttonStyle(.bordered)
                     }
                 }
 
                 Spacer()
             } else {
+                // Direct job-board search (MCP) entry point
+                HStack {
+                    Button {
+                        showingJobSearch = true
+                    } label: {
+                        Label("Search Job Boards", systemImage: "magnifyingglass")
+                    }
+                    .buttonStyle(.bordered)
+                    .help("Search Dice and import results as pipeline leads")
+
+                    Spacer()
+                }
+                .padding(.horizontal)
+                .padding(.top, 8)
+                .padding(.bottom, -12)
+
                 // Category filter bar
                 if availableCategories.count > 1 {
                     ScrollView(.horizontal, showsIndicators: false) {
@@ -157,6 +179,9 @@ struct SourcesView: View {
         }
         .sheet(item: $editingSource) { source in
             AddSourceSheet(store: coordinator.jobSourceStore, editing: source)
+        }
+        .sheet(isPresented: $showingJobSearch) {
+            JobSearchView(jobAppStore: coordinator.jobAppStore)
         }
         .onChange(of: triggerDiscovery) { _, newValue in
             if newValue {
