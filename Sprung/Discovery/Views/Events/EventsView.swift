@@ -20,6 +20,22 @@ enum EventsViewMode: String, CaseIterable {
     }
 }
 
+/// Buckets an event date relative to a 7-day "this week" window.
+/// Pure and testable: no `Date()` inside — `now` is always injected.
+enum EventWeekBucket {
+    case thisWeek
+    case comingUp
+
+    /// Day-granularity comparison via the injected calendar. Today counts as
+    /// `.thisWeek`; a day-difference of 7 or more is `.comingUp`.
+    static func bucket(for date: Date, now: Date, calendar: Calendar) -> EventWeekBucket {
+        let startOfNow = calendar.startOfDay(for: now)
+        let startOfDate = calendar.startOfDay(for: date)
+        let dayDifference = calendar.dateComponents([.day], from: startOfNow, to: startOfDate).day ?? 0
+        return dayDifference < 7 ? .thisWeek : .comingUp
+    }
+}
+
 struct EventsView: View {
     let coordinator: DiscoveryCoordinator
     @Binding var triggerEventDiscovery: Bool
@@ -36,6 +52,18 @@ struct EventsView: View {
 
     private var filteredUpcoming: [NetworkingEventOpportunity] {
         applyFilter(coordinator.eventStore.upcomingEvents)
+    }
+
+    private var thisWeekUpcoming: [NetworkingEventOpportunity] {
+        filteredUpcoming.filter {
+            EventWeekBucket.bucket(for: $0.date, now: Date(), calendar: .current) == .thisWeek
+        }
+    }
+
+    private var comingUpUpcoming: [NetworkingEventOpportunity] {
+        filteredUpcoming.filter {
+            EventWeekBucket.bucket(for: $0.date, now: Date(), calendar: .current) == .comingUp
+        }
     }
 
     private var filteredDiscovered: [NetworkingEventOpportunity] {
@@ -156,18 +184,15 @@ struct EventsView: View {
             }
 
             List {
-                if !filteredUpcoming.isEmpty {
-                    Section("Upcoming") {
-                        ForEach(filteredUpcoming) { event in
-                            NavigationLink {
-                                EventPrepView(event: event, coordinator: coordinator)
-                            } label: {
-                                EventRowView(event: event, store: coordinator.eventStore)
-                            }
-                            .contextMenu {
-                                eventContextMenu(for: event)
-                            }
-                        }
+                if !thisWeekUpcoming.isEmpty {
+                    Section("This Week") {
+                        upcomingRows(for: thisWeekUpcoming)
+                    }
+                }
+
+                if !comingUpUpcoming.isEmpty {
+                    Section("Coming Up") {
+                        upcomingRows(for: comingUpUpcoming)
                     }
                 }
 
@@ -202,6 +227,20 @@ struct EventsView: View {
                 }
             }
             .scrollEdgeEffect()
+        }
+    }
+
+    @ViewBuilder
+    private func upcomingRows(for events: [NetworkingEventOpportunity]) -> some View {
+        ForEach(events) { event in
+            NavigationLink {
+                EventPrepView(event: event, coordinator: coordinator)
+            } label: {
+                EventRowView(event: event, store: coordinator.eventStore)
+            }
+            .contextMenu {
+                eventContextMenu(for: event)
+            }
         }
     }
 
