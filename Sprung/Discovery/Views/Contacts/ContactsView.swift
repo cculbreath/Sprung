@@ -11,6 +11,8 @@ import SwiftUI
 struct ContactsView: View {
     let coordinator: DiscoveryCoordinator
 
+    @State private var showingAddSheet = false
+
     var body: some View {
         VStack(spacing: 20) {
             Image(systemName: "teletype.answer.circle.fill")
@@ -25,12 +27,12 @@ struct ContactsView: View {
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: 400)
 
-            if coordinator.contactStore.allContacts.isEmpty {
-                Button("Add Contact") {
-                    // TODO: Show add contact sheet
-                }
-                .buttonStyle(.borderedProminent)
-            } else {
+            Button("Add Contact") {
+                showingAddSheet = true
+            }
+            .buttonStyle(.borderedProminent)
+
+            if !coordinator.contactStore.allContacts.isEmpty {
                 List {
                     if !coordinator.contactStore.needsAttention.isEmpty {
                         Section("Needs Attention") {
@@ -59,6 +61,9 @@ struct ContactsView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .navigationTitle("")
+        .sheet(isPresented: $showingAddSheet) {
+            AddContactSheet(store: coordinator.contactStore)
+        }
     }
 }
 

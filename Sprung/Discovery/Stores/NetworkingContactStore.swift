@@ -59,37 +59,6 @@ final class NetworkingContactStore: EntityStore {
         update(contact)
     }
 
-    /// Auto-decay warmth based on time since last contact
-    func decayWarmthIfNeeded(_ contact: NetworkingContact) {
-        guard let days = contact.daysSinceContact else { return }
-
-        let newWarmth: ContactWarmth
-        switch contact.warmth {
-        case .hot:
-            if days > 21 { newWarmth = .warm }
-            else { return }
-        case .warm:
-            if days > 60 { newWarmth = .cold }
-            else { return }
-        case .cold:
-            if days > 120 { newWarmth = .dormant }
-            else { return }
-        case .dormant:
-            return
-        }
-
-        contact.warmth = newWarmth
-        contact.updatedAt = Date()
-        update(contact)
-    }
-
-    /// Update warmth for all contacts based on decay rules
-    func updateAllWarmthLevels() {
-        for contact in allContacts {
-            decayWarmthIfNeeded(contact)
-        }
-    }
-
     /// Contacts added this week
     var thisWeeksNewContacts: [NetworkingContact] {
         let calendar = Calendar.current
