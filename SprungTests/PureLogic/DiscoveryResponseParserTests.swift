@@ -5,9 +5,10 @@
 //  Pure-logic coverage for DiscoveryResponseParser: JSON extraction (fenced
 //  blocks, raw braces, raw brackets) exercised through the typed parse* methods,
 //  plus error surfacing for unparseable input. Wire keys are checked: snake_case
-//  where the source/event prompt templates pin it. (The daily-task contract
-//  moved to DailyTaskGenerator's structured output — see
-//  DiscoveryPureLogicTests.)
+//  where the source prompt template pins it. (The daily-task contract moved to
+//  DailyTaskGenerator's structured output — see DiscoveryPureLogicTests; the
+//  event-discovery contract is the strict submit_events tool — see
+//  EventDiscoveryLoopTests.)
 //
 
 import XCTest
@@ -59,20 +60,6 @@ final class DiscoveryResponseParserTests: XCTestCase {
         let json = #"{"sources":[{"name":"X","url":"u","category":"local","relevance_reason":"r"}]}"#
         let result = try parser.parseSources(json)
         XCTAssertNil(result.sources.first?.recommendedCadenceDays)
-    }
-
-    // MARK: - parseEvents
-
-    func testParseEventsRawJSON() throws {
-        let json = #"""
-        {"events":[{"name":"Meetup","date":"2026-07-01","location":"SF","url":"u","event_type":"meetup"}]}
-        """#
-        let result = try parser.parseEvents(json)
-        XCTAssertEqual(result.events.count, 1)
-        XCTAssertEqual(result.events.first?.name, "Meetup")
-        XCTAssertEqual(result.events.first?.eventType, "meetup",
-                       "snake_case event_type must map to eventType")
-        XCTAssertNil(result.events.first?.organizer, "missing optional decodes to nil")
     }
 
     // MARK: - Error surfacing

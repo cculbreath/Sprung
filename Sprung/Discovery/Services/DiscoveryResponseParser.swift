@@ -15,10 +15,6 @@ struct DiscoveryResponseParser {
         try decodeFromResponse(response, as: JobSourcesResult.self)
     }
 
-    func parseEvents(_ response: String) throws -> NetworkingEventsResult {
-        try decodeFromResponse(response, as: NetworkingEventsResult.self)
-    }
-
     func parsePrep(_ response: String) throws -> EventPrepResult {
         try decodeFromResponse(response, as: EventPrepResult.self)
     }

@@ -4,9 +4,10 @@
 //
 //  Result types and generated data structures for Discovery LLM responses.
 //
-//  Wire-key note: the job-selection contract is camelCase (keys we control,
-//  instructed by discovery_choose_best_jobs.txt). The event-prep, debrief,
-//  source, and networking-event DTOs keep snake_case CodingKeys because their
+//  Wire-key note: the job-selection and event-discovery contracts are
+//  camelCase (keys we control; event discovery is pinned by the strict
+//  submit_events tool schema in EventDiscoveryToolSchemas). The event-prep,
+//  debrief, and source DTOs keep snake_case CodingKeys because their
 //  contracts are pinned by the corresponding prompt templates in
 //  Resources/Prompts. The daily-task contract lives in DailyTaskGenerator.
 //
@@ -19,8 +20,10 @@ struct JobSourcesResult: Codable {
     let sources: [GeneratedJobSource]
 }
 
-struct NetworkingEventsResult: Codable {
-    let events: [GeneratedNetworkingEvent]
+/// Payload of the strict `submit_events` completion tool (camelCase keys we
+/// control — see EventDiscoveryToolSchemas.submitEventsSchema).
+struct EventDiscoverySubmission: Codable {
+    let events: [DiscoveredEvent]
 }
 
 struct JobSelectionsResult: Codable {
@@ -167,80 +170,69 @@ struct GeneratedJobSource: Codable {
     }
 }
 
-struct GeneratedNetworkingEvent: Codable {
+/// One page-verified networking event, as submitted by the discovery agent
+/// through the strict `submit_events` tool. All keys camelCase; nullable
+/// fields arrive as explicit JSON null under strict tool use.
+struct DiscoveredEvent: Codable {
     let name: String
     let date: String
     let time: String?
     let location: String
+    let format: String
+    let organizer: String
     let url: String
     let eventType: String
-    let organizer: String?
-    let estimatedAttendance: String?
     let cost: String?
-    let relevanceReason: String?
+    let estimatedAttendance: String?
+    let relevanceReason: String
 
-    enum CodingKeys: String, CodingKey {
-        case name, date, time, location, url
-        case eventType = "event_type"
-        case organizer
-        case estimatedAttendance = "estimated_attendance"
-        case cost
-        case relevanceReason = "relevance_reason"
-    }
+    /// The page-verified date, parsed. Nil for malformed dates —
+    /// `parseCompletion` rejects submissions containing any, so a nil here
+    /// after a successful loop indicates a programming error, not bad data.
+    var parsedDate: Date? { Self.parseEventDate(date) }
 
-    func toNetworkingEventOpportunity() -> NetworkingEventOpportunity {
+    /// Nil when the date cannot be parsed — the caller drops the event rather
+    /// than persisting one pinned to a fabricated date.
+    func toNetworkingEventOpportunity() -> NetworkingEventOpportunity? {
+        guard let parsedDate else {
+            Logger.warning("Dropping discovered event with unparseable date '\(date)': \(name)", category: .ai)
+            return nil
+        }
         let event = NetworkingEventOpportunity()
         event.name = name
-        event.date = parseEventDate(date) ?? Date()
+        event.date = parsedDate
         event.time = time
         event.location = location
+        event.isVirtual = format == "virtual"
         event.url = url
-        event.eventType = parseEventType(eventType)
+        event.eventType = Self.parseEventType(eventType)
         event.organizer = organizer
-        event.estimatedAttendance = parseAttendanceSize(estimatedAttendance)
+        event.estimatedAttendance = Self.parseAttendanceSize(estimatedAttendance)
         event.cost = cost
         event.relevanceReason = relevanceReason
         event.discoveredVia = .webSearch
         return event
     }
 
-    private func parseEventDate(_ dateString: String) -> Date? {
-        let iso8601Formatter = ISO8601DateFormatter()
-        if let date = iso8601Formatter.date(from: dateString) {
-            return date
-        }
-
+    static func parseEventDate(_ dateString: String) -> Date? {
+        // Primary contract: YYYY-MM-DD (pinned by the submit_events schema).
         let dateOnlyFormatter = DateFormatter()
+        dateOnlyFormatter.locale = Locale(identifier: "en_US_POSIX")
         dateOnlyFormatter.timeZone = TimeZone.current
-
-        // Try date-only format (YYYY-MM-DD)
         dateOnlyFormatter.dateFormat = "yyyy-MM-dd"
         if let date = dateOnlyFormatter.date(from: dateString) {
             return date
         }
-
-        // Try common US format (MM/DD/YYYY)
-        dateOnlyFormatter.dateFormat = "MM/dd/yyyy"
-        if let date = dateOnlyFormatter.date(from: dateString) {
-            return date
-        }
-
-        // Try natural language formats (e.g., "January 6, 2026")
-        dateOnlyFormatter.dateFormat = "MMMM d, yyyy"
-        if let date = dateOnlyFormatter.date(from: dateString) {
-            return date
-        }
-
-        Logger.warning("Could not parse event date: \(dateString)", category: .ai)
-        return nil
+        // Tolerate a full ISO8601 timestamp.
+        return ISO8601DateFormatter().date(from: dateString)
     }
 
-    private func parseEventType(_ type: String) -> NetworkingEventType {
-        NetworkingEventType(rawValue: type.replacingOccurrences(of: "_", with: " ").capitalized) ?? .meetup
+    private static func parseEventType(_ type: String) -> NetworkingEventType {
+        NetworkingEventType(rawValue: type.replacingOccurrences(of: "_", with: " ").capitalized) ?? .other
     }
 
-    private func parseAttendanceSize(_ size: String?) -> AttendanceSize {
-        guard let size = size else { return .medium }
+    private static func parseAttendanceSize(_ size: String?) -> AttendanceSize {
+        guard let size else { return .medium }
         switch size.lowercased() {
         case "intimate": return .intimate
         case "small": return .small

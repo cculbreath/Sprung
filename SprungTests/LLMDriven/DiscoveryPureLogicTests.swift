@@ -7,14 +7,15 @@
 //  The Discovery agent's LLM responses decode into the Codable DTOs in
 //  DiscoveryAgentTypes.swift (and DailyTaskGenerator.swift for the daily-task
 //  generation contract). Phase 1's DiscoveryResponseParserTests exercises the
-//  top-level Result wrappers (sources/events) through the text-extraction
-//  parser; this file covers the per-item response DTOs directly — the wire-key
-//  mapping (camelCase for the daily-task/job-selection contracts we control;
-//  snake_case where the prompt templates pin it) and optional-field handling —
-//  plus the two value-type mappers (TalkingPointResult / TargetCompanyResult),
-//  which are pure. The remaining `to*()` mappers build SwiftData @Model
-//  objects (JobSource, NetworkingEventOpportunity) and are out of scope for a
-//  pure unit.
+//  top-level Result wrappers (sources) through the text-extraction parser;
+//  EventDiscoveryLoopTests covers the strict submit_events event-discovery
+//  contract. This file covers the per-item response DTOs directly — the
+//  wire-key mapping (camelCase for the daily-task/job-selection contracts we
+//  control; snake_case where the prompt templates pin it) and optional-field
+//  handling — plus the two value-type mappers (TalkingPointResult /
+//  TargetCompanyResult), which are pure. The remaining `to*()` mappers build
+//  SwiftData @Model objects (JobSource, NetworkingEventOpportunity) and are
+//  out of scope for a pure unit.
 //
 
 import XCTest
@@ -96,43 +97,6 @@ final class DiscoveryPureLogicTests: XCTestCase {
         """)
         XCTAssertNil(withoutCadence.recommendedCadenceDays,
                      "missing recommended_cadence_days decodes to nil")
-    }
-
-    // MARK: - GeneratedNetworkingEvent
-
-    func testGeneratedNetworkingEventDecodesSnakeCaseAndOptionals() throws {
-        let json = """
-        {
-          "name": "SwiftConf",
-          "date": "2026-09-01",
-          "time": "09:00",
-          "location": "Berlin",
-          "url": "https://swiftconf.example",
-          "event_type": "conference",
-          "organizer": "Swift GmbH",
-          "estimated_attendance": "large",
-          "cost": "€200",
-          "relevance_reason": "Core stack"
-        }
-        """
-        let event = try decode(GeneratedNetworkingEvent.self, json)
-        XCTAssertEqual(event.name, "SwiftConf")
-        XCTAssertEqual(event.eventType, "conference", "event_type -> eventType")
-        XCTAssertEqual(event.estimatedAttendance, "large", "estimated_attendance -> estimatedAttendance")
-        XCTAssertEqual(event.relevanceReason, "Core stack")
-    }
-
-    func testGeneratedNetworkingEventOmitsAllOptionals() throws {
-        let json = """
-        { "name": "Meetup", "date": "2026-01-01", "location": "Online",
-          "url": "https://m.example", "event_type": "meetup" }
-        """
-        let event = try decode(GeneratedNetworkingEvent.self, json)
-        XCTAssertNil(event.time)
-        XCTAssertNil(event.organizer)
-        XCTAssertNil(event.estimatedAttendance)
-        XCTAssertNil(event.cost)
-        XCTAssertNil(event.relevanceReason)
     }
 
     // MARK: - JobSelection / JobSelectionsResult

@@ -363,9 +363,9 @@ final class DiscoveryCoordinator {
         }
     }
 
-    /// Discover networking events using LLM agent
+    /// Discover networking events using the Anthropic web-search agent loop
     func discoverNetworkingEvents(
-        daysAhead: Int = 14,
+        daysAhead: Int = 42,
         streamCallback: (@MainActor @Sendable (DiscoveryStatus, String?) async -> Void)? = nil
     ) async throws {
         guard let agent = agentService else {
@@ -558,20 +558,22 @@ final class DiscoveryCoordinator {
         Logger.info("✅ Discovered \(validSources.count) new job sources", category: .ai)
     }
 
-    /// Discover networking events using the LLM agent and persist new ones.
-    /// (Merged from the former networking sub-coordinator.)
+    /// Discover networking events using the Anthropic web-search agent loop
+    /// and persist new ones. The agent receives the currently known events so
+    /// it never resubmits them; whatever slips through is still deduped by URL.
     private func performNetworkingEventDiscovery(
         using agentService: DiscoveryAgentService,
         sectors: [String],
         location: String,
         candidateContext: String = "",
-        daysAhead: Int = 14,
+        daysAhead: Int = 42,
         streamCallback: (@MainActor @Sendable (DiscoveryStatus, String?) async -> Void)? = nil
     ) async throws {
-        let result = try await agentService.discoverNetworkingEvents(
+        let discovered = try await agentService.discoverNetworkingEvents(
             sectors: sectors,
             location: location,
             candidateContext: candidateContext,
+            knownEventsContext: knownEventsContext(),
             daysAhead: daysAhead,
             statusCallback: { status in
                 await streamCallback?(status, nil)
@@ -583,14 +585,28 @@ final class DiscoveryCoordinator {
 
         // Filter duplicates and add new events
         let newEvents = eventStore.filterNew(
-            result.events.map { $0.toNetworkingEventOpportunity() }
+            discovered.compactMap { $0.toNetworkingEventOpportunity() }
         )
 
         eventStore.addMultiple(newEvents)
 
-        await streamCallback?(.complete(added: newEvents.count, filtered: result.events.count - newEvents.count), nil)
+        await streamCallback?(.complete(added: newEvents.count, filtered: discovered.count - newEvents.count), nil)
 
         Logger.info("✅ Discovered \(newEvents.count) new events", category: .ai)
+    }
+
+    /// Current and future events already in the store, formatted for the
+    /// discovery agent's "do not resubmit" context.
+    private func knownEventsContext() -> String {
+        let startOfToday = Calendar.current.startOfDay(for: Date())
+        let known = eventStore.allEvents.filter { $0.date >= startOfToday }
+        guard !known.isEmpty else { return "" }
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyy-MM-dd"
+        return known
+            .map { "- \($0.name) — \(formatter.string(from: $0.date))" }
+            .joined(separator: "\n")
     }
 
     /// Run event preparation via the LLM agent and persist the full result —

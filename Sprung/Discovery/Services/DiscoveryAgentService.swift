@@ -3,11 +3,13 @@
 //  Sprung
 //
 //  Agent service for Discovery LLM interactions.
-//  Tool-loop flows (event prep, weekly reflection) run on the shared
-//  AnthropicToolLoopRunner against the user-selected Discovery Anthropic
-//  model; single-shot flows (debrief outcomes, choose-best-jobs) are plain
-//  Anthropic Messages calls. Web-search discovery (job sources, networking
-//  events) stays on LLMFacade.executeWithWebSearch (OpenAI). Daily-task
+//  Tool-loop flows (event prep, weekly reflection, networking-event
+//  discovery) run on the shared AnthropicToolLoopRunner against the
+//  user-selected Discovery Anthropic model — event discovery additionally
+//  carries Anthropic's server-side web_search/web_fetch tools (see
+//  EventDiscoveryLoop). Single-shot flows (debrief outcomes,
+//  choose-best-jobs) are plain Anthropic Messages calls. Job-source
+//  discovery stays on LLMFacade.executeWithWebSearch (OpenAI). Daily-task
 //  generation lives in DailyTaskGenerator — the single generation path.
 //
 
@@ -113,9 +115,7 @@ final class DiscoveryAgentService {
         modelId: String,
         reasoningEffort: String = "low",
         webSearchLocation: String? = nil,
-        searchContext: String = "job sources",
-        statusCallback: (@MainActor @Sendable (DiscoveryStatus) async -> Void)? = nil,
-        reasoningCallback: (@MainActor @Sendable (String) async -> Void)? = nil
+        statusCallback: (@MainActor @Sendable (DiscoveryStatus) async -> Void)? = nil
     ) async throws -> String {
         do {
             return try await llmFacade.executeWithWebSearch(
@@ -125,12 +125,11 @@ final class DiscoveryAgentService {
                 reasoningEffort: reasoningEffort,
                 webSearchLocation: webSearchLocation,
                 onWebSearching: statusCallback.map { callback in
-                    { @Sendable in await callback(.webSearching(context: searchContext)) }
+                    { @Sendable in await callback(.webSearching(context: "job sources")) }
                 },
                 onWebSearchComplete: statusCallback.map { callback in
                     { @Sendable in await callback(.webSearchComplete) }
-                },
-                onTextDelta: reasoningCallback
+                }
             )
         } catch let error as LLMError {
             // Convert LLMError to DiscoveryAgentError for consistency
@@ -164,32 +163,55 @@ final class DiscoveryAgentService {
         return try parser.parseSources(response)
     }
 
+    /// Discover networking events via a multi-turn Anthropic agent loop with
+    /// server-side web_search + web_fetch (EventDiscoveryLoop). Every returned
+    /// event was page-verified by the agent before submission.
     func discoverNetworkingEvents(
         sectors: [String],
         location: String,
         candidateContext: String = "",
-        daysAhead: Int = 14,
+        knownEventsContext: String = "",
+        daysAhead: Int = 42,
         statusCallback: (@MainActor @Sendable (DiscoveryStatus) async -> Void)? = nil,
         reasoningCallback: (@MainActor @Sendable (String) async -> Void)? = nil
-    ) async throws -> NetworkingEventsResult {
-        let systemPrompt = try loadPromptTemplate(named: "discovery_discover_networking_events")
+    ) async throws -> [DiscoveredEvent] {
+        let systemPrompt = try loadPromptTemplate(named: "discovery_discover_events")
+        let modelId = try anthropicModelId(operation: "Event Discovery")
 
-        var userMessage = "Find networking events for sectors: \(sectors.joined(separator: ", ")) in \(location) for the next \(daysAhead) days"
+        let dateFormatter = DateFormatter()
+        dateFormatter.locale = Locale(identifier: "en_US_POSIX")
+        dateFormatter.dateFormat = "yyyy-MM-dd"
+        let today = Date()
+        let windowEnd = Calendar.current.date(byAdding: .day, value: daysAhead, to: today) ?? today
+
+        var userMessage = """
+            Find networking events for this job seeker.
+
+            Target sectors: \(sectors.joined(separator: ", "))
+            Location: \(location)
+            Date window: \(dateFormatter.string(from: today)) through \(dateFormatter.string(from: windowEnd))
+            """
         if !candidateContext.isEmpty {
             userMessage += "\n\n\(candidateContext)"
         }
+        if !knownEventsContext.isEmpty {
+            userMessage += "\n\n## ALREADY KNOWN EVENTS (do not resubmit)\n\(knownEventsContext)"
+        }
 
-        let response = try await runOpenAIRequest(
+        await statusCallback?(.webSearching(context: "networking events"))
+
+        let loop = EventDiscoveryLoop(
+            llmFacade: llmFacade,
+            modelId: modelId,
             systemPrompt: systemPrompt,
             userMessage: userMessage,
-            modelId: webSearchModelId,
-            reasoningEffort: reasoningEffort,
-            webSearchLocation: location,
-            searchContext: "networking events",
-            statusCallback: statusCallback,
-            reasoningCallback: reasoningCallback
+            onProgress: reasoningCallback.map { callback in
+                { line in await callback(line + "\n") }
+            }
         )
-        return try parser.parseEvents(response)
+        let events = try await AnthropicToolLoopRunner(delegate: loop).run()
+        await statusCallback?(.webSearchComplete)
+        return events
     }
 
     func prepareForEvent(eventId: UUID, focusCompanies: [String] = [], goals: String? = nil) async throws -> EventPrepResult {
