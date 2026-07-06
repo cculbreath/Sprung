@@ -2,8 +2,10 @@
 //  JobURLImportService.swift
 //  Sprung
 //
-//  Pure, testable halves of the "import a job posting from a URL" flow: the
-//  structured-output schema, the OpenAI Responses request construction, and the
+//  Pure, testable halves of the "import a job posting" flow: the
+//  structured-output schema, the OpenAI Responses request construction (a URL
+//  variant that web-searches the page, and a text variant for posting text
+//  supplied directly, e.g. from the LinkedIn MCP details tool), and the
 //  response-text → JobApp parse. NewAppSheetView keeps only the thin streaming
 //  drain + UI status (untestable live glue); everything worth a unit test lives here.
 //
@@ -42,6 +44,36 @@ enum JobURLImportService {
         )
     }
 
+    /// System prompt for the text-input variant: the posting text is supplied
+    /// directly (e.g. LinkedIn MCP `get_job_details` innerText), so there is
+    /// no web-search step.
+    static let textSystemPrompt = """
+    You are a job listing data extractor. You are given the raw text of a job posting page. Extract structured job information from that text.
+    Extract ALL available information from the posting. For job_description, include the COMPLETE description with all responsibilities, requirements, qualifications, and any other details. Do not summarize or truncate.
+    For any field where the information is not provided in the posting text, use "Not specified" as the value.
+    """
+
+    /// Explicit output ceiling for the text-input extraction: reasoning +
+    /// structured output without a cap silently truncates the JSON. Postings
+    /// run a few KB of innerText, so this comfortably clears the largest
+    /// extracted record while still bounding a runaway response.
+    static let textVariantMaxOutputTokens = 8192
+
+    /// Resolve the user-configured job-import model id, throwing (never
+    /// substituting a default) when it isn't configured.
+    static func requireJobImportModelId(
+        operationName: String,
+        defaults: UserDefaults = .standard
+    ) throws -> String {
+        guard let modelId = defaults.string(forKey: "jobImportModelId"), !modelId.isEmpty else {
+            throw ModelConfigurationError.modelNotConfigured(
+                settingKey: "jobImportModelId",
+                operationName: operationName
+            )
+        }
+        return modelId
+    }
+
     /// Build the Responses-API request for extracting a job from `url` using the
     /// user-configured `modelId` (web search + structured output, low reasoning).
     static func buildParameters(url: URL, modelId: String) -> ModelResponseParameter {
@@ -61,6 +93,27 @@ enum JobURLImportService {
             text: TextConfiguration(format: .jsonSchema(jobSchema, name: "job_listing")),
             toolChoice: .auto,
             tools: [webSearchTool]
+        )
+    }
+
+    /// Build the Responses-API request for extracting a job from posting text
+    /// supplied directly — same output schema and model setting as the URL
+    /// variant, but no web-search tool and an explicit output-token cap.
+    static func buildTextParameters(postingText: String, modelId: String) -> ModelResponseParameter {
+        let developerMessage = InputMessage(role: "developer", content: .text(textSystemPrompt))
+        let userInputMessage = InputMessage(
+            role: "user",
+            content: .text("Extract all job information from this job posting text:\n\n\(postingText)")
+        )
+        let inputItems: [InputItem] = [.message(developerMessage), .message(userInputMessage)]
+        return ModelResponseParameter(
+            input: .array(inputItems),
+            model: .custom(modelId),
+            maxOutputTokens: textVariantMaxOutputTokens,
+            reasoning: Reasoning(effort: "low"),
+            store: true,
+            stream: true,
+            text: TextConfiguration(format: .jsonSchema(jobSchema, name: "job_listing"))
         )
     }
 

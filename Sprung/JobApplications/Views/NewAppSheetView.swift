@@ -9,6 +9,7 @@ import SwiftOpenAI
 
 struct NewAppSheetView: View {
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
+    @Environment(LinkedInMCPServerService.self) private var linkedInMCPServer
     @State private var isLoading: Bool = false
     @State private var urlText: String = ""
     @State private var delayed: Bool = false
@@ -17,21 +18,13 @@ struct NewAppSheetView: View {
     @State private var challengeURL: URL?
     @State private var errorMessage: String?
     @State private var showError: Bool = false
-    @State private var showLinkedInLogin: Bool = false
     @State private var isProcessingJob: Bool = false
     @State private var llmStatusMessage: String = ""
-    @State private var linkedInSessionManager: LinkedInSessionStore
     @Binding var isPresented: Bool
     var initialURL: String?
 
-    @MainActor
     init(isPresented: Binding<Bool>, initialURL: String? = nil) {
-        self.init(isPresented: isPresented, sessionManager: LinkedInSessionStore(), initialURL: initialURL)
-    }
-    @MainActor
-    init(isPresented: Binding<Bool>, sessionManager: LinkedInSessionStore, initialURL: String? = nil) {
         _isPresented = isPresented
-        _linkedInSessionManager = State(initialValue: sessionManager)
         self.initialURL = initialURL
     }
     var body: some View {
@@ -87,8 +80,6 @@ struct NewAppSheetView: View {
                             .font(.subheadline)
                             .foregroundColor(.secondary)
                     }
-                    // LinkedIn session status
-                    LinkedInSessionStatusView(sessionManager: linkedInSessionManager)
                     // URL input section
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Job URL")
@@ -158,31 +149,19 @@ struct NewAppSheetView: View {
                 }.defaultSize()
             }
         }
-        .sheet(isPresented: $showLinkedInLogin) {
-            LinkedInLoginSheet(
-                isPresented: $showLinkedInLogin,
-                sessionManager: linkedInSessionManager
-            ) {
-                // After successful login, retry the job import
-                Task {
-                    guard let retryURL = URL(string: urlText) else {
-                        await MainActor.run {
-                            errorMessage = "Invalid URL format. Please check and try again."
-                            showError = true
-                        }
-                        return
-                    }
-                    await handleLinkedInJob(url: retryURL)
-                }
-            }
-        }
     }
     private func handleNewApp() async {
         Logger.info("🚀 Starting job URL fetch for: \(urlText)")
         if let url = URL(string: urlText) {
             switch url.host {
-            case "www.linkedin.com":
-                await handleLinkedInJob(url: url)
+            case "www.linkedin.com", "linkedin.com":
+                if let jobId = LinkedInJobDetailsService.jobId(fromURL: url.absoluteString) {
+                    await handleLinkedInJob(jobId: jobId)
+                } else {
+                    // Non-job-view LinkedIn URLs name no job id — they route
+                    // through the generic URL importer like any other host.
+                    await handleLLMImport(url: url)
+                }
             case "jobs.apple.com":
                 isLoading = true
                 Task {
@@ -235,8 +214,12 @@ struct NewAppSheetView: View {
             showError = true
         }
     }
-    private func handleLinkedInJob(url: URL) async {
-        // Prevent duplicate processing
+    /// Import a LinkedIn job by id: fetch the posting text over the local MCP
+    /// server (`get_job_details`), then run the same structured extraction the
+    /// generic URL importer uses — on the supplied text instead of web search.
+    /// Errors (no browser session, budget, server, extraction) surface in the
+    /// sheet's error panel; nothing degrades silently.
+    private func handleLinkedInJob(jobId: String) async {
         guard !isProcessingJob else {
             Logger.debug("🔄 [NewAppSheetView] Already processing LinkedIn job, ignoring duplicate call")
             return
@@ -244,37 +227,97 @@ struct NewAppSheetView: View {
         await MainActor.run {
             isProcessingJob = true
             isLoading = true
+            llmStatusMessage = "Fetching LinkedIn job posting..."
         }
         defer {
             Task { @MainActor in
                 isProcessingJob = false
+                llmStatusMessage = ""
             }
         }
-        // Check if user is logged in to LinkedIn
-        if !linkedInSessionManager.isLoggedIn {
+
+        // The canonical URL is the job's stable identity (shared with the
+        // LinkedIn search board's leads) — dedup before spending a budgeted
+        // LinkedIn call and an extraction pass.
+        let canonicalURL = LinkedInMCPImportService.canonicalJobURL(jobID: jobId)
+        if let existingJob = jobAppStore.jobApps.first(where: { $0.postingURL == canonicalURL }) {
+            Logger.info("📋 [LinkedIn] Job already exists, selecting it", category: .ai)
             await MainActor.run {
-                isLoading = false
-                showLinkedInLogin = true
-            }
-            return
-        }
-        // Try direct LinkedIn extraction
-        if await JobApp.extractLinkedInJobDetails(
-            from: url.absoluteString,
-            jobAppStore: jobAppStore,
-            sessionManager: linkedInSessionManager
-        ) != nil {
-            await MainActor.run {
+                jobAppStore.selectedApp = existingJob
                 isLoading = false
                 isPresented = false
             }
             return
         }
-        // Direct extraction failed
-        await MainActor.run {
-            errorMessage = "LinkedIn extraction failed. Please ensure you're logged into LinkedIn and the job posting is still available."
-            showError = true
-            isLoading = false
+
+        guard let apiKey = APIKeyStore.get(.openAI), !apiKey.isEmpty else {
+            await MainActor.run {
+                errorMessage = "OpenAI API key required to import LinkedIn jobs. Add your key in Settings."
+                showError = true
+            }
+            return
+        }
+
+        do {
+            // Resolve the configured model up front (no hardcoded default —
+            // surface the picker) before the budgeted LinkedIn call.
+            let modelId = try JobURLImportService.requireJobImportModelId(operationName: "LinkedIn Job Import")
+
+            let postingText = try await LinkedInJobDetailsService.fetchPostingText(
+                jobId: jobId,
+                serverService: linkedInMCPServer
+            )
+            await MainActor.run { llmStatusMessage = "Extracting job details..." }
+
+            let parameters = JobURLImportService.buildTextParameters(postingText: postingText, modelId: modelId)
+            let service = OpenAIServiceFactory.service(apiKey: apiKey)
+
+            var finalResponse: ResponseModel?
+            let stream = try await service.responseCreateStream(parameters)
+            for try await event in stream {
+                if case .responseCompleted(let completed) = event {
+                    finalResponse = completed.response
+                }
+            }
+
+            guard let response = finalResponse,
+                  let outputText = JobURLImportService.extractResponseText(from: response),
+                  let jobApp = JobURLImportService.parseJob(from: outputText, sourceURL: canonicalURL) else {
+                await MainActor.run {
+                    errorMessage = "Failed to extract job details from the LinkedIn posting. Please try again."
+                    showError = true
+                }
+                return
+            }
+            jobApp.source = "LinkedIn"
+
+            // Same downstream dedup as the LLM-import path (title+company net).
+            if let existingJob = jobAppStore.findDuplicateJobApp(
+                url: canonicalURL,
+                title: jobApp.jobPosition,
+                company: jobApp.companyName
+            ) {
+                Logger.info("📋 [LinkedIn] Job already exists, selecting it", category: .ai)
+                await MainActor.run {
+                    jobAppStore.selectedApp = existingJob
+                    isLoading = false
+                    isPresented = false
+                }
+                return
+            }
+
+            await MainActor.run {
+                jobAppStore.selectedApp = jobAppStore.addJobApp(jobApp)
+                Logger.info("✅ [LinkedIn] Imported: \(jobApp.jobPosition) at \(jobApp.companyName)", category: .ai)
+                isLoading = false
+                isPresented = false
+            }
+        } catch {
+            Logger.error("🚨 [LinkedIn] Import failed: \(error.localizedDescription)", category: .ai)
+            await MainActor.run {
+                errorMessage = error.localizedDescription
+                showError = true
+            }
         }
     }
 

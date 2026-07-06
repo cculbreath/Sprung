@@ -126,7 +126,7 @@ final class JobLeadEnrichmentSeamTests: InMemoryStoreCase {
 
     func testAddJobAppDefaultStillInsertsAndSelects() throws {
         // The `deferringPreprocessing` parameter defaults to false, so every
-        // pre-existing caller (LinkedIn/Apple/Indeed scrapes, NewAppSheetView)
+        // pre-existing caller (Apple/Indeed scrapes, NewAppSheetView)
         // keeps its behavior: insert, persist, select.
         let store = makeJobAppStore()
         let job = JobApp(jobPosition: "Welder", companyName: "Forge Co")
@@ -184,5 +184,26 @@ final class JobLeadEnrichmentSeamTests: InMemoryStoreCase {
             JobLeadEnrichmentService.acceptedFullDescription("Operate CNC mills.", current: "  \n"),
             "Operate CNC mills."
         )
+    }
+
+    // MARK: - 3. Enrichment host routing (pure half)
+
+    func testLinkedInHostsRouteToTheMCPDetailsPath() {
+        // linkedin.com leads must never take the OpenAI web-fetch path — it
+        // dead-ends at LinkedIn's authwall.
+        XCTAssertTrue(JobLeadEnrichmentService.isLinkedInPostingHost("www.linkedin.com"))
+        XCTAssertTrue(JobLeadEnrichmentService.isLinkedInPostingHost("linkedin.com"))
+        // Host matching is case-insensitive.
+        XCTAssertTrue(JobLeadEnrichmentService.isLinkedInPostingHost("WWW.LinkedIn.com"))
+    }
+
+    func testNonLinkedInHostsRouteToTheWebSearchPath() {
+        XCTAssertFalse(JobLeadEnrichmentService.isLinkedInPostingHost(nil))
+        XCTAssertFalse(JobLeadEnrichmentService.isLinkedInPostingHost("www.dice.com"))
+        XCTAssertFalse(JobLeadEnrichmentService.isLinkedInPostingHost("api.ziprecruiter.com"))
+        // Lookalike hosts must not match — the suffix check requires a real
+        // subdomain boundary.
+        XCTAssertFalse(JobLeadEnrichmentService.isLinkedInPostingHost("notlinkedin.com"))
+        XCTAssertFalse(JobLeadEnrichmentService.isLinkedInPostingHost("linkedin.com.evil.example"))
     }
 }
