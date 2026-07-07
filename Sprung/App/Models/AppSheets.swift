@@ -89,15 +89,31 @@ struct AppSheetsModifier: ViewModifier {
                 }
             }
             .sheet(isPresented: $sheets.showApplicationReview) {
+                // The review runs resume-only; a generated cover letter is optional.
+                // Present a helpful empty state (never a blank sheet) when there is no
+                // selected job application or no resume to review.
                 if let selApp = jobAppStore.selectedApp,
-                   let currentResume = selApp.selectedRes,
-                   let currentCoverLetter = selApp.selectedCover,
-                   currentCoverLetter.generated {
+                   let currentResume = selApp.selectedRes {
                     ApplicationReviewSheet(
                         jobApp: selApp,
                         resume: currentResume,
                         availableCoverLetters: selApp.coverLetters.filter { $0.generated }.sorted { $0.moddedDate > $1.moddedDate }
                     )
+                } else {
+                    VStack(spacing: 12) {
+                        Text("Select a job application with a résumé first")
+                            .font(.headline)
+                        Text("The application review analyzes a résumé (and optionally a cover letter) for a specific job application.")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                        Button("Close") {
+                            sheets.showApplicationReview = false
+                        }
+                        .buttonStyle(.borderedProminent)
+                    }
+                    .frame(minWidth: 420, minHeight: 220)
+                    .padding()
                 }
             }
             .sheet(isPresented: $sheets.showBatchCoverLetter) {

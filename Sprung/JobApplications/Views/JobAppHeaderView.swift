@@ -51,7 +51,10 @@ struct HeaderView: View {
                         Button("Delete", role: .destructive) {
                             buttons.edit = false
                             jobAppStore.deleteSelected()
-                            tab = TabList.none
+                            // The store auto-selects another job; reset to the first
+                            // visible segment so its content shows immediately instead
+                            // of the blank .none tab (the picker has no .none segment).
+                            tab = TabList.listing
                         }
                         Button("Cancel", role: .cancel) {
                             // Just dismiss the dialog

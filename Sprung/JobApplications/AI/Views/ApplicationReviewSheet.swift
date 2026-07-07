@@ -23,16 +23,26 @@ struct ApplicationReviewSheet: View {
         self.jobApp = jobApp
         self.resume = resume
         self.availableCoverLetters = availableCoverLetters
-        // Initialize customOptions with the jobApp's selectedCover if available
-        let initialCoverLetter = jobApp.selectedCover
+        // Default to including a cover letter only when a generated one exists,
+        // so a resume-only application can still be reviewed. Prefer the job's
+        // selected cover when it's been generated, otherwise the most recent
+        // generated cover passed in (already filtered to generated).
+        let defaultCover = (jobApp.selectedCover?.generated == true) ? jobApp.selectedCover : availableCoverLetters.first
         _customOptions = State(initialValue: CustomApplicationReviewOptions(
-            includeCoverLetter: true,
+            includeCoverLetter: defaultCover != nil,
             includeResumeText: true,
             includeResumeImage: true,
             includeBackgroundDocs: false,
-            selectedCoverLetter: initialCoverLetter,
+            selectedCoverLetter: defaultCover,
             customPrompt: ""
         ))
+    }
+    /// The generated cover letter shown and used by default: the job's selected
+    /// cover when it's been generated, otherwise the most recent generated cover
+    /// (if any). `nil` means the review runs resume-only.
+    private var effectiveDefaultCover: CoverLetter? {
+        if let selected = jobApp.selectedCover, selected.generated { return selected }
+        return availableCoverLetters.first
     }
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -75,12 +85,16 @@ struct ApplicationReviewSheet: View {
                                 .font(.callout)
                         }
                         Spacer()
-                        // Cover Letter information if available
-                        if !availableCoverLetters.isEmpty, let selectedCover = jobApp.selectedCover {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("Cover Letter:")
-                                    .fontWeight(.semibold)
-                                Text(selectedCover.sequencedName)
+                        // Cover Letter information (honest about resume-only reviews)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Cover Letter:")
+                                .fontWeight(.semibold)
+                            if let cover = effectiveDefaultCover {
+                                Text(cover.sequencedName)
+                                    .foregroundColor(.secondary)
+                                    .font(.callout)
+                            } else {
+                                Text("None — reviewing résumé only")
                                     .foregroundColor(.secondary)
                                     .font(.callout)
                             }
@@ -125,6 +139,12 @@ struct ApplicationReviewSheet: View {
                 } else {
                     Button("Submit Request") { submit() }
                         .buttonStyle(.borderedProminent)
+                        .disabled(selectedModel.isEmpty)
+                    if selectedModel.isEmpty {
+                        Text("Pick an AI model to run the review.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
                     Spacer()
                     Button("Close") { dismiss() }
                 }
@@ -150,25 +170,31 @@ struct ApplicationReviewSheet: View {
     private var customOptionsView: some View {
         GroupBox(label: Text("Custom Options").fontWeight(.medium)) {
             VStack(alignment: .leading, spacing: 8) {
-                Toggle("Include Cover Letter", isOn: $customOptions.includeCoverLetter)
-                    .onChange(of: customOptions.includeCoverLetter) { _, newVal in
-                        if newVal && customOptions.selectedCoverLetter == nil {
-                            // Default to the job app's selected cover letter
-                            customOptions.selectedCoverLetter = jobApp.selectedCover
+                if availableCoverLetters.isEmpty {
+                    Label("Generate a cover letter to include it in the review.", systemImage: "info.circle")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Toggle("Include Cover Letter", isOn: $customOptions.includeCoverLetter)
+                        .onChange(of: customOptions.includeCoverLetter) { _, newVal in
+                            if newVal && customOptions.selectedCoverLetter == nil {
+                                // Default to the effective (generated) cover letter
+                                customOptions.selectedCoverLetter = effectiveDefaultCover
+                            }
                         }
-                    }
-                if customOptions.includeCoverLetter {
-                    Picker("Cover Letter", selection: Binding(
-                        get: { customOptions.selectedCoverLetter ?? jobApp.selectedCover },
-                        set: { customOptions.selectedCoverLetter = $0 }
-                    )) {
-                        ForEach(availableCoverLetters, id: \.self) { cl in
-                            // Add a marker to indicate which is the current cover letter
-                            Text(previewTitle(for: cl) + (cl.id == jobApp.selectedCover?.id ? " (Current)" : ""))
-                                .tag(cl as CoverLetter?)
+                    if customOptions.includeCoverLetter {
+                        Picker("Cover Letter", selection: Binding(
+                            get: { customOptions.selectedCoverLetter ?? effectiveDefaultCover },
+                            set: { customOptions.selectedCoverLetter = $0 }
+                        )) {
+                            ForEach(availableCoverLetters, id: \.self) { cl in
+                                // Add a marker to indicate which is the current cover letter
+                                Text(previewTitle(for: cl) + (cl.id == jobApp.selectedCover?.id ? " (Current)" : ""))
+                                    .tag(cl as CoverLetter?)
+                            }
                         }
+                        .pickerStyle(.menu)
                     }
-                    .pickerStyle(.menu)
                 }
                 Toggle("Include Resume Text", isOn: $customOptions.includeResumeText)
                 Toggle("Include Resume Image", isOn: $customOptions.includeResumeImage)
@@ -231,11 +257,12 @@ struct ApplicationReviewSheet: View {
         errorMessage = nil
         let coverLetterToUse: CoverLetter? = {
             if selectedType == .custom {
-                // For custom reviews, use the cover letter specifically selected in the UI picker
-                return customOptions.selectedCoverLetter
+                // For custom reviews, honor the include toggle and the UI picker
+                return customOptions.includeCoverLetter ? customOptions.selectedCoverLetter : nil
             } else {
-                // For standard reviews, always use the job app's selected cover letter
-                return jobApp.selectedCover
+                // For standard reviews, use the effective generated cover letter
+                // (nil runs a résumé-only review)
+                return effectiveDefaultCover
             }
         }()
         Logger.info("🚀 Submitting application review using \(selectedType.rawValue) (custom: \(selectedType == .custom))")

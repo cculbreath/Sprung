@@ -312,7 +312,6 @@ final class ToolbarCoordinator: NSObject, NSToolbarDelegate, NSToolbarItemValida
                 return jobAppStore?.selectedApp?.selectedRes != nil
             case .analyze:
                 return jobAppStore?.selectedApp?.selectedRes != nil
-                    && jobAppStore?.selectedApp?.selectedCover?.generated == true
             case .customize:
                 return navigationState?.selectedTab == .resume
                     && jobAppStore?.selectedApp?.selectedRes?.hasUpdatableNodes == true
