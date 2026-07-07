@@ -22,12 +22,8 @@ struct ReviewItem: Identifiable, Equatable {
     var editedChildren: [String]?
     /// Timestamp when added to queue
     let addedAt: Date
-    /// Number of times this item has been regenerated
-    var regenerationCount: Int
     /// Whether regeneration is in progress
     var isRegenerating: Bool
-    /// ID of the original item if this is a regeneration
-    let previousVersionId: UUID?
 
     init(
         id: UUID = UUID(),
@@ -37,9 +33,7 @@ struct ReviewItem: Identifiable, Equatable {
         editedContent: String? = nil,
         editedChildren: [String]? = nil,
         addedAt: Date = Date(),
-        regenerationCount: Int = 0,
-        isRegenerating: Bool = false,
-        previousVersionId: UUID? = nil
+        isRegenerating: Bool = false
     ) {
         self.id = id
         self.task = task
@@ -48,9 +42,7 @@ struct ReviewItem: Identifiable, Equatable {
         self.editedContent = editedContent
         self.editedChildren = editedChildren
         self.addedAt = addedAt
-        self.regenerationCount = regenerationCount
         self.isRegenerating = isRegenerating
-        self.previousVersionId = previousVersionId
     }
 
     /// User action on a review item
@@ -121,6 +113,14 @@ final class ReviewQueue {
     /// Items that have been approved
     var approvedItems: [ReviewItem] {
         items.filter { $0.isApproved }
+    }
+
+    /// Approved items whose IDs are not in `applied` — the set still awaiting
+    /// Apply. Lets the module apply incrementally: newly approved items stay
+    /// actionable after an earlier Apply, and already-applied items are never
+    /// re-applied.
+    func approvedItems(excluding applied: Set<UUID>) -> [ReviewItem] {
+        approvedItems.filter { !applied.contains($0.id) }
     }
 
     /// Items that have been rejected
@@ -204,9 +204,7 @@ final class ReviewQueue {
             let newContent = try await onRegenerationRequested(item.id, item.generatedContent, feedback)
             let newItem = ReviewItem(
                 task: item.task,
-                generatedContent: newContent,
-                regenerationCount: item.regenerationCount + 1,
-                previousVersionId: item.id
+                generatedContent: newContent
             )
 
             if let index = items.firstIndex(where: { $0.id == item.id }) {

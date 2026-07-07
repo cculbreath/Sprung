@@ -23,7 +23,10 @@ struct SeedGenerationView: View {
     @Environment(LLMFacade.self) private var llmFacade
 
     @State private var selectedItem: SeedGenerationSelection?
-    @State private var hasApplied = false
+    /// IDs of items already written to defaults. Apply is incremental: items
+    /// approved after an earlier Apply stay actionable; applied items are
+    /// never re-applied.
+    @State private var appliedItemIDs: Set<UUID> = []
     @State private var hasStartedGeneration = false
     @State private var generationOptions = GenerationOptions.load()
 
@@ -185,8 +188,8 @@ struct SeedGenerationView: View {
 
             Spacer()
 
-            if hasApplied {
-                Label("Applied", systemImage: "checkmark.circle.fill")
+            if !appliedItemIDs.isEmpty {
+                Label("Applied \(appliedItemIDs.count)", systemImage: "checkmark.circle.fill")
                     .foregroundStyle(.green)
                     .font(.subheadline)
             }
@@ -197,7 +200,7 @@ struct SeedGenerationView: View {
                 Label("Apply to Defaults", systemImage: "square.and.arrow.down")
             }
             .buttonStyle(.borderedProminent)
-            .disabled(orchestrator.reviewQueue.approvedItems.isEmpty || hasApplied)
+            .disabled(orchestrator.reviewQueue.approvedItems(excluding: appliedItemIDs).isEmpty)
         }
         .padding(.horizontal)
         .padding(.vertical, 12)
@@ -207,11 +210,12 @@ struct SeedGenerationView: View {
 
     private func applyToDefaults() {
         var defaults = defaultsStore.currentDefaults()
-        orchestrator.applyApprovedContent(to: &defaults)
+        let newlyApplied = orchestrator.applyApprovedContent(to: &defaults, skipping: appliedItemIDs)
+        guard !newlyApplied.isEmpty else { return }
         defaultsStore.save(defaults)  // Actually save the modified defaults
         defaultsStore.markSeedCreated()
-        hasApplied = true
-        Logger.info("🌱 Applied \(orchestrator.reviewQueue.approvedItems.count) items to defaults and marked seedCreated", category: .ai)
+        appliedItemIDs.formUnion(newlyApplied)
+        Logger.info("🌱 Applied \(newlyApplied.count) new items to defaults (\(appliedItemIDs.count) total) and marked seedCreated", category: .ai)
     }
 
     // MARK: - Main Content

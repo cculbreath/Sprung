@@ -253,8 +253,16 @@ final class SeedGenerationOrchestrator {
 
     // MARK: - Apply Approved Content
 
-    func applyApprovedContent(to defaults: inout ExperienceDefaults) {
-        let itemsToApply = reviewQueue.approvedItems.filter { $0.shouldApplyContent }
+    /// Apply approved items that have not already been applied. Returns the IDs
+    /// applied in this call so the caller can accumulate them and keep Apply
+    /// enabled only for items approved after the last Apply — applying is
+    /// incremental, never re-applying an item already written to defaults.
+    @discardableResult
+    func applyApprovedContent(
+        to defaults: inout ExperienceDefaults,
+        skipping alreadyApplied: Set<UUID> = []
+    ) -> Set<UUID> {
+        let itemsToApply = reviewQueue.approvedItems(excluding: alreadyApplied)
 
         for item in itemsToApply {
             let generator = generators.first { $0.sectionKey == item.task.section }
@@ -276,6 +284,7 @@ final class SeedGenerationOrchestrator {
         }
 
         Logger.info("Applied \(itemsToApply.count) items to defaults", category: .ai)
+        return Set(itemsToApply.map(\.id))
     }
 
     /// Apply edited children array directly to the content (no parsing needed)

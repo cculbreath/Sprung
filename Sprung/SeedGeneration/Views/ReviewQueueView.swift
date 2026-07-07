@@ -37,7 +37,10 @@ struct ReviewQueueView: View {
     enum FilterState: String, CaseIterable {
         case pending = "Pending"
         case approved = "Approved"
-        case rejected = "Rejected"
+        // Rejecting an item immediately kicks off a regeneration that replaces
+        // it, so this state is only ever occupied while that regeneration is
+        // in flight — "Regenerating" is the honest label, not "Rejected".
+        case regenerating = "Regenerating"
         case all = "All"
     }
 
@@ -168,7 +171,7 @@ struct ReviewQueueView: View {
             return scopedItems.filter { $0.userAction == nil }
         case .approved:
             return scopedItems.filter { $0.isApproved }
-        case .rejected:
+        case .regenerating:
             return scopedItems.filter { $0.isRejected }
         case .all:
             return scopedItems
@@ -179,7 +182,7 @@ struct ReviewQueueView: View {
         switch filterState {
         case .pending: return "No Pending Items"
         case .approved: return "No Approved Items"
-        case .rejected: return "No Rejected Items"
+        case .regenerating: return "Nothing Regenerating"
         case .all: return "Queue is Empty"
         }
     }
@@ -188,7 +191,7 @@ struct ReviewQueueView: View {
         switch filterState {
         case .pending: return "tray"
         case .approved: return "checkmark.circle"
-        case .rejected: return "xmark.circle"
+        case .regenerating: return "arrow.triangle.2.circlepath"
         case .all: return "tray"
         }
     }
@@ -197,7 +200,7 @@ struct ReviewQueueView: View {
         switch filterState {
         case .pending: return "All items have been reviewed."
         case .approved: return "No items have been approved yet."
-        case .rejected: return "No items have been rejected."
+        case .regenerating: return "No items are currently regenerating."
         case .all: return "Generate content to start reviewing."
         }
     }
