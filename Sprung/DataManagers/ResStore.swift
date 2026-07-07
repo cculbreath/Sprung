@@ -96,6 +96,7 @@ final class ResStore: SwiftDataStore {
         newResume.includeFonts = originalResume.includeFonts
         newResume.keyLabels = originalResume.keyLabels
         newResume.importedEditorKeysData = originalResume.importedEditorKeysData
+        newResume.sectionVisibilityOverrides = originalResume.sectionVisibilityOverrides
         newResume.template = originalResume.template
         // Deep copy the tree structure
         if let originalRoot = originalResume.rootNode {

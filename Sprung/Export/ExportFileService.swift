@@ -154,6 +154,9 @@ final class ExportFileService {
                 DispatchQueue.main.async {
                     self.performPDFExport(for: resume, onToast: onToast)
                 }
+            },
+            onFailure: { error in
+                onToast("Couldn't export resume PDF — the render failed: \(error.localizedDescription)")
             }
         )
     }
@@ -204,6 +207,9 @@ final class ExportFileService {
                 } catch {
                     onToast("Failed to export text: \(error.localizedDescription)")
                 }
+            },
+            onFailure: { error in
+                onToast("Couldn't export resume text — the render failed: \(error.localizedDescription)")
             }
         )
     }

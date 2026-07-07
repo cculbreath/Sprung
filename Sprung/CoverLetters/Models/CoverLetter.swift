@@ -291,6 +291,11 @@ class CoverLetter: Identifiable, Hashable {
         // Set this one as chosen
         self.isChosenSubmissionDraft = true
     }
+    /// Clears the chosen-submission-draft flag on this letter only.
+    /// Leaves every other letter — and the job app's editor selection — untouched.
+    func unmarkAsChosenSubmissionDraft() {
+        isChosenSubmissionDraft = false
+    }
 }
 @Model
 class MessageParams: Identifiable, Codable {

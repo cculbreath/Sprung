@@ -26,6 +26,9 @@ final class ResumeExportCoordinator {
         self.debounceInterval = debounceInterval
     }
     /// Debounced export used for live editing flows.
+    /// `onFinish` runs only after a successful render; on a failed render
+    /// `onFailure` receives the error instead. The exporting flag is cleared
+    /// either way.
     func debounceExport(
         resume: Resume,
         onStart: (() -> Void)? = nil,
@@ -40,10 +43,10 @@ final class ResumeExportCoordinator {
             Task { @MainActor in
                 defer {
                     self.exportingResumeIDs.remove(resume.id)
-                    onFinish?()
                 }
                 do {
                     try await self.exportService.export(for: resume)
+                    onFinish?()
                 } catch {
                     Logger.error("Debounced export failed: \(error)")
                     onFailure?(error)

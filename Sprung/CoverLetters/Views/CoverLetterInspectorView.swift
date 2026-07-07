@@ -179,10 +179,8 @@ struct CoverLetterInspectorView: View {
         // Toggle chosen status - if already chosen, unmark it
         // If not chosen, mark it (which will automatically unmark others)
         if coverLetter.isChosenSubmissionDraft {
-            // Unmark this one by setting selectedCover to nil
-            if let jobApp = jobAppStore.selectedApp {
-                jobApp.selectedCover = nil
-            }
+            // Unmark this one; the editor selection (selectedCover) is untouched
+            coverLetter.unmarkAsChosenSubmissionDraft()
         } else {
             // Mark this one as chosen (automatically unmarks others)
             coverLetter.markAsChosenSubmissionDraft()
