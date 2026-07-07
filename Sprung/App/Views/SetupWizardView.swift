@@ -149,7 +149,7 @@ private extension SetupWizardView {
             Text("A quick guided setup to get you drafting quickly.")
                 .font(.headline)
             VStack(alignment: .leading, spacing: 10) {
-                Label("Add API keys for OpenRouter, OpenAI (interview + TTS), and Anthropic (document analysis).", systemImage: "key.fill")
+                Label("Add API keys for OpenRouter, Anthropic (interview + document analysis), and OpenAI (text-to-speech + imports).", systemImage: "key.fill")
                 Label("Choose OpenRouter models to enable.", systemImage: "switch.2")
                 Label("Set defaults for onboarding, document analysis, and Git ingest.", systemImage: "slider.horizontal.3")
                 Label("Optional: revisit this wizard anytime from Settings.", systemImage: "clock.arrow.circlepath")
@@ -175,18 +175,18 @@ private extension SetupWizardView {
                         help: "Required for multi-model resume/cover workflows and Git ingest."
                     )
                     keyField(
-                        title: "OpenAI (Interview + TTS)",
+                        title: "Anthropic",
+                        placeholder: "sk-ant-…",
+                        value: $anthropicApiKey,
+                        isRequired: true,
+                        help: "The backbone key: powers the onboarding interview, document analysis, resume revision, and the Discovery agent."
+                    )
+                    keyField(
+                        title: "OpenAI (TTS + Imports)",
                         placeholder: "sk-…",
                         value: $openAiApiKey,
                         isRequired: true,
-                        help: "Used for onboarding interview and streaming text-to-speech."
-                    )
-                    keyField(
-                        title: "Anthropic (document analysis)",
-                        placeholder: "sk-ant-…",
-                        value: $anthropicApiKey,
-                        isRequired: false,
-                        help: "Needed for document ingestion: summaries, narrative cards, skill bank, and enrichment."
+                        help: "Powers streaming text-to-speech, the generic job-URL import, and MCP lead enrichment."
                     )
                 }
             }

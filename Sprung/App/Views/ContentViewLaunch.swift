@@ -7,6 +7,9 @@ struct ContentViewLaunch: View {
     @State private var restoreStatus: RestoreStatus?
     @State private var isRestoring = false
     @State private var isResetting = false
+    @AppStorage("hasDismissedGetStartedChecklist") private var hasDismissedGetStarted = false
+    @State private var getStartedProgress = GetStartedProgress()
+    @State private var didEvaluateGetStarted = false
     var body: some View {
         ZStack {
             coreContent
@@ -24,13 +27,70 @@ struct ContentViewLaunch: View {
                 )
                 .padding()
                 .transition(.opacity)
+            } else if showGetStartedChecklist {
+                GetStartedChecklistView(
+                    progress: getStartedProgress,
+                    onRunInterview: {
+                        NotificationCenter.default.post(name: .startOnboardingInterview, object: nil)
+                    },
+                    onOpenExperience: {
+                        NotificationCenter.default.post(
+                            name: .navigateToModule,
+                            object: nil,
+                            userInfo: ["module": AppModule.experience.rawValue]
+                        )
+                    },
+                    onOpenTemplateEditor: {
+                        NotificationCenter.default.post(name: .showTemplateEditor, object: nil)
+                    },
+                    onCaptureJob: {
+                        NotificationCenter.default.post(name: .newJobApp, object: nil)
+                    },
+                    onDismiss: {
+                        withAnimation { hasDismissedGetStarted = true }
+                    }
+                )
+                .padding(20)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                .transition(.opacity)
             }
         }
         .animation(.easeInOut, value: appEnvironment.launchState)
+        .animation(.easeInOut, value: showGetStartedChecklist)
+        // Evaluate first-run progress off the render path (avoids mutating the
+        // store while a view body is running) and re-evaluate whenever any
+        // essential-step store changes so rows tick and the panel self-dismisses.
+        .task { refreshGetStarted() }
+        .onChange(of: appEnvironment.requiresTemplateSetup) { _, _ in refreshGetStarted() }
+        .onChange(of: deps.knowledgeCardStore.changeVersion) { _, _ in refreshGetStarted() }
+        .onChange(of: deps.skillStore.changeVersion) { _, _ in refreshGetStarted() }
+        .onChange(of: deps.jobAppStore.changeVersion) { _, _ in refreshGetStarted() }
+        .onChange(of: deps.experienceDefaultsStore.changeVersion) { _, _ in refreshGetStarted() }
         // App-global toast surface. `ToastCenter.shared` is a single app-wide
         // singleton; mounting the overlay here lets any store/service/view fire
         // `ToastCenter.shared.show(...)` and have it render in the main window.
         .toastOverlay()
+    }
+
+    /// Whether to surface the first-run "Get Started" checklist: only once
+    /// progress has been evaluated, never in read-only mode, never after the
+    /// user dismissed it, and never once the essentials all exist.
+    private var showGetStartedChecklist: Bool {
+        guard didEvaluateGetStarted else { return false }
+        guard !appEnvironment.launchState.isReadOnly else { return false }
+        guard !hasDismissedGetStarted else { return false }
+        return !getStartedProgress.allComplete
+    }
+
+    private func refreshGetStarted() {
+        getStartedProgress = GetStartedProgress.evaluate(
+            knowledgeCardStore: deps.knowledgeCardStore,
+            skillStore: deps.skillStore,
+            experienceDefaultsStore: deps.experienceDefaultsStore,
+            templateInstalled: !appEnvironment.requiresTemplateSetup,
+            jobCaptured: !deps.jobAppStore.jobApps.isEmpty
+        )
+        didEvaluateGetStarted = true
     }
     private var coreContent: some View {
         ContentView()
