@@ -2,14 +2,15 @@
 //  ResumeDetailView.swift
 //  Sprung
 //
-//  Panel-based resume TreeNode editor with section dropdown,
-//  bottom drawers, and AI action controls.
+//  Panel-based resume TreeNode editor with section dropdown
+//  and a styling bottom drawer.
 //
 import SwiftData
 import SwiftUI
 
 /// Tree-editor panel showing resume nodes with section dropdown navigation.
-/// AI and styling controls are in collapsible bottom drawers.
+/// Styling controls are in a collapsible bottom drawer; AI actions live in
+/// the toolbar and Resume menu.
 struct ResumeDetailView: View {
     // External navigation bindings
     @Binding var tab: TabList
@@ -21,7 +22,6 @@ struct ResumeDetailView: View {
 
     // Persisted UI state
     @AppStorage("resumeEditorSelectedSection") private var selectedSection: String = "work"
-    @AppStorage("resumeEditorAIDrawerExpanded") private var isAIDrawerExpanded: Bool = true
     @AppStorage("resumeEditorStylingDrawerExpanded") private var isStylingDrawerExpanded: Bool = false
 
     // MARK: - Init
@@ -57,7 +57,8 @@ struct ResumeDetailView: View {
                 // Section dropdown at top
                 ResumeSectionDropdown(
                     sections: contentSections,
-                    selectedSection: $selectedSection
+                    selectedSection: $selectedSection,
+                    reviewItemCount: vm.rootNode?.aiStatusChildren ?? 0
                 )
 
                 Divider()
@@ -81,17 +82,11 @@ struct ResumeDetailView: View {
 
                 Spacer(minLength: 0)
 
-                // Bottom drawers
+                // Bottom drawer
                 let hasStylePanels = vm.hasFontSizeNodes || vm.hasSectionVisibilityOptions
                 if hasStylePanels {
                     ResumeStylingDrawer(isExpanded: $isStylingDrawerExpanded)
                 }
-
-                ResumeAIDrawer(
-                    isExpanded: $isAIDrawerExpanded,
-                    sheets: $sheets,
-                    revnodeCount: vm.rootNode?.aiStatusChildren ?? 0
-                )
             }
 
         }

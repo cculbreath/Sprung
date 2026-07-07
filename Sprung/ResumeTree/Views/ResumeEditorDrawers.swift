@@ -3,84 +3,11 @@
 //  Sprung
 //
 //  Bottom drawer components for the resume editor panel.
-//  Contains AI action drawer (default open) and styling drawer (default closed).
+//  Contains the styling drawer (default closed).
 //
 
 import AppKit
 import SwiftUI
-
-// MARK: - AI Action Drawer
-
-/// Bottom drawer containing AI action buttons and a review-item count
-struct ResumeAIDrawer: View {
-    @Binding var isExpanded: Bool
-    @Binding var sheets: AppSheets
-    let revnodeCount: Int
-
-    @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
-
-    var body: some View {
-        VStack(spacing: 0) {
-            DrawerSectionHeader(
-                title: "AI Actions",
-                isExpanded: $isExpanded,
-                trailingContent: revnodeCount > 0 ? AnyView(
-                    HStack(spacing: 4) {
-                        Text("Review Items:")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        HStack(spacing: 3) {
-                            Image(systemName: "sparkles")
-                                .font(.system(size: 9))
-                            Text("\(revnodeCount)")
-                                .font(.caption2.weight(.medium))
-                        }
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(Capsule().fill(Color.orange))
-                    }
-                ) : nil
-            )
-
-            if isExpanded {
-                VStack(spacing: 10) {
-                    // AI action buttons row (compact size)
-                    HStack(spacing: 8) {
-                        Button {
-                            NotificationCenter.default.post(name: .customizeResume, object: nil)
-                        } label: {
-                            Label("Customize", systemImage: "wand.and.sparkles")
-                                .font(.system(size: 12))
-                        }
-                        .controlSize(.small)
-                        .buttonStyle(.automatic)
-                        .help("Create resume revisions (requires nodes marked for AI revision)")
-                        .disabled(jobAppStore.selectedApp?.selectedRes?.hasUpdatableNodes != true)
-
-                        Button {
-                            sheets.showResumeReview = true
-                        } label: {
-                            Label("Optimize", systemImage: "character.magnify")
-                                .font(.system(size: 12))
-                        }
-                        .controlSize(.small)
-                        .buttonStyle(.automatic)
-                        .help("AI Resume Review")
-                        .disabled(jobAppStore.selectedApp?.selectedRes == nil)
-
-                        Spacer()
-                    }
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .transition(.opacity.combined(with: .move(edge: .bottom)))
-            }
-        }
-        .clipped()
-        .glassEffect(.regular, in: .rect(cornerRadius: 0))
-    }
-}
 
 // MARK: - Styling Drawer
 
@@ -136,8 +63,6 @@ struct ResumeStylingDrawer: View {
 struct DrawerSectionHeader: View {
     let title: String
     @Binding var isExpanded: Bool
-    var badge: AnyView? = nil
-    var trailingContent: AnyView? = nil
 
     var body: some View {
         VStack(spacing: 0) {
@@ -163,15 +88,7 @@ struct DrawerSectionHeader: View {
                         .tracking(0.5)
                         .foregroundStyle(.secondary)
 
-                    if let badge {
-                        badge
-                    }
-
                     Spacer()
-
-                    if let trailingContent {
-                        trailingContent
-                    }
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)

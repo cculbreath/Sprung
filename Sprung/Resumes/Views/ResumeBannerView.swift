@@ -25,10 +25,10 @@ struct ResumeBannerView: View {
             createResumeButton
             resumePicker
         }
+        .controlSize(.small)
         .padding(.leading, 12)
         .padding(.trailing, 20)
-        .padding(.top, 8)
-        .padding(.bottom, 12)
+        .padding(.vertical, 6)
         .background {
             Color(nsColor: .controlBackgroundColor).opacity(0.85)
         }

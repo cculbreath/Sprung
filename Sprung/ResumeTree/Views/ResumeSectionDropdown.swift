@@ -21,6 +21,8 @@ struct SectionInfo: Identifiable {
 struct ResumeSectionDropdown: View {
     let sections: [SectionInfo]
     @Binding var selectedSection: String
+    /// Count of nodes marked for AI revision across the whole resume.
+    let reviewItemCount: Int
 
     private var currentIndex: Int {
         sections.firstIndex(where: { $0.name == selectedSection }) ?? 0
@@ -76,12 +78,25 @@ struct ResumeSectionDropdown: View {
                     .help("Next section")
                 }
 
-                // Left-aligned: section-level AI icon
+                // Edges: section-level AI icon (left), review-item badge (right)
                 HStack {
                     if let node = selectedSectionNode, sectionSupportsAIConfig(node) {
                         SectionAIModeMenu(node: node)
                     }
                     Spacer()
+                    if reviewItemCount > 0 {
+                        HStack(spacing: 3) {
+                            Image(systemName: "sparkles")
+                                .font(.system(size: 9))
+                            Text("\(reviewItemCount)")
+                                .font(.caption2.weight(.medium))
+                        }
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Capsule().fill(Color.orange))
+                        .help("\(reviewItemCount) item\(reviewItemCount == 1 ? "" : "s") marked for AI revision")
+                    }
                 }
             }
             .padding(.horizontal, 8)

@@ -66,7 +66,6 @@ struct ResumeSplitView: View {
             }
 
             ResumeBannerView(jobApp: selApp)
-                .frame(height: 32)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .animation(.easeInOut(duration: 0.2), value: pdfPreviewVisible)
@@ -174,7 +173,6 @@ struct ResumeSplitView: View {
             }
 
             ResumeBannerView(jobApp: selApp)
-                .frame(height: 32)
         }
         .alert(
             "Couldn't Create Resume",
