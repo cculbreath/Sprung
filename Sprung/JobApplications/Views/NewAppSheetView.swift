@@ -122,16 +122,6 @@ struct NewAppSheetView: View {
                 }
             }
         }
-        .onReceive(NotificationCenter.default.publisher(for: .captureJobURLReady)) { notification in
-            // Relay notification from AppSheets - fires after sheet is mounted
-            if let urlString = notification.userInfo?["url"] as? String, urlText.isEmpty {
-                Logger.info("📥 [NewAppSheetView] Received capture URL via relay notification: \(urlString)", category: .ui)
-                urlText = urlString
-                Task {
-                    await handleNewApp()
-                }
-            }
-        }
         .sheet(isPresented: $showCloudflareChallenge) {
             if let challengeURL {
                 CloudflareChallengeView(url: challengeURL, isPresented: $showCloudflareChallenge) {

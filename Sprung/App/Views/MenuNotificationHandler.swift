@@ -11,10 +11,16 @@ import AppKit
 /// notifications listed in `MenuCommands.swift` should be observed, and they map
 /// 1:1 with menu or toolbar items. View-local interactions should prefer SwiftUI
 /// bindings rather than introducing new notifications.
+/// Lives at the shell level (`UnifiedAppLayout`), NOT inside any module view,
+/// so every menu/toolbar command works regardless of which module is frontmost.
+/// Commands whose final observers live inside the Resume Editor module's view
+/// tree navigate there first (`ModuleNavigationService`) before acting — the
+/// same navigate-then-trigger pattern the Discovery menu uses.
 @Observable
 class MenuNotificationHandler {
     private weak var jobAppStore: JobAppStore?
     private weak var coverLetterStore: CoverLetterStore?
+    private weak var moduleNavigation: ModuleNavigationService?
     private var sheets: Binding<AppSheets>?
     private var selectedTab: Binding<TabList>?
     private var observersConfigured = false
@@ -23,12 +29,14 @@ class MenuNotificationHandler {
     func configure(
         jobAppStore: JobAppStore,
         coverLetterStore: CoverLetterStore,
+        moduleNavigation: ModuleNavigationService,
         sheets: Binding<AppSheets>,
         selectedTab: Binding<TabList>
     ) {
         Logger.info("🛠️ MenuNotificationHandler configure invoked", category: .ui)
         self.jobAppStore = jobAppStore
         self.coverLetterStore = coverLetterStore
+        self.moduleNavigation = moduleNavigation
         self.sheets = sheets
         self.selectedTab = selectedTab
         guard !observersConfigured else {
@@ -53,8 +61,10 @@ class MenuNotificationHandler {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            // Switch to listing tab for manual entry editing
-            self?.selectedTab?.wrappedValue = .listing
+            // Surface the Resume Editor's listing tab for manual entry editing
+            Task { @MainActor in
+                self?.showResumeEditor(tab: .listing)
+            }
         }
         NotificationCenter.default.addObserver(
             forName: .bestJob,
@@ -67,8 +77,8 @@ class MenuNotificationHandler {
         }
         // Resume Commands
         // .customizeResume opens the revision window via AppDelegate (the
-        // module-independent choke point). This module-scoped observer only
-        // syncs the visible tab when the Resume Editor module is active.
+        // module-independent choke point). This observer only syncs the Resume
+        // Editor's tab state so the resume is visible next time that module is up.
         NotificationCenter.default.addObserver(
             forName: .customizeResume,
             object: nil,
@@ -132,8 +142,10 @@ class MenuNotificationHandler {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            self?.selectedTab?.wrappedValue = .coverLetter
-            self?.sheets?.wrappedValue.showCoverLetterInspector.toggle()
+            Task { @MainActor in
+                self?.showResumeEditor(tab: .coverLetter)
+                self?.sheets?.wrappedValue.showCoverLetterInspector.toggle()
+            }
         }
         // Analysis Commands
         NotificationCenter.default.addObserver(
@@ -200,18 +212,14 @@ class MenuNotificationHandler {
         ) { [weak self] _ in
             self?.sheets?.wrappedValue.showCreateResume = true
         }
-        // Setup Wizard
-        NotificationCenter.default.addObserver(
-            forName: .showSetupWizard,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            self?.sheets?.wrappedValue.showSetupWizard = true
-        }
+        // Setup Wizard: observed by UnifiedAppLayout (the single presenter,
+        // which also owns the hasCompletedSetupWizard bookkeeping) — no
+        // observer here, so the sheet is never double-presented.
         // Discovery lives in the main-window module shell; its menu items post
         // .navigateToModule (plus module-scoped trigger notifications) directly
         // from SprungApp, so no observers are needed here.
-        // Export Commands - switch to Submit tab and relay via .triggerExport
+        // Export Commands - surface the Submit tab and relay via .triggerExport
+        // (the observer, ResumeExportView, is tab content and must mount first)
         let exportMap: [(Notification.Name, String)] = [
             (.exportResumePDF, "resumePDF"),
             (.exportResumeText, "resumeText"),
@@ -227,7 +235,9 @@ class MenuNotificationHandler {
                 object: nil,
                 queue: .main
             ) { [weak self] _ in
-                self?.selectedTab?.wrappedValue = .submitApp
+                Task { @MainActor in
+                    self?.showResumeEditor(tab: .submitApp)
+                }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
                     NotificationCenter.default.post(
                         name: .triggerExport,
@@ -240,24 +250,36 @@ class MenuNotificationHandler {
     }
     // MARK: - Menu Action Handlers
     // These handlers directly trigger the same UI state changes that the toolbar buttons do
+    /// Bring the Resume Editor module to front and select a tab. Used by every
+    /// command whose observer or result surface lives inside that module's tree.
+    @MainActor
+    private func showResumeEditor(tab: TabList) {
+        moduleNavigation?.selectModule(.resumeEditor)
+        selectedTab?.wrappedValue = tab
+    }
     @MainActor
     private func handleBestJob() {
         // Trigger the same action as the BestJobButton in the toolbar
+        // (headless observer lives at the shell level — works in any module)
         NotificationCenter.default.post(name: .triggerBestJobButton, object: nil)
     }
     @MainActor
     private func handleGenerateCoverLetter() {
-        // Switch to cover letter tab first
-        selectedTab?.wrappedValue = .coverLetter
+        // Surface the cover letter tab first
+        showResumeEditor(tab: .coverLetter)
         // Trigger the same action as CoverLetterGenerateButton
+        // (headless observer lives at the shell level — no mount race)
         NotificationCenter.default.post(name: .triggerGenerateCoverLetterButton, object: nil)
     }
     @MainActor
     private func handleReviseCoverLetter() {
-        // Switch to cover letter tab first
-        selectedTab?.wrappedValue = .coverLetter
-        // Trigger the same action as CoverLetterReviseButton
-        NotificationCenter.default.post(name: .triggerReviseCoverLetterButton, object: nil)
+        // Surface the cover letter tab first — its observer
+        // (CoverLetterReviseButton) is tab content and must mount before
+        // the trigger fires, hence the delay (same pattern as exports).
+        showResumeEditor(tab: .coverLetter)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+            NotificationCenter.default.post(name: .triggerReviseCoverLetterButton, object: nil)
+        }
     }
     @MainActor
     private func handleBestCoverLetter() {
@@ -281,20 +303,25 @@ class MenuNotificationHandler {
     }
     @MainActor
     private func handleStartSpeaking() {
-        // Switch to cover letter tab and trigger TTS start
-        selectedTab?.wrappedValue = .coverLetter
-        NotificationCenter.default.post(name: .triggerTTSStart, object: nil)
+        // Surface the cover letter tab, then trigger TTS start once its
+        // observer (TTSButton, tab content) has had a chance to mount.
+        showResumeEditor(tab: .coverLetter)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+            NotificationCenter.default.post(name: .triggerTTSStart, object: nil)
+        }
     }
     @MainActor
     private func handleStopSpeaking() {
-        // Trigger TTS stop
+        // Trigger TTS stop (if nothing observes, nothing is speaking)
         NotificationCenter.default.post(name: .triggerTTSStop, object: nil)
     }
     @MainActor
     private func handleRestartSpeaking() {
-        // Switch to cover letter tab and trigger TTS restart
-        selectedTab?.wrappedValue = .coverLetter
-        NotificationCenter.default.post(name: .triggerTTSRestart, object: nil)
+        // Surface the cover letter tab, then trigger TTS restart (see start)
+        showResumeEditor(tab: .coverLetter)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+            NotificationCenter.default.post(name: .triggerTTSRestart, object: nil)
+        }
     }
     @MainActor
     private func handlePreprocessAllPendingJobs() {

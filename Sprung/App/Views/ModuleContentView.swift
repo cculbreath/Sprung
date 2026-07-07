@@ -10,6 +10,9 @@ import SwiftUI
 /// Routes to the appropriate view based on the selected module
 struct ModuleContentView: View {
     let module: AppModule
+    /// Shared app-sheet state owned by UnifiedAppLayout (the always-alive
+    /// presenter); the Resume Editor module reads/writes it for its tab content.
+    @Binding var sheets: AppSheets
 
     var body: some View {
         Group {
@@ -18,7 +21,7 @@ struct ModuleContentView: View {
                 PipelineModuleView()
 
             case .resumeEditor:
-                ResumeEditorModuleView()
+                ResumeEditorModuleView(sheets: $sheets)
 
             case .dailyTasks:
                 DailyTasksModuleView()

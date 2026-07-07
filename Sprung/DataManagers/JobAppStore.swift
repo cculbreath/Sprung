@@ -275,6 +275,7 @@ final class JobAppStore: EntityStore {
         jobAppToSave.industries = form.industries
         jobAppToSave.jobApplyLink = form.jobApplyLink
         jobAppToSave.postingURL = form.postingURL
+        jobAppToSave.salary = form.salary
         persistChanges()
 
         // Preprocessing results are derived from the job description — they

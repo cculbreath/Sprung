@@ -129,6 +129,17 @@ struct SkillBankRowView: View {
                                     startEditing()
                                 }
 
+                            if skill.isPending {
+                                Text("Pending")
+                                    .font(.caption2.weight(.semibold))
+                                    .foregroundStyle(.orange)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(Color.orange.opacity(0.12))
+                                    .clipShape(Capsule())
+                                    .help("Created during onboarding but never approved — use Approve Pending above")
+                            }
+
                             // Edit button on hover
                             Button {
                                 startEditing()

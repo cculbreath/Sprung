@@ -17,8 +17,10 @@ struct ResumeEditorModuleView: View {
     @Environment(UnifiedJobFocusState.self) private var focusState
 
     @State var tabRefresh: Bool = false
-    @State private var sheets = AppSheets()
-    @State private var menuHandler = MenuNotificationHandler()
+    /// Shared app-sheet state owned by UnifiedAppLayout. The shell presents the
+    /// sheets and observes the menu/URL-scheme notifications (so they work in
+    /// every module); this module only reads/writes the bits its tabs need.
+    @Binding var sheets: AppSheets
 
     // Sidebar collapse state - persisted
     @AppStorage("resumeEditorSidebarExpanded") private var isSidebarExpanded: Bool = true
@@ -55,19 +57,6 @@ struct ResumeEditorModuleView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .animation(.easeInOut(duration: 0.2), value: isSidebarExpanded)
-        // Headless toolbar button views: stay in the view hierarchy so their
-        // notification-driven sheets/alerts continue to present from menu and toolbar commands
-        .background {
-            VStack(spacing: 0) {
-                BestJobButton()
-                CoverLetterGenerateButton()
-            }
-            .frame(width: 0, height: 0)
-            .clipped()
-            .allowsHitTesting(false)
-            .accessibilityHidden(true)
-        }
-        .appSheets(sheets: $sheets)
         .onChange(of: jobAppStore.selectedApp) { _, newValue in
             updateMyLetter()
             focusState.focusedJob = newValue
@@ -85,13 +74,6 @@ struct ResumeEditorModuleView: View {
             NotificationCenter.default.post(name: .toolbarNeedsValidation, object: nil)
         }
         .onAppear {
-            Logger.debug("ResumeEditorModuleView configuring MenuNotificationHandler", category: .ui)
-            menuHandler.configure(
-                jobAppStore: jobAppStore,
-                coverLetterStore: coverLetterStore,
-                sheets: $sheets,
-                selectedTab: $navigationState.selectedTab
-            )
             // Restore the persisted job focus (single source: UnifiedJobFocusState ->
             // unifiedFocusedJobId), then propagate it to the store selection below.
             focusState.restoreFocus(from: jobAppStore.jobApps)

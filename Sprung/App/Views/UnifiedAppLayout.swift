@@ -7,7 +7,14 @@
 
 import SwiftUI
 
-/// Top-level layout combining icon bar and module content
+/// Top-level layout combining icon bar and module content.
+///
+/// Also the always-alive owner of the app's command surface: the shared
+/// `AppSheets` state, the `MenuNotificationHandler` observers, and the headless
+/// toolbar-button views live HERE — above the `.id(module)` switch — so menu
+/// commands, toolbar items, and the `sprung://capture-job` URL scheme work no
+/// matter which module is frontmost. (They were previously registered inside
+/// ResumeEditorModuleView and silently died whenever another module was up.)
 struct UnifiedAppLayout: View {
     @Environment(ModuleNavigationService.self) private var navigation
     @Environment(WindowCoordinator.self) private var windowCoordinator
@@ -15,9 +22,14 @@ struct UnifiedAppLayout: View {
     @Environment(ReasoningStreamState.self) private var reasoningStreamManager
     @Environment(AppState.self) private var appState
     @Environment(EnabledLLMStore.self) private var enabledLLMStore
+    @Environment(JobAppStore.self) private var jobAppStore
+    @Environment(CoverLetterStore.self) private var coverLetterStore
+    @Environment(NavigationStateService.self) private var navigationState
 
     @State private var showSetupWizard: Bool = false
     @State private var didPromptTemplateEditor = false
+    @State private var sheets = AppSheets()
+    @State private var menuHandler = MenuNotificationHandler()
     @AppStorage("hasCompletedSetupWizard") private var hasCompletedSetupWizard = false
 
     var body: some View {
@@ -26,9 +38,25 @@ struct UnifiedAppLayout: View {
             IconBarView()
 
             // Module content
-            ModuleContentView(module: navigation.selectedModule)
+            ModuleContentView(module: navigation.selectedModule, sheets: $sheets)
         }
         .frame(minWidth: 1000, minHeight: 650)
+        // Headless toolbar-button views: kept alive at the shell so their
+        // notification-driven sheets/alerts present from menu and toolbar
+        // commands in every module (single observer per trigger).
+        .background {
+            VStack(spacing: 0) {
+                BestJobButton()
+                CoverLetterGenerateButton()
+            }
+            .frame(width: 0, height: 0)
+            .clipped()
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+        }
+        // Single presenter for all shared app sheets, and the sole observer of
+        // .captureJobFromURL — alive for the lifetime of the main window.
+        .appSheets(sheets: $sheets)
         // Global reasoning stream overlay (shared across all modules)
         .overlay {
             if reasoningStreamManager.isVisible {
@@ -70,6 +98,14 @@ struct UnifiedAppLayout: View {
             })
         }
         .onAppear {
+            @Bindable var navigationState = navigationState
+            menuHandler.configure(
+                jobAppStore: jobAppStore,
+                coverLetterStore: coverLetterStore,
+                moduleNavigation: navigation,
+                sheets: $sheets,
+                selectedTab: $navigationState.selectedTab
+            )
             if shouldShowSetupWizard() {
                 showSetupWizard = true
             }

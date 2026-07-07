@@ -19,8 +19,7 @@ final class KnowledgeCardStoreTests: InMemoryStoreCase {
         title: String = "Lead Engineer",
         type: CardType = .employment,
         fromOnboarding: Bool = false,
-        pending: Bool = false,
-        enabledByDefault: Bool = false
+        pending: Bool = false
     ) -> KnowledgeCard {
         KnowledgeCard(
             title: title,
@@ -28,7 +27,7 @@ final class KnowledgeCardStoreTests: InMemoryStoreCase {
             cardType: type,
             isFromOnboarding: fromOnboarding,
             isPending: pending
-        ).withDefaultFlag(enabledByDefault)
+        )
     }
 
     // MARK: - KnowledgeCardStore CRUD
@@ -102,6 +101,50 @@ final class KnowledgeCardStoreTests: InMemoryStoreCase {
         XCTAssertEqual(store.approvedCards.count, 2)
     }
 
+    // MARK: - Pending-card ghost contract (app-audit-2026-07-06 §3.1)
+    //
+    // Cards onboarding persisted with isPending=true survive an abandoned
+    // interview. The pinned contract: they stay in `knowledgeCards` (the
+    // collection generation consumers read), they are approvable individually
+    // from the References browser (per-card Approve → approveCards(cardIds:)),
+    // and approving one card must not touch the others.
+
+    func testPendingCardsRemainInFullCollectionUntilApproved() throws {
+        let store = KnowledgeCardStore(context: context)
+        store.addAll([
+            makeCard(title: "Ghost", fromOnboarding: true, pending: true),
+            makeCard(title: "Approved", fromOnboarding: false, pending: false)
+        ])
+
+        // Pending cards are NOT hidden from the primary collection — they feed
+        // generation and must therefore stay visible/approvable in browsers.
+        XCTAssertEqual(store.knowledgeCards.count, 2)
+        XCTAssertEqual(store.pendingCards.map(\.title), ["Ghost"])
+    }
+
+    func testApproveSingleCardLeavesOthersPending() throws {
+        let store = KnowledgeCardStore(context: context)
+        let first = makeCard(title: "ApproveMe", fromOnboarding: true, pending: true)
+        let second = makeCard(title: "StillPending", fromOnboarding: true, pending: true)
+        store.addAll([first, second])
+
+        store.approveCards(cardIds: [first.id])
+
+        XCTAssertFalse(first.isPending)
+        XCTAssertTrue(second.isPending)
+        XCTAssertEqual(store.pendingCards.map(\.title), ["StillPending"])
+        XCTAssertEqual(try fetchAll(KnowledgeCard.self).filter { $0.isPending }.count, 1)
+    }
+
+    func testApproveWithUnknownIdIsANoOp() throws {
+        let store = KnowledgeCardStore(context: context)
+        store.add(makeCard(title: "Pending", fromOnboarding: true, pending: true))
+
+        store.approveCards(cardIds: [UUID()])
+
+        XCTAssertEqual(store.pendingCards.count, 1)
+    }
+
     func testDeletePendingCardsLeavesApproved() throws {
         let store = KnowledgeCardStore(context: context)
         store.addAll([
@@ -112,16 +155,6 @@ final class KnowledgeCardStoreTests: InMemoryStoreCase {
         store.deletePendingCards()
         XCTAssertEqual(store.knowledgeCards.count, 1)
         XCTAssertEqual(store.knowledgeCards.first?.title, "Keep")
-    }
-
-    func testDefaultCardsFilter() throws {
-        let store = KnowledgeCardStore(context: context)
-        store.addAll([
-            makeCard(title: "Default", enabledByDefault: true),
-            makeCard(title: "NonDefault", enabledByDefault: false)
-        ])
-        XCTAssertEqual(store.defaultCards.count, 1)
-        XCTAssertEqual(store.defaultCards.first?.title, "Default")
     }
 
     func testCardsOfTypeFilter() throws {
@@ -249,6 +282,34 @@ final class SkillStoreTests: InMemoryStoreCase {
         XCTAssertEqual(store.approvedSkills.count, 2)
     }
 
+    // Pending-skill ghost contract (app-audit-2026-07-06 §3.1): skills left
+    // pending by an abandoned interview stay in `skills` (the full collection)
+    // and are cleared wholesale by the browser's Approve Pending action
+    // (approveSkills with no ids); a targeted approval must not touch others.
+
+    func testPendingSkillsRemainInFullCollectionUntilApproved() throws {
+        let store = SkillStore(context: context)
+        store.addAll([
+            makeSkill(canonical: "Ghost", fromOnboarding: true, pending: true),
+            makeSkill(canonical: "Approved", fromOnboarding: false, pending: false)
+        ])
+        XCTAssertEqual(store.skills.count, 2)
+        XCTAssertEqual(store.pendingSkills.map(\.canonical), ["Ghost"])
+    }
+
+    func testApproveSingleSkillLeavesOthersPending() throws {
+        let store = SkillStore(context: context)
+        let first = makeSkill(canonical: "ApproveMe", fromOnboarding: true, pending: true)
+        let second = makeSkill(canonical: "StillPending", fromOnboarding: true, pending: true)
+        store.addAll([first, second])
+
+        store.approveSkills(skillIds: [first.id])
+
+        XCTAssertFalse(first.isPending)
+        XCTAssertTrue(second.isPending)
+        XCTAssertEqual(store.pendingSkills.map(\.canonical), ["StillPending"])
+    }
+
     func testSkillsMatchingSearchesVariants() throws {
         let store = SkillStore(context: context)
         let skill = Skill(canonical: "Python", atsVariants: ["python3", "Py"], category: "Programming Languages")
@@ -264,14 +325,5 @@ final class SkillStoreTests: InMemoryStoreCase {
             makeSkill(canonical: "Figma", category: "Design & Creative")
         ])
         XCTAssertEqual(store.skills(inCategory: "Programming Languages").count, 1)
-    }
-}
-
-// MARK: - Fixture sugar
-
-private extension KnowledgeCard {
-    func withDefaultFlag(_ value: Bool) -> KnowledgeCard {
-        enabledByDefault = value
-        return self
     }
 }

@@ -236,6 +236,22 @@ struct SkillsBankBrowser: View {
             .background(Color(nsColor: .controlBackgroundColor))
             .clipShape(RoundedRectangle(cornerRadius: 8))
 
+            // Pending skills left behind by onboarding (e.g. an abandoned
+            // interview) stay visible with a per-row badge; approve them here.
+            if let store = skillStore, !store.pendingSkills.isEmpty {
+                Button(action: { store.approveSkills() }) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "checkmark.circle")
+                        Text("Approve Pending (\(store.pendingSkills.count))")
+                    }
+                    .font(.caption.weight(.medium))
+                }
+                .buttonStyle(.bordered)
+                .tint(.orange)
+                .disabled(isProcessing)
+                .help("Approve \(store.pendingSkills.count) skill\(store.pendingSkills.count == 1 ? "" : "s") created during onboarding but never approved")
+            }
+
             // Action buttons (show if we have facade; Extract always visible)
             if llmFacade != nil {
                 actionButtons

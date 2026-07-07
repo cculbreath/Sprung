@@ -8,6 +8,10 @@ struct KnowledgeCardView: View {
     let onEdit: () -> Void
     let onDelete: () -> Void
     var onRefine: (() -> Void)?
+    /// Approves a pending card (isPending → false). Pending cards are the ones
+    /// onboarding persisted but the user never approved (e.g. an abandoned
+    /// interview) — they must stay visible and approvable here, not ghost.
+    var onApprove: (() -> Void)?
     var onRegenerateSummary: (() -> Void)?
 
     @State private var isHovering = false
@@ -123,6 +127,17 @@ struct KnowledgeCardView: View {
                     .clipShape(Capsule())
 
                 Spacer()
+
+                if card.isPending {
+                    Label("Pending Approval", systemImage: "clock.badge.questionmark")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.orange)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(Color.orange.opacity(0.12))
+                        .clipShape(Capsule())
+                        .help("Created during onboarding but never approved — approve it to confirm it belongs in your library")
+                }
 
                 if card.isFromOnboarding {
                     Image(systemName: "sparkles")
@@ -325,6 +340,17 @@ struct KnowledgeCardView: View {
 
     private var footerSection: some View {
         HStack(spacing: 12) {
+            if card.isPending, let onApprove {
+                Button(action: onApprove) {
+                    Label("Approve", systemImage: "checkmark.circle")
+                        .font(.subheadline.weight(.medium))
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.regular)
+                .tint(.orange)
+                .help("Approve this pending card")
+            }
+
             Button(action: onEdit) {
                 Label("Edit", systemImage: "pencil")
                     .font(.subheadline.weight(.medium))

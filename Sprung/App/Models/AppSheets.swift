@@ -16,8 +16,6 @@ struct AppSheets {
     var showCreateResume = false
     // UI state that was previously in ResumeButtons
     var showCoverLetterInspector = false
-    // Setup wizard (first-run configuration)
-    var showSetupWizard = false
     // Job capture from URL scheme (sprung://capture-job?url=...)
     var capturedJobURL: String?
 }
@@ -45,20 +43,10 @@ struct AppSheetsModifier: ViewModifier {
             .onReceive(NotificationCenter.default.publisher(for: .captureJobFromURL)) { notification in
                 if let urlString = notification.userInfo?["url"] as? String {
                     Logger.info("📥 [AppSheets] Received job capture URL: \(urlString)", category: .ui)
+                    // The sheet receives the URL via initialURL (the .id above
+                    // remounts it per captured URL), so no relay is needed.
                     sheets.capturedJobURL = urlString
-                    // Show sheet first
-                    DispatchQueue.main.async {
-                        sheets.showNewJobApp = true
-                        // Relay notification after sheet has time to mount and subscribe
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                            Logger.info("📤 [AppSheets] Posting captureJobURLReady relay notification", category: .ui)
-                            NotificationCenter.default.post(
-                                name: .captureJobURLReady,
-                                object: nil,
-                                userInfo: ["url": urlString]
-                            )
-                        }
-                    }
+                    sheets.showNewJobApp = true
                 }
             }
             .sheet(isPresented: $sheets.showCreateResume) {
@@ -115,11 +103,8 @@ struct AppSheetsModifier: ViewModifier {
                     .environment(coverLetterStore)
                     .environment(enabledLLMStore)
             }
-            .sheet(isPresented: $sheets.showSetupWizard) {
-                SetupWizardView {
-                    sheets.showSetupWizard = false
-                }
-            }
+        // Setup wizard is presented by UnifiedAppLayout (the .showSetupWizard
+        // observer that also owns hasCompletedSetupWizard) — not here.
     }
 }
 

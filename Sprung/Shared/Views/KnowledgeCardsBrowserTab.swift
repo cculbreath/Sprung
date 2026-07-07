@@ -71,6 +71,13 @@ struct KnowledgeCardsBrowserTab: View {
         cards.filter { $0.factsJSON == nil && !$0.narrative.isEmpty }
     }
 
+    /// Cards onboarding persisted but the user never approved (e.g. an
+    /// abandoned interview). They feed generation like any other card, so they
+    /// must be visible and approvable here rather than ghosting invisibly.
+    private var pendingCards: [KnowledgeCard] {
+        cards.filter { $0.isPending }
+    }
+
     var body: some View {
         ZStack {
             CoverflowBrowser(
@@ -88,7 +95,8 @@ struct KnowledgeCardsBrowserTab: View {
                     isTopCard: isTopCard,
                     onEdit: { editingCard = card },
                     onDelete: { cardToDelete = card; showDeleteConfirmation = true },
-                    onRefine: llmFacade != nil ? { refiningCard = card } : nil
+                    onRefine: llmFacade != nil ? { refiningCard = card } : nil,
+                    onApprove: { knowledgeCardStore.approveCards(cardIds: [card.id]) }
                 )
             } filterContent: { currentIndex in
                 // Filter bar
@@ -244,6 +252,26 @@ struct KnowledgeCardsBrowserTab: View {
     private var pipelineButtons: some View {
         let isProcessing = pipelineCoordinator?.status.isProcessing == true
         let enrichCount = unEnrichedCards.count
+        let pendingCount = pendingCards.count
+
+        if pendingCount > 0 {
+            Button(action: { knowledgeCardStore.approveCards() }) {
+                HStack(spacing: 4) {
+                    Image(systemName: "checkmark.circle")
+                    Text("Approve Pending")
+                    Text("\(pendingCount)")
+                        .font(.caption2.weight(.semibold))
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 1)
+                        .background(Capsule().fill(Color.orange.opacity(0.2)))
+                }
+                .font(.caption)
+                .foregroundStyle(.orange)
+            }
+            .buttonStyle(.plain)
+            .disabled(isProcessing)
+            .help("Approve \(pendingCount) card\(pendingCount == 1 ? "" : "s") left pending by onboarding")
+        }
 
         Button(action: runEnrichment) {
             HStack(spacing: 4) {

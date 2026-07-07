@@ -8,12 +8,11 @@ import SwiftUI
 import AppKit
 struct AppWindowView: View {
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
-    @Environment(CoverLetterStore.self) private var coverLetterStore: CoverLetterStore
-    @Environment(AppState.self) private var appState: AppState
     @State private var listingButtons: SaveButtons = .init(edit: false, save: false, cancel: false)
     @Binding var selectedTab: TabList
     @Binding var tabRefresh: Bool
-    // Centralized sheet state management for all app windows/modals
+    // Shared app-sheet state; presented once at the shell (UnifiedAppLayout's
+    // AppSheetsModifier). This view only feeds bindings into its tab content.
     @Binding var sheets: AppSheets
     var body: some View {
         @Bindable var jobAppStore = jobAppStore
@@ -35,14 +34,6 @@ struct AppWindowView: View {
             }
         }
         .id($tabRefresh.wrappedValue)
-        .modifier(AppWindowViewModifiers(
-            jobAppStore: jobAppStore,
-            sheets: $sheets,
-            coverLetterStore: coverLetterStore,
-            appState: appState,
-            selectedTab: $selectedTab,
-            updateMyLetter: updateMyLetter
-        ))
     }
     private var tabView: some View {
         VStack(spacing: 0) {
@@ -90,81 +81,9 @@ struct AppWindowView: View {
             EmptyView()
         }
     }
-    // MARK: - Toolbar Action Methods
-    func updateMyLetter() {
-        if let selectedApp = jobAppStore.selectedApp {
-            // Determine or create the cover letter
-            let letter: CoverLetter
-            if let lastLetter = selectedApp.coverLetters.last {
-                letter = lastLetter
-            } else {
-                letter = coverLetterStore.create(jobApp: selectedApp)
-            }
-            coverLetterStore.cL = letter
-            // Note: Individual views now manage their own editing state
-        } else {
-            coverLetterStore.cL = nil
-        }
-    }
 }
 struct SaveButtons {
     var edit: Bool = false
     var save: Bool = false
     var cancel: Bool = false
-}
-// MARK: - View Modifiers
-struct AppWindowViewModifiers: ViewModifier {
-    let jobAppStore: JobAppStore
-    @Binding var sheets: AppSheets
-    let coverLetterStore: CoverLetterStore
-    let appState: AppState
-    @Binding var selectedTab: TabList
-    let updateMyLetter: () -> Void
-    func body(content: Content) -> some View {
-        let step1: some View = content
-            .onChange(of: jobAppStore.selectedApp) { _, _ in
-                updateMyLetter()
-            }
-            .onChange(of: jobAppStore.selectedApp?.hasAnyRes ?? false) { _, _ in
-            }
-            .onAppear {
-                updateMyLetter()
-            }
-        let step2: some View = step1
-            .sheet(isPresented: $sheets.showResumeReview) {
-                if let selectedResume = jobAppStore.selectedApp?.selectedRes {
-                    ResumeReviewSheet(selectedResume: .constant(selectedResume))
-                }
-            }
-        let step3: some View = step2
-            .sheet(isPresented: $sheets.showMultiModelChooseBest) {
-                if jobAppStore.selectedApp != nil,
-                   let currentCoverLetter = coverLetterStore.cL {
-                    MultiModelChooseBestCoverLetterSheet(coverLetter: .constant(currentCoverLetter))
-                }
-            }
-            .sheet(isPresented: $sheets.showNewJobApp) {
-                NewAppSheetView(isPresented: $sheets.showNewJobApp)
-                .environment(jobAppStore)
-            }
-            .sheet(isPresented: $sheets.showApplicationReview) {
-                if let selApp = jobAppStore.selectedApp,
-                   let currentResume = selApp.selectedRes,
-                   let currentCoverLetter = selApp.selectedCover,
-                   currentCoverLetter.generated {
-                    ApplicationReviewSheet(
-                        jobApp: selApp,
-                        resume: currentResume,
-                        availableCoverLetters: selApp.coverLetters.filter { $0.generated }.sorted { $0.moddedDate > $1.moddedDate }
-                    )
-                }
-            }
-            .sheet( isPresented: $sheets.showBatchCoverLetter) {
-                BatchCoverLetterView()
-                    .environment(appState)
-                    .environment(jobAppStore)
-                    .environment(coverLetterStore)
-            }
-        return step3
-    }
 }

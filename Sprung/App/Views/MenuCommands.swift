@@ -87,8 +87,6 @@ extension Notification.Name {
     static let navigateToReferencesTab = Notification.Name("navigateToReferencesTab")
     // URL Scheme Notifications
     static let captureJobFromURL = Notification.Name("captureJobFromURL")
-    /// Relay notification sent after sheet is shown, so the view can receive it
-    static let captureJobURLReady = Notification.Name("captureJobURLReady")
     // Secondary Window Notifications
     static let showDebugLogs = Notification.Name("showDebugLogs")
     static let showSeedGeneration = Notification.Name("showSeedGeneration")
