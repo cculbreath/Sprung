@@ -12,7 +12,6 @@ struct ResumeSplitView: View {
     @Environment(ResStore.self) private var resStore: ResStore
     @Environment(AppEnvironment.self) private var appEnvironment: AppEnvironment
     @Environment(TemplateStore.self) private var templateStore: TemplateStore
-    @Environment(KnowledgeCardStore.self) private var knowledgeCardStore: KnowledgeCardStore
 
     @Binding var isWide: Bool
     @Binding var tab: TabList
@@ -71,10 +70,9 @@ struct ResumeSplitView: View {
         .animation(.easeInOut(duration: 0.2), value: pdfPreviewVisible)
         .sheet(isPresented: $showCreateResumeSheet) {
             CreateResumeView(
-                onCreateResume: { template, sources in
+                onCreateResume: { template in
                     try resStore.create(
                         jobApp: selApp,
-                        sources: sources,
                         template: template
                     )
                     refresh.toggle()
@@ -136,7 +134,6 @@ struct ResumeSplitView: View {
                         do {
                             try resStore.create(
                                 jobApp: selApp,
-                                sources: knowledgeCardStore.approvedCards,
                                 template: template
                             )
                             refresh.toggle()

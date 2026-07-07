@@ -52,8 +52,8 @@ struct AppSheetsModifier: ViewModifier {
             .sheet(isPresented: $sheets.showCreateResume) {
                 if let selApp = jobAppStore.selectedApp {
                     CreateResumeView(
-                        onCreateResume: { template, sources in
-                            try resStore.create(jobApp: selApp, sources: sources, template: template)
+                        onCreateResume: { template in
+                            try resStore.create(jobApp: selApp, template: template)
                         }
                     )
                     .padding()

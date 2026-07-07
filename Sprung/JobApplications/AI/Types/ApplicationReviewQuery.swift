@@ -14,6 +14,7 @@ import Foundation
     ///   - resume: The resume to review
     ///   - coverLetter: The cover letter to review (optional)
     ///   - includeImage: Whether image analysis is available
+    ///   - knowledgeCards: Background knowledge cards to include, read fresh from the store
     ///   - customOptions: Optional custom review options
     /// - Returns: The complete prompt string
     func buildReviewPrompt(
@@ -22,6 +23,7 @@ import Foundation
         resume: Resume,
         coverLetter: CoverLetter?,
         includeImage: Bool,
+        knowledgeCards: [KnowledgeCard],
         customOptions: CustomApplicationReviewOptions? = nil
     ) -> String {
         var prompt = reviewType.promptTemplate()
@@ -47,7 +49,7 @@ import Foundation
         }
         prompt = prompt.replacingOccurrences(of: "{resumeText}", with: resumeText)
         // Background docs placeholder
-        let bgDocs = resume.enabledSources.map { "\($0.title):\n\($0.narrative)\n\n" }.joined()
+        let bgDocs = knowledgeCards.map { "\($0.title):\n\($0.narrative)\n\n" }.joined()
         prompt = prompt.replacingOccurrences(of: "{backgroundDocs}", with: bgDocs)
         // Include image sentence
         let imageText = includeImage ? "I've also attached rasterized resume page image(s) so you can assess the visual layout, typography, and overall design professionalism." : ""

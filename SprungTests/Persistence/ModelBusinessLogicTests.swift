@@ -24,7 +24,7 @@ final class ModelBusinessLogicTests: InMemoryStoreCase {
         let job = JobApp(jobPosition: position, companyName: "Acme")
         insert(job)
         for _ in 0..<resumeCount {
-            let resume = Resume(jobApp: job, enabledSources: [])
+            let resume = Resume(jobApp: job)
             insert(resume)
             job.resumes.append(resume)
         }
@@ -74,7 +74,7 @@ final class ModelBusinessLogicTests: InMemoryStoreCase {
         insert(job)
         XCTAssertEqual(job.status, .new)
 
-        let resume = Resume(jobApp: job, enabledSources: [])
+        let resume = Resume(jobApp: job)
         insert(resume)
         job.addResume(resume)
         saveContext()

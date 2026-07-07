@@ -169,7 +169,6 @@ struct RevisionResumeImporter {
 
         let newResume = Resume(
             jobApp: jobApp,
-            enabledSources: original.enabledSources,
             template: original.template
         )
         context.insert(newResume)

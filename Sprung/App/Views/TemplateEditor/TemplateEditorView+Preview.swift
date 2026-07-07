@@ -85,7 +85,7 @@ extension TemplateEditorView {
             Logger.verbose("TemplatePreview[\(slug)]: manifest sections => \(manifest.sectionOrder)")
         }
         let jobApp = JobApp()
-        let resume = Resume(jobApp: jobApp, enabledSources: [], template: template)
+        let resume = Resume(jobApp: jobApp, template: template)
         resume.importedEditorKeys = []
         let experienceDefaults = appEnvironment.experienceDefaultsStore.currentDefaults()
         let treeBuilder = ExperienceDefaultsToTree(

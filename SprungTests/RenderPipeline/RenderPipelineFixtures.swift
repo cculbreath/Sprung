@@ -40,7 +40,7 @@ enum RenderFixtures {
     static func makeResume(in context: ModelContext) -> Resume {
         let jobApp = JobApp()
         context.insert(jobApp)
-        let resume = Resume(jobApp: jobApp, enabledSources: [])
+        let resume = Resume(jobApp: jobApp)
         context.insert(resume)
         return resume
     }

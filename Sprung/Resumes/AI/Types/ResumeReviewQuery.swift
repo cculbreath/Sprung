@@ -12,12 +12,14 @@ import Foundation
     ///   - reviewType: The type of review to perform
     ///   - resume: The resume to review
     ///   - includeImage: Whether image analysis is available
+    ///   - knowledgeCards: Background knowledge cards to include, read fresh from the store
     ///   - customOptions: Optional custom review options
     /// - Returns: The complete prompt string
     func buildReviewPrompt(
         reviewType: ResumeReviewType,
         resume: Resume,
         includeImage: Bool,
+        knowledgeCards: [KnowledgeCard],
         customOptions: CustomReviewOptions? = nil
     ) -> String {
         guard let jobApp = resume.jobApp else {
@@ -33,8 +35,8 @@ import Foundation
         prompt = prompt.replacingOccurrences(of: "{jobDescription}", with: jobApp.jobDescription)
         let resumeText = resume.textResume
         prompt = prompt.replacingOccurrences(of: "{resumeText}", with: resumeText)
-        // Background docs: knowledge cards enabled for this resume
-        let bgDocs = resume.enabledSources.map { "\($0.title):\n\($0.narrative)\n\n" }.joined()
+        // Background docs: knowledge cards read fresh from the store
+        let bgDocs = knowledgeCards.map { "\($0.title):\n\($0.narrative)\n\n" }.joined()
         prompt = prompt.replacingOccurrences(of: "{backgroundDocs}", with: bgDocs)
         // Image context sentence
         let imageText = includeImage

@@ -82,26 +82,46 @@ class ResumeExportService {
     }
     private func generateBasicTextTemplate() -> String {
         return """
-{{{ center(contact.name, 80) }}}
-{{{ center(join(job-titles), 80) }}}
-{{#contactLine}}
-{{{ center(contactLine, 80) }}}
-{{/contactLine}}
-{{{ wrap(summary, 80, 6, 6) }}}
-{{#section-labels.employment}}
-{{{ sectionLine(section-labels.employment, 80) }}}
-{{/section-labels.employment}}
-{{#employment}}
-{{ employer }}{{#location}} | {{{.}}}{{/location}}
-{{#position}}
+{{#hasContent(basics.name)}}
+{{{ center(basics.name, 80) }}}
+{{/hasContent(basics.name)}}
+{{#hasContent(custom.jobTitles)}}
+{{{ center(join(custom.jobTitles), 80) }}}
+{{/hasContent(custom.jobTitles)}}
+{{#hasContent(basics.contactLinePieces)}}
+{{{ center(join(basics.contactLinePieces), 80) }}}
+{{/hasContent(basics.contactLinePieces)}}
+{{#hasContent(custom.objective)}}
+{{{ wrap(custom.objective, 80, 0, 0) }}}
+{{/hasContent(custom.objective)}}
+{{#hasContent(skills)}}
+{{{ sectionLine(template.sectionLabels.skills, 80) }}}
+{{#skills}}
+{{ name }}
+{{#hasContent(keywords)}}
+{{{ wrap(join(keywords), 80, 0, 0) }}}
+{{/hasContent(keywords)}}
+{{/skills}}
+{{/hasContent(skills)}}
+{{#hasContent(work)}}
+{{{ sectionLine(template.sectionLabels.work, 80) }}}
+{{#work}}
+{{ name }}{{#hasContent(location)}} | {{ location }}{{/hasContent(location)}}
+{{#hasContent(position)}}
 {{ position }}
-{{/position}}
-{{ formatDate(start) }} – {{ formatDate(end) }}
+{{/hasContent(position)}}
+{{#hasContent(startDate)}}
+{{ formatDate(startDate) }}{{#hasContent(endDate)}} – {{ formatDate(endDate) }}{{/hasContent(endDate)}}
+{{/hasContent(startDate)}}
+{{#hasContent(highlights)}}
 {{{ bulletList(highlights, 80, 2, "•") }}}
-{{/employment}}
-{{#more-info}}
-{{{ wrap(uppercase(more-info), 80, 0, 0) }}}
-{{/more-info}}
+{{/hasContent(highlights)}}
+{{/work}}
+{{/hasContent(work)}}
+{{#hasContent(custom.moreInfo)}}
+{{{ sectionLine(template.sectionLabels.moreInfo, 80) }}}
+{{{ wrap(htmlStrip(custom.moreInfo), 80, 0, 0) }}}
+{{/hasContent(custom.moreInfo)}}
 """
     }
 }

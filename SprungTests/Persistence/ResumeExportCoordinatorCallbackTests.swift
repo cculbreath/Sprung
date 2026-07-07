@@ -32,7 +32,7 @@ final class ResumeExportCoordinatorCallbackTests: InMemoryStoreCase {
 
         let job = JobApp(jobPosition: "P")
         insert(job)
-        let resume = Resume(jobApp: job, enabledSources: [])
+        let resume = Resume(jobApp: job)
         insert(resume)
         job.addResume(resume)
         saveContext()

@@ -9,6 +9,7 @@ struct ResumeReviewSheet: View {
     @Binding var selectedResume: Resume?
     @State private var viewModel = ResumeReviewViewModel()
     @Environment(LLMFacade.self) private var llmFacade
+    @Environment(KnowledgeCardStore.self) private var knowledgeCardStore
     @State private var selectedReviewType: ResumeReviewType = .assessQuality
     @State private var customOptions = CustomReviewOptions()
     // Model selection state with persistence
@@ -153,6 +154,7 @@ struct ResumeReviewSheet: View {
             reviewType: selectedReviewType,
             resume: resume,
             selectedModel: selectedModel,
+            knowledgeCards: knowledgeCardStore.approvedCards,
             customOptions: customOptions
         )
     }

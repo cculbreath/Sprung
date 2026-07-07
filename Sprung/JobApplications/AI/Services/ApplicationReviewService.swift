@@ -31,6 +31,7 @@ class ApplicationReviewService: @unchecked Sendable {
         resume: Resume,
         coverLetter: CoverLetter?,
         modelId: String,
+        knowledgeCards: [KnowledgeCard],
         customOptions: CustomApplicationReviewOptions? = nil,
         onProgress: @escaping (String) -> Void,
         onComplete: @escaping (Result<String, Error>) -> Void
@@ -45,6 +46,7 @@ class ApplicationReviewService: @unchecked Sendable {
                     resume: resume,
                     coverLetter: coverLetter,
                     modelId: modelId,
+                    knowledgeCards: knowledgeCards,
                     customOptions: customOptions,
                     onProgress: onProgress,
                     onComplete: onComplete
@@ -61,6 +63,7 @@ class ApplicationReviewService: @unchecked Sendable {
         resume: Resume,
         coverLetter: CoverLetter?,
         modelId: String,
+        knowledgeCards: [KnowledgeCard],
         customOptions: CustomApplicationReviewOptions? = nil,
         onProgress: @escaping (String) -> Void,
         onComplete: @escaping (Result<String, Error>) -> Void
@@ -85,6 +88,7 @@ class ApplicationReviewService: @unchecked Sendable {
             resume: resume,
             coverLetter: coverLetter,
             includeImage: !imageData.isEmpty,
+            knowledgeCards: knowledgeCards,
             customOptions: customOptions
         )
         let requestID = UUID()

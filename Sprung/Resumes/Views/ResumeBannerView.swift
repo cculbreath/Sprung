@@ -110,10 +110,9 @@ struct ResumeBannerView: View {
         .help("Create resume")
         .sheet(isPresented: $showCreateResumeSheet) {
             CreateResumeView(
-                onCreateResume: { template, sources in
+                onCreateResume: { template in
                     try resStore.create(
                         jobApp: jobApp,
-                        sources: sources,
                         template: template
                     )
                 }

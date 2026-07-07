@@ -8,6 +8,7 @@ struct ApplicationReviewSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(LLMFacade.self) private var llmFacade
     @Environment(AppEnvironment.self) private var appEnvironment
+    @Environment(KnowledgeCardStore.self) private var knowledgeCardStore
     let jobApp: JobApp
     let resume: Resume
     let availableCoverLetters: [CoverLetter]
@@ -250,6 +251,7 @@ struct ApplicationReviewSheet: View {
                 resume: resume,
                 coverLetter: coverLetterToUse,
                 modelId: selectedModel,
+                knowledgeCards: knowledgeCardStore.approvedCards,
                 customOptions: selectedType == .custom ? customOptions : nil,
                 onProgress: { chunk in
                     Task { @MainActor in

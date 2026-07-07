@@ -26,6 +26,7 @@ class ResumeReviewViewModel {
         reviewType: ResumeReviewType,
         resume: Resume,
         selectedModel: String,
+        knowledgeCards: [KnowledgeCard],
         customOptions: CustomReviewOptions?
     ) {
         resetState()
@@ -44,6 +45,7 @@ class ResumeReviewViewModel {
             reviewType: reviewType,
             resume: resume,
             selectedModel: selectedModel,
+            knowledgeCards: knowledgeCards,
             customOptions: customOptions
         )
     }
@@ -69,6 +71,7 @@ class ResumeReviewViewModel {
         reviewType: ResumeReviewType,
         resume: Resume,
         selectedModel: String,
+        knowledgeCards: [KnowledgeCard],
         customOptions: CustomReviewOptions?
     ) {
         isProcessing = true
@@ -77,6 +80,7 @@ class ResumeReviewViewModel {
             reviewType: reviewType,
             resume: resume,
             modelId: selectedModel,
+            knowledgeCards: knowledgeCards,
             customOptions: reviewType == .custom ? customOptions : nil,
             onProgress: { [weak self] contentChunk in
                 Task { @MainActor in

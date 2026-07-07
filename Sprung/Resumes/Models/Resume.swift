@@ -74,8 +74,6 @@ class Resume: Identifiable, Hashable {
     }
     var dateCreated: Date = Date()
     weak var jobApp: JobApp?
-    @Relationship(deleteRule: .nullify, inverse: \KnowledgeCard.enabledResumes)
-    var enabledSources: [KnowledgeCard]
     var createdDateString: String {
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "hh:mm a 'on' MM/dd/yy"
@@ -101,13 +99,11 @@ class Resume: Identifiable, Hashable {
     var meta: String = "\"format\": \"FRESH@0.6.0\", \"version\": \"0.1.0\""
     init(
         jobApp: JobApp,
-        enabledSources: [KnowledgeCard],
         template: Template? = nil
     ) {
         self.template = template
         self.jobApp = jobApp
         dateCreated = Date()
-        self.enabledSources = enabledSources
     }
     // MARK: - Hashable
     static func == (lhs: Resume, rhs: Resume) -> Bool {

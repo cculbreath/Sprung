@@ -9,8 +9,7 @@ import Foundation
 // Helper view for creating a resume
 struct CreateResumeView: View {
     @Environment(TemplateStore.self) private var templateStore: TemplateStore
-    @Environment(KnowledgeCardStore.self) private var knowledgeCardStore: KnowledgeCardStore
-    var onCreateResume: (Template, [KnowledgeCard]) throws -> Void
+    var onCreateResume: (Template) throws -> Void
     @State private var selectedTemplateID: UUID?
     @State private var createError: String?
     @Environment(\.dismiss) private var dismiss
@@ -79,7 +78,7 @@ struct CreateResumeView: View {
                         return
                     }
                     do {
-                        try onCreateResume(selectedTemplate, knowledgeCardStore.approvedCards)
+                        try onCreateResume(selectedTemplate)
                         dismiss()
                     } catch {
                         createError = "Couldn't create resume — \(error.localizedDescription)"

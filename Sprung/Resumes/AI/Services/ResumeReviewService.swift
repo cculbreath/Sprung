@@ -22,6 +22,7 @@ class ResumeReviewService: @unchecked Sendable {
     /// - Parameters:
     ///   - reviewType: The type of review to perform
     ///   - resume: The resume to review
+    ///   - knowledgeCards: Background knowledge cards to include, read fresh from the store
     ///   - customOptions: Optional custom review options
     ///   - onProgress: Callback for progress updates (streaming)
     ///   - onComplete: Completion callback with result
@@ -30,6 +31,7 @@ class ResumeReviewService: @unchecked Sendable {
         reviewType: ResumeReviewType,
         resume: Resume,
         modelId: String,
+        knowledgeCards: [KnowledgeCard],
         customOptions: CustomReviewOptions? = nil,
         onProgress: @escaping (String) -> Void,
         onComplete: @escaping (Result<String, Error>) -> Void
@@ -62,6 +64,7 @@ class ResumeReviewService: @unchecked Sendable {
                     reviewType: reviewType,
                     resume: resume,
                     includeImage: !imageData.isEmpty,
+                    knowledgeCards: knowledgeCards,
                     customOptions: customOptions
                 )
                 Logger.debug("🔍 ResumeReviewService: Sending review request with model: \(modelId)")

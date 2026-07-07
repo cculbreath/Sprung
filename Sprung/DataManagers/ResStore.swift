@@ -39,10 +39,10 @@ final class ResStore: SwiftDataStore {
         self.experienceDefaultsStore = experienceDefaultsStore
     }
     @discardableResult
-    func create(jobApp: JobApp, sources: [KnowledgeCard], template: Template) throws -> Resume {
+    func create(jobApp: JobApp, template: Template) throws -> Resume {
         // ModelContext is guaranteed to exist
         let modelContext = self.modelContext
-        let resume = Resume(jobApp: jobApp, enabledSources: sources, template: template)
+        let resume = Resume(jobApp: jobApp, template: template)
         if jobApp.selectedRes == nil {
             jobApp.selectedRes = resume
         }
@@ -86,10 +86,9 @@ final class ResStore: SwiftDataStore {
     @discardableResult
     func duplicate(_ originalResume: Resume) -> Resume? {
         guard let jobApp = originalResume.jobApp else { return nil }
-        // Create new resume with same sources and template
+        // Create new resume with same template
         let newResume = Resume(
             jobApp: jobApp,
-            enabledSources: originalResume.enabledSources,
             template: originalResume.template
         )
         // Copy basic properties
@@ -225,7 +224,6 @@ final class ResStore: SwiftDataStore {
         }
         // Clear references to prevent potential access to deleted objects
         res.rootNode = nil
-        res.enabledSources = []
         // Delete the resume and save
         modelContext.delete(res)
         saveContext()

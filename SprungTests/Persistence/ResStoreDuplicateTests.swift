@@ -38,7 +38,7 @@ final class ResStoreDuplicateTests: InMemoryStoreCase {
         let resStore = makeResStore()
         let job = JobApp(jobPosition: "Optical Engineer")
         insert(job)
-        let original = Resume(jobApp: job, enabledSources: [])
+        let original = Resume(jobApp: job)
         insert(original)
         job.addResume(original)
         original.sectionVisibilityOverrides = ["projects": false, "volunteer": true]
