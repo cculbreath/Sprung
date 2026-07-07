@@ -3,9 +3,10 @@
 //  SprungTests
 //
 //  Pins the contract of `JobAppStore.findDuplicateJobApp(url:title:company:)` —
-//  the shared dedup check used by IndeedJobScrape and JobMCPImportService's
-//  Dice/ZipRecruiter `importAsLead` paths (see call sites in
-//  Sprung/JobApplications/Models/IndeedJobScrape.swift and
+//  the shared dedup check used by the generic URL importer (NewAppSheetView's
+//  LLM/LinkedIn paths) and JobMCPImportService's Dice/ZipRecruiter
+//  `importAsLead` paths (see call sites in
+//  Sprung/JobApplications/Views/NewAppSheetView.swift and
 //  Sprung/JobApplications/MCP/JobMCPImportService.swift).
 //
 //  Contract (from JobAppStore.swift doc comment + implementation):

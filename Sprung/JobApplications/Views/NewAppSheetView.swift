@@ -12,10 +12,6 @@ struct NewAppSheetView: View {
     @Environment(LinkedInMCPServerService.self) private var linkedInMCPServer
     @State private var isLoading: Bool = false
     @State private var urlText: String = ""
-    @State private var delayed: Bool = false
-    @State private var verydelayed: Bool = false
-    @State private var showCloudflareChallenge: Bool = false
-    @State private var challengeURL: URL?
     @State private var errorMessage: String?
     @State private var showError: Bool = false
     @State private var isProcessingJob: Bool = false
@@ -38,13 +34,6 @@ struct NewAppSheetView: View {
                         ProgressView("Fetching job details...")
                             .progressViewStyle(CircularProgressViewStyle())
                             .padding()
-                    }
-                    if delayed {
-                        Text("Fetch results not ready. Trying again in 10s").font(.caption)
-                    }
-                    if verydelayed {
-                        Text("The scraping service is taking longer than expected. Retrying in 200 seconds.")
-                            .font(.caption)
                     }
                     if showError, let errorMessage {
                         VStack(spacing: 12) {
@@ -122,23 +111,6 @@ struct NewAppSheetView: View {
                 }
             }
         }
-        .sheet(isPresented: $showCloudflareChallenge) {
-            if let challengeURL {
-                CloudflareChallengeView(url: challengeURL, isPresented: $showCloudflareChallenge) {
-                    // After success retry the import
-                    Task {
-                        isLoading = true
-                        if let urlString = challengeURL.absoluteString as String?,
-                           await JobApp.importFromIndeed(urlString: urlString, jobAppStore: jobAppStore) != nil {
-                            isLoading = false
-                            isPresented = false
-                        } else {
-                            isLoading = false
-                        }
-                    }
-                }.defaultSize()
-            }
-        }
     }
     private func handleNewApp() async {
         Logger.info("🚀 Starting job URL fetch for: \(urlText)")
@@ -152,48 +124,9 @@ struct NewAppSheetView: View {
                     // through the generic URL importer like any other host.
                     await handleLLMImport(url: url)
                 }
-            case "jobs.apple.com":
-                isLoading = true
-                Task {
-                    do {
-                        let htmlContent = try await WebResourceService.fetchHTML(from: url)
-                        try JobApp.parseAppleJobListing(
-                            jobAppStore: jobAppStore, html: htmlContent, url: urlText
-                        )
-                        Logger.info("✅ Successfully imported job from Apple")
-                        isLoading = false
-                        isPresented = false
-                    } catch {
-                        Logger.error("🚨 Apple job import error: \(error)")
-                        await MainActor.run {
-                            errorMessage = "Failed to import Apple job listing: \(error.localizedDescription)"
-                            showError = true
-                            isLoading = false
-                        }
-                    }
-                }
-            case "www.indeed.com", "indeed.com":
-                isLoading = true
-                Task {
-                    if let jobApp = await JobApp.importFromIndeed(urlString: urlText, jobAppStore: jobAppStore) {
-                        Logger.info("✅ Successfully imported job from Indeed: \(jobApp.jobPosition)")
-                        isLoading = false
-                        isPresented = false
-                    } else {
-                        // Failed to import - likely Cloudflare challenge or other error
-                        Logger.warning("⚠️ Indeed import failed for URL: \(urlText)")
-                        isLoading = false
-                        if let u = URL(string: urlText) {
-                            challengeURL = u
-                            showCloudflareChallenge = true
-                        } else {
-                            errorMessage = "Failed to import from Indeed: Invalid URL"
-                            showError = true
-                        }
-                    }
-                }
             default:
-                // Use LLM with web search for unknown domains
+                // Every non-LinkedIn host goes through the generic LLM importer
+                // — the single import path for pasted job URLs.
                 await handleLLMImport(url: url)
             }
             return
