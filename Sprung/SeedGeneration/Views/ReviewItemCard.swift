@@ -205,33 +205,29 @@ struct ReviewItemCard: View {
         switch item.generatedContent.type {
         case .workHighlights(_, let highlights),
              .volunteerDescription(_, _, let highlights):
-            BulletListView(items: highlights)
+            BulletListView(items: item.editedChildren ?? highlights)
 
         case .projectDescription(_, let description, let highlights, _):
+            let displayHighlights = item.editedChildren ?? highlights
             VStack(alignment: .leading, spacing: 8) {
                 if !description.isEmpty {
                     Text(description)
                         .font(.body)
                 }
-                if !highlights.isEmpty {
-                    BulletListView(items: highlights)
+                if !displayHighlights.isEmpty {
+                    BulletListView(items: displayHighlights)
                 }
             }
 
         case .objective(let summary):
-            Text(summary)
+            Text(item.editedContent ?? summary)
                 .font(.body)
 
         case .skillGroups(let groups):
-            SkillGroupsPreview(groups: groups)
+            SkillGroupsPreview(groups: item.editedContent.map(SkillGroup.parse(editableText:)) ?? groups)
 
         case .titleSets(let titles):
             TitleSetsPreview(titleSets: titles)
-
-        default:
-            Text("Content preview not available")
-                .foregroundStyle(.secondary)
-                .italic()
         }
     }
 

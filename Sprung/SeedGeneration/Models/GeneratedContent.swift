@@ -25,8 +25,6 @@ struct GeneratedContent: Equatable {
         // MARK: - Work Section
         /// Work highlights (3-4 bullet points for a specific job)
         case workHighlights(targetId: String, highlights: [String])
-        /// Work summary description
-        case workSummary(targetId: String, summary: String)
 
         // MARK: - Volunteer Section
         /// Volunteer description and highlights
@@ -40,45 +38,13 @@ struct GeneratedContent: Equatable {
         /// Skill groupings (category name -> keywords)
         case skillGroups([SkillGroup])
 
-        // MARK: - Awards Section
-        /// Award summary
-        case awardSummary(targetId: String, summary: String)
-
-        // MARK: - Certificates Section
-        /// Certificate (mostly facts, minimal LLM)
-        case certificate(targetId: String)
-
-        // MARK: - Publications Section
-        /// Publication summary
-        case publicationSummary(targetId: String, summary: String)
-
-        // MARK: - Languages Section
-        /// Language fluency descriptions
-        case languages([LanguageEntry])
-
-        // MARK: - Interests Section
-        /// Interest descriptions
-        case interests([InterestEntry])
-
-        // MARK: - References Section
-        /// Reference (mostly facts)
-        case reference(targetId: String)
-
         // MARK: - Summary/Objective
         /// Objective statement (3-5 sentences)
         case objective(summary: String)
 
         // MARK: - Title Options
-        /// Title options (uses TitleSet from InferenceGuidanceTypes)
+        /// Title options (uses TitleSet from TitleSetTypes)
         case titleSets([TitleSet])
-
-        // MARK: - Custom Fields
-        /// Custom field value
-        case customField(key: String, values: [String])
-
-        // MARK: - Fallback
-        /// Raw JSON for complex/unstructured content
-        case rawJSON(JSON)
     }
 
     static func == (lhs: GeneratedContent, rhs: GeneratedContent) -> Bool {
@@ -93,34 +59,16 @@ extension GeneratedContent.ContentType: Equatable {
         switch (lhs, rhs) {
         case (.workHighlights(let idA, let hA), .workHighlights(let idB, let hB)):
             return idA == idB && hA == hB
-        case (.workSummary(let idA, let sA), .workSummary(let idB, let sB)):
-            return idA == idB && sA == sB
         case (.volunteerDescription(let idA, let sA, let hA), .volunteerDescription(let idB, let sB, let hB)):
             return idA == idB && sA == sB && hA == hB
         case (.projectDescription(let idA, let dA, let hA, let kA), .projectDescription(let idB, let dB, let hB, let kB)):
             return idA == idB && dA == dB && hA == hB && kA == kB
         case (.skillGroups(let a), .skillGroups(let b)):
             return a == b
-        case (.awardSummary(let idA, let sA), .awardSummary(let idB, let sB)):
-            return idA == idB && sA == sB
-        case (.certificate(let idA), .certificate(let idB)):
-            return idA == idB
-        case (.publicationSummary(let idA, let sA), .publicationSummary(let idB, let sB)):
-            return idA == idB && sA == sB
-        case (.languages(let a), .languages(let b)):
-            return a == b
-        case (.interests(let a), .interests(let b)):
-            return a == b
-        case (.reference(let idA), .reference(let idB)):
-            return idA == idB
         case (.objective(let a), .objective(let b)):
             return a == b
         case (.titleSets(let a), .titleSets(let b)):
             return a == b
-        case (.customField(let keyA, let valA), .customField(let keyB, let valB)):
-            return keyA == keyB && valA == valB
-        case (.rawJSON(let a), .rawJSON(let b)):
-            return a.rawString() == b.rawString()
         default:
             return false
         }
@@ -181,18 +129,6 @@ extension SkillGroup {
     }
 }
 
-/// Language entry with fluency
-struct LanguageEntry: Equatable, Codable {
-    var language: String
-    var fluency: String
-}
-
-/// Interest entry with keywords
-struct InterestEntry: Equatable, Codable {
-    var name: String
-    var keywords: [String]
-}
-
 // MARK: - Content Extraction Helpers
 
 extension GeneratedContent {
@@ -200,13 +136,8 @@ extension GeneratedContent {
     var targetId: String? {
         switch type {
         case .workHighlights(let id, _),
-             .workSummary(let id, _),
              .volunteerDescription(let id, _, _),
-             .projectDescription(let id, _, _, _),
-             .awardSummary(let id, _),
-             .certificate(let id),
-             .publicationSummary(let id, _),
-             .reference(let id):
+             .projectDescription(let id, _, _, _):
             return id
         default:
             return nil
@@ -230,16 +161,10 @@ extension GeneratedContent {
     /// Extract summary/description text
     var summaryText: String? {
         switch type {
-        case .workSummary(_, let text):
-            return text
         case .volunteerDescription(_, let summary, _):
             return summary
         case .projectDescription(_, let description, _, _):
             return description
-        case .awardSummary(_, let text):
-            return text
-        case .publicationSummary(_, let text):
-            return text
         case .objective(let text):
             return text
         default:
@@ -250,7 +175,7 @@ extension GeneratedContent {
     /// Get the section key this content belongs to
     var section: ExperienceSectionKey? {
         switch type {
-        case .workHighlights, .workSummary:
+        case .workHighlights:
             return .work
         case .volunteerDescription:
             return .volunteer
@@ -258,19 +183,7 @@ extension GeneratedContent {
             return .projects
         case .skillGroups:
             return .skills
-        case .awardSummary:
-            return .awards
-        case .certificate:
-            return .certificates
-        case .publicationSummary:
-            return .publications
-        case .languages:
-            return .languages
-        case .interests:
-            return .interests
-        case .reference:
-            return .references
-        case .objective, .titleSets, .customField, .rawJSON:
+        case .objective, .titleSets:
             return nil
         }
     }
