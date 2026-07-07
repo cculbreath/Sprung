@@ -14,6 +14,6 @@ struct RoundedTagView: View {
             .padding(.vertical, 2)
             .padding(.horizontal, 6)
             .foregroundColor(foregroundColor)
-            .glassEffect(.regular.tint(backgroundColor), in: .capsule)
+            .background(backgroundColor, in: .capsule)
     }
 }

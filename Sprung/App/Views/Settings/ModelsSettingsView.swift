@@ -54,10 +54,6 @@ struct ModelsSettingsView: View {
     @State private var isLoadingAnthropicModels = false
     @State private var anthropicModelError: String?
 
-    @State private var openAIModels: [ModelObject] = []
-    @State private var isLoadingOpenAIModels = false
-    @State private var openAIModelError: String?
-
     // Column widths
     private let operationWidth: CGFloat = 180
     private let backendWidth: CGFloat = 100
@@ -269,9 +265,9 @@ struct ModelsSettingsView: View {
         HStack(spacing: 0) {
             Text("Job Import")
                 .frame(width: operationWidth, alignment: .leading)
-            backendBadge(.openAI)
+            backendBadge(.anthropic)
                 .frame(width: backendWidth, alignment: .leading)
-            openAIPicker(selection: $jobImportModelId)
+            anthropicPicker(selection: $jobImportModelId)
             Spacer()
         }
         .padding(.vertical, 6)
@@ -303,13 +299,12 @@ struct ModelsSettingsView: View {
     // MARK: - Backend Badge
 
     private enum Backend {
-        case anthropic, openRouter, openAI
+        case anthropic, openRouter
 
         var name: String {
             switch self {
             case .anthropic: return "Anthropic"
             case .openRouter: return "OpenRouter"
-            case .openAI: return "OpenAI"
             }
         }
 
@@ -317,7 +312,6 @@ struct ModelsSettingsView: View {
             switch self {
             case .anthropic: return .orange
             case .openRouter: return .purple
-            case .openAI: return .green
             }
         }
     }
@@ -400,65 +394,16 @@ struct ModelsSettingsView: View {
         }
     }
 
-    @ViewBuilder
-    private func openAIPicker(selection: Binding<String>) -> some View {
-        if !hasOpenAIKey {
-            Text("No API key")
-                .foregroundStyle(.secondary)
-        } else if isLoadingOpenAIModels {
-            ProgressView().controlSize(.small)
-        } else if let error = openAIModelError {
-            Label(error, systemImage: "exclamationmark.triangle.fill")
-                .foregroundStyle(.red)
-                .font(.caption)
-        } else if filteredOpenAIModels.isEmpty {
-            Text("No models")
-                .foregroundStyle(.secondary)
-        } else {
-            let selectedModel = filteredOpenAIModels.first { $0.id == selection.wrappedValue }
-            Menu {
-                ForEach(filteredOpenAIModels, id: \.id) { model in
-                    Button(model.id) {
-                        selection.wrappedValue = model.id
-                        clearHighlight()
-                    }
-                }
-            } label: {
-                HStack(spacing: 4) {
-                    Text(selectedModel?.id ?? "Select...")
-                    Image(systemName: "chevron.up.chevron.down")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .menuStyle(.borderlessButton)
-        }
-    }
-
     // MARK: - Computed Properties
 
     private var hasAnthropicKey: Bool {
         APIKeyStore.get(.anthropic) != nil
     }
 
-    private var hasOpenAIKey: Bool {
-        guard let key = APIKeyStore.get(.openAI) else { return false }
-        return !key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-    }
-
     private var filteredAnthropicModels: [AnthropicModel] {
         anthropicModels
             .filter(\.isSelectable)
             .sorted { $0.displayName < $1.displayName }
-    }
-
-    private var filteredOpenAIModels: [ModelObject] {
-        openAIModels
-            .filter { model in
-                let id = model.id.lowercased()
-                return id.hasPrefix("gpt-4o") || id.hasPrefix("gpt-5") || id.hasPrefix("gpt-6") || id.hasPrefix("gpt-7")
-            }
-            .sorted { $0.id < $1.id }
     }
 
     private var allOpenRouterModels: [EnabledLLM] {
@@ -490,9 +435,7 @@ private extension View {
 // MARK: - Model Loading
 private extension ModelsSettingsView {
     func refreshAllModelLists() async {
-        async let anthropic: () = loadAnthropicModels()
-        async let openai: () = loadOpenAIModels()
-        _ = await (anthropic, openai)
+        await loadAnthropicModels()
     }
 
     @MainActor
@@ -508,6 +451,9 @@ private extension ModelsSettingsView {
             // the row in red so the user explicitly re-picks.
             flagIfSelectedModelMissing(selectedId: onboardingAnthropicModelId, key: "onboardingAnthropicModelId")
             flagIfSelectedModelMissing(selectedId: seedGenerationAnthropicModelId, key: "seedGenerationAnthropicModelId")
+            // Job Import migrated to Anthropic: a stale OpenAI id won't be in the
+            // fetched list, so this boxes the row red until the user re-picks.
+            flagIfSelectedModelMissing(selectedId: jobImportModelId, key: "jobImportModelId")
         } catch {
             anthropicModelError = error.localizedDescription
         }
@@ -523,20 +469,4 @@ private extension ModelsSettingsView {
         }
     }
 
-    @MainActor
-    func loadOpenAIModels() async {
-        guard hasOpenAIKey else { return }
-        guard let apiKey = APIKeyStore.get(.openAI) else { return }
-
-        isLoadingOpenAIModels = true
-        openAIModelError = nil
-        do {
-            let service = OpenAIServiceFactory.service(apiKey: apiKey)
-            let response = try await service.listModels()
-            openAIModels = response.data
-        } catch {
-            openAIModelError = error.localizedDescription
-        }
-        isLoadingOpenAIModels = false
-    }
 }

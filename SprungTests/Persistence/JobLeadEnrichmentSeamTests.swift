@@ -146,7 +146,7 @@ final class JobLeadEnrichmentSeamTests: InMemoryStoreCase {
     }
 
     func testRejectsNotSpecifiedFillerCaseInsensitively() {
-        // JobURLImportService's system prompt instructs the extractor to emit
+        // The JobImportLoop system prompt instructs the extractor to emit
         // "Not specified" for missing fields — that's filler, not a posting.
         XCTAssertNil(JobLeadEnrichmentService.acceptedFullDescription("Not specified", current: ""))
         XCTAssertNil(JobLeadEnrichmentService.acceptedFullDescription("  not specified  ", current: ""))

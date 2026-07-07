@@ -15,15 +15,14 @@
 //  result has none at all), and neither MCP server has a job-details tool. So
 //  `importAsLead` lands the search result instantly as a `.new` lead with
 //  preprocessing deferred, and `JobLeadEnrichmentService` (below) fetches the
-//  full posting in the background — reusing JobURLImportService's extraction
-//  pass (web search for public boards; the local LinkedIn MCP details tool +
-//  text extraction for linkedin.com leads) — then triggers the normal
-//  preprocessing on the full text (or on the summary as the fallback when the
-//  fetch fails).
+//  full posting in the background — via the `JobImportLoop` extraction agent
+//  (Anthropic server-side web_fetch for public boards; the local LinkedIn MCP
+//  details tool + text extraction for linkedin.com leads) — then triggers the
+//  normal preprocessing on the full text (or on the summary as the fallback
+//  when the fetch fails).
 //
 
 import Foundation
-import SwiftOpenAI
 
 enum JobMCPImportError: LocalizedError {
     case invalidEndpoint
@@ -489,9 +488,7 @@ enum JobMCPImportService {
 /// Errors from the background full-posting fetch for an MCP-imported lead.
 enum JobLeadEnrichmentError: LocalizedError {
     case invalidPostingURL(String)
-    case missingOpenAIKey
     case linkedInServerUnavailable
-    case noResponse
     case extractionFailed
     case descriptionNotImproved
 
@@ -499,12 +496,8 @@ enum JobLeadEnrichmentError: LocalizedError {
         switch self {
         case .invalidPostingURL(let url):
             return "The lead's posting URL is invalid: \(url)"
-        case .missingOpenAIKey:
-            return "An OpenAI API key is required to fetch full job postings. Add one in Settings."
         case .linkedInServerUnavailable:
             return "The local LinkedIn MCP server isn't available, so this LinkedIn lead can't be enriched."
-        case .noResponse:
-            return "The extraction model returned no response."
         case .extractionFailed:
             return "Couldn't extract job details from the posting page."
         case .descriptionNotImproved:
@@ -522,14 +515,14 @@ enum JobLeadEnrichmentError: LocalizedError {
 ///  1. `importAsLead` lands the `.new` lead instantly — the user never waits —
 ///     with preprocessing deferred (`JobAppStore.addJobApp(_:deferringPreprocessing:)`).
 ///  2. This service, throttled to `maxConcurrentEnrichments` so a bulk
-///     "Import All as Leads" can't stampede N web-search calls, fetches the
-///     posting via the same JobURLImportService extraction pass that
-///     NewAppSheetView's URL import drives (Dice's `detailsPageUrl`;
-///     ZipRecruiter's `job_redirect_url`, which may fail on bot protection).
-///     Leads whose posting host is linkedin.com route through the local
-///     LinkedIn MCP server's `get_job_details` + the text-input extraction
-///     instead (the public web path dead-ends at LinkedIn's authwall) — one
-///     deterministic rule, `isLinkedInPostingHost`.
+///     "Import All as Leads" can't stampede N extraction agents, fetches the
+///     posting via the same `JobImportLoop` agent that NewAppSheetView's URL
+///     import drives (Dice's `detailsPageUrl`; ZipRecruiter's
+///     `job_redirect_url`, which may fail on bot protection). Leads whose
+///     posting host is linkedin.com route through the local LinkedIn MCP
+///     server's `get_job_details` + the text-input variant instead (the public
+///     web path dead-ends at LinkedIn's authwall) — one deterministic rule,
+///     `isLinkedInPostingHost`.
 ///  3. On success it stores the full description and runs the standard
 ///     preprocessing. On failure the summary stays as the description,
 ///     preprocessing falls back to it (when non-empty), and the failure is
@@ -539,11 +532,11 @@ final class JobLeadEnrichmentService {
 
     /// Maximum in-flight full-posting fetches. Small on purpose: a bulk import
     /// enqueues every lead on the page at once, and each fetch is a
-    /// web-search LLM pass.
+    /// web_fetch-backed extraction agent.
     static let maxConcurrentEnrichments = 3
 
     /// Whether a lead's posting host routes through the LinkedIn MCP details
-    /// path instead of the web-search extraction. Matches linkedin.com and
+    /// path instead of the web_fetch extraction. Matches linkedin.com and
     /// its subdomains only — never lookalike hosts.
     static func isLinkedInPostingHost(_ host: String?) -> Bool {
         guard let host = host?.lowercased() else { return false }
@@ -558,6 +551,16 @@ final class JobLeadEnrichmentService {
     /// Set the server service used for linkedin.com lead enrichment.
     func setLinkedInServerService(_ service: LinkedInMCPServerService) {
         self.linkedInServerService = service
+    }
+
+    /// The app-lifetime LLM facade, wired by AppDependencies (same
+    /// setter-injection pattern as `setActivityTracker`). Job extraction runs
+    /// through the Anthropic job-import agent on this facade.
+    private weak var llmFacade: LLMFacade?
+
+    /// Set the LLM facade used for job-posting extraction.
+    func setLLMFacade(_ facade: LLMFacade) {
+        self.llmFacade = facade
     }
 
     private struct PendingLead {
@@ -694,86 +697,50 @@ final class JobLeadEnrichmentService {
         }
     }
 
-    /// Fetch the posting and extract the full description, reusing
-    /// JobURLImportService's request/parse halves (the same extraction pass
-    /// NewAppSheetView drives). Routed by posting host: linkedin.com leads go
-    /// through the local MCP details tool + text extraction, everything else
-    /// through the web-search extraction.
+    /// Fetch the posting and extract the full description through the Anthropic
+    /// job-import agent (`JobImportLoop`). Routed by posting host: linkedin.com
+    /// leads supply their MCP-fetched text to the text variant (the public web
+    /// path hits LinkedIn's authwall); every other board uses the URL variant,
+    /// where the agent fetches the page itself with server-side web_fetch.
     private func fetchFullDescription(postingURL: String, currentDescription: String) async throws -> String {
         guard let url = URL(string: postingURL), url.scheme != nil else {
             throw JobLeadEnrichmentError.invalidPostingURL(postingURL)
         }
-        let outputText: String
-        if Self.isLinkedInPostingHost(url.host) {
-            outputText = try await fetchLinkedInExtractionText(postingURL: postingURL)
-        } else {
-            outputText = try await fetchWebSearchExtractionText(url: url)
-        }
-        guard let parsed = JobURLImportService.parseJob(from: outputText, sourceURL: postingURL) else {
+        guard let llmFacade else {
             throw JobLeadEnrichmentError.extractionFailed
         }
-        guard let accepted = Self.acceptedFullDescription(parsed.jobDescription, current: currentDescription) else {
+        let modelId = try JobURLImportService.requireJobImportModelId(operationName: "Job Lead Enrichment")
+
+        let mode: JobImportLoop.Mode
+        if Self.isLinkedInPostingHost(url.host) {
+            mode = .text(try await fetchLinkedInPostingText(postingURL: postingURL))
+        } else {
+            mode = .url(url)
+        }
+
+        let loop = JobImportLoop(mode: mode, sourceURL: postingURL, llmFacade: llmFacade, modelId: modelId)
+        let extracted = try await AnthropicToolLoopRunner(delegate: loop).run()
+
+        guard let accepted = Self.acceptedFullDescription(extracted.jobDescription, current: currentDescription) else {
             throw JobLeadEnrichmentError.descriptionNotImproved
         }
         return accepted
     }
 
     /// LinkedIn leads: the posting text comes from the local MCP server's
-    /// `get_job_details` (the public web path hits LinkedIn's authwall) and
-    /// the extraction runs on that text — no web search.
-    private func fetchLinkedInExtractionText(postingURL: String) async throws -> String {
+    /// `get_job_details` (the public web path hits LinkedIn's authwall); the
+    /// agent then extracts from that text with no web step.
+    private func fetchLinkedInPostingText(postingURL: String) async throws -> String {
         guard let jobId = LinkedInJobDetailsService.jobId(fromURL: postingURL) else {
             throw JobLeadEnrichmentError.invalidPostingURL(postingURL)
         }
         guard let serverService = linkedInServerService else {
             throw JobLeadEnrichmentError.linkedInServerUnavailable
         }
-        // Resolve the extraction config up front — no point spending a
-        // budgeted LinkedIn call when the extraction can't run.
-        guard let apiKey = APIKeyStore.get(.openAI), !apiKey.isEmpty else {
-            throw JobLeadEnrichmentError.missingOpenAIKey
-        }
-        let modelId = try JobURLImportService.requireJobImportModelId(operationName: "Job Lead Enrichment")
-        let postingText = try await LinkedInJobDetailsService.fetchPostingText(
+        return try await LinkedInJobDetailsService.fetchPostingText(
             jobId: jobId,
             serverService: serverService
         )
-        return try await runExtraction(
-            JobURLImportService.buildTextParameters(postingText: postingText, modelId: modelId),
-            apiKey: apiKey
-        )
-    }
-
-    /// Every other board: the same web-search extraction pass NewAppSheetView's
-    /// URL import drives.
-    private func fetchWebSearchExtractionText(url: URL) async throws -> String {
-        guard let apiKey = APIKeyStore.get(.openAI), !apiKey.isEmpty else {
-            throw JobLeadEnrichmentError.missingOpenAIKey
-        }
-        let modelId = try JobURLImportService.requireJobImportModelId(operationName: "Job Lead Enrichment")
-        return try await runExtraction(
-            JobURLImportService.buildParameters(url: url, modelId: modelId),
-            apiKey: apiKey
-        )
-    }
-
-    /// Drain one OpenAI Responses stream to its completed response text.
-    private func runExtraction(_ parameters: ModelResponseParameter, apiKey: String) async throws -> String {
-        let service = OpenAIServiceFactory.service(apiKey: apiKey)
-        var finalResponse: ResponseModel?
-        let stream = try await service.responseCreateStream(parameters)
-        for try await event in stream {
-            if case .responseCompleted(let completed) = event {
-                finalResponse = completed.response
-            }
-        }
-        guard let response = finalResponse else {
-            throw JobLeadEnrichmentError.noResponse
-        }
-        guard let outputText = JobURLImportService.extractResponseText(from: response) else {
-            throw JobLeadEnrichmentError.extractionFailed
-        }
-        return outputText
     }
 
     // MARK: Pure half

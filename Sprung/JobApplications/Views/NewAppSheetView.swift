@@ -5,11 +5,11 @@
 //
 import Foundation
 import SwiftUI
-import SwiftOpenAI
 
 struct NewAppSheetView: View {
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
     @Environment(LinkedInMCPServerService.self) private var linkedInMCPServer
+    @Environment(LLMFacade.self) private var llmFacade: LLMFacade
     @State private var isLoading: Bool = false
     @State private var urlText: String = ""
     @State private var errorMessage: String?
@@ -173,14 +173,6 @@ struct NewAppSheetView: View {
             return
         }
 
-        guard let apiKey = APIKeyStore.get(.openAI), !apiKey.isEmpty else {
-            await MainActor.run {
-                errorMessage = "OpenAI API key required to import LinkedIn jobs. Add your key in Settings."
-                showError = true
-            }
-            return
-        }
-
         do {
             // Resolve the configured model up front (no hardcoded default —
             // surface the picker) before the budgeted LinkedIn call.
@@ -192,26 +184,10 @@ struct NewAppSheetView: View {
             )
             await MainActor.run { llmStatusMessage = "Extracting job details..." }
 
-            let parameters = JobURLImportService.buildTextParameters(postingText: postingText, modelId: modelId)
-            let service = OpenAIServiceFactory.service(apiKey: apiKey)
-
-            var finalResponse: ResponseModel?
-            let stream = try await service.responseCreateStream(parameters)
-            for try await event in stream {
-                if case .responseCompleted(let completed) = event {
-                    finalResponse = completed.response
-                }
-            }
-
-            guard let response = finalResponse,
-                  let outputText = JobURLImportService.extractResponseText(from: response),
-                  let jobApp = JobURLImportService.parseJob(from: outputText, sourceURL: canonicalURL) else {
-                await MainActor.run {
-                    errorMessage = "Failed to extract job details from the LinkedIn posting. Please try again."
-                    showError = true
-                }
-                return
-            }
+            // Extract from the MCP-supplied posting text — no web step.
+            let jobApp = try await runJobImport(
+                mode: .text(postingText), sourceURL: canonicalURL, modelId: modelId
+            )
             jobApp.source = "LinkedIn"
 
             // Same downstream dedup as the LLM-import path (title+company net).
@@ -263,19 +239,9 @@ struct NewAppSheetView: View {
             }
         }
 
-        // Check for OpenAI API key
-        guard let apiKey = APIKeyStore.get(.openAI), !apiKey.isEmpty else {
-            await MainActor.run {
-                errorMessage = "OpenAI API key required to import from this site. Add your key in Settings."
-                showError = true
-                isLoading = false
-            }
-            return
-        }
-
         Logger.info("🤖 [NewAppSheetView] Starting LLM import for: \(url.absoluteString)", category: .ai)
 
-        // Resolve the configured OpenAI model (no hardcoded default — surface the picker).
+        // Resolve the configured Job Import model (no hardcoded default — surface the picker).
         guard let modelId = UserDefaults.standard.string(forKey: "jobImportModelId"), !modelId.isEmpty else {
             await MainActor.run {
                 errorMessage = "No Job Import model configured. Select one in Settings > Models."
@@ -285,49 +251,12 @@ struct NewAppSheetView: View {
             return
         }
 
-        let service = OpenAIServiceFactory.service(apiKey: apiKey)
-
         do {
-            let parameters = JobURLImportService.buildParameters(url: url, modelId: modelId)
-
-            var finalResponse: ResponseModel?
-            let stream = try await service.responseCreateStream(parameters)
-
-            for try await event in stream {
-                switch event {
-                case .responseCompleted(let completed):
-                    finalResponse = completed.response
-                case .webSearchCallSearching:
-                    await MainActor.run { llmStatusMessage = "Searching the web..." }
-                case .webSearchCallCompleted:
-                    await MainActor.run { llmStatusMessage = "Processing results..." }
-                default:
-                    break
-                }
-            }
-
-            guard let response = finalResponse,
-                  let outputText = JobURLImportService.extractResponseText(from: response) else {
-                await MainActor.run {
-                    errorMessage = "No response from AI. Please try again."
-                    showError = true
-                    isLoading = false
-                }
-                return
-            }
-
-            // Log full JSON response for debugging
-            Logger.info("📄 [LLM] Full JSON response:\n\(outputText)", category: .ai)
-
-            // Parse the JSON response
-            guard let jobApp = JobURLImportService.parseJob(from: outputText, sourceURL: url.absoluteString) else {
-                await MainActor.run {
-                    errorMessage = "Failed to extract job details from this page. The listing may not be accessible."
-                    showError = true
-                    isLoading = false
-                }
-                return
-            }
+            // The agent fetches the posting page itself (server-side web_fetch)
+            // and extracts, surfacing progress through llmStatusMessage.
+            let jobApp = try await runJobImport(
+                mode: .url(url), sourceURL: url.absoluteString, modelId: modelId
+            )
 
             // Check for duplicates. Compare the pasted URL both as-is and in
             // its Dice-normalized form (utm_* tracking query + fragment
@@ -371,6 +300,24 @@ struct NewAppSheetView: View {
                 isLoading = false
             }
         }
+    }
+
+    /// Run the Anthropic job-import agent for either variant, threading its
+    /// progress lines into the sheet's status text.
+    @MainActor
+    private func runJobImport(
+        mode: JobImportLoop.Mode,
+        sourceURL: String,
+        modelId: String
+    ) async throws -> JobApp {
+        let loop = JobImportLoop(
+            mode: mode,
+            sourceURL: sourceURL,
+            llmFacade: llmFacade,
+            modelId: modelId,
+            onProgress: { message in llmStatusMessage = message }
+        )
+        return try await AnthropicToolLoopRunner(delegate: loop).run()
     }
 
 }

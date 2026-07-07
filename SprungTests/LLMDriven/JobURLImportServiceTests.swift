@@ -2,17 +2,15 @@
 //  JobURLImportServiceTests.swift
 //  SprungTests
 //
-//  Covers the pure halves of the job-import flow, extracted out of
-//  NewAppSheetView so they are testable: parseJob(from:sourceURL:) (the JSON →
-//  JobApp mapping), the text-input request-build variant (posting text supplied
-//  directly — the LinkedIn MCP detail path — so no web-search tool, with an
-//  explicit output-token cap and the same schema as the URL variant), and the
-//  jobImportModelId resolution that throws instead of substituting a default.
-//  The live OpenAI streaming half is not unit-testable.
+//  Covers the pure halves of the job-import flow: makeJobApp (the extracted
+//  ImportedJobFields → JobApp mapping, including the "Not specified" filler
+//  normalization and the essential-data guard), that the submit_job tool input
+//  JSON decodes into ImportedJobFields, and the jobImportModelId resolution that
+//  throws instead of substituting a default. The live Anthropic tool-loop half
+//  (JobImportLoop) is not unit-testable.
 //
 
 import XCTest
-import SwiftOpenAI
 @testable import Sprung
 
 @MainActor
@@ -20,29 +18,31 @@ final class JobURLImportServiceTests: XCTestCase {
 
     private let sourceURL = "https://example.com/jobs/123"
 
-    private func validJSON(applyLink: String = "https://apply.example.com",
-                           salary: String = "$150k–$180k",
-                           workplaceType: String = "Remote",
-                           employmentType: String = "Full-time") -> String {
-        """
-        {
-          "job_title": "Staff Engineer",
-          "company": "Acme Corp",
-          "location": "Austin, TX",
-          "workplace_type": "\(workplaceType)",
-          "employment_type": "\(employmentType)",
-          "seniority_level": "Staff",
-          "industries": "Software",
-          "posted_date": "2 days ago",
-          "salary": "\(salary)",
-          "job_description": "Build things.",
-          "apply_link": "\(applyLink)"
-        }
-        """
+    private func fields(
+        jobTitle: String = "Staff Engineer",
+        company: String = "Acme Corp",
+        applyLink: String = "https://apply.example.com",
+        salary: String = "$150k–$180k",
+        workplaceType: String = "Remote",
+        employmentType: String = "Full-time"
+    ) -> ImportedJobFields {
+        ImportedJobFields(
+            jobTitle: jobTitle,
+            company: company,
+            location: "Austin, TX",
+            workplaceType: workplaceType,
+            employmentType: employmentType,
+            seniorityLevel: "Staff",
+            industries: "Software",
+            postedDate: "2 days ago",
+            salary: salary,
+            jobDescription: "Build things.",
+            applyLink: applyLink
+        )
     }
 
-    func testParsesAllCoreFields() throws {
-        let job = try XCTUnwrap(JobURLImportService.parseJob(from: validJSON(), sourceURL: sourceURL))
+    func testMapsAllCoreFields() throws {
+        let job = try XCTUnwrap(JobURLImportService.makeJobApp(from: fields(), sourceURL: sourceURL))
         XCTAssertEqual(job.jobPosition, "Staff Engineer")
         XCTAssertEqual(job.companyName, "Acme Corp")
         XCTAssertEqual(job.jobLocation, "Austin, TX")
@@ -57,96 +57,57 @@ final class JobURLImportServiceTests: XCTestCase {
         XCTAssertEqual(job.status, .new)
     }
 
-    func testToleratesJSONCodeFence() throws {
-        let fenced = "```json\n" + validJSON() + "\n```"
-        let job = try XCTUnwrap(JobURLImportService.parseJob(from: fenced, sourceURL: sourceURL))
+    func testSubmitJobToolInputDecodes() throws {
+        // The submit_job tool input arrives as camelCase JSON (keys we control);
+        // it must decode into ImportedJobFields for makeJobApp.
+        let json = """
+        {
+          "jobTitle": "Staff Engineer", "company": "Acme Corp", "location": "Austin, TX",
+          "workplaceType": "Remote", "employmentType": "Full-time", "seniorityLevel": "Staff",
+          "industries": "Software", "postedDate": "2 days ago", "salary": "$150k",
+          "jobDescription": "Build things.", "applyLink": "https://apply.example.com"
+        }
+        """
+        let decoded = try JSONDecoder().decode(ImportedJobFields.self, from: Data(json.utf8))
+        let job = try XCTUnwrap(JobURLImportService.makeJobApp(from: decoded, sourceURL: sourceURL))
         XCTAssertEqual(job.companyName, "Acme Corp")
+        XCTAssertEqual(job.salary, "$150k")
     }
 
     func testWorkplaceTypeAppendedToEmploymentType() throws {
-        let job = try XCTUnwrap(JobURLImportService.parseJob(
-            from: validJSON(workplaceType: "Hybrid", employmentType: "Contract"),
-            sourceURL: sourceURL))
+        let job = try XCTUnwrap(JobURLImportService.makeJobApp(
+            from: fields(workplaceType: "Hybrid", employmentType: "Contract"), sourceURL: sourceURL))
         XCTAssertEqual(job.employmentType, "Contract (Hybrid)")
     }
 
     func testEmptyApplyLinkFallsBackToSourceURL() throws {
-        let job = try XCTUnwrap(JobURLImportService.parseJob(
-            from: validJSON(applyLink: ""), sourceURL: sourceURL))
+        let job = try XCTUnwrap(JobURLImportService.makeJobApp(
+            from: fields(applyLink: ""), sourceURL: sourceURL))
+        XCTAssertEqual(job.jobApplyLink, sourceURL)
+    }
+
+    func testNotSpecifiedApplyLinkFallsBackToSourceURL() throws {
+        // The extractor emits "Not specified" for an absent field — that filler
+        // must not become the apply link.
+        let job = try XCTUnwrap(JobURLImportService.makeJobApp(
+            from: fields(applyLink: "Not specified"), sourceURL: sourceURL))
         XCTAssertEqual(job.jobApplyLink, sourceURL)
     }
 
     func testSalaryNotSpecifiedIsIgnored() throws {
-        let job = try XCTUnwrap(JobURLImportService.parseJob(
-            from: validJSON(salary: "Not specified"), sourceURL: sourceURL))
+        let job = try XCTUnwrap(JobURLImportService.makeJobApp(
+            from: fields(salary: "Not specified"), sourceURL: sourceURL))
         XCTAssertTrue(job.salary.isEmpty, "the literal 'Not specified' must not populate the salary field")
     }
 
     func testMissingTitleReturnsNil() {
-        let json = """
-        { "job_title": "", "company": "Acme Corp", "job_description": "x" }
-        """
-        XCTAssertNil(JobURLImportService.parseJob(from: json, sourceURL: sourceURL),
+        XCTAssertNil(JobURLImportService.makeJobApp(from: fields(jobTitle: ""), sourceURL: sourceURL),
                      "a missing job title must fail the essential-data guard")
     }
 
     func testMissingCompanyReturnsNil() {
-        let json = """
-        { "job_title": "Engineer", "company": "", "job_description": "x" }
-        """
-        XCTAssertNil(JobURLImportService.parseJob(from: json, sourceURL: sourceURL),
+        XCTAssertNil(JobURLImportService.makeJobApp(from: fields(company: ""), sourceURL: sourceURL),
                      "a missing company must fail the essential-data guard")
-    }
-
-    func testMalformedJSONReturnsNil() {
-        XCTAssertNil(JobURLImportService.parseJob(from: "{ not json", sourceURL: sourceURL))
-    }
-
-    // MARK: - Text-input variant (request-build half)
-
-    /// Encode a request the way the SDK ships it, for wire-shape assertions.
-    private func encodedWire(_ parameters: ModelResponseParameter) throws -> [String: Any] {
-        let data = try JSONEncoder().encode(parameters)
-        return try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
-    }
-
-    func testTextVariantUsesSuppliedModelId() {
-        let params = JobURLImportService.buildTextParameters(postingText: "posting", modelId: "test-model-id")
-        XCTAssertEqual(params.model, "test-model-id")
-    }
-
-    func testTextVariantSetsExplicitMaxOutputTokens() {
-        // Reasoning + structured output without an explicit cap silently
-        // truncates — the cap must always be present on the text variant.
-        let params = JobURLImportService.buildTextParameters(postingText: "posting", modelId: "test-model-id")
-        XCTAssertEqual(params.maxOutputTokens, JobURLImportService.textVariantMaxOutputTokens)
-    }
-
-    func testTextVariantCarriesNoTools() {
-        // The posting text is supplied directly; there is no web-search step.
-        let params = JobURLImportService.buildTextParameters(postingText: "posting", modelId: "test-model-id")
-        XCTAssertNil(params.tools)
-        XCTAssertNil(params.toolChoice)
-    }
-
-    func testTextVariantSchemaMatchesURLVariant() throws {
-        // Both variants must emit the identical structured-output config —
-        // one schema, two transports.
-        let urlParams = JobURLImportService.buildParameters(
-            url: URL(string: "https://example.com/jobs/1")!, modelId: "test-model-id"
-        )
-        let textParams = JobURLImportService.buildTextParameters(postingText: "posting", modelId: "test-model-id")
-        let urlTextConfig = try XCTUnwrap(encodedWire(urlParams)["text"] as? [String: Any])
-        let textTextConfig = try XCTUnwrap(encodedWire(textParams)["text"] as? [String: Any])
-        XCTAssertEqual(NSDictionary(dictionary: urlTextConfig), NSDictionary(dictionary: textTextConfig))
-    }
-
-    func testTextVariantEmbedsThePostingText() throws {
-        let params = JobURLImportService.buildTextParameters(
-            postingText: "Operate the big lathe safely.", modelId: "test-model-id"
-        )
-        let wire = try XCTUnwrap(String(data: JSONEncoder().encode(params), encoding: .utf8))
-        XCTAssertTrue(wire.contains("Operate the big lathe safely."))
     }
 
     // MARK: - jobImportModelId resolution

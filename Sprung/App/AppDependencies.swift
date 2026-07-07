@@ -242,6 +242,7 @@ final class AppDependencies {
         // enrich through the local MCP server rather than web fetch (authwall).
         jobAppStore.leadEnrichment.setActivityTracker(backgroundActivityTracker)
         jobAppStore.leadEnrichment.setLinkedInServerService(linkedInMCPServer)
+        jobAppStore.leadEnrichment.setLLMFacade(llmFacade)
 
         self.appEnvironment = AppEnvironment(
             appState: appState,
