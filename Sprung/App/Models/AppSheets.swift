@@ -44,7 +44,11 @@ struct AppSheetsModifier: ViewModifier {
                 if let urlString = notification.userInfo?["url"] as? String {
                     Logger.info("📥 [AppSheets] Received job capture URL: \(urlString)", category: .ui)
                     // The sheet receives the URL via initialURL (the .id above
-                    // remounts it per captured URL), so no relay is needed.
+                    // remounts it per captured URL), so no relay is needed here — this
+                    // subscriber is the single delivery point. AppDelegate.CaptureURLBuffer
+                    // buffers any URL that arrives before UnifiedAppLayout (this modifier's
+                    // host) has mounted and this onReceive has subscribed, then delivers it
+                    // via the same .captureJobFromURL post once the ready-signal fires.
                     sheets.capturedJobURL = urlString
                     sheets.showNewJobApp = true
                 }

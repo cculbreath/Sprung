@@ -201,8 +201,8 @@ class MenuNotificationHandler {
                 self?.handleRestartSpeaking()
             }
         }
-        // Window-level commands (.showSettings, .showApplicantProfile, .showTemplateEditor,
-        // .showExperienceEditor, .startOnboardingInterview) are now observed directly by
+        // Window-level commands (.showSettings, .showTemplateEditor,
+        // .startOnboardingInterview) are now observed directly by
         // AppDelegate so they work regardless of which module is active.
         // Create New Resume
         NotificationCenter.default.addObserver(

@@ -2,18 +2,19 @@
 //  AppMenuBuilder.swift
 //  Sprung
 //
-//  Imperatively inserts Sprung-specific items (Applicant Profile, Template
-//  Editor, Experience Editor) into the running application menu. Call once,
-//  after applicationDidFinishLaunching, on the main queue.
+//  Imperatively inserts Sprung-specific items (Profile, Template Editor,
+//  Experience) into the running application menu. Call once, after
+//  applicationDidFinishLaunching, on the main queue. Profile and Experience
+//  navigate to their main-window modules; only Template Editor opens a window.
 //
 import Cocoa
 
 @MainActor
 enum AppMenuBuilder {
     static func install(
-        showApplicantProfile: Selector,
+        navigateToProfile: Selector,
         showTemplateEditor: Selector,
-        showExperienceEditor: Selector,
+        navigateToExperience: Selector,
         target: AnyObject
     ) {
         guard let mainMenu = NSApp.mainMenu else {
@@ -49,7 +50,7 @@ enum AppMenuBuilder {
         // If About item not found, insert at the beginning
         let aboutSeparatorIndex = aboutItemIndex >= 0 ? aboutItemIndex + 1 : 0
         // If we already have an Applicant Profile menu item, remove it to avoid duplicates
-        let existingProfileIndex = appMenu.indexOfItem(withTitle: "Applicant Profile...")
+        let existingProfileIndex = appMenu.indexOfItem(withTitle: "Applicant Profile")
         if existingProfileIndex >= 0 {
             appMenu.removeItem(at: existingProfileIndex)
         }
@@ -58,10 +59,10 @@ enum AppMenuBuilder {
             !appMenu.item(at: aboutSeparatorIndex)!.isSeparatorItem {
             appMenu.insertItem(NSMenuItem.separator(), at: aboutSeparatorIndex)
         }
-        // Add Applicant Profile menu item after separator
+        // Add Applicant Profile menu item after separator (navigates to the module)
         let profileMenuItem = NSMenuItem(
-            title: "Applicant Profile...",
-            action: showApplicantProfile,
+            title: "Applicant Profile",
+            action: navigateToProfile,
             keyEquivalent: ""
         )
         profileMenuItem.target = target
@@ -76,8 +77,8 @@ enum AppMenuBuilder {
         templateMenuItem.keyEquivalentModifierMask = [.command, .shift]
         appMenu.insertItem(templateMenuItem, at: aboutSeparatorIndex + 2)
         let experienceMenuItem = NSMenuItem(
-            title: "Experience Editor...",
-            action: showExperienceEditor,
+            title: "Experience Editor",
+            action: navigateToExperience,
             keyEquivalent: "E"
         )
         experienceMenuItem.keyEquivalentModifierMask = [.command, .shift]

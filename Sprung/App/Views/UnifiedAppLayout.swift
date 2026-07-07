@@ -55,7 +55,10 @@ struct UnifiedAppLayout: View {
             .accessibilityHidden(true)
         }
         // Single presenter for all shared app sheets, and the sole observer of
-        // .captureJobFromURL — alive for the lifetime of the main window.
+        // .captureJobFromURL — alive for the lifetime of the main window. Any
+        // capture-job URL that arrived before this mounted is buffered by
+        // AppDelegate.CaptureURLBuffer and delivered via the ready-signal in onAppear
+        // below, so a cold launch via the URL scheme never drops the capture.
         .appSheets(sheets: $sheets)
         // Global reasoning stream overlay (shared across all modules)
         .overlay {
@@ -106,6 +109,13 @@ struct UnifiedAppLayout: View {
                 sheets: $sheets,
                 selectedTab: $navigationState.selectedTab
             )
+            // Ready signal: the .appSheets modifier below (AppSheetsModifier's
+            // .onReceive for .captureJobFromURL) mounts as part of this same body
+            // evaluation, so this is the deterministic point to drain any capture-job
+            // URL that arrived during a cold launch, before this view existed to hear it.
+            if let delegate = NSApplication.shared.delegate as? AppDelegate {
+                delegate.mainWindowCaptureConsumerDidMount()
+            }
             if shouldShowSetupWizard() {
                 showSetupWizard = true
             }
@@ -141,16 +151,19 @@ struct UnifiedAppLayout: View {
 
         let hasOpenRouterKey = !(APIKeyStore.get(.openRouter)?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
         let hasOpenAIKey = !(APIKeyStore.get(.openAI)?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
+        let hasAnthropicKey = !(APIKeyStore.get(.anthropic)?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
 
-        if !hasOpenRouterKey || !hasOpenAIKey {
+        // Anthropic is the backbone key (interview, document analysis, resume
+        // revision, Discovery agent) — a missing one hard-re-prompts on every
+        // launch, exactly like a missing OpenRouter/OpenAI key.
+        if !hasOpenRouterKey || !hasOpenAIKey || !hasAnthropicKey {
             return true
         }
 
         guard !hasCompletedSetupWizard else { return false }
 
-        let hasAnthropicKey = !(APIKeyStore.get(.anthropic)?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
         let hasModels = !enabledLLMStore.enabledModels.isEmpty
-        return !hasAnthropicKey || !hasModels
+        return !hasModels
     }
 
     private func openTemplateEditor() {

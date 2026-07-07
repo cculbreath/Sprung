@@ -48,9 +48,7 @@ extension Notification.Name {
     /// Internal: drive an already-open SettingsView to the Models tab and highlight
     /// a row. userInfo: ["settingKey": String] (absent = navigate only, no highlight).
     static let highlightModelSetting = Notification.Name("highlightModelSetting")
-    static let showApplicantProfile = Notification.Name("showApplicantProfile")
     static let showTemplateEditor = Notification.Name("showTemplateEditor")
-    static let showExperienceEditor = Notification.Name("showExperienceEditor")
     // Menu-to-Toolbar Bridge Commands (for programmatically triggering toolbar buttons)
     static let triggerBestJobButton = Notification.Name("triggerBestJobButton")
     static let triggerGenerateCoverLetterButton = Notification.Name("triggerGenerateCoverLetterButton")

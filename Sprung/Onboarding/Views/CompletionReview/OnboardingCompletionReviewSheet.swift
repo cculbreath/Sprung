@@ -217,14 +217,12 @@ struct OnboardingCompletionReviewSheet: View {
                 VStack(alignment: .leading, spacing: 10) {
                     Button("Open Applicant Profile") {
                         Task { @MainActor in
-                            NotificationCenter.default.post(name: .showApplicantProfile, object: nil)
-                            _ = NSApp.sendAction(#selector(AppDelegate.showApplicantProfileWindow), to: nil, from: nil)
+                            NotificationCenter.default.post(name: .navigateToModule, object: nil, userInfo: ["module": AppModule.profile.rawValue])
                         }
                     }
                     Button("Open Experience Editor") {
                         Task { @MainActor in
-                            NotificationCenter.default.post(name: .showExperienceEditor, object: nil)
-                            _ = NSApp.sendAction(#selector(AppDelegate.showExperienceEditorWindow), to: nil, from: nil)
+                            NotificationCenter.default.post(name: .navigateToModule, object: nil, userInfo: ["module": AppModule.experience.rawValue])
                         }
                     }
                     Button("Browse Knowledge Cards") {

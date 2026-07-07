@@ -30,10 +30,8 @@ final class SecondaryWindowService {
     // MARK: - Window References
 
     var settingsWindow: NSWindow?
-    var applicantProfileWindow: NSWindow?
     var templateEditorWindow: NSWindow?
     var onboardingInterviewWindow: NSWindow?
-    var experienceEditorWindow: NSWindow?
     var debugLogsWindow: NSWindow?
     var seedGenerationWindow: NSWindow?
     var resumeRevisionWindow: NSWindow?
@@ -164,47 +162,11 @@ final class SecondaryWindowService {
         }
     }
 
-    // MARK: - Applicant Profile Window
-
-    func showApplicantProfile() {
-        guard let deps else {
-            Logger.warning("Applicant Profile window requested before app services were configured", category: .appLifecycle)
-            return
-        }
-        if let window = applicantProfileWindow, !window.isVisible {
-            applicantProfileWindow = nil
-        }
-        if applicantProfileWindow == nil {
-            let appEnvironment = deps.appEnvironment
-            let root = ApplicantProfileView()
-                .environment(appEnvironment)
-                .environment(appEnvironment.appState)
-                .environment(deps.applicantProfileStore)
-                .environment(appEnvironment.experienceDefaultsStore)
-                .environment(appEnvironment.careerKeywordStore)
-                .modelContainer(deps.modelContainer)
-            applicantProfileWindow = makeWindow(
-                WindowSpec(
-                    title: "Applicant Profile", width: 600, height: 650,
-                    minSize: NSSize(width: 500, height: 520)
-                ),
-                content: toastHosted(root),
-                observeClose: true
-            )
-        }
-        applicantProfileWindow?.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
-    }
-
     // MARK: - Window Close Handler
 
     @objc func windowWillClose(_ notification: Notification) {
-        if notification.object as? NSWindow == applicantProfileWindow {
-            applicantProfileWindow = nil
-        } else if notification.object as? NSWindow == templateEditorWindow {
+        if notification.object as? NSWindow == templateEditorWindow {
             templateEditorWindow = nil
-        } else if notification.object as? NSWindow == experienceEditorWindow {
-            experienceEditorWindow = nil
         } else if notification.object as? NSWindow == resumeRevisionWindow {
             // Single teardown choke point for the revision session: every close
             // path (title-bar close, in-view Cancel/Close, window replacement
@@ -312,38 +274,6 @@ final class SecondaryWindowService {
             NSApp.activate(ignoringOtherApps: true)
         }
         Logger.info("Onboarding interview window presented", category: .ui)
-    }
-
-    // MARK: - Experience Editor Window
-
-    func showExperienceEditor() {
-        guard let deps else {
-            Logger.warning("Experience Editor window requested before app services were configured", category: .appLifecycle)
-            return
-        }
-        if let window = experienceEditorWindow, !window.isVisible {
-            experienceEditorWindow = nil
-        }
-        if experienceEditorWindow == nil {
-            let appEnvironment = deps.appEnvironment
-            let root = ExperienceEditorView()
-                .modelContainer(deps.modelContainer)
-                .environment(appEnvironment)
-                .environment(appEnvironment.appState)
-                .environment(deps.experienceDefaultsStore)
-                .environment(appEnvironment.careerKeywordStore)
-                .environment(deps.experienceEntryRefinementService)
-            experienceEditorWindow = makeWindow(
-                WindowSpec(
-                    title: "Experience Editor", width: 1180, height: 780,
-                    minSize: NSSize(width: 960, height: 680), disallowTabbing: true
-                ),
-                content: toastHosted(root),
-                observeClose: true
-            )
-        }
-        experienceEditorWindow?.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
     }
 
     // MARK: - Resume Revision Window

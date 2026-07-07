@@ -362,7 +362,10 @@ final class ToolbarCoordinator: NSObject, NSToolbarDelegate, NSToolbarItemValida
     }
 
     @objc private func experienceEditorAction() {
-        NotificationCenter.default.post(name: .showExperienceEditor, object: nil)
+        NotificationCenter.default.post(
+            name: .navigateToModule, object: nil,
+            userInfo: ["module": AppModule.experience.rawValue]
+        )
     }
 
     @objc private func analyzeAction() {
@@ -378,7 +381,10 @@ final class ToolbarCoordinator: NSObject, NSToolbarDelegate, NSToolbarItemValida
     }
 
     @objc private func applicantProfileAction() {
-        NotificationCenter.default.post(name: .showApplicantProfile, object: nil)
+        NotificationCenter.default.post(
+            name: .navigateToModule, object: nil,
+            userInfo: ["module": AppModule.profile.rawValue]
+        )
     }
 
     @objc private func ttsReadAloudAction() {

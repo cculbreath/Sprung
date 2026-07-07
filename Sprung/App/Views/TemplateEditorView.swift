@@ -121,19 +121,16 @@ struct TemplateEditorView: View {
         }
     }
     private func openApplicantEditor() {
-        Task { @MainActor in
-            NotificationCenter.default.post(name: .showApplicantProfile, object: nil)
-            if !NSApp.sendAction(#selector(AppDelegate.showApplicantProfileWindow), to: nil, from: nil),
-               let delegate = NSApplication.shared.delegate as? AppDelegate {
-                delegate.showApplicantProfileWindow()
-            }
-        }
+        NotificationCenter.default.post(
+            name: .navigateToModule, object: nil,
+            userInfo: ["module": AppModule.profile.rawValue]
+        )
     }
     private func openExperienceEditor() {
-        Task { @MainActor in
-            NotificationCenter.default.post(name: .showExperienceEditor, object: nil)
-            NSApp.sendAction(#selector(AppDelegate.showExperienceEditorWindow), to: nil, from: nil)
-        }
+        NotificationCenter.default.post(
+            name: .navigateToModule, object: nil,
+            userInfo: ["module": AppModule.experience.rawValue]
+        )
     }
     private var resumeTemplateIdentifier: String? {
         guard let resume = selectedResume else { return nil }

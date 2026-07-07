@@ -8,10 +8,44 @@
 import Cocoa
 import SwiftUI
 
+/// One-shot buffer for a `sprung://capture-job` URL that may arrive before the main
+/// window's capture consumer (`AppSheetsModifier`, hosted by `UnifiedAppLayout`) has
+/// mounted and subscribed to `.captureJobFromURL` — e.g. a bookmarklet firing during a
+/// cold launch, before SwiftUI has evaluated the window's body. `NotificationCenter`
+/// does not replay missed posts, so without this the capture is silently dropped.
+///
+/// Holds at most one URL (latest wins) and delivers it exactly once: either immediately
+/// (consumer already ready) or on the next `consumerDidBecomeReady()` call (buffered).
+/// Pure value type — no AppKit/SwiftUI dependency — so it's directly unit-testable.
+struct CaptureURLBuffer {
+    private var pendingURL: String?
+    private var isConsumerReady = false
+
+    /// Call when a capture URL arrives. Returns the URL to deliver right away if the
+    /// consumer is ready, or `nil` if it was buffered for later delivery.
+    mutating func capture(_ url: String) -> String? {
+        guard isConsumerReady else {
+            pendingURL = url
+            return nil
+        }
+        return url
+    }
+
+    /// Call once the consumer has mounted and subscribed. Returns a buffered URL to
+    /// deliver, if one arrived before this point. Idempotent: subsequent calls return
+    /// `nil` since the buffer only ever holds one not-yet-delivered URL.
+    mutating func consumerDidBecomeReady() -> String? {
+        isConsumerReady = true
+        defer { pendingURL = nil }
+        return pendingURL
+    }
+}
+
 @MainActor
 class AppDelegate: NSObject, NSApplicationDelegate {
     let windowManager = SecondaryWindowService()
     var toolbarCoordinator: ToolbarCoordinator?
+    private var captureURLBuffer = CaptureURLBuffer()
 
     // MARK: - Lifecycle
 
@@ -69,18 +103,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         )
         NotificationCenter.default.addObserver(
             self,
-            selector: #selector(showApplicantProfileWindow),
-            name: .showApplicantProfile,
-            object: nil
-        )
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(showExperienceEditorWindow),
-            name: .showExperienceEditor,
-            object: nil
-        )
-        NotificationCenter.default.addObserver(
-            self,
             selector: #selector(showOnboardingInterviewWindow),
             name: .startOnboardingInterview,
             object: nil
@@ -129,9 +151,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func setupAppMenu() {
         AppMenuBuilder.install(
-            showApplicantProfile: #selector(showApplicantProfileWindow),
+            navigateToProfile: #selector(navigateToProfileModule),
             showTemplateEditor: #selector(showTemplateEditorWindow),
-            showExperienceEditor: #selector(showExperienceEditorWindow),
+            navigateToExperience: #selector(navigateToExperienceModule),
             target: self
         )
     }
@@ -147,8 +169,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         windowManager.showModelSettings(highlightKey: key)
     }
 
-    @objc func showApplicantProfileWindow() {
-        windowManager.showApplicantProfile()
+    /// The Profile editor lives in the main-window module shell (⌘9 / icon bar).
+    /// The app-menu item navigates there rather than opening a duplicate window.
+    @objc func navigateToProfileModule() {
+        NotificationCenter.default.post(
+            name: .navigateToModule, object: nil,
+            userInfo: ["module": AppModule.profile.rawValue]
+        )
     }
 
     @objc func showTemplateEditorWindow() {
@@ -159,8 +186,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         windowManager.showOnboardingInterview()
     }
 
-    @objc func showExperienceEditorWindow() {
-        windowManager.showExperienceEditor()
+    /// The Experience editor lives in the main-window module shell (⌘8 / icon bar).
+    /// The app-menu item navigates there rather than opening a duplicate window.
+    @objc func navigateToExperienceModule() {
+        NotificationCenter.default.post(
+            name: .navigateToModule, object: nil,
+            userInfo: ["module": AppModule.experience.rawValue]
+        )
     }
 
     @objc func showBackgroundActivityWindow() {
@@ -204,12 +236,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         case "capture-job":
             if let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
                let jobURLString = components.queryItems?.first(where: { $0.name == "url" })?.value {
-                NotificationCenter.default.post(
-                    name: .captureJobFromURL,
-                    object: nil,
-                    userInfo: ["url": jobURLString]
-                )
-                NSApp.activate(ignoringOtherApps: true)
+                if let deliverable = captureURLBuffer.capture(jobURLString) {
+                    deliverCaptureJobURL(deliverable)
+                } else {
+                    Logger.info("Buffering capture-job URL until the main window mounts", category: .appLifecycle)
+                }
             } else {
                 Logger.warning("capture-job URL missing 'url' parameter", category: .appLifecycle)
                 ToastCenter.shared.show(.error("Couldn't capture job — the URL was missing required information."))
@@ -218,5 +249,22 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         default:
             Logger.warning("Unknown URL host: \(url.host ?? "nil")", category: .appLifecycle)
         }
+    }
+
+    /// Called by `UnifiedAppLayout` once its `AppSheetsModifier` (the sole consumer of
+    /// `.captureJobFromURL`) has mounted and subscribed. Drains and delivers any
+    /// capture-job URL that arrived before the main window was ready to receive it.
+    func mainWindowCaptureConsumerDidMount() {
+        guard let bufferedURL = captureURLBuffer.consumerDidBecomeReady() else { return }
+        deliverCaptureJobURL(bufferedURL)
+    }
+
+    private func deliverCaptureJobURL(_ jobURLString: String) {
+        NotificationCenter.default.post(
+            name: .captureJobFromURL,
+            object: nil,
+            userInfo: ["url": jobURLString]
+        )
+        NSApp.activate(ignoringOtherApps: true)
     }
 }
