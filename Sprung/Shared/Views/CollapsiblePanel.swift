@@ -117,19 +117,27 @@ struct VerticalResizeHandle: View {
             .contentShape(Rectangle())
             .onHover { hovering in
                 isHovered = hovering
+                // Cursor is pushed exactly once per hover-in and popped on
+                // hover-out (or at drag end, if the pointer left mid-drag).
+                guard !isDragging else { return }
                 if hovering {
                     NSCursor.resizeLeftRight.push()
-                } else if !isDragging {
+                } else {
                     NSCursor.pop()
                 }
             }
+            // The drag MUST be tracked in a stable coordinate space. The handle
+            // moves as a consequence of its own drag; in the default .local
+            // space each layout pass shifts the space the translation is
+            // measured in, so the reading collapses back toward zero and the
+            // width snaps between two states (visible as violent jitter, or as
+            // a divider that refuses to move under slow drags).
             .gesture(
-                DragGesture(minimumDistance: 1)
+                DragGesture(minimumDistance: 1, coordinateSpace: .global)
                     .onChanged { value in
                         if !isDragging {
                             isDragging = true
                             dragStartWidth = width
-                            NSCursor.resizeLeftRight.push()
                         }
                         let delta = inverted ? -value.translation.width : value.translation.width
                         let newWidth = dragStartWidth + delta
@@ -137,7 +145,9 @@ struct VerticalResizeHandle: View {
                     }
                     .onEnded { _ in
                         isDragging = false
-                        NSCursor.pop()
+                        if !isHovered {
+                            NSCursor.pop()
+                        }
                     }
             )
     }

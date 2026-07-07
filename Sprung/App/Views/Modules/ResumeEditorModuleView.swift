@@ -37,8 +37,14 @@ struct ResumeEditorModuleView: View {
         HStack(spacing: 0) {
             // Collapsible sidebar (skinny handle when collapsed)
             if isSidebarExpanded {
+                // Range frame, not a fixed width: the pane holds its stored
+                // width when there's room but compresses down to its minimum
+                // when the window can't fit every pane. A fixed frame here made
+                // the HStack overflow (and recenter) whenever the icon bar +
+                // panes exceeded the window width, which read as interface-wide
+                // jitter and dead resize handles.
                 sidebarContent
-                    .frame(width: sidebarWidth)
+                    .frame(minWidth: minSidebarWidth, idealWidth: sidebarWidth, maxWidth: sidebarWidth)
                     .transition(.move(edge: .leading).combined(with: .opacity))
 
                 // Draggable resize handle

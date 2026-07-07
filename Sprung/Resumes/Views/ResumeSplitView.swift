@@ -94,8 +94,11 @@ struct ResumeSplitView: View {
             inverted: true
         )
 
+        // Range frame (see ResumeEditorModuleView's sidebar): holds the stored
+        // width when there's room, compresses toward minPdfPreviewWidth instead
+        // of overflowing the HStack when the window is narrow.
         ResumePDFView(resume: resume)
-            .frame(width: pdfPreviewWidth)
+            .frame(minWidth: minPdfPreviewWidth, idealWidth: pdfPreviewWidth, maxWidth: pdfPreviewWidth)
             .id(resume.id)
     }
 
