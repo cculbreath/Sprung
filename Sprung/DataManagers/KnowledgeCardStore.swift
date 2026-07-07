@@ -26,11 +26,6 @@ final class KnowledgeCardStore: EntityStore {
     /// All knowledge cards - SwiftData is the single source of truth
     var knowledgeCards: [KnowledgeCard] { fetchAll() }
 
-    /// Cards enabled by default for new resumes
-    var defaultCards: [KnowledgeCard] {
-        knowledgeCards.filter { $0.enabledByDefault }
-    }
-
     /// Cards created during onboarding
     var onboardingCards: [KnowledgeCard] {
         knowledgeCards.filter { $0.isFromOnboarding }

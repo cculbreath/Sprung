@@ -78,9 +78,6 @@ class KnowledgeCard: Identifiable, Codable {
 
     // MARK: - Resume Integration
 
-    /// Whether this card is enabled by default for new resumes
-    var enabledByDefault: Bool = false
-
     /// Resumes that have this card enabled
     var enabledResumes: [Resume] = []
 
@@ -131,7 +128,6 @@ class KnowledgeCard: Identifiable, Codable {
         evidenceAnchors: [EvidenceAnchor] = [],
         extractable: ExtractableMetadata? = nil,
         relatedCardIds: [UUID] = [],
-        enabledByDefault: Bool = false,
         isFromOnboarding: Bool = false,
         tokenCount: Int? = nil,
         isPending: Bool = false
@@ -143,7 +139,6 @@ class KnowledgeCard: Identifiable, Codable {
         self.dateRange = dateRange
         self.organization = organization
         self.location = location
-        self.enabledByDefault = enabledByDefault
         self.isFromOnboarding = isFromOnboarding
         self.tokenCount = tokenCount
         self.isPending = isPending
@@ -166,7 +161,6 @@ class KnowledgeCard: Identifiable, Codable {
         case evidenceAnchorsJSON = "evidence_anchors"
         case extractableJSON = "extractable"
         case relatedCardIdsJSON = "related_card_ids"
-        case enabledByDefault
         case isFromOnboarding
         case tokenCount
         case isPending
@@ -191,7 +185,6 @@ class KnowledgeCard: Identifiable, Codable {
         self.dateRange = try container.decodeIfPresent(String.self, forKey: .dateRange)
         self.organization = try container.decodeIfPresent(String.self, forKey: .organization)
         self.location = try container.decodeIfPresent(String.self, forKey: .location)
-        self.enabledByDefault = try container.decodeIfPresent(Bool.self, forKey: .enabledByDefault) ?? false
         self.isFromOnboarding = try container.decodeIfPresent(Bool.self, forKey: .isFromOnboarding) ?? false
         self.tokenCount = try container.decodeIfPresent(Int.self, forKey: .tokenCount)
         self.isPending = try container.decodeIfPresent(Bool.self, forKey: .isPending) ?? false
@@ -251,7 +244,6 @@ class KnowledgeCard: Identifiable, Codable {
         try container.encodeIfPresent(evidenceAnchorsJSON, forKey: .evidenceAnchorsJSON)
         try container.encodeIfPresent(extractableJSON, forKey: .extractableJSON)
         try container.encodeIfPresent(relatedCardIdsJSON, forKey: .relatedCardIdsJSON)
-        try container.encode(enabledByDefault, forKey: .enabledByDefault)
         try container.encode(isFromOnboarding, forKey: .isFromOnboarding)
         try container.encodeIfPresent(tokenCount, forKey: .tokenCount)
         try container.encode(isPending, forKey: .isPending)

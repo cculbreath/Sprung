@@ -13,7 +13,6 @@ struct KnowledgeCardEditSheet: View {
     @State private var organization: String = ""
     @State private var dateRange: String = ""
     @State private var location: String = ""
-    @State private var enabledByDefault: Bool = true
 
     // Extractable metadata
     @State private var domains: [String] = []
@@ -56,7 +55,6 @@ struct KnowledgeCardEditSheet: View {
             || organization != (card.organization ?? "")
             || dateRange != (card.dateRange ?? "")
             || location != (card.location ?? "")
-            || enabledByDefault != card.enabledByDefault
             || domains != card.extractable.domains
             || scaleItems != card.extractable.scale
             || keywords != card.extractable.keywords
@@ -90,7 +88,6 @@ struct KnowledgeCardEditSheet: View {
             _organization = State(initialValue: card.organization ?? "")
             _dateRange = State(initialValue: card.dateRange ?? "")
             _location = State(initialValue: card.location ?? "")
-            _enabledByDefault = State(initialValue: card.enabledByDefault)
 
             // Extractable metadata
             _domains = State(initialValue: card.extractable.domains)
@@ -128,7 +125,6 @@ struct KnowledgeCardEditSheet: View {
                     if !facts.isEmpty || !isNewCard { factsSection }
                     if !verbatimExcerpts.isEmpty || !isNewCard { verbatimExcerptsSection }
                     if !evidenceAnchors.isEmpty || !isNewCard { evidenceAnchorsSection }
-                    settingsSection
                 }
                 .padding(24)
             }
@@ -570,28 +566,6 @@ struct KnowledgeCardEditSheet: View {
         }
     }
 
-    private var settingsSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Settings")
-                .font(.headline)
-                .foregroundStyle(.primary)
-
-            Toggle(isOn: $enabledByDefault) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Enabled by Default")
-                        .font(.subheadline.weight(.medium))
-                    Text("Include this card when generating new resumes")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .toggleStyle(.switch)
-        }
-        .padding(16)
-        .background(Color(nsColor: .controlBackgroundColor))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-    }
-
     private var footerSection: some View {
         HStack {
             // Validation status
@@ -637,7 +611,6 @@ struct KnowledgeCardEditSheet: View {
             existingCard.organization = organization.isEmpty ? nil : organization.trimmingCharacters(in: .whitespaces)
             existingCard.dateRange = dateRange.isEmpty ? nil : dateRange.trimmingCharacters(in: .whitespaces)
             existingCard.location = location.isEmpty ? nil : location.trimmingCharacters(in: .whitespaces)
-            existingCard.enabledByDefault = enabledByDefault
             existingCard.extractable = ExtractableMetadata(domains: domains, scale: scaleItems, keywords: keywords)
             existingCard.technologies = technologies
             existingCard.outcomes = outcomes
@@ -657,7 +630,6 @@ struct KnowledgeCardEditSheet: View {
                 organization: organization.isEmpty ? nil : organization.trimmingCharacters(in: .whitespaces),
                 location: location.isEmpty ? nil : location.trimmingCharacters(in: .whitespaces),
                 extractable: ExtractableMetadata(domains: domains, scale: scaleItems, keywords: keywords),
-                enabledByDefault: enabledByDefault,
                 isFromOnboarding: false
             )
             newCard.technologies = technologies
