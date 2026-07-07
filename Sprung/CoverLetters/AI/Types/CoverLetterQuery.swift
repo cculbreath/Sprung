@@ -199,10 +199,29 @@ enum CoverLetterQueryError: LocalizedError {
     let dossierContext: String?
 
     var knowledgeCardDocs: String {
-        if knowledgeCards.isEmpty {
+        Self.knowledgeCardDocs(from: knowledgeCards)
+    }
+
+    /// Builds the BACKGROUND DOCUMENTS block: each card's title + narrative,
+    /// followed by up to two verbatim excerpts as VOICE source material. The
+    /// excerpts are the candidate's own words (captured during onboarding
+    /// expressly to preserve voice); they ground the letter in the candidate's
+    /// authentic phrasing and are never license to fabricate — the FORBIDDEN
+    /// block in `constraintsBlock` still governs every claim.
+    static func knowledgeCardDocs(from cards: [KnowledgeCard]) -> String {
+        if cards.isEmpty {
             return ""
         }
-        return knowledgeCards.map { $0.title + ":\n" + $0.narrative + "\n\n" }.joined()
+        return cards.map { card in
+            var block = card.title + ":\n" + card.narrative + "\n"
+            let voiceExcerpts = card.verbatimExcerpts.prefix(2).map { $0.text }
+            if !voiceExcerpts.isEmpty {
+                block += "\nCandidate's own words (verbatim — reflect this voice, do not quote wholesale):\n"
+                block += voiceExcerpts.map { "- \($0)" }.joined(separator: "\n")
+                block += "\n"
+            }
+            return block + "\n"
+        }.joined()
     }
     let writersVoice: String
     private func truncateContext(_ string: String, maxBytes: Int) -> String {
