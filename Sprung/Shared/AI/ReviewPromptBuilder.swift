@@ -178,11 +178,6 @@ struct ReviewPromptBuilder {
 
     // MARK: - Simple Prompts
 
-    /// Builds a simple instruction-only prompt (for overflow fixes, etc.)
-    static func buildSimplePrompt(instruction: String) -> String {
-        instruction
-    }
-
     /// Returns an empty string for custom prompts that will be built dynamically
     static func emptyCustomPrompt() -> String {
         ""

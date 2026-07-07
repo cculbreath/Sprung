@@ -6,7 +6,6 @@
 import SwiftUI
 
 struct ResumeSettingsSection: View {
-    @AppStorage("fixOverflowMaxIterations") private var fixOverflowMaxIterations: Int = 3
     @AppStorage("reasoningEffort") private var reasoningEffort: String = "medium"
     @AppStorage("enableResumeCustomizationTools") private var enableResumeCustomizationTools: Bool = true
     @AppStorage("enableCoherencePass") private var enableCoherencePass: Bool = true
@@ -31,21 +30,6 @@ struct ResumeSettingsSection: View {
                     }
                     .pickerStyle(.menu)
                     Text("Controls AI reasoning depth for resume customization and cover letter writing.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                }
-
-                VStack(alignment: .leading, spacing: 12) {
-                    Stepper(value: $fixOverflowMaxIterations, in: 1 ... 10) {
-                        HStack {
-                            Text("Fix Overflow Attempts")
-                            Spacer()
-                            Text("\(fixOverflowMaxIterations)")
-                                .foregroundStyle(.secondary)
-                                .monospacedDigit()
-                        }
-                    }
-                    Text("How many times AI will attempt to correct overflowing resume sections.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }

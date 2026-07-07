@@ -68,11 +68,7 @@ final class ReviewPromptBuilderTests: XCTestCase {
         XCTAssertEqual(ReviewPromptBuilder.buildTask(instructions: "Do X"), "Task:\nDo X")
     }
 
-    // MARK: - buildSimplePrompt / emptyCustomPrompt
-
-    func testSimplePromptIsIdentity() {
-        XCTAssertEqual(ReviewPromptBuilder.buildSimplePrompt(instruction: "just this"), "just this")
-    }
+    // MARK: - emptyCustomPrompt
 
     func testEmptyCustomPromptIsEmpty() {
         XCTAssertEqual(ReviewPromptBuilder.emptyCustomPrompt(), "")

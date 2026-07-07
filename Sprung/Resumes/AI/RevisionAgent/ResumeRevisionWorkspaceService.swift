@@ -148,7 +148,12 @@ final class ResumeRevisionWorkspaceService {
 
     // MARK: - Export
 
-    func exportResumePDF(resume: Resume, pdfGenerator: NativePDFGenerator) async throws {
+    /// Renders the current resume into the workspace and seeds
+    /// `render_info.json` with the initial page count. Returns that count
+    /// (0 when it could not be determined; the metadata then carries the
+    /// honest "unavailable" marker).
+    @discardableResult
+    func exportResumePDF(resume: Resume, pdfGenerator: NativePDFGenerator) async throws -> Int {
         try await requireExporter().exportResumePDF(resume: resume, pdfGenerator: pdfGenerator)
     }
 

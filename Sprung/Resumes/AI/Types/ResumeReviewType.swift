@@ -8,13 +8,9 @@ enum ResumeReviewType: String, CaseIterable, Identifiable {
     case suggestChanges = "Suggest Resume Fields to Change"
     case assessQuality = "Assess Overall Resume Quality"
     case assessFit = "Assess Applicant Fit for Job Position"
-    case fixOverflow = "Fix Overflow 'Skills & Expertise'"
-    case reorderSkills = "Reorder 'Skills & Experience'"
     case custom = "Custom"
     var id: String { rawValue }
     /// Returns the prompt template for this review type
-    /// Note: The prompt for fixOverflow will be handled more dynamically by ResumeReviewService
-    /// due to its iterative nature and inclusion of image data.
     func promptTemplate() -> String {
         switch self {
         case .assessQuality:
@@ -80,50 +76,6 @@ enum ResumeReviewType: String, CaseIterable, Identifiable {
                 Output as a markdown table with columns: *Section*, *Why change?*, *Suggested Rewrite*.
                 """
             )
-
-        case .fixOverflow:
-            return ReviewPromptBuilder.buildSimplePrompt(
-                instruction: "The 'Skills and Expertise' section of the resume is overflowing. Please adjust the content to fit."
-            )
-
-        case .reorderSkills:
-            let contextHeader = ReviewPromptBuilder.buildContextHeader(
-                jobPosition: "{jobPosition}",
-                companyName: "{companyName}",
-                additionalInfo: [
-                    "• Full job description is included below.",
-                    "• A draft of the applicant's resume follows the job description."
-                ],
-                includeImage: true
-            )
-
-            let sections = [
-                (title: "Job Description", placeholder: "jobDescription"),
-                (title: "Resume Draft", placeholder: "resumeText")
-            ]
-
-            var components = [contextHeader]
-            for section in sections {
-                components.append(ReviewPromptBuilder.buildSection(title: section.title, placeholder: section.placeholder))
-            }
-
-            components.append(ReviewPromptBuilder.buildTask(instructions: """
-            You are an expert resume consultant specializing in strategic skills presentation.
-            1. Review the 'Skills & Experience' section of the resume.
-            2. Analyze the job description to identify the most valuable and relevant skills.
-            3. Recommend a reordering of the skills to prioritize those most relevant to the job.
-            4. List the skills in the recommended order (most relevant first).
-            Output format (markdown):
-            ### Skills Reordering Recommendation
-            **Current Skills Order**
-            <List the current skills in their existing order>
-            **Recommended Skills Order**
-            <List the skills in recommended order with the most relevant first>
-            **Rationale**
-            <Brief explanation of the recommended changes and how they align with the job requirements>
-            """))
-
-            return components.joined(separator: "\n")
 
         case .custom:
             return ReviewPromptBuilder.emptyCustomPrompt()

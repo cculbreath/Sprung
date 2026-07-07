@@ -6,10 +6,6 @@ import Foundation
 // Make sure we're using the right MarkdownView component
 struct ResumeReviewSheet: View {
     @Environment(\.dismiss) private var dismiss
-    @Environment(AppEnvironment.self) private var appEnvironment
-    @Environment(ReasoningStreamState.self) private var reasoningStreamManager
-    @Environment(OpenRouterService.self) private var openRouterService
-    @Environment(CoverRefStore.self) private var coverRefStore
     @Binding var selectedResume: Resume?
     @State private var viewModel = ResumeReviewViewModel()
     @Environment(LLMFacade.self) private var llmFacade
@@ -17,12 +13,10 @@ struct ResumeReviewSheet: View {
     @State private var customOptions = CustomReviewOptions()
     // Model selection state with persistence
     @AppStorage("resumeReviewSelectedModel") private var selectedModel: String = ""
-    // State for entity merge option
-    @State private var allowEntityMerge: Bool = false
     // Computed property for the content view (remains the same)
     private var contentView: some View {
         Group {
-            if viewModel.isProcessingGeneral {
+            if viewModel.isProcessing {
                 VStack(spacing: 16) {
                     Spacer()
                     ProgressView()
@@ -32,111 +26,19 @@ struct ResumeReviewSheet: View {
                     Spacer()
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if viewModel.isProcessingFixOverflow {
-                VStack(spacing: 16) {
-                    Spacer()
-                    ProgressView()
-                    Text(viewModel.fixOverflowStatusMessage.isEmpty ? "Optimizing skills section..." : viewModel.fixOverflowStatusMessage)
-                        .multilineTextAlignment(.center)
-                        .frame(maxWidth: .infinity, alignment: .center)
-                    if viewModel.currentPageLimit > 0 && viewModel.currentPageCount > viewModel.currentPageLimit {
-                        Text("Currently \(viewModel.currentPageCount) pages (limit \(viewModel.currentPageLimit))")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                    if !viewModel.fixOverflowChangeMessage.isEmpty && viewModel.fixOverflowChangeMessage.contains("Merge performed") {
-                        Text("✓ Merge operation completed")
-                            .font(.caption)
-                            .foregroundColor(.green)
-                    }
-                    Spacer()
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if let pendingReview = viewModel.pendingChangeReview {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("\(pendingReview.operationTitle): Review Changes")
-                            .font(.headline)
-                        if !viewModel.fixOverflowStatusMessage.isEmpty {
-                            Text(viewModel.fixOverflowStatusMessage)
-                                .textSelection(.enabled)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                        }
-                        if let error = viewModel.fixOverflowError {
-                            Text(error)
-                                .foregroundColor(.red)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                        }
-                        Divider()
-                        Text(pendingReview.diffSummary.isEmpty ? "The AI modified the skills section." : pendingReview.diffSummary)
-                            .textSelection(.enabled)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .multilineTextAlignment(.leading)
-                        HStack {
-                            Button("Reject Changes") {
-                                Task { await viewModel.rejectPendingChanges() }
-                            }
-                            .buttonStyle(.bordered)
-                            Button("Accept Changes") {
-                                viewModel.acceptPendingChanges()
-                            }
-                            .buttonStyle(.borderedProminent)
-                        }
-                        .padding(.top, 4)
-                    }
-                    .padding()
-                    .background(Color.gray.opacity(0.1))
-                    .cornerRadius(8)
-                }
             } else if !viewModel.reviewResponseText.isEmpty {
                 MarkdownView(markdown: viewModel.reviewResponseText)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .padding(12)
                     .background(Color(NSColor.controlBackgroundColor))
                     .cornerRadius(8)
-            } else if !viewModel.fixOverflowStatusMessage.isEmpty || !viewModel.fixOverflowChangeMessage.isEmpty {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 12) {
-                        // Show status message if it exists
-                        if !viewModel.fixOverflowStatusMessage.isEmpty {
-                            Text(viewModel.fixOverflowStatusMessage)
-                                .textSelection(.enabled)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                        }
-                        // Always show change message if it exists
-                        if !viewModel.fixOverflowChangeMessage.isEmpty {
-                            if !viewModel.fixOverflowStatusMessage.isEmpty {
-                                Divider()
-                                    .padding(.vertical, 4)
-                            }
-                            Text("Changes Made:")
-                                .font(.headline)
-                                .padding(.bottom, 4)
-                            Text(viewModel.fixOverflowChangeMessage)
-                                .textSelection(.enabled)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .multilineTextAlignment(.leading)
-                        }
-                    }
-                    .padding()
-                    .background(Color.gray.opacity(0.1))
-                    .cornerRadius(8)
-                }
-            } else if let error = viewModel.generalError ?? viewModel.fixOverflowError {
+            } else if let error = viewModel.reviewError {
                 Text(error)
                     .foregroundColor(.red)
                     .padding()
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(Color.red.opacity(0.1))
                     .cornerRadius(8)
-            } else if selectedReviewType == .fixOverflow {
-                Text("Ready to optimize the 'Skills & Expertise' section to prevent text overflow.")
-                    .foregroundColor(.secondary)
-                    .padding()
-            } else if selectedReviewType == .reorderSkills {
-                Text("Ready to reorder the 'Skills & Expertise' section for maximum relevance to the job position.")
-                    .foregroundColor(.secondary)
-                    .padding()
             } else {
                 Text("Select a review type and submit your request.")
                     .foregroundColor(.secondary)
@@ -169,19 +71,10 @@ struct ResumeReviewSheet: View {
                         if selectedReviewType == .custom {
                             CustomReviewOptionsView(customOptions: $customOptions)
                         }
-                        // Fix Overflow options
-                        if selectedReviewType == .fixOverflow {
-                            VStack(alignment: .leading, spacing: 8) {
-                                Toggle("Allow entity merge", isOn: $allowEntityMerge)
-                                    .help("When enabled, allows the AI to merge two redundant or conceptually overlapping entries into a single entry to help with fit and improve resume strength")
-                            }
-                            .padding(.vertical, 8)
-                        }
                         // AI Model Selection
-                        // Use vision capability filter for Fix Overflow since it requires image analysis
                         DropdownModelPicker(
                             selectedModel: $selectedModel,
-                            requiredCapability: selectedReviewType == .fixOverflow ? .vision : nil,
+                            requiredCapability: nil,
                             title: "AI Model"
                         )
                         // Content area (GroupBox with contentView)
@@ -195,35 +88,25 @@ struct ResumeReviewSheet: View {
                 } // End ScrollView
                 // Button row - Pinned to the bottom
                 HStack {
-                    if viewModel.isProcessingGeneral || viewModel.isProcessingFixOverflow {
+                    if viewModel.isProcessing {
                         Button("Stop") {
                             viewModel.cancelRequest()
                         }
                         .buttonStyle(.bordered)
                         Spacer()
                         Button("Close") {
-                            viewModel.resetChangeMessage()
                             dismiss()
                         }
-                        .disabled(viewModel.pendingChangeReview != nil)
                     } else {
-                        Button(
-                            selectedReviewType == .fixOverflow ? "Optimize Skills" :
-                            selectedReviewType == .reorderSkills ? "Reorder Skills" : "Submit Request"
-                        ) {
+                        Button("Submit Request") {
                             handleSubmit()
                         }
                         .buttonStyle(.borderedProminent)
-                        .disabled(selectedResume == nil || viewModel.pendingChangeReview != nil)
+                        .disabled(selectedResume == nil)
                         Spacer()
                         Button("Close") {
-                            viewModel.resetChangeMessage()
                             dismiss()
                         }
-                        .disabled(viewModel.pendingChangeReview != nil)
-                        .help(viewModel.pendingChangeReview != nil
-                              ? "Accept or reject the AI changes before closing"
-                              : "")
                     }
                 }
                 .padding([.horizontal, .bottom]) // Padding for the button bar
@@ -233,23 +116,8 @@ struct ResumeReviewSheet: View {
             // Note: Reasoning stream view is now displayed globally in the main app UI
         }
         .frame(width: 650, height: 600, alignment: .topLeading) // Increased sheet size for better content fit
-        // A pending accept/reject gate is the only undo path for applied AI
-        // mutations — block every dismissal route (Esc included) until the
-        // user explicitly accepts or rejects.
-        .interactiveDismissDisabled(viewModel.pendingChangeReview != nil)
         .onAppear {
-            viewModel.initialize(
-                llmFacade: llmFacade,
-                exportCoordinator: appEnvironment.resumeExportCoordinator,
-                reasoningStreamManager: reasoningStreamManager,
-                openRouterService: openRouterService,
-                coverRefStore: coverRefStore
-            )
-        }
-        .onDisappear {
-            // Runs that finish after this point auto-reject their mutations
-            // instead of presenting a review gate into a dead view.
-            viewModel.handleSheetDismissed()
+            viewModel.initialize(llmFacade: llmFacade)
         }
     }
     // View for custom options (extracted for clarity) - Unchanged
@@ -285,8 +153,7 @@ struct ResumeReviewSheet: View {
             reviewType: selectedReviewType,
             resume: resume,
             selectedModel: selectedModel,
-            customOptions: customOptions,
-            allowEntityMerge: allowEntityMerge
+            customOptions: customOptions
         )
     }
 }

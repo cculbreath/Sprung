@@ -38,6 +38,11 @@ class ResumeRevisionAgent {
     /// > 0 means applied work exists in the workspace that must never be
     /// silently discarded on an early exit.
     private var successfulWriteCount = 0
+    /// Page count from the most recent successful render (the initial
+    /// workspace export, a `write_json_file` auto-render, or a
+    /// `check_page_count` call). nil when no render has produced a count —
+    /// `check_page_count` then reports `previousPageCount: null`.
+    private var lastKnownPageCount: Int?
     /// Consecutive stream failures (thrown transport errors or in-stream error
     /// events). Reset on any successful turn.
     private var consecutiveStreamFailures = 0
@@ -217,6 +222,7 @@ class ResumeRevisionAgent {
         shouldBuildResumeOnExit = false
         consecutiveNoToolTurns = 0
         successfulWriteCount = 0
+        lastKnownPageCount = nil
         consecutiveStreamFailures = 0
         pendingUserMessages.removeAll()
         acceptedChangeLedger.removeAll()
@@ -237,7 +243,10 @@ class ResumeRevisionAgent {
             currentAction = "Setting up workspace..."
             let workspacePath = try workspaceService.createWorkspace()
 
-            try await workspaceService.exportResumePDF(resume: resume, pdfGenerator: pdfGenerator)
+            let initialPageCount = try await workspaceService.exportResumePDF(resume: resume, pdfGenerator: pdfGenerator)
+            if initialPageCount > 0 {
+                lastKnownPageCount = initialPageCount
+            }
             let manifest = try workspaceService.exportModifiableTreeNodes(from: resume)
             try workspaceService.exportJobDescription(jobDescription)
             var jobRequirementsExported = false
@@ -1174,6 +1183,7 @@ class ResumeRevisionAgent {
             AnthropicSchemaConverter.anthropicTool(from: GlobSearchTool.self),
             AnthropicSchemaConverter.anthropicTool(from: GrepSearchTool.self),
             AnthropicSchemaConverter.anthropicTool(from: WriteJsonFileTool.self),
+            AnthropicSchemaConverter.anthropicTool(from: CheckPageCountTool.self),
             AnthropicSchemaConverter.anthropicTool(from: ProposeChangesTool.self)
         ]
         if askUserToolEnabled {
@@ -1257,8 +1267,30 @@ class ResumeRevisionAgent {
                 // a single set of page images is appended after all tools complete)
                 let renderInfo = await pdfRenderer.autoRenderResume(from: resume)
                 latestPDFData = renderInfo.pdfData
+                if renderInfo.success, renderInfo.pageCount > 0 {
+                    lastKnownPageCount = renderInfo.pageCount
+                }
                 let text = "{\"success\": true, \"path\": \"\(result.path)\", \"itemCount\": \(result.itemCount), \"pageCount\": \(renderInfo.pageCount), \"renderSuccess\": \(renderInfo.success)}"
                 return ToolExecutionResult(text: text)
+
+            case CheckPageCountTool.name:
+                // Page-overflow skill: render the CURRENT workspace state into a
+                // scratch clone (autoRenderResume never mutates the real resume)
+                // and report the count so the agent can iterate until it fits.
+                let renderInfo = await pdfRenderer.autoRenderResume(from: resume)
+                guard renderInfo.success, renderInfo.pageCount > 0 else {
+                    return ToolExecutionResult(
+                        text: "{\"error\": \"The resume could not be rendered from the current workspace state, so the page count is unavailable. Verify the treenode JSON files are valid and try again.\"}",
+                        isError: true
+                    )
+                }
+                latestPDFData = renderInfo.pdfData
+                let previousPageCount = lastKnownPageCount
+                lastKnownPageCount = renderInfo.pageCount
+                return ToolExecutionResult(text: CheckPageCountTool.resultJSON(
+                    pageCount: renderInfo.pageCount,
+                    previousPageCount: previousPageCount
+                ))
 
             case ProposeChangesTool.name:
                 let params = try JSONDecoder().decode(ProposeChangesTool.Parameters.self, from: argsData)
@@ -1801,6 +1833,7 @@ class ResumeRevisionAgent {
         case GlobSearchTool.name: return "Searching files"
         case GrepSearchTool.name: return "Searching content"
         case WriteJsonFileTool.name: return "Writing JSON & rendering"
+        case CheckPageCountTool.name: return "Checking page count"
         case ProposeChangesTool.name: return "Proposing changes"
         case AskUserTool.name: return "Asking question"
         case CompleteRevisionTool.name: return "Completing revision"

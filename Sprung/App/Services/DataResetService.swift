@@ -190,7 +190,6 @@ final class DataResetService {
 
         // Reset resume/cover letter AI settings
         defaults.removeObject(forKey: "reasoningEffort")
-        defaults.removeObject(forKey: "fixOverflowMaxIterations")
         defaults.removeObject(forKey: "enableResumeCustomizationTools")
         defaults.removeObject(forKey: "enableCoherencePass")
 

@@ -36,6 +36,9 @@ enum ResumeRevisionAgentPrompts {
         - `resume.pdf` — The fully rendered resume (read-only visual reference). \
         This PDF is automatically re-rendered whenever you write a JSON file, so it always \
         reflects the latest state.
+        - `render_info.json` — Read-only metadata seeded at session start: the page count of \
+        the resume as it stood before any edits (`status` is "unavailable" when that initial \
+        count could not be determined).
         - `treenodes/` — Editable JSON files, one per section, containing ONLY the resume nodes \
         you are allowed to modify. Non-editable content is visible in the PDF but not exposed here.
         - `fontsizenodes.json` — Editable JSON file controlling font sizes for each resume element
@@ -54,7 +57,8 @@ enum ResumeRevisionAgentPrompts {
         - `title_sets.txt` — Professional identity title sets library (read-only reference, if present)
         - `manifest.txt` — Section metadata and configuration
 
-        **Convention:** Only `.json` files are editable. All `.txt` and `.pdf` files are read-only.
+        **Convention:** The ONLY editable files are `treenodes/*.json` and `fontsizenodes.json`. \
+        Everything else — including `render_info.json` and all `.txt` and `.pdf` files — is read-only.
 
         ## Editability Rules
 
@@ -347,10 +351,42 @@ enum ResumeRevisionAgentPrompts {
             ## Page Target
 
             The resume MUST fit within \(pageCount) page\(pageCount == 1 ? "" : "s"). \
-            After each round of edits, check the page count returned by `write_json_file`. \
+            After each round of edits, check the page count returned by `write_json_file` \
+            (or call `check_page_count` for a fresh count without writing). \
             If it exceeds \(pageCount), prioritize trimming lower-impact content.
             """
         }
+
+        // Page-overflow skill. The target-length clarification routes through
+        // ask_user only when that tool is registered; the fallback keeps the
+        // assumed target visible in the proposal so the user can correct it.
+        let overflowTargetGuidance = askUserEnabled
+            ? "If no target is declared and the user has not said how long the resume should " +
+              "be, ask for the desired page count with `ask_user` before cutting anything."
+            : "If no target is declared, state the page count you are working toward in your " +
+              "proposal summary so the user can correct it."
+        prompt += """
+
+
+        ## Page Overflow
+
+        When the rendered resume runs longer than it should — the page count exceeds the \
+        target, or the user asks for a tighter resume — fix it by cutting content, not by \
+        formatting tricks:
+
+        1. **Confirm the target length.** Use the declared page target when there is one \
+        (see `manifest.txt`). \(overflowTargetGuidance)
+        2. **Cut the weakest-relevance content for THIS job.** Remove whole bullets or whole \
+        entries that do the least work for the target role. Keep the strongest evidence, and \
+        keep the narrative voice of everything that remains — never compress prose into \
+        fragments or strip words just to save lines.
+        3. **Formatting is a last resort.** Prefer content cuts over font-size reductions, \
+        and never shrink text below readability to force a fit.
+        4. **Every cut goes through review.** Propose removals with `propose_changes` like \
+        any other change — never silently drop content the user has not reviewed.
+        5. **Verify with `check_page_count`** after applying the cuts, and iterate until the \
+        resume fits the target.
+        """
 
         if hasTitleSets {
             prompt += """
@@ -374,6 +410,9 @@ enum ResumeRevisionAgentPrompts {
         - Each `write_json_file` call automatically re-renders the PDF and returns both the page \
         count and rendered page image(s) for your visual inspection. You do NOT need to call \
         `read_file` on `resume.pdf` after writing — the images are provided inline.
+        - `check_page_count` re-renders the resume from the current workspace state without \
+        writing anything and returns the page count alongside the previous count — use it to \
+        verify the length after a round of cuts.
         """
 
         return prompt

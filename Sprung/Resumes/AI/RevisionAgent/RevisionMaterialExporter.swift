@@ -22,14 +22,54 @@ struct RevisionMaterialExporter {
 
     // MARK: - Export: Resume PDF
 
-    /// Render the full resume PDF (all fields, locked + unlocked) and write to workspace.
-    func exportResumePDF(resume: Resume, pdfGenerator: NativePDFGenerator) async throws {
-        let template = try pdfGenerator.resolveTemplate(for: resume)
-        let pdfData = try await pdfGenerator.generatePDF(for: resume, template: template.slug)
+    /// Render the full resume PDF (all fields, locked + unlocked), write it to
+    /// the workspace, and seed `render_info.json` with the initial page count.
+    /// Returns that page count; when it cannot be determined, returns 0 and the
+    /// metadata carries the honest "unavailable" marker — never a fake count.
+    func exportResumePDF(resume: Resume, pdfGenerator: NativePDFGenerator) async throws -> Int {
+        let pdfData: Data
+        do {
+            let template = try pdfGenerator.resolveTemplate(for: resume)
+            pdfData = try await pdfGenerator.generatePDF(for: resume, template: template.slug)
+        } catch {
+            Logger.error(
+                "Initial resume render failed — seeding render_info.json as unavailable: \(error.localizedDescription)",
+                category: .ai
+            )
+            try? writeRenderInfo(.unavailable)
+            throw error
+        }
         let pdfFile = layout.root.appendingPathComponent("resume.pdf")
         try pdfData.write(to: pdfFile)
 
-        Logger.info("Exported resume PDF (\(pdfData.count) bytes)", category: .ai)
+        let pageCount = RevisionPDFRenderer.countPDFPages(pdfData)
+        if pageCount > 0 {
+            try writeRenderInfo(.rendered(pageCount: pageCount))
+        } else {
+            Logger.error(
+                "Could not determine the page count of the initial resume render — seeding render_info.json as unavailable",
+                category: .ai
+            )
+            try writeRenderInfo(.unavailable)
+        }
+
+        Logger.info("Exported resume PDF (\(pdfData.count) bytes, \(pageCount) page(s))", category: .ai)
+        return pageCount
+    }
+
+    /// Write the initial-render metadata file (`render_info.json`) at the
+    /// workspace root. Read-only for the agent: the write tool only accepts
+    /// `treenodes/*.json` and `fontsizenodes.json`.
+    func writeRenderInfo(_ info: WorkspaceRenderInfo) throws {
+        try Self.renderInfoData(info)
+            .write(to: layout.root.appendingPathComponent("render_info.json"))
+    }
+
+    /// Pure half: encode the render metadata (camelCase keys, stable ordering).
+    static func renderInfoData(_ info: WorkspaceRenderInfo) throws -> Data {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        return try encoder.encode(info)
     }
 
     // MARK: - Export: Modifiable TreeNodes
@@ -529,4 +569,21 @@ struct WorkspaceManifest: Codable {
 
     let sections: [SectionInfo]
     let targetPageCount: Int?
+}
+
+// MARK: - Workspace Render Info
+
+/// Initial render metadata seeded into the workspace at session start
+/// (`render_info.json`). `pageCount` is nil when the initial render's page
+/// count could not be determined — an honest "unavailable" marker; a count is
+/// never fabricated.
+struct WorkspaceRenderInfo: Codable, Equatable {
+    let pageCount: Int?
+    let status: String
+
+    static func rendered(pageCount: Int) -> WorkspaceRenderInfo {
+        WorkspaceRenderInfo(pageCount: pageCount, status: "rendered")
+    }
+
+    static let unavailable = WorkspaceRenderInfo(pageCount: nil, status: "unavailable")
 }

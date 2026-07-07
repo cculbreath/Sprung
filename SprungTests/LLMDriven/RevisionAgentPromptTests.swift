@@ -135,6 +135,42 @@ final class RevisionAgentPromptTests: XCTestCase {
                       "the strategic block must reassert the evidence-grounding rule")
     }
 
+    // MARK: - Page overflow skill
+
+    func testPageOverflowSectionAlwaysPresent() {
+        let prompt = systemPrompt()
+        XCTAssertTrue(prompt.contains("## Page Overflow"),
+                      "the page-overflow skill guidance is unconditional")
+        XCTAssertTrue(prompt.contains("`check_page_count`"),
+                      "overflow fixes verify via the check_page_count tool")
+        XCTAssertTrue(prompt.contains("weakest-relevance"),
+                      "cuts target the weakest-relevance content for the job")
+        XCTAssertTrue(prompt.contains("Every cut goes through review"),
+                      "cuts flow through propose_changes — never silent")
+        XCTAssertTrue(prompt.contains("Formatting is a last resort"),
+                      "content cuts are preferred over formatting tricks")
+    }
+
+    func testPageOverflowTargetClarificationGatedOnAskUser() {
+        let enabled = systemPrompt(askUserEnabled: true)
+        XCTAssertTrue(enabled.contains("ask for the desired page count with `ask_user`"),
+                      "with ask_user available, the target length is clarified via the tool")
+
+        let disabled = systemPrompt(askUserEnabled: false)
+        XCTAssertTrue(disabled.contains("state the page count you are working toward"),
+                      "without ask_user, the assumed target surfaces in the proposal summary")
+        // testAskUserReferencesScrubbedWhenDisabled already pins that no
+        // `ask_user` string survives in the disabled variant.
+    }
+
+    func testWorkspaceListingIncludesReadOnlyRenderInfo() {
+        let prompt = systemPrompt()
+        XCTAssertTrue(prompt.contains("`render_info.json`"),
+                      "the seeded render metadata file is listed in the workspace")
+        XCTAssertTrue(prompt.contains("The ONLY editable files are `treenodes/*.json` and `fontsizenodes.json`."),
+                      "the editability convention matches exactly what the write tool enforces")
+    }
+
     // MARK: - initialUserMessage
 
     func testInitialUserMessageEmbedsJobDescription() {

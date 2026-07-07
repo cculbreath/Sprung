@@ -77,17 +77,6 @@ class TextResumeGenerator {
             let employmentArray = convertEmploymentToArray(employment, from: resume)
             context["employment"] = employmentArray
         }
-        // Ensure skills are represented as an array of dictionaries
-        if let skillsDict = context["skills-and-expertise"] as? [String: Any] {
-            var skillsArray: [[String: Any]] = []
-            for (title, description) in skillsDict {
-                skillsArray.append([
-                    "title": title,
-                    "description": description
-                ])
-            }
-            context["skills-and-expertise"] = skillsArray
-        }
         // Convert education object to array format
         if let educationDict = context["education"] as? [String: Any] {
             var educationArray: [[String: Any]] = []

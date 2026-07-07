@@ -79,8 +79,8 @@ enum LeafStatus: String, Codable, Hashable {
     /// Indicates whether this node can be deleted by the user per manifest metadata.
     var schemaAllowsNodeDeletion: Bool = false
     // This property should be explicitly set when a node is created or its role changes.
-    // It's not reliably computable based on name/value alone.
-    // For the "Fix Overflow" feature, we will pass this to the LLM and expect it back.
+    // It's not reliably computable based on name/value alone. The revision-agent
+    // workspace format relies on it to identify title nodes.
     var isTitleNode: Bool = false
     var hasChildren: Bool {
         return !(children?.isEmpty ?? true)

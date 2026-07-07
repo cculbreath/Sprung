@@ -215,6 +215,39 @@ final class RevisionWorkspaceExportTests: InMemoryStoreCase {
         XCTAssertFalse(actual.isEmpty, "mismatch surfaces the actual section content for display")
     }
 
+    // MARK: - Render-info seeding (page-overflow skill)
+
+    func testRenderInfoDataShapeForRenderedCount() throws {
+        let data = try RevisionMaterialExporter.renderInfoData(.rendered(pageCount: 2))
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        XCTAssertEqual(object["pageCount"] as? Int, 2)
+        XCTAssertEqual(object["status"] as? String, "rendered")
+        XCTAssertEqual(Set(object.keys), ["pageCount", "status"],
+                       "camelCase keys we control, nothing else")
+    }
+
+    func testRenderInfoUnavailableMarkerCarriesNoFakeCount() throws {
+        let data = try RevisionMaterialExporter.renderInfoData(.unavailable)
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        XCTAssertEqual(object["status"] as? String, "unavailable")
+        XCTAssertNil(object["pageCount"],
+                     "an unavailable render must never fabricate a page count")
+    }
+
+    func testWriteRenderInfoLandsAtWorkspaceRootAndRoundTrips() throws {
+        let (service, tempRoot) = try makeService()
+        defer { try? FileManager.default.removeItem(at: tempRoot) }
+
+        let layout = try XCTUnwrap(service.layout)
+        let exporter = RevisionMaterialExporter(layout: layout)
+        try exporter.writeRenderInfo(.rendered(pageCount: 3))
+
+        let file = layout.root.appendingPathComponent("render_info.json")
+        let data = try Data(contentsOf: file)
+        let decoded = try JSONDecoder().decode(WorkspaceRenderInfo.self, from: data)
+        XCTAssertEqual(decoded, .rendered(pageCount: 3))
+    }
+
     // MARK: - Pure static helpers
 
     func testNormalizedForMatchCollapsesWhitespaceAndCase() {

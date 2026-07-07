@@ -39,7 +39,7 @@ class ResumeReviewService: @unchecked Sendable {
         Task { @MainActor in
             do {
                 // Determine if we need image input
-                let needsImage = (reviewType != .custom && reviewType != .fixOverflow) ||
+                let needsImage = reviewType != .custom ||
                     (customOptions?.includeResumeImage ?? false)
                 var imageData: [Data] = []
                 if needsImage, let pdfData = resume.pdfData {
