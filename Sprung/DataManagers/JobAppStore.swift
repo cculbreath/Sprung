@@ -65,6 +65,8 @@ final class JobAppStore: EntityStore {
         // Clear existing preprocessing data
         jobApp.extractedRequirements = nil
         jobApp.relevantCardIds = nil
+        jobApp.preprocessingStatus = .pending
+        jobApp.preprocessingStatusDate = nil
         persistChanges()
 
         preprocessor.preprocessInBackground(
@@ -85,8 +87,12 @@ final class JobAppStore: EntityStore {
             return 0
         }
 
+        // Only jobs that have never been run — a completed pass (even one
+        // that legitimately found no requirements) or a failed pass must not
+        // be silently re-queued and re-billed on every call. Failed jobs get
+        // an explicit retry affordance in the row context menu instead.
         let jobsNeedingPreprocessing = jobApps.filter {
-            !$0.jobDescription.isEmpty && !$0.hasPreprocessingComplete
+            !$0.jobDescription.isEmpty && $0.preprocessingStatus == .pending
         }
 
         guard !jobsNeedingPreprocessing.isEmpty else {
@@ -135,6 +141,8 @@ final class JobAppStore: EntityStore {
             // Clear existing preprocessing to force re-run
             jobApp.extractedRequirements = nil
             jobApp.relevantCardIds = nil
+            jobApp.preprocessingStatus = .pending
+            jobApp.preprocessingStatusDate = nil
 
             preprocessor.preprocessInBackground(
                 for: jobApp,
@@ -284,6 +292,8 @@ final class JobAppStore: EntityStore {
         if jobDescriptionChanged {
             jobAppToSave.extractedRequirements = nil
             jobAppToSave.relevantCardIds = nil
+            jobAppToSave.preprocessingStatus = .pending
+            jobAppToSave.preprocessingStatusDate = nil
             persistChanges()
             Logger.info("🧹 [JobAppStore] Job description changed — cleared stale preprocessing for: \(jobAppToSave.jobPosition)", category: .ai)
             if !jobAppToSave.jobDescription.isEmpty {
@@ -343,7 +353,6 @@ final class JobAppStore: EntityStore {
                 jobApp.firstInterviewDate = Date()
             }
             jobApp.lastInterviewDate = Date()
-            jobApp.interviewCount += 1
         case .offer:
             jobApp.offerDate = Date()
         case .accepted, .rejected, .withdrawn:
@@ -352,14 +361,6 @@ final class JobAppStore: EntityStore {
             break
         }
 
-        persistChanges()
-    }
-
-    /// Mark a job app as rejected
-    func reject(_ jobApp: JobApp, reason: String?) {
-        jobApp.status = .rejected
-        jobApp.rejectionReason = reason
-        jobApp.closedDate = Date()
         persistChanges()
     }
 }

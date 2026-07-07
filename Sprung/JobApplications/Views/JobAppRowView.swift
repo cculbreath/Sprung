@@ -20,12 +20,24 @@ struct JobAppRowView: View {
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
             Spacer(minLength: 4)
-            // Only show indicator for jobs awaiting analysis (not for completed)
-            if !jobApp.jobDescription.isEmpty && !jobApp.hasPreprocessingComplete {
-                Image(systemName: "clock.arrow.circlepath")
-                    .foregroundStyle(.orange)
-                    .font(.system(size: 9))
-                    .help("Awaiting analysis")
+            // Indicator only for jobs not yet successfully analyzed —
+            // pending and failed render distinctly so a failure isn't mistaken
+            // for "still working on it".
+            if !jobApp.jobDescription.isEmpty {
+                switch jobApp.preprocessingStatus {
+                case .pending:
+                    Image(systemName: "clock.arrow.circlepath")
+                        .foregroundStyle(.orange)
+                        .font(.system(size: 9))
+                        .help("Awaiting analysis")
+                case .failed:
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.red)
+                        .font(.system(size: 9))
+                        .help("Analysis failed — right-click to retry")
+                case .complete:
+                    EmptyView()
+                }
             }
         }
         .tag(jobApp)
@@ -38,7 +50,7 @@ struct JobAppRowView: View {
                     rerunPreprocessingAction?()
                 } label: {
                     Label(
-                        jobApp.hasPreprocessingComplete ? "Re-analyze Requirements" : "Analyze Requirements",
+                        contextMenuLabel,
                         systemImage: "arrow.triangle.2.circlepath"
                     )
                 }
@@ -49,6 +61,14 @@ struct JobAppRowView: View {
             Button(role: .destructive, action: deleteAction) {
                 Label("Delete", systemImage: "trash")
             }
+        }
+    }
+
+    private var contextMenuLabel: String {
+        switch jobApp.preprocessingStatus {
+        case .pending: return "Analyze Requirements"
+        case .complete: return "Re-analyze Requirements"
+        case .failed: return "Retry Analysis"
         }
     }
 }

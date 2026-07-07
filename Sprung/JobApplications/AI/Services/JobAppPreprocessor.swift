@@ -210,6 +210,10 @@ class JobAppPreprocessor {
 
                 job.jobApp.extractedRequirements = result.requirements
                 job.jobApp.relevantCardIds = result.relevantCardIds
+                // A completed pass is `.complete` even when it legitimately
+                // found no requirements — never re-billed as "pending" again.
+                job.jobApp.preprocessingStatus = .complete
+                job.jobApp.preprocessingStatusDate = Date()
                 do {
                     try job.context.save()
                 } catch {
@@ -224,6 +228,16 @@ class JobAppPreprocessor {
                 }
                 Logger.info("✅ [JobAppPreprocessor] Preprocessed: \(job.jobApp.jobPosition) at \(job.jobApp.companyName)", category: .ai)
             } catch {
+                // Persist the failure so the row can render it distinctly
+                // instead of showing "Awaiting analysis" forever.
+                job.jobApp.preprocessingStatus = .failed
+                job.jobApp.preprocessingStatusDate = Date()
+                do {
+                    try job.context.save()
+                } catch let saveError {
+                    Logger.error("❌ [JobAppPreprocessor] Failed to persist failed status for \(job.jobApp.jobPosition): \(saveError.localizedDescription)", category: .storage)
+                }
+
                 await MainActor.run {
                     activityTracker?.markFailed(operationId: operationId, error: error.localizedDescription)
                 }

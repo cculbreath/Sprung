@@ -90,36 +90,4 @@ enum AppModule: String, CaseIterable, Identifiable, Codable {
             [.profile, .experience, .references],
         ]
     }
-
-    /// Whether this module requires a focused job to function
-    var requiresJobContext: Bool {
-        switch self {
-        case .resumeEditor: return true
-        default: return false
-        }
-    }
-
-    /// Whether to show the job picker in the toolbar
-    var showsJobPicker: Bool {
-        switch self {
-        case .resumeEditor: return true
-        default: return false
-        }
-    }
-
-    /// Whether this module provides its own toolbar items
-    var hasCustomToolbar: Bool {
-        switch self {
-        case .resumeEditor: return true
-        default: return false
-        }
-    }
-
-    /// Whether this module has its own footer bar
-    var hasCustomFooter: Bool {
-        switch self {
-        case .resumeEditor: return true
-        default: return false
-        }
-    }
 }

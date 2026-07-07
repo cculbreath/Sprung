@@ -94,14 +94,13 @@ final class DependentStoresTests: InMemoryStoreCase {
         XCTAssertEqual(job.status, .inProgress)
     }
 
-    func testRejectSetsReasonAndClosedDate() throws {
+    func testSetStatusRejectedStampsClosedDate() throws {
         let stores = makeStores()
         let job = JobApp(jobPosition: "P")
         _ = stores.jobAppStore.addJobApp(job)
 
-        stores.jobAppStore.reject(job, reason: "Position filled")
+        stores.jobAppStore.setStatus(job, to: .rejected)
         XCTAssertEqual(job.status, .rejected)
-        XCTAssertEqual(job.rejectionReason, "Position filled")
         XCTAssertNotNil(job.closedDate)
     }
 

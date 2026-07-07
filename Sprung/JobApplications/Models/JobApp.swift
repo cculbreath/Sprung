@@ -14,6 +14,15 @@ enum JobLeadPriority: String, Codable, CaseIterable {
     case low = "Low"
 }
 
+/// Tri-state outcome of the background job-requirements preprocessing pass.
+/// Persisted so a failed pass can be told apart from one that hasn't run yet
+/// or one that ran and legitimately found nothing.
+enum PreprocessingStatus: String, Codable, CaseIterable {
+    case pending
+    case complete
+    case failed
+}
+
 /// Application status - unified pipeline for both sidebar and kanban views
 enum Statuses: String, Codable, CaseIterable {
     case new = "new"                        // Identified/gathered lead
@@ -191,22 +200,6 @@ extension Statuses {
     var offerDate: Date?
     var closedDate: Date?
 
-    // MARK: - Interview Tracking
-
-    var interviewCount: Int = 0
-    var lastInterviewNotes: String?
-
-    // MARK: - Outcome Details
-
-    var rejectionReason: String?
-    var withdrawalReason: String?
-    var offerDetails: String?
-
-    // MARK: - LLM Assessment
-
-    var fitScore: Double?
-    var llmAssessment: String?
-
     // MARK: - Job Preprocessing
 
     /// Pre-extracted job requirements (populated async after job creation)
@@ -216,6 +209,23 @@ extension Statuses {
     /// IDs of knowledge cards identified as relevant during preprocessing
     /// Used when total card tokens exceed the configured limit
     private var _relevantCardIds: [String]?
+
+    /// Raw storage for `preprocessingStatus`. Optional so existing records
+    /// (pre-dating this field) decode to `.pending` rather than requiring a
+    /// migration.
+    private var _preprocessingStatusRaw: String?
+
+    /// When the current `preprocessingStatus` was last set (success or failure).
+    var preprocessingStatusDate: Date?
+
+    /// Tri-state outcome of the background requirements-extraction pass —
+    /// distinct from whether the extraction happened to find any must-have
+    /// requirements. A completed pass that legitimately found none is still
+    /// `.complete`, not `.pending`, so it is never silently re-billed.
+    var preprocessingStatus: PreprocessingStatus {
+        get { _preprocessingStatusRaw.flatMap(PreprocessingStatus.init(rawValue:)) ?? .pending }
+        set { _preprocessingStatusRaw = newValue.rawValue }
+    }
 
     /// Decoded extracted requirements
     var extractedRequirements: ExtractedRequirements? {
@@ -244,9 +254,11 @@ extension Statuses {
         set { _relevantCardIds = newValue }
     }
 
-    /// Whether preprocessing has been completed
+    /// Whether preprocessing has been completed (successfully — a completed
+    /// pass that found no requirements still counts). Use `preprocessingStatus`
+    /// to also distinguish `.failed` from `.pending`.
     var hasPreprocessingComplete: Bool {
-        extractedRequirements?.isValid ?? false
+        preprocessingStatus == .complete
     }
 
     // MARK: - Computed Properties
