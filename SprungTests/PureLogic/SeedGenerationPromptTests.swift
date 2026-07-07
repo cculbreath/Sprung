@@ -222,6 +222,38 @@ final class SeedGenerationPromptTests: XCTestCase {
         XCTAssertFalse(second.contains("Original Card Title"))
     }
 
+    // MARK: - Enrichment: documented outcomes reach the shared digest
+
+    func testPreambleIncludesCardDocumentedOutcomes() {
+        // outcomes previously never reached SGM. The shared KC digest now
+        // surfaces them as grounding evidence under a "Documented Outcomes"
+        // heading (framing only — no metric-formula instruction added).
+        let card = KnowledgeCard(title: "Telemetry Platform", narrative: "n")
+        card.outcomes = ["Reduced nightly build from 40 minutes to 6 minutes"]
+        let service = PromptCacheService(backend: .openRouter)
+        let preamble = service.buildPreamble(context: makeContext(cards: [card]))
+        XCTAssertTrue(preamble.contains("**Documented Outcomes:**"),
+                      "the shared KC digest must expose a documented-outcomes section")
+        XCTAssertTrue(preamble.contains("Reduced nightly build from 40 minutes to 6 minutes"),
+                      "the captured outcome text must appear in the preamble")
+    }
+
+    func testCachedPreambleInvalidatedByOutcomeChange() {
+        // Same card COUNT and same title, only outcomes edited: the cache key
+        // must fold outcome content or an edited card reuses a stale digest.
+        let service = PromptCacheService(backend: .openRouter)
+        let card = KnowledgeCard(title: "Stable Title", narrative: "n")
+        card.outcomes = ["Original outcome statement"]
+        let first = service.buildPreamble(context: makeContext(cards: [card]))
+        XCTAssertTrue(first.contains("Original outcome statement"))
+
+        card.outcomes = ["Revised outcome statement"]
+        let second = service.buildPreamble(context: makeContext(cards: [card]))
+        XCTAssertTrue(second.contains("Revised outcome statement"),
+                      "an edited outcome must invalidate the cached preamble")
+        XCTAssertFalse(second.contains("Original outcome statement"))
+    }
+
     func testCachedPreambleInvalidatedBySkillRename() {
         let service = PromptCacheService(backend: .openRouter)
         let skill = Skill(canonical: "OldSkillName", category: "technical")

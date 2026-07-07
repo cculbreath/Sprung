@@ -237,6 +237,19 @@ final class PromptCacheService {
                     lines.append("- \(bullet)")
                 }
             }
+
+            // Documented outcomes: real captured results the candidate can
+            // cite. These are grounding evidence for narrative framing — the
+            // role preamble's anti-fabrication rules still govern how they're
+            // used. (Content is folded into hashContext so an edited outcome
+            // invalidates the cached preamble.)
+            let outcomes = card.outcomes
+            if !outcomes.isEmpty {
+                lines.append("**Documented Outcomes:**")
+                for outcome in outcomes.prefix(3) {
+                    lines.append("- \(outcome)")
+                }
+            }
         }
 
         return lines.joined(separator: "\n")
@@ -325,6 +338,7 @@ final class PromptCacheService {
             hasher.combine(card.dateRange)
             hasher.combine(card.factsJSON)
             hasher.combine(card.suggestedBulletsJSON)
+            hasher.combine(card.outcomesJSON)
         }
 
         for skill in context.skills {

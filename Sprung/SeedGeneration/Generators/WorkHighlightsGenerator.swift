@@ -89,26 +89,9 @@ final class WorkHighlightsGenerator: BaseSectionGenerator {
             \(taskContext)
             \(voiceCueBlock(context))
 
-            ## Requirements
-
-            Generate up to \(config.options.maxHighlightsPerEntry) bullet points that:
-
-            1. **Use ONLY facts from the Knowledge Cards** - Every claim must have evidence in the KCs provided above
-
-            2. **Match the candidate's voice** - Write in their style as shown in the writing samples, not generic resume-speak
-
-            3. **Describe work narratively** - Focus on what was built, created, discovered, or accomplished
-
-            4. **Vary sentence structure** - Don't start every bullet the same way
-
-            \(config.options.bulletConstraintText)
-
-            ## FORBIDDEN
-
-            - Inventing metrics, percentages, or numbers not explicitly stated in KCs
-            - Generic phrases: "spearheaded", "leveraged", "drove results", "cross-functional"
-            - Vague impact claims: "significantly improved", "enhanced capabilities", "streamlined processes"
-            - Formulaic structure: "[Verb] [thing] resulting in [X]% improvement"
+            \(highlightGuidelines(
+                maxHighlights: config.options.maxHighlightsPerEntry,
+                bulletConstraint: config.options.bulletConstraintText))
 
             ## Output Format
 
@@ -164,26 +147,9 @@ final class WorkHighlightsGenerator: BaseSectionGenerator {
 
             \(regenerationContext)
 
-            ## Requirements
-
-            Generate up to \(config.options.maxHighlightsPerEntry) bullet points that:
-
-            1. **Use ONLY facts from the Knowledge Cards** - Every claim must have evidence in the KCs provided above
-
-            2. **Match the candidate's voice** - Write in their style as shown in the writing samples, not generic resume-speak
-
-            3. **Describe work narratively** - Focus on what was built, created, discovered, or accomplished
-
-            4. **Vary sentence structure** - Don't start every bullet the same way
-
-            \(config.options.bulletConstraintText)
-
-            ## FORBIDDEN
-
-            - Inventing metrics, percentages, or numbers not explicitly stated in KCs
-            - Generic phrases: "spearheaded", "leveraged", "drove results", "cross-functional"
-            - Vague impact claims: "significantly improved", "enhanced capabilities", "streamlined processes"
-            - Formulaic structure: "[Verb] [thing] resulting in [X]% improvement"
+            \(highlightGuidelines(
+                maxHighlights: config.options.maxHighlightsPerEntry,
+                bulletConstraint: config.options.bulletConstraintText))
             """
 
         let response: WorkHighlightsResponse = try await executeStructuredRequest(
@@ -237,7 +203,40 @@ final class WorkHighlightsGenerator: BaseSectionGenerator {
         """
     }
 
-    private func buildTaskContext(entry: JSON, kcs: [KnowledgeCard]) -> String {
+    /// Shared "Requirements + FORBIDDEN" guidance, emitted verbatim by both
+    /// execute() and regenerate() so the anti-slop guardrails can never drift
+    /// between the two paths. Threaded with the per-run bullet cap and the
+    /// derived bullet-constraint text. Kept internal so a regression test can
+    /// pin that the FORBIDDEN block survives future prompt edits.
+    func highlightGuidelines(maxHighlights: Int, bulletConstraint: String) -> String {
+        """
+        ## Requirements
+
+        Generate up to \(maxHighlights) bullet points that:
+
+        1. **Use ONLY facts from the Knowledge Cards** - Every claim must have evidence in the KCs provided above
+
+        2. **Match the candidate's voice** - Write in their style as shown in the writing samples, not generic resume-speak
+
+        3. **Describe work narratively** - Focus on what was built, created, discovered, or accomplished
+
+        4. **Vary sentence structure** - Don't start every bullet the same way
+
+        \(bulletConstraint)
+
+        ## FORBIDDEN
+
+        - Inventing metrics, percentages, or numbers not explicitly stated in KCs
+        - Generic phrases: "spearheaded", "leveraged", "drove results", "cross-functional"
+        - Vague impact claims: "significantly improved", "enhanced capabilities", "streamlined processes"
+        - Formulaic structure: "[Verb] [thing] resulting in [X]% improvement"
+        """
+    }
+
+    /// Build the per-entry evidence digest fed to the highlights prompt.
+    /// Internal (not private) so a pure regression test can assert which
+    /// enrichment fields reach the prompt.
+    func buildTaskContext(entry: JSON, kcs: [KnowledgeCard]) -> String {
         var lines: [String] = []
 
         // Position details
@@ -277,6 +276,23 @@ final class WorkHighlightsGenerator: BaseSectionGenerator {
                     for bullet in bullets.prefix(2) {
                         lines.append("- \(bullet)")
                     }
+                }
+                // Documented outcomes: real results the candidate reported.
+                // Grounding source material for narrative framing — NOT a
+                // license to fabricate metrics; the FORBIDDEN block still
+                // governs the generated bullets.
+                let outcomes = kc.outcomes
+                if !outcomes.isEmpty {
+                    lines.append("**Documented Outcomes:**")
+                    for outcome in outcomes.prefix(3) {
+                        lines.append("- \(outcome)")
+                    }
+                }
+                // Technologies/tools used in this work — grounds any stack or
+                // framework mentions so the model doesn't invent one.
+                let technologies = kc.technologies
+                if !technologies.isEmpty {
+                    lines.append("**Technologies:** \(technologies.joined(separator: ", "))")
                 }
             }
         }
