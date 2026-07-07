@@ -45,6 +45,7 @@ struct ResumeExportView: View {
                         pipelineSection(for: jobApp)
                         actionsSection(for: jobApp)
                         exportSection(for: jobApp)
+                        SubmittedPacketsSection(jobApp: jobApp)
                         notesSection(for: jobApp)
                     }
                     .padding(.horizontal, 24)
@@ -75,6 +76,16 @@ struct ResumeExportView: View {
                     jobAppStore.updateJobAppStatus(jobApp, to: .submitted)
                     jobApp.appliedDate = Date()
                     jobAppStore.updateJobApp(jobApp)
+                    // Freeze what was submitted: a fresh render + tree snapshot.
+                    if let exportService {
+                        Task {
+                            do {
+                                try await exportService.renderAndRecordPacket()
+                            } catch {
+                                showToastNotification("Marked as submitted, but couldn't archive the packet: \(error.localizedDescription)")
+                            }
+                        }
+                    }
                 }
                 Button("Keep Current", role: .cancel) {}
             } message: {

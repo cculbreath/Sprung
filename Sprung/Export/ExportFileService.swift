@@ -48,6 +48,22 @@ enum ExportOption: String, CaseIterable, Identifiable {
     }
 }
 
+// MARK: - Submitted Packet Errors
+
+enum SubmittedPacketError: LocalizedError {
+    case noResumeSelected
+    case renderProducedNoPDF
+
+    var errorDescription: String? {
+        switch self {
+        case .noResumeSelected:
+            return "No resume is selected to record."
+        case .renderProducedNoPDF:
+            return "The resume render produced no PDF."
+        }
+    }
+}
+
 // MARK: - Export File Service
 
 @MainActor
@@ -62,6 +78,40 @@ final class ExportFileService {
         self.jobAppStore = jobAppStore
         self.coverLetterStore = coverLetterStore
         self.resumeExportCoordinator = resumeExportCoordinator
+    }
+
+    /// Freeze what's currently selected into a persisted `SubmittedPacket`:
+    /// force a FRESH PDF render (never the possibly-stale `resume.pdfData`),
+    /// snapshot the resume tree with the revision encoder, and record it via the
+    /// store. Throws on render failure so callers surface it instead of
+    /// archiving stale bytes (app-audit resume-editor #2 + #5).
+    @discardableResult
+    func renderAndRecordPacket() async throws -> SubmittedPacket {
+        guard let jobApp = jobAppStore.selectedApp,
+              let resume = jobApp.selectedRes else {
+            throw SubmittedPacketError.noResumeSelected
+        }
+        try await resumeExportCoordinator.forceRender(for: resume)
+        guard let pdfData = resume.pdfData else {
+            throw SubmittedPacketError.renderProducedNoPDF
+        }
+        let treeSnapshot = resume.rootNode.flatMap { root in
+            try? JSONSerialization.data(
+                withJSONObject: root.toRevisionDictionary(),
+                options: [.prettyPrinted, .sortedKeys]
+            )
+        }
+        let packet = SubmittedPacket(
+            jobAppId: jobApp.id,
+            submittedDate: Date(),
+            resumePdfData: pdfData,
+            treeSnapshotData: treeSnapshot,
+            coverLetterText: jobApp.selectedCover?.content,
+            templateSlug: resume.template?.slug ?? "",
+            label: resume.label
+        )
+        jobAppStore.recordSubmittedPacket(packet)
+        return packet
     }
 
     func performExport(_ option: ExportOption, onToast: @escaping (String) -> Void) {
@@ -291,8 +341,7 @@ final class ExportFileService {
 
     func exportApplicationPacket(onToast: @escaping (String) -> Void) {
         guard let jobApp = jobAppStore.selectedApp,
-              let resume = jobApp.selectedRes,
-              let resumePdfData = resume.pdfData
+              jobApp.selectedRes != nil
         else {
             onToast("No resume selected. Please select a resume first.")
             return
@@ -301,23 +350,35 @@ final class ExportFileService {
             onToast("No cover letter selected. Please select a cover letter first.")
             return
         }
-        let jobPosition = coverLetter.jobApp?.jobPosition ?? "unknown"
-        let downloadsURL = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first ?? FileManager.default.temporaryDirectory
-        let (fileURL, filename) = createUniqueFileURL(
-            baseFileName: "\(jobPosition) Application",
-            extension: "pdf",
-            in: downloadsURL
-        )
-        let coverLetterPdfData = coverLetterStore.exportPDF(from: coverLetter)
-        if let combinedPdfData = combinePDFs(pdfDataArray: [coverLetterPdfData, resumePdfData]) {
+        onToast("Generating fresh application packet...")
+        Task { @MainActor in
+            // Fresh render + freeze the submitted packet from the freshly
+            // rendered bytes (never the possibly-stale resume.pdfData).
+            let packet: SubmittedPacket
             do {
-                try combinedPdfData.write(to: fileURL)
-                onToast("Application packet has been exported to \"\(filename)\"")
+                packet = try await self.renderAndRecordPacket()
             } catch {
-                onToast("Failed to export application packet: \(error.localizedDescription)")
+                onToast("Couldn't export the application packet — the render failed: \(error.localizedDescription)")
+                return
             }
-        } else {
-            onToast("Failed to combine PDFs for application packet.")
+            let jobPosition = coverLetter.jobApp?.jobPosition ?? "unknown"
+            let downloadsURL = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first ?? FileManager.default.temporaryDirectory
+            let (fileURL, filename) = self.createUniqueFileURL(
+                baseFileName: "\(jobPosition) Application",
+                extension: "pdf",
+                in: downloadsURL
+            )
+            let coverLetterPdfData = self.coverLetterStore.exportPDF(from: coverLetter)
+            if let combinedPdfData = self.combinePDFs(pdfDataArray: [coverLetterPdfData, packet.resumePdfData]) {
+                do {
+                    try combinedPdfData.write(to: fileURL)
+                    onToast("Application packet has been exported to \"\(filename)\"")
+                } catch {
+                    onToast("Failed to export application packet: \(error.localizedDescription)")
+                }
+            } else {
+                onToast("Failed to combine PDFs for application packet.")
+            }
         }
     }
 

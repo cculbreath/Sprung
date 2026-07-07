@@ -60,6 +60,10 @@ final class ResStoreDuplicateTests: InMemoryStoreCase {
         XCTAssertEqual(copy.keyLabels, ["work": "Employment"])
         XCTAssertEqual(copy.importedEditorKeys, ["custom.objective"])
         XCTAssertNotEqual(copy.id, original.id)
+        // A duplicate is stamped with `.duplicated` provenance and a derived label
+        // so the version picker can tell it apart (app-audit resume-editor #3).
+        XCTAssertEqual(copy.provenance, .duplicated)
+        XCTAssertTrue(copy.label.contains("copy"), "duplicate label should mark it as a copy")
 
         // Let the fire-and-forget render task run (and early-return) before the
         // in-memory container is torn down.

@@ -171,6 +171,8 @@ struct RevisionResumeImporter {
             jobApp: jobApp,
             template: original.template
         )
+        newResume.provenance = .aiRevised
+        newResume.label = "\(original.template?.name ?? "Resume") — AI revised"
         context.insert(newResume)
 
         // Deep-clone the original tree. Clones receive fresh ids; the maps tie

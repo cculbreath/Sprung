@@ -161,6 +161,34 @@ final class JobAppStore: EntityStore {
         persistChanges()
         // Handle additional logic like notifying listeners as needed
     }
+
+    // MARK: - Submitted Packets
+
+    /// Persist a frozen record of what was submitted for a job application
+    /// (app-audit resume-editor #2). Minted at the "Mark as Submitted" moment
+    /// and at "Export Application" from a fresh render — see
+    /// `ExportFileService.renderAndRecordPacket`.
+    func recordSubmittedPacket(_ packet: SubmittedPacket) {
+        modelContext.insert(packet)
+        saveContext()
+    }
+
+    /// Every packet ever submitted for this job application, newest first.
+    /// Keyed by `SubmittedPacket.jobAppId` (a plain UUID) so the fetch never
+    /// depends on relationship-graph traversal.
+    func submittedPackets(for jobApp: JobApp) -> [SubmittedPacket] {
+        let jobAppId = jobApp.id
+        let descriptor = FetchDescriptor<SubmittedPacket>(
+            predicate: #Predicate { $0.jobAppId == jobAppId },
+            sortBy: [SortDescriptor(\.submittedDate, order: .reverse)]
+        )
+        do {
+            return try modelContext.fetch(descriptor)
+        } catch {
+            Logger.error("Failed to fetch submitted packets: \(error.localizedDescription)", category: .storage)
+            return []
+        }
+    }
     /// Add a job app and (unless deferred) trigger background preprocessing.
     ///
     /// `deferringPreprocessing: true` is for lead imports whose stored
@@ -234,6 +262,11 @@ final class JobAppStore: EntityStore {
         // Clean up child objects first
         for resume in jobApp.resumes {
             resStore.deleteRes(resume)
+        }
+        // Submitted packets are keyed by jobAppId (not a cascade relationship),
+        // so remove them explicitly to avoid orphaned external-storage PDF blobs.
+        for packet in submittedPackets(for: jobApp) {
+            modelContext.delete(packet)
         }
         modelContext.delete(jobApp)
         persistChanges()

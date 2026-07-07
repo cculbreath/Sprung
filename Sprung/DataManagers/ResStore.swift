@@ -43,6 +43,8 @@ final class ResStore: SwiftDataStore {
         // ModelContext is guaranteed to exist
         let modelContext = self.modelContext
         let resume = Resume(jobApp: jobApp, template: template)
+        resume.provenance = .createdFromDefaults
+        resume.label = template.name
         if jobApp.selectedRes == nil {
             jobApp.selectedRes = resume
         }
@@ -97,6 +99,11 @@ final class ResStore: SwiftDataStore {
         newResume.importedEditorKeysData = originalResume.importedEditorKeysData
         newResume.sectionVisibilityOverrides = originalResume.sectionVisibilityOverrides
         newResume.template = originalResume.template
+        newResume.provenance = .duplicated
+        let baseLabel = originalResume.label.isEmpty
+            ? (originalResume.template?.name ?? "Resume")
+            : originalResume.label
+        newResume.label = "\(baseLabel) copy"
         // Deep copy the tree structure
         if let originalRoot = originalResume.rootNode {
             newResume.rootNode = duplicateTreeNode(originalRoot, for: newResume)

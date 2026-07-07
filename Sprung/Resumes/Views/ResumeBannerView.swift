@@ -50,7 +50,7 @@ struct ResumeBannerView: View {
                 if jobApp.resumes.isEmpty {
                     Text("None").tag(Resume?.none)
                 }
-                ForEach(jobApp.resumes) { resume in
+                ForEach(sortedResumes) { resume in
                     Text(resumeLabel(for: resume))
                         .tag(Resume?.some(resume))
                 }
@@ -123,7 +123,21 @@ struct ResumeBannerView: View {
 
     // MARK: - Helpers
 
+    /// `JobApp.resumes` is an unordered SwiftData to-many, so picker order is not
+    /// a persisted contract — sort explicitly by creation time (oldest first, so
+    /// versions read chronologically).
+    private var sortedResumes: [Resume] {
+        jobApp.resumes.sorted { $0.dateCreated < $1.dateCreated }
+    }
+
+    /// Prefer the resume's provenance label (e.g. "Aleo — AI revised"), stamped
+    /// at each creation site, so tailored versions are distinguishable at a
+    /// glance. Records created before labels existed fall back to the old
+    /// template-plus-timestamp string.
     private func resumeLabel(for resume: Resume) -> String {
+        if !resume.label.isEmpty {
+            return resume.label
+        }
         let templateName = resume.template?.name ?? "No template"
         return "\(templateName) – \(resume.createdDateString)"
     }

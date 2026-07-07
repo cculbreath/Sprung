@@ -1,10 +1,35 @@
 // Sprung/Resumes/Models/Resume.swift
 import Foundation
 import SwiftData
+
+/// Where a resume version came from, so the version picker can stop being a
+/// guessing game (app-audit 2026-07-06, resume-editor #3). Stamped at each of
+/// the three real creation sites: fresh-from-defaults, duplicated, AI-revised.
+enum ResumeProvenance: String, Codable, CaseIterable {
+    case createdFromDefaults
+    case duplicated
+    case aiRevised
+}
+
 @Model
 class Resume: Identifiable, Hashable {
     @Attribute(.unique) var id: UUID = UUID()
     var needToFont: Bool = true
+
+    /// Human label for this version, shown in the banner picker. Defaulted
+    /// meaningfully at each creation site (template name plus a provenance
+    /// suffix); B2 renders it and sorts the picker.
+    var label: String = ""
+
+    /// Raw storage for `provenance`. Defaulted so existing records decode to
+    /// `.createdFromDefaults` without a migration.
+    private var provenanceRaw: String = ResumeProvenance.createdFromDefaults.rawValue
+
+    /// Where this resume version originated.
+    var provenance: ResumeProvenance {
+        get { ResumeProvenance(rawValue: provenanceRaw) ?? .createdFromDefaults }
+        set { provenanceRaw = newValue.rawValue }
+    }
     @Relationship(deleteRule: .cascade)
     var rootNode: TreeNode? // The top-level node
     @Relationship(deleteRule: .cascade, inverse: \FontSizeNode.resume)
@@ -82,6 +107,14 @@ class Resume: Identifiable, Hashable {
     @Attribute(originalName: "textRes")
     var textResume: String = ""
     var pdfData: Data?
+    // MARK: - Last AI Review (Optimize sheet)
+    /// Persisted output of the most recent advisory AI review (assess quality /
+    /// assess fit / suggest changes / custom). Reopening the Optimize sheet shows
+    /// this last analysis with its timestamp instead of losing the markdown — and
+    /// the tokens spent — on dismiss. Optional: absent until a review completes.
+    var lastReviewMarkdown: String?
+    var lastReviewDate: Date?
+    var lastReviewType: String?
     /// Serializes the resume tree to a pretty-printed JSON string.
     /// Throws if the context cannot be built or serialized.
     func buildJSON() throws -> String {
