@@ -223,6 +223,144 @@ final class RecordingReplayTests: XCTestCase {
         XCTAssertNil(gateway.recordedResult(callId: "nope"))
     }
 
+    // MARK: - Synthetic-tape restore end-to-end (through the real replay + registration seam)
+
+    /// Turn 0: the model calls `glob`. Turn 1: it answers in text. Each carries a
+    /// `usage` block so the tape looks like a real recording.
+    private static let restoreTurn0SSE: [String] = [
+        #"{"type":"message_start","message":{"id":"msg_r0","type":"message","role":"assistant","content":[],"model":"claude-test","stop_reason":null,"usage":{"input_tokens":10,"output_tokens":1}}}"#,
+        #"{"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"toolu_glob","name":"glob"}}"#,
+        #"{"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"{\"pattern\":\"*.swift\"}"}}"#,
+        #"{"type":"content_block_stop","index":0}"#,
+        #"{"type":"message_delta","delta":{"stop_reason":"tool_use","stop_sequence":null},"usage":{"output_tokens":20}}"#,
+        #"{"type":"message_stop"}"#,
+    ]
+    private static let restoreTurn1SSE: [String] = [
+        #"{"type":"message_start","message":{"id":"msg_r1","type":"message","role":"assistant","content":[],"model":"claude-test","stop_reason":null,"usage":{"input_tokens":40,"output_tokens":1}}}"#,
+        #"{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Found 2 files."}}"#,
+        #"{"type":"message_delta","delta":{"stop_reason":"end_turn","stop_sequence":null},"usage":{"output_tokens":8}}"#,
+        #"{"type":"message_stop"}"#,
+    ]
+
+    /// Drives the full RESTORE data flow — build a synthetic tape in-code, load it
+    /// back through the real store, install replay over a live service, re-serve
+    /// every recorded turn, then go live — through the SAME pipeline objects the
+    /// live re-drive uses below `SessionReplayService` (recorder, store,
+    /// `ReplayAnthropicService`, `ReplayToolGateway`) and the SAME registration
+    /// object `SessionReplayService.swapToLiveService` swaps against
+    /// (`LLMFacadeSpecializedAPIs`, to which `LLMFacade` delegates verbatim). No UI,
+    /// no `LLMFacade`, no network. Asserts the three restore guarantees:
+    ///   (a) replayed turns issue ZERO live API calls,
+    ///   (b) session state (model-turn count + injected user messages) matches the tape,
+    ///   (c) the go-live swap installs the live service exactly once.
+    @MainActor
+    func testSyntheticTapeRestoreServesFromTapeWithZeroLiveCallsThenGoesLiveOnce() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("SprungRestoreTest-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        // --- Record a synthetic session through the REAL recorder ---
+        // A system-generated opener (re-fires on its own during replay → must NOT be
+        // injected) and one user-typed message (must be injected), around two model
+        // turns whose tool call resolves from the tape.
+        let sessionId = "restore-synthetic"
+        let recorder = SessionTapeRecorder(recordingsRoot: root)
+        await recorder.start(sessionId: sessionId, modelId: "claude-test")
+
+        await recorder.recordUserMessage(entryId: "opener", wireText: "I'm ready to proceed",
+                                         attachmentBase64: nil, attachmentMediaType: nil,
+                                         isSystemGenerated: true)
+        let t0 = await recorder.nextModelTurnIndex()
+        let turn0 = try Self.restoreTurn0SSE.map { RecordedStreamEvent(capturing: try streamEvent(from: $0)) }
+        await recorder.recordModelStream(turnIndex: t0, events: turn0)
+        await recorder.recordToolResult(callId: "toolu_glob", name: "glob",
+                                        argumentsJSON: #"{"pattern":"*.swift"}"#,
+                                        output: "a.swift\nb.swift", status: "completed", mintedIds: [])
+        await recorder.recordUserMessage(entryId: "u1", wireText: "here is my background",
+                                         attachmentBase64: nil, attachmentMediaType: nil,
+                                         isSystemGenerated: false)
+        let t1 = await recorder.nextModelTurnIndex()
+        let turn1 = try Self.restoreTurn1SSE.map { RecordedStreamEvent(capturing: try streamEvent(from: $0)) }
+        await recorder.recordModelStream(turnIndex: t1, events: turn1)
+        await recorder.stop()
+
+        // --- Load it back exactly as SessionReplayService.restore does ---
+        let store = TapeStore(recordingsRoot: root)
+        let events = try await store.loadEvents(sessionId: sessionId)
+        let modelStreams = try await store.loadModelStreams(sessionId: sessionId)
+        let toolResults = try await store.loadToolResults(sessionId: sessionId)
+
+        // (b) Session state matches the tape. This is the EXACT injection predicate
+        // SessionReplayService.restore uses — only NON-system-generated user messages
+        // are injected; the opener re-fires on its own.
+        let userTyped: [TapeUserMessage] = events.compactMap {
+            if case .userMessage(let message) = $0, !message.isSystemGenerated { return message }
+            return nil
+        }
+        XCTAssertEqual(modelStreams.count, 2, "two model turns are on the tape")
+        XCTAssertEqual(userTyped.map(\.wireText), ["here is my background"],
+                       "only the user-typed message is injected; the system opener is filtered out")
+
+        // --- Install replay over the live service, in the REAL registration seam ---
+        // LLMFacade.registerAnthropicService/currentAnthropicService delegate straight
+        // to this object, so the swap logic exercised here is the production swap.
+        let specialized = LLMFacadeSpecializedAPIs()
+        let live = CountingAnthropicService()
+        specialized.registerAnthropicService(live)
+        let savedLive = specialized.currentAnthropicService()   // what go-live restores
+
+        let replay = ReplayAnthropicService(modelStreams: modelStreams)
+        let gateway = ReplayToolGateway(toolResults: toolResults)
+        specialized.registerAnthropicService(replay)            // replay is now current
+
+        // (a) Drive every recorded turn through the CURRENTLY-registered service (the
+        // replay one). The pipeline issues one model request per assistant turn; the
+        // tape has exactly two, so two requests serve from the tape and a third
+        // refuses rather than falling through to the live API.
+        let dummy = AnthropicMessageParameter(model: "x", messages: [], maxTokens: 1)
+        let current = try XCTUnwrap(specialized.currentAnthropicService())
+
+        let served0 = try await collect(current.messagesStream(parameters: dummy))
+        XCTAssertTrue(served0.contains { $0.toolUseInfo?.id == "toolu_glob" },
+                      "turn 0 replays the recorded tool_use block")
+        XCTAssertEqual(gateway.recordedResult(callId: "toolu_glob")?.output, "a.swift\nb.swift",
+                       "the tool call resolves from the tape — the external tool never re-runs")
+
+        let served1 = try await collect(current.messagesStream(parameters: dummy))
+        XCTAssertTrue(served1.contains { $0.textDelta == "Found 2 files." },
+                      "turn 1 replays the recorded text answer")
+
+        do {
+            _ = try await current.messagesStream(parameters: dummy)
+            XCTFail("a third turn was never recorded — replay must refuse it, never hit the live API")
+        } catch let error as ReplayError {
+            guard case .noRecordedTurn(let idx) = error else { return XCTFail("expected noRecordedTurn, got \(error)") }
+            XCTAssertEqual(idx, 2)
+        }
+
+        XCTAssertEqual(live.messagesStreamCalls, 0, "replay must issue ZERO live streaming calls")
+        XCTAssertEqual(live.nonStreamCalls, 0, "no live files/tokens/models calls during replay")
+
+        // (c) GO LIVE: register the saved live service back and clear the gateway —
+        // the exact operations of SessionReplayService.swapToLiveService.
+        let restoredLive = try XCTUnwrap(savedLive)
+        specialized.registerAnthropicService(restoredLive)
+        XCTAssertTrue((specialized.currentAnthropicService() as AnyObject?) === (restoredLive as AnyObject),
+                      "go-live restores the exact saved live service")
+        XCTAssertFalse((specialized.currentAnthropicService() as AnyObject?) === (replay as AnyObject),
+                       "the replay service is no longer installed after go-live")
+
+        // swapToLiveService is documented safe to call repeatedly: a second swap is a
+        // no-op that keeps the live service current (installed exactly once, not toggled).
+        specialized.registerAnthropicService(restoredLive)
+        XCTAssertTrue((specialized.currentAnthropicService() as AnyObject?) === (restoredLive as AnyObject))
+
+        // The next (post-go-live) turn hits the LIVE service exactly once — the real
+        // API path has resumed, and it was untouched throughout the replay window.
+        _ = try await collect(specialized.anthropicMessagesStream(parameters: dummy))
+        XCTAssertEqual(live.messagesStreamCalls, 1, "exactly one live call after go-live, none before")
+    }
+
     // MARK: - Stream collection helper
 
     private func collect(_ stream: AsyncThrowingStream<AnthropicStreamEvent, Error>) async throws -> [AnthropicStreamEvent] {
@@ -230,4 +368,41 @@ final class RecordingReplayTests: XCTestCase {
         for try await event in stream { events.append(event) }
         return events
     }
+}
+
+// MARK: - Live-service tripwire
+
+/// A stand-in for the real, live `AnthropicService` saved across a restore. It
+/// counts calls so a test can prove the replay window issued ZERO live API calls
+/// and that go-live routes exactly one subsequent call back to the live service.
+/// Streaming returns an immediately-finishing stream (a successful post-go-live
+/// turn); every non-stream endpoint throws — none should ever run.
+private final class CountingAnthropicService: AnthropicService, @unchecked Sendable {
+    private let lock = NSLock()
+    private var _messagesStreamCalls = 0
+    private var _nonStreamCalls = 0
+
+    var messagesStreamCalls: Int { lock.lock(); defer { lock.unlock() }; return _messagesStreamCalls }
+    var nonStreamCalls: Int { lock.lock(); defer { lock.unlock() }; return _nonStreamCalls }
+
+    private enum ProbeError: Error { case unexpectedNonStreamCall(String) }
+
+    private func countNonStream(_ op: String) throws -> Never {
+        lock.lock(); _nonStreamCalls += 1; lock.unlock()
+        throw ProbeError.unexpectedNonStreamCall(op)
+    }
+
+    func messagesStream(parameters: AnthropicMessageParameter) async throws -> AsyncThrowingStream<AnthropicStreamEvent, Error> {
+        lock.lock(); _messagesStreamCalls += 1; lock.unlock()
+        return AsyncThrowingStream { $0.finish() }
+    }
+
+    func messages(parameters: AnthropicMessageParameter) async throws -> AnthropicMessageResponse { try countNonStream("messages") }
+    func listModels() async throws -> AnthropicModelsResponse { try countNonStream("listModels") }
+    func retrieveModel(id: String) async throws -> AnthropicModel { try countNonStream("retrieveModel") }
+    func countTokens(parameters: AnthropicTokenCountParameter) async throws -> AnthropicTokenCountResponse { try countNonStream("countTokens") }
+    func uploadFile(data: Data, filename: String, mimeType: String) async throws -> AnthropicFileMetadata { try countNonStream("uploadFile") }
+    func retrieveFileMetadata(id: String) async throws -> AnthropicFileMetadata { try countNonStream("retrieveFileMetadata") }
+    func listFiles() async throws -> AnthropicFileListResponse { try countNonStream("listFiles") }
+    func deleteFile(id: String) async throws -> AnthropicFileDeletedResponse { try countNonStream("deleteFile") }
 }
