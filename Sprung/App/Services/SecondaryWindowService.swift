@@ -139,7 +139,6 @@ final class SecondaryWindowService {
                 .environment(deps.applicantProfileStore)
                 .environment(deps.experienceDefaultsStore)
                 .environment(deps.careerKeywordStore)
-                .environment(deps.guidanceStore)
                 .environment(appEnvironment.openRouterService)
                 .environment(debugSettingsStore)
                 .environment(deps.searchOpsCoordinator)
@@ -183,7 +182,6 @@ final class SecondaryWindowService {
                 .environment(deps.applicantProfileStore)
                 .environment(appEnvironment.experienceDefaultsStore)
                 .environment(appEnvironment.careerKeywordStore)
-                .environment(deps.guidanceStore)
                 .modelContainer(deps.modelContainer)
             applicantProfileWindow = makeWindow(
                 WindowSpec(
@@ -240,7 +238,6 @@ final class SecondaryWindowService {
                 .environment(appEnvironment.experienceDefaultsStore)
                 .environment(appEnvironment.careerKeywordStore)
                 .environment(appEnvironment.applicantProfileStore)
-                .environment(deps.guidanceStore)
             templateEditorWindow = makeWindow(
                 WindowSpec(
                     title: "Template Editor", width: 1200, height: 760,
@@ -282,7 +279,6 @@ final class SecondaryWindowService {
                 .environment(deps.coverRefStore)
                 .environment(appEnvironment.applicantProfileStore)
                 .environment(appEnvironment.experienceDefaultsStore)
-                .environment(deps.guidanceStore)
                 .environment(onboardingService)
                 .environment(onboardingService.toolRouter)
                 .environment(debugSettingsStore)
@@ -336,7 +332,6 @@ final class SecondaryWindowService {
                 .environment(appEnvironment.appState)
                 .environment(deps.experienceDefaultsStore)
                 .environment(appEnvironment.careerKeywordStore)
-                .environment(deps.guidanceStore)
                 .environment(deps.experienceEntryRefinementService)
             experienceEditorWindow = makeWindow(
                 WindowSpec(
@@ -416,7 +411,6 @@ final class SecondaryWindowService {
             .environment(deps.skillStore)
             .environment(deps.coverRefStore)
             .environment(deps.titleSetStore)
-            .environment(deps.guidanceStore)
             .environment(deps.candidateDossierStore)
 
         let window = makeWindow(
@@ -555,7 +549,6 @@ final class SecondaryWindowService {
                 .environment(appEnvironment.appState)
                 .environment(appEnvironment.llmFacade)
                 .environment(deps.experienceDefaultsStore)
-                .environment(deps.guidanceStore)
                 .environment(deps.titleSetStore)
             seedGenerationWindow = makeWindow(
                 WindowSpec(

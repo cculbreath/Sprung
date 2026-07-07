@@ -9,7 +9,6 @@ struct WritingSamplesBrowserTab: View {
 
     @Environment(LLMFacade.self) private var llmFacade
     @Environment(ReasoningStreamState.self) private var reasoningStreamManager
-    @Environment(InferenceGuidanceStore.self) private var guidanceStore
     @Environment(CoverRefStore.self) private var coverRefStore
 
     @State private var selectedFilter: SampleTypeFilter = .all
@@ -200,9 +199,9 @@ struct WritingSamplesBrowserTab: View {
             : "Extract a voice profile from \(sampleCount) writing sample\(sampleCount == 1 ? "" : "s")")
     }
 
-    /// Extract a voice profile from the stored writing samples and store it in
-    /// the guidance store (same profile the onboarding flow produces — used
-    /// for voice anchoring across document analysis and generation).
+    /// Extract a voice profile from the stored writing samples and store it on
+    /// the `.voicePrimer` CoverRef (same profile the onboarding flow produces —
+    /// used for voice anchoring across document analysis and generation).
     private func runVoiceExtraction() {
         let samples = writingSampleContents
         guard !samples.isEmpty else { return }
@@ -216,7 +215,7 @@ struct WritingSamplesBrowserTab: View {
                     reasoningStreamManager: reasoningStreamManager
                 )
                 let profile = try await service.extractVoiceProfile(from: samples)
-                try service.storeVoiceProfile(profile, in: guidanceStore, coverRefStore: coverRefStore)
+                try service.storeVoiceProfile(profile, coverRefStore: coverRefStore)
                 voiceResultMessage = voiceProfileSummary(profile, sampleCount: samples.count)
                 Logger.info("🎤 Voice profile extracted from writing samples browser (\(samples.count) samples)", category: .ai)
             } catch let error as ModelConfigurationError {

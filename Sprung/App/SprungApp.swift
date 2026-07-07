@@ -97,7 +97,6 @@ struct SprungApp: App {
                 .environment(appDependencies.templateStore)
                 .environment(appDependencies.experienceDefaultsStore)
                 .environment(appDependencies.careerKeywordStore)
-                .environment(appDependencies.guidanceStore)
                 .environment(appDependencies.candidateDossierStore)
                 .environment(appDependencies.moduleNavigation)
                 .environment(appDependencies.focusState)

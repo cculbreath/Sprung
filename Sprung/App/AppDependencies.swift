@@ -33,7 +33,6 @@ final class AppDependencies {
     let onboardingCoordinator: OnboardingInterviewCoordinator
     let reasoningStreamManager: ReasoningStreamState
     let searchOpsCoordinator: DiscoveryCoordinator
-    let guidanceStore: InferenceGuidanceStore
     let titleSetStore: TitleSetStore
     let backgroundActivityTracker: BackgroundActivityTracker
     let experienceEntryRefinementService: ExperienceEntryRefinementService
@@ -78,8 +77,6 @@ final class AppDependencies {
         self.onboardingSessionStore = OnboardingSessionStore(context: modelContext)
         self.candidateDossierStore = CandidateDossierStore(context: modelContext)
         self.artifactRecordStore = ArtifactRecordStore(context: modelContext)
-        let guidanceStore = InferenceGuidanceStore(context: modelContext)
-        self.guidanceStore = guidanceStore
         self.titleSetStore = TitleSetStore(context: modelContext)
         // Core export orchestration
         let resumeExportService = ResumeExportService(
@@ -181,7 +178,6 @@ final class AppDependencies {
             skillStore: skillStore,
             coverRefStore: coverRefStore,
             experienceDefaultsStore: experienceDefaultsStore,
-            guidanceStore: guidanceStore,
             sessionStore: onboardingSessionStore,
             dataStore: interviewDataStore,
             candidateDossierStore: candidateDossierStore,

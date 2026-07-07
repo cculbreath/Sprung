@@ -28,7 +28,6 @@ final class JSONBlobRoundTripTests: InMemoryStoreCase {
         card.suggestedBullets = ["Shipped X", "Scaled Y"]
         card.technologies = ["Swift", "Postgres"]
         card.outcomes = ["Cut latency 40%"]
-        card.relatedCardIds = [UUID(), UUID()]
         insert(card)
         saveContext()
 
@@ -40,7 +39,6 @@ final class JSONBlobRoundTripTests: InMemoryStoreCase {
         XCTAssertEqual(fetched.suggestedBullets, ["Shipped X", "Scaled Y"])
         XCTAssertEqual(fetched.technologies, ["Swift", "Postgres"])
         XCTAssertEqual(fetched.outcomes, ["Cut latency 40%"])
-        XCTAssertEqual(fetched.relatedCardIds.count, 2)
     }
 
     func testKnowledgeCardCardTypeComputedAccessor() throws {
@@ -198,7 +196,10 @@ final class JSONBlobRoundTripTests: InMemoryStoreCase {
         XCTAssertEqual(reqs.mustHave, ["Swift"])
         XCTAssertEqual(reqs.atsKeywords, ["swift", "ios"])
         XCTAssertTrue(reqs.isValid)
-        XCTAssertTrue(fetched.hasPreprocessingComplete)
+        // `hasPreprocessingComplete` now derives from the persisted tri-state,
+        // not from `extractedRequirements` presence/validity — setting the
+        // blob alone (as this test does) does not itself mark the pass complete.
+        XCTAssertFalse(fetched.hasPreprocessingComplete)
     }
 
     func testJobAppRelevantCardIdsRoundTrip() throws {
@@ -209,17 +210,4 @@ final class JSONBlobRoundTripTests: InMemoryStoreCase {
         XCTAssertEqual(try fetchAll(JobApp.self).first?.relevantCardIds, ["card-a", "card-b"])
     }
 
-    // MARK: - InferenceGuidance attachments blob
-
-    func testInferenceGuidanceAttachmentsRoundTrip() throws {
-        let guidance = InferenceGuidance(
-            nodeKey: "objective",
-            displayName: "Obj",
-            prompt: "x",
-            attachmentsJSON: "{\"voiceProfile\":null}"
-        )
-        insert(guidance)
-        saveContext()
-        XCTAssertEqual(try fetchAll(InferenceGuidance.self).first?.attachmentsJSON, "{\"voiceProfile\":null}")
-    }
 }

@@ -1,63 +1,14 @@
 //
-//  InferenceGuidanceTypes.swift
+//  VoiceProfile.swift
 //  Sprung
 //
-//  Supporting types for inference guidance attachments.
-//  These types are stored as JSON in InferenceGuidance.attachmentsJSON.
+//  Extracted voice characteristics for objective/narrative generation.
+//  Produced by VoiceProfileService, persisted on the `.voicePrimer` CoverRef
+//  (the single source of voice truth), and rendered into every voice-aware
+//  prompt via `characteristicPairs` (cover letters, revision workspace, SGM).
 //
 
 import Foundation
-
-// MARK: - Title Sets
-
-/// Pre-validated 4-title combination
-struct TitleSet: Codable, Identifiable, Equatable {
-    let id: String
-    var titles: [String]          // Exactly 4
-    var emphasis: TitleEmphasis
-    var suggestedFor: [String]    // Job types: ["R&D", "software", "academic"]
-    var isFavorite: Bool
-
-    init(
-        id: String = UUID().uuidString,
-        titles: [String],
-        emphasis: TitleEmphasis = .balanced,
-        suggestedFor: [String] = [],
-        isFavorite: Bool = false
-    ) {
-        self.id = id
-        self.titles = titles
-        self.emphasis = emphasis
-        self.suggestedFor = suggestedFor
-        self.isFavorite = isFavorite
-    }
-
-    /// Display string: "Physicist. Developer. Educator. Machinist."
-    var displayString: String {
-        titles.joined(separator: ". ") + "."
-    }
-
-    // Custom decoder to handle optional fields with defaults
-    init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        id = try container.decode(String.self, forKey: .id)
-        titles = try container.decode([String].self, forKey: .titles)
-        emphasis = try container.decode(TitleEmphasis.self, forKey: .emphasis)
-        suggestedFor = try container.decodeIfPresent([String].self, forKey: .suggestedFor) ?? []
-        isFavorite = try container.decodeIfPresent(Bool.self, forKey: .isFavorite) ?? false
-    }
-}
-
-enum TitleEmphasis: String, Codable, CaseIterable {
-    case technical
-    case research
-    case leadership
-    case balanced
-
-    var displayName: String {
-        rawValue.capitalized
-    }
-}
 
 // MARK: - Voice Profile
 
@@ -113,7 +64,7 @@ struct VoiceProfile: Codable, Equatable {
 extension VoiceProfile {
     /// Labeled characteristic pairs — the single source of truth for every
     /// "voice characteristics" prompt block (cover letters, revision
-    /// workspace, guidance store). Empty/absent fields are omitted.
+    /// workspace, SGM). Empty/absent fields are omitted.
     var characteristicPairs: [(label: String, value: String)] {
         var pairs: [(String, String)] = []
         if let summary = voiceSummary, !summary.isEmpty {
@@ -171,34 +122,5 @@ enum EnthusiasmLevel: String, Codable, CaseIterable {
         case .moderate: return ["I'm drawn to", "What appeals to me", "I enjoy"]
         case .high: return ["I'm excited by", "I love", "I'm passionate about"]
         }
-    }
-}
-
-// MARK: - Attachment Container
-
-/// Container for structured attachments stored in InferenceGuidance.attachmentsJSON
-struct GuidanceAttachments: Codable {
-    var voiceProfile: VoiceProfile?
-
-    init(voiceProfile: VoiceProfile? = nil) {
-        self.voiceProfile = voiceProfile
-    }
-
-    func asJSON() -> String? {
-        let encoder = JSONEncoder()
-        encoder.keyEncodingStrategy = .convertToSnakeCase
-        guard let data = try? encoder.encode(self) else { return nil }
-        return String(data: data, encoding: .utf8)
-    }
-
-    static func from(json: String?) -> GuidanceAttachments? {
-        guard let json = json, let data = json.data(using: .utf8) else { return nil }
-        let decoder = JSONDecoder()
-        decoder.keyDecodingStrategy = .convertFromSnakeCase
-        return try? decoder.decode(GuidanceAttachments.self, from: data)
-    }
-
-    enum CodingKeys: String, CodingKey {
-        case voiceProfile = "voice_profile"
     }
 }

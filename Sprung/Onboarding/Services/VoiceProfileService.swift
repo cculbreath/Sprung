@@ -123,46 +123,24 @@ final class VoiceProfileService {
         reasoningStreamManager.isVisible = false
     }
 
-    /// Store the extracted voice profile everywhere it is consumed:
-    /// - guidance store ("objective" row) for generation guidance and the
-    ///   document-analysis voice anchor
-    /// - CoverRefStore `.voicePrimer` entry for cover letters, the revision
-    ///   workspace, and the writing-samples browser's Voice Primers tab
-    /// Both writes upsert — re-running extraction replaces the profile
-    /// instead of stacking duplicates.
+    /// Store the extracted voice profile on the `.voicePrimer` CoverRef — the
+    /// single source of voice truth for cover letters, the revision workspace,
+    /// the document-analysis voice anchor, and the writing-samples browser's
+    /// Voice Primers tab. The write upserts — re-running extraction replaces the
+    /// profile instead of stacking duplicates.
     /// Throws if the CoverRef encode fails (cover letters won't use the voice).
     /// A toast is fired before throwing so callers outside this file don't need
     /// to surface the error themselves.
     func storeVoiceProfile(
         _ profile: VoiceProfile,
-        in guidanceStore: InferenceGuidanceStore,
         coverRefStore: CoverRefStore
     ) throws {
-        let attachments = GuidanceAttachments(voiceProfile: profile)
-
         var promptLines = ["Voice profile for content generation:"]
         promptLines += profile.characteristicPairs.map { "- \($0.label): \($0.value)" }
         promptLines.append("")
         promptLines.append("Sample excerpts preserving voice:")
         promptLines.append(profile.sampleExcerpts.map { "• \"\($0)\"" }.joined(separator: "\n"))
         let prompt = promptLines.joined(separator: "\n")
-
-        if let existing = guidanceStore.guidance(for: "objective") {
-            existing.prompt = prompt
-            existing.attachmentsJSON = attachments.asJSON()
-            guidanceStore.update(existing)
-            Logger.info("🎤 Voice profile updated in guidance store", category: .ai)
-        } else {
-            let guidance = InferenceGuidance(
-                nodeKey: "objective",
-                displayName: "Voice Profile",
-                prompt: prompt,
-                attachmentsJSON: attachments.asJSON(),
-                source: .auto
-            )
-            guidanceStore.add(guidance)
-            Logger.info("🎤 Voice profile stored in guidance store", category: .ai)
-        }
 
         do {
             try upsertVoicePrimerRef(profile, summary: prompt, in: coverRefStore)

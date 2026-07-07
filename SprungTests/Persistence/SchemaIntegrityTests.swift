@@ -38,7 +38,7 @@ final class SchemaIntegrityTests: XCTestCase {
             "JobApp", "Resume", "KnowledgeCard", "Skill", "CoverLetter",
             "ApplicantProfile", "ExperienceDefaults", "Template", "EnabledLLM",
             "OnboardingSession", "ArtifactRecord", "CandidateDossier",
-            "InferenceGuidance", "TitleSetRecord", "CoverRef"
+            "TitleSetRecord", "CoverRef"
         ]
         for model in required {
             XCTAssertTrue(registered.contains(model), "\(model) must be registered in SprungSchema.models")

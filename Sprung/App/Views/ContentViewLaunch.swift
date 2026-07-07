@@ -49,7 +49,6 @@ struct ContentViewLaunch: View {
             .environment(deps.enabledLLMStore)
             .environment(deps.applicantProfileStore)
             .environment(deps.experienceDefaultsStore)
-            .environment(deps.guidanceStore)
             .environment(deps.titleSetStore)
             .environment(deps.experienceEntryRefinementService)
             .environment(deps.onboardingCoordinator)

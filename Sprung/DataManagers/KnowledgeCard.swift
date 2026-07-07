@@ -73,21 +73,10 @@ class KnowledgeCard: Identifiable, Codable {
     /// JSON-encoded ExtractableMetadata (domains, scale, keywords)
     var extractableJSON: String?
 
-    /// JSON-encoded array of related card UUIDs
-    var relatedCardIdsJSON: String?
-
-    // MARK: - Resume Integration
-
-    /// Resumes that have this card enabled
-    var enabledResumes: [Resume] = []
-
     // MARK: - Onboarding Metadata
 
     /// Indicates this was created via onboarding interview
     var isFromOnboarding: Bool = false
-
-    /// Token count for this card's content
-    var tokenCount: Int?
 
     /// Cards created during onboarding start as pending until user approves
     var isPending: Bool = false
@@ -112,9 +101,6 @@ class KnowledgeCard: Identifiable, Codable {
     /// JSON-encoded array of verbatim excerpts preserving voice
     var verbatimExcerptsJSON: String?
 
-    /// For skill cards: JSON-encoded array of KnowledgeCard UUIDs that demonstrate this skill
-    var evidenceCardIdsJSON: String?
-
     // MARK: - Initialization
 
     init(
@@ -127,9 +113,7 @@ class KnowledgeCard: Identifiable, Codable {
         location: String? = nil,
         evidenceAnchors: [EvidenceAnchor] = [],
         extractable: ExtractableMetadata? = nil,
-        relatedCardIds: [UUID] = [],
         isFromOnboarding: Bool = false,
-        tokenCount: Int? = nil,
         isPending: Bool = false
     ) {
         self.id = id
@@ -140,7 +124,6 @@ class KnowledgeCard: Identifiable, Codable {
         self.organization = organization
         self.location = location
         self.isFromOnboarding = isFromOnboarding
-        self.tokenCount = tokenCount
         self.isPending = isPending
 
         // Encode complex types to JSON
@@ -148,7 +131,6 @@ class KnowledgeCard: Identifiable, Codable {
         if let extractable = extractable {
             self.extractable = extractable
         }
-        self.relatedCardIds = relatedCardIds
     }
 
     // MARK: - Codable
@@ -160,13 +142,10 @@ class KnowledgeCard: Identifiable, Codable {
         case organization, location
         case evidenceAnchorsJSON = "evidence_anchors"
         case extractableJSON = "extractable"
-        case relatedCardIdsJSON = "related_card_ids"
         case isFromOnboarding
-        case tokenCount
         case isPending
         case factsJSON, suggestedBulletsJSON, technologiesJSON
         case outcomesJSON, evidenceQuality, verbatimExcerptsJSON
-        case evidenceCardIdsJSON
     }
 
     required init(from decoder: Decoder) throws {
@@ -186,7 +165,6 @@ class KnowledgeCard: Identifiable, Codable {
         self.organization = try container.decodeIfPresent(String.self, forKey: .organization)
         self.location = try container.decodeIfPresent(String.self, forKey: .location)
         self.isFromOnboarding = try container.decodeIfPresent(Bool.self, forKey: .isFromOnboarding) ?? false
-        self.tokenCount = try container.decodeIfPresent(Int.self, forKey: .tokenCount)
         self.isPending = try container.decodeIfPresent(Bool.self, forKey: .isPending) ?? false
 
         // Decode evidence anchors - handle both JSON string and direct array
@@ -207,21 +185,6 @@ class KnowledgeCard: Identifiable, Codable {
             self.extractableJSON = json
         }
 
-        // Decode related card IDs - handle both JSON string and direct array
-        if let relatedString = try? container.decode(String.self, forKey: .relatedCardIdsJSON) {
-            self.relatedCardIdsJSON = relatedString
-        } else if let relatedIds = try? container.decode([UUID].self, forKey: .relatedCardIdsJSON),
-                  let data = try? JSONEncoder().encode(relatedIds),
-                  let json = String(data: data, encoding: .utf8) {
-            self.relatedCardIdsJSON = json
-        } else if let relatedStrings = try? container.decode([String].self, forKey: .relatedCardIdsJSON) {
-            let uuids = relatedStrings.compactMap { UUID(uuidString: $0) }
-            if let data = try? JSONEncoder().encode(uuids),
-               let json = String(data: data, encoding: .utf8) {
-                self.relatedCardIdsJSON = json
-            }
-        }
-
         // Fact-based card fields
         self.factsJSON = try container.decodeIfPresent(String.self, forKey: .factsJSON)
         self.suggestedBulletsJSON = try container.decodeIfPresent(String.self, forKey: .suggestedBulletsJSON)
@@ -229,7 +192,6 @@ class KnowledgeCard: Identifiable, Codable {
         self.outcomesJSON = try container.decodeIfPresent(String.self, forKey: .outcomesJSON)
         self.evidenceQuality = try container.decodeIfPresent(String.self, forKey: .evidenceQuality)
         self.verbatimExcerptsJSON = try container.decodeIfPresent(String.self, forKey: .verbatimExcerptsJSON)
-        self.evidenceCardIdsJSON = try container.decodeIfPresent(String.self, forKey: .evidenceCardIdsJSON)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -243,9 +205,7 @@ class KnowledgeCard: Identifiable, Codable {
         try container.encodeIfPresent(location, forKey: .location)
         try container.encodeIfPresent(evidenceAnchorsJSON, forKey: .evidenceAnchorsJSON)
         try container.encodeIfPresent(extractableJSON, forKey: .extractableJSON)
-        try container.encodeIfPresent(relatedCardIdsJSON, forKey: .relatedCardIdsJSON)
         try container.encode(isFromOnboarding, forKey: .isFromOnboarding)
-        try container.encodeIfPresent(tokenCount, forKey: .tokenCount)
         try container.encode(isPending, forKey: .isPending)
         try container.encodeIfPresent(factsJSON, forKey: .factsJSON)
         try container.encodeIfPresent(suggestedBulletsJSON, forKey: .suggestedBulletsJSON)
@@ -253,7 +213,6 @@ class KnowledgeCard: Identifiable, Codable {
         try container.encodeIfPresent(outcomesJSON, forKey: .outcomesJSON)
         try container.encodeIfPresent(evidenceQuality, forKey: .evidenceQuality)
         try container.encodeIfPresent(verbatimExcerptsJSON, forKey: .verbatimExcerptsJSON)
-        try container.encodeIfPresent(evidenceCardIdsJSON, forKey: .evidenceCardIdsJSON)
     }
 
     // MARK: - Enrichment Encoding
@@ -328,26 +287,6 @@ class KnowledgeCard: Identifiable, Codable {
         set {
             if let json = encodeOrLog(newValue, "extractable") {
                 extractableJSON = json
-            }
-        }
-    }
-
-    /// Related card IDs
-    var relatedCardIds: [UUID] {
-        get {
-            guard let json = relatedCardIdsJSON,
-                  let data = json.data(using: .utf8),
-                  let decoded = try? JSONDecoder().decode([UUID].self, from: data) else {
-                return []
-            }
-            return decoded
-        }
-        set {
-            if newValue.isEmpty {
-                relatedCardIdsJSON = nil
-            } else if let data = try? JSONEncoder().encode(newValue),
-                      let json = String(data: data, encoding: .utf8) {
-                relatedCardIdsJSON = json
             }
         }
     }
@@ -429,25 +368,6 @@ class KnowledgeCard: Identifiable, Codable {
                 verbatimExcerptsJSON = nil
             } else if let json = encodeOrLog(newValue, "verbatimExcerpts") {
                 verbatimExcerptsJSON = json
-            }
-        }
-    }
-
-    /// Evidence card IDs (for skill cards)
-    var evidenceCardIds: [UUID] {
-        get {
-            guard let json = evidenceCardIdsJSON,
-                  let data = json.data(using: .utf8),
-                  let decoded = try? JSONDecoder().decode([UUID].self, from: data) else {
-                return []
-            }
-            return decoded
-        }
-        set {
-            if newValue.isEmpty {
-                evidenceCardIdsJSON = nil
-            } else if let json = encodeOrLog(newValue, "evidenceCardIds") {
-                evidenceCardIdsJSON = json
             }
         }
     }

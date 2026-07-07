@@ -12,7 +12,6 @@ struct ResumeRevisionView: View {
     @Environment(SkillStore.self) private var skillStore
     @Environment(CoverRefStore.self) private var coverRefStore
     @Environment(TitleSetStore.self) private var titleSetStore
-    @Environment(InferenceGuidanceStore.self) private var guidanceStore
     @Environment(CandidateDossierStore.self) private var candidateDossierStore
     @Environment(\.modelContext) private var modelContext
 
@@ -223,8 +222,12 @@ struct ResumeRevisionView: View {
         let coverRefs = coverRefStore.storedCoverRefs
         // Canonical voice context: the same block every other LLM surface uses.
         let writersVoice = coverRefStore.writersVoice
-        // Explicitly banned phrases from the onboarding voice profile.
-        let avoidPhrases = guidanceStore.voiceProfile()?.avoidPhrases ?? []
+        // Explicitly banned phrases from the onboarding voice profile — read
+        // from the .voicePrimer CoverRef, the single source of voice truth.
+        let avoidPhrases = coverRefStore.storedCoverRefs
+            .first { $0.type == .voicePrimer }?
+            .voiceProfile?
+            .avoidPhrases ?? []
         // Strategic positioning (strengths/pitfalls) from the candidate dossier;
         // empty string when no dossier exists. Private fields are not included.
         let strategicGuidance = candidateDossierStore.exportForResumeCustomization() ?? ""

@@ -109,7 +109,6 @@ final class OnboardingDependencyContainer {
     private let skillStore: SkillStore
     private let coverRefStore: CoverRefStore
     private let experienceDefaultsStore: ExperienceDefaultsStore
-    private let guidanceStore: InferenceGuidanceStore
     let sessionStore: OnboardingSessionStore
     private let dataStore: InterviewDataStore
     private let candidateDossierStore: CandidateDossierStore
@@ -174,7 +173,6 @@ final class OnboardingDependencyContainer {
         skillStore: SkillStore,
         coverRefStore: CoverRefStore,
         experienceDefaultsStore: ExperienceDefaultsStore,
-        guidanceStore: InferenceGuidanceStore,
         sessionStore: OnboardingSessionStore,
         dataStore: InterviewDataStore,
         candidateDossierStore: CandidateDossierStore,
@@ -189,7 +187,6 @@ final class OnboardingDependencyContainer {
         self.skillStore = skillStore
         self.coverRefStore = coverRefStore
         self.experienceDefaultsStore = experienceDefaultsStore
-        self.guidanceStore = guidanceStore
         self.sessionStore = sessionStore
         self.dataStore = dataStore
         self.candidateDossierStore = candidateDossierStore
@@ -436,7 +433,6 @@ final class OnboardingDependencyContainer {
         self.voiceProfileExtractionHandler = VoiceProfileExtractionHandler(
             eventBus: core.eventBus,
             voiceProfileService: voiceProfileService,
-            guidanceStore: guidanceStore,
             coverRefStore: coverRefStore,
             artifactRecordStore: artifactRecordStore,
             sessionPersistenceHandler: sessionPersistenceHandler,
@@ -450,7 +446,7 @@ final class OnboardingDependencyContainer {
         // byte-stable across passes and documents and the anchored prefix
         // caches.
         let documentProcessingForVoice = docs.documentProcessingService
-        let guidanceStoreForVoice = guidanceStore
+        let coverRefStoreForVoice = coverRefStore
         let artifactStoreForVoice = artifactRecordStore
         let sessionHandlerForVoice = sessionPersistenceHandler
         let voiceAnchorProvider: @Sendable () async -> String? = {
@@ -463,8 +459,12 @@ final class OnboardingDependencyContainer {
                 } else {
                     samples = []
                 }
+                // The .voicePrimer CoverRef is the single source of voice truth.
+                let profile = coverRefStoreForVoice.storedCoverRefs
+                    .first { $0.type == .voicePrimer }?
+                    .voiceProfile
                 return DocumentAnalysisPrompts.voiceAnchorText(
-                    profile: guidanceStoreForVoice.voiceProfile(),
+                    profile: profile,
                     writingSamples: samples
                 )
             }
@@ -755,8 +755,5 @@ final class OnboardingDependencyContainer {
     }
     func getExperienceDefaultsStore() -> ExperienceDefaultsStore {
         experienceDefaultsStore
-    }
-    func getGuidanceStore() -> InferenceGuidanceStore {
-        guidanceStore
     }
 }

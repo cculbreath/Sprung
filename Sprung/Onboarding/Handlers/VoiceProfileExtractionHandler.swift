@@ -13,7 +13,6 @@ import SwiftyJSON
 final class VoiceProfileExtractionHandler {
     private let eventBus: EventBus
     private let voiceProfileService: VoiceProfileService
-    private let guidanceStore: InferenceGuidanceStore
     private let coverRefStore: CoverRefStore
     private let artifactRecordStore: ArtifactRecordStore
     private let sessionPersistenceHandler: SessionPersistenceService
@@ -27,7 +26,6 @@ final class VoiceProfileExtractionHandler {
     init(
         eventBus: EventBus,
         voiceProfileService: VoiceProfileService,
-        guidanceStore: InferenceGuidanceStore,
         coverRefStore: CoverRefStore,
         artifactRecordStore: ArtifactRecordStore,
         sessionPersistenceHandler: SessionPersistenceService,
@@ -36,7 +34,6 @@ final class VoiceProfileExtractionHandler {
     ) {
         self.eventBus = eventBus
         self.voiceProfileService = voiceProfileService
-        self.guidanceStore = guidanceStore
         self.coverRefStore = coverRefStore
         self.artifactRecordStore = artifactRecordStore
         self.sessionPersistenceHandler = sessionPersistenceHandler
@@ -126,7 +123,7 @@ final class VoiceProfileExtractionHandler {
                 }
 
                 let profile = try await voiceProfileService.extractVoiceProfile(from: samples)
-                try voiceProfileService.storeVoiceProfile(profile, in: guidanceStore, coverRefStore: coverRefStore)
+                try voiceProfileService.storeVoiceProfile(profile, coverRefStore: coverRefStore)
 
                 if let data = try? JSONEncoder().encode(profile),
                    let json = try? JSON(data: data) {

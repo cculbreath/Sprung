@@ -46,8 +46,7 @@ enum SprungSchema {
         NetworkingInteraction.self,
         // Job Search Coach Models
         CoachingSession.self,
-        // Inference Guidance
-        InferenceGuidance.self,
+        // InferenceGuidance removed — voice profile now lives solely on the .voicePrimer CoverRef
         // Title Sets
         TitleSetRecord.self
     ]

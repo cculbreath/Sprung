@@ -41,7 +41,6 @@ final class OnboardingInterviewCoordinator {
     private var applicantProfileStore: ApplicantProfileStore { container.getApplicantProfileStore() }
     var knowledgeCardStore: KnowledgeCardStore { container.getKnowledgeCardStore() }
     var skillStore: SkillStore { container.getSkillStore() }
-    var guidanceStore: InferenceGuidanceStore { container.getGuidanceStore() }
     private var coverRefStore: CoverRefStore { container.getCoverRefStore() }
     private var experienceDefaultsStore: ExperienceDefaultsStore { container.getExperienceDefaultsStore() }
     private var artifactRecordStore: ArtifactRecordStore { container.artifactRecordStore }
@@ -166,7 +165,6 @@ final class OnboardingInterviewCoordinator {
         skillStore: SkillStore,
         coverRefStore: CoverRefStore,
         experienceDefaultsStore: ExperienceDefaultsStore,
-        guidanceStore: InferenceGuidanceStore,
         sessionStore: OnboardingSessionStore,
         dataStore: InterviewDataStore,
         candidateDossierStore: CandidateDossierStore,
@@ -182,7 +180,6 @@ final class OnboardingInterviewCoordinator {
             skillStore: skillStore,
             coverRefStore: coverRefStore,
             experienceDefaultsStore: experienceDefaultsStore,
-            guidanceStore: guidanceStore,
             sessionStore: sessionStore,
             dataStore: dataStore,
             candidateDossierStore: candidateDossierStore,
