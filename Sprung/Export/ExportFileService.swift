@@ -71,13 +71,16 @@ final class ExportFileService {
     private let jobAppStore: JobAppStore
     private let coverLetterStore: CoverLetterStore
     private let resumeExportCoordinator: ResumeExportCoordinator
+    private let applicantProfileStore: ApplicantProfileStore
 
     init(jobAppStore: JobAppStore,
          coverLetterStore: CoverLetterStore,
-         resumeExportCoordinator: ResumeExportCoordinator) {
+         resumeExportCoordinator: ResumeExportCoordinator,
+         applicantProfileStore: ApplicantProfileStore) {
         self.jobAppStore = jobAppStore
         self.coverLetterStore = coverLetterStore
         self.resumeExportCoordinator = resumeExportCoordinator
+        self.applicantProfileStore = applicantProfileStore
     }
 
     /// Freeze what's currently selected into a persisted `SubmittedPacket`:
@@ -144,6 +147,18 @@ final class ExportFileService {
     private func sanitizeFilename(_ name: String) -> String {
         let invalidCharacters = CharacterSet(charactersIn: "/\\?%*:|\"<>")
         return name.components(separatedBy: invalidCharacters).joined(separator: "_")
+    }
+
+    /// Builds an export base filename prefixed with the candidate's name so a
+    /// recruiter's download folder reads "<Name> - <jobPosition> <suffix>"
+    /// instead of just "<jobPosition> <suffix>" (app-audit resume-editor,
+    /// below-the-fold: export filenames omit the candidate name).
+    private func exportBaseName(_ suffix: String, jobPosition: String) -> String {
+        let candidateName = applicantProfileStore.currentProfile().name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !candidateName.isEmpty else {
+            return "\(jobPosition) \(suffix)"
+        }
+        return "\(candidateName) - \(jobPosition) \(suffix)"
     }
 
     private func createUniqueFileURL(baseFileName: String, extension: String, in directory: URL) -> (URL, String) {
@@ -219,7 +234,7 @@ final class ExportFileService {
         let jobPosition = resume.jobApp?.jobPosition ?? "unknown"
         let downloadsURL = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first ?? FileManager.default.temporaryDirectory
         let (fileURL, filename) = createUniqueFileURL(
-            baseFileName: "\(jobPosition) Resume",
+            baseFileName: exportBaseName("Resume", jobPosition: jobPosition),
             extension: "pdf",
             in: downloadsURL
         )
@@ -247,7 +262,7 @@ final class ExportFileService {
                 let jobPosition = resume.jobApp?.jobPosition ?? "unknown"
                 let downloadsURL = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first ?? FileManager.default.temporaryDirectory
                 let (fileURL, filename) = self.createUniqueFileURL(
-                    baseFileName: "\(jobPosition) Resume",
+                    baseFileName: self.exportBaseName("Resume", jobPosition: jobPosition),
                     extension: "txt",
                     in: downloadsURL
                 )
@@ -274,7 +289,7 @@ final class ExportFileService {
         let jobPosition = resume.jobApp?.jobPosition ?? "unknown"
         let downloadsURL = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first ?? FileManager.default.temporaryDirectory
         let (fileURL, filename) = createUniqueFileURL(
-            baseFileName: "\(jobPosition) Resume",
+            baseFileName: exportBaseName("Resume", jobPosition: jobPosition),
             extension: "json",
             in: downloadsURL
         )
@@ -304,7 +319,7 @@ final class ExportFileService {
         let jobPosition = coverLetter.jobApp?.jobPosition ?? "unknown"
         let downloadsURL = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first ?? FileManager.default.temporaryDirectory
         let (fileURL, filename) = createUniqueFileURL(
-            baseFileName: "\(jobPosition) Cover Letter",
+            baseFileName: exportBaseName("Cover Letter", jobPosition: jobPosition),
             extension: "txt",
             in: downloadsURL
         )
@@ -326,7 +341,7 @@ final class ExportFileService {
         let jobPosition = coverLetter.jobApp?.jobPosition ?? "unknown"
         let downloadsURL = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first ?? FileManager.default.temporaryDirectory
         let (fileURL, filename) = createUniqueFileURL(
-            baseFileName: "\(jobPosition) Cover Letter",
+            baseFileName: exportBaseName("Cover Letter", jobPosition: jobPosition),
             extension: "pdf",
             in: downloadsURL
         )
@@ -364,7 +379,7 @@ final class ExportFileService {
             let jobPosition = coverLetter.jobApp?.jobPosition ?? "unknown"
             let downloadsURL = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first ?? FileManager.default.temporaryDirectory
             let (fileURL, filename) = self.createUniqueFileURL(
-                baseFileName: "\(jobPosition) Application",
+                baseFileName: self.exportBaseName("Application", jobPosition: jobPosition),
                 extension: "pdf",
                 in: downloadsURL
             )
@@ -395,7 +410,7 @@ final class ExportFileService {
         let jobPosition = jobApp.jobPosition
         let downloadsURL = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first ?? FileManager.default.temporaryDirectory
         let (textFileURL, textFilename) = createUniqueFileURL(
-            baseFileName: "\(jobPosition) All Cover Letters",
+            baseFileName: exportBaseName("All Cover Letters", jobPosition: jobPosition),
             extension: "txt",
             in: downloadsURL
         )

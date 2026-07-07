@@ -11,6 +11,7 @@ struct ResumeExportView: View {
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
     @Environment(CoverLetterStore.self) private var coverLetterStore: CoverLetterStore
     @Environment(AppEnvironment.self) private var appEnvironment: AppEnvironment
+    @Environment(ApplicantProfileStore.self) private var applicantProfileStore: ApplicantProfileStore
 
     @Binding var selectedTab: TabList
 
@@ -22,6 +23,7 @@ struct ResumeExportView: View {
     @State private var selectedExportOption: ExportOption = .completeApplication
     @State private var showAdvanceStatusAlert: Bool = false
     @State private var exportService: ExportFileService?
+    @State private var notesSaveWorkItem: DispatchWorkItem?
 
     var body: some View {
         if let jobApp = jobAppStore.selectedApp {
@@ -55,11 +57,17 @@ struct ResumeExportView: View {
             .onAppear {
                 selectedStatus = jobApp.status
                 notes = jobApp.notes
+                notesSaveWorkItem?.cancel()
+                notesSaveWorkItem = nil
                 exportService = ExportFileService(
                     jobAppStore: jobAppStore,
                     coverLetterStore: coverLetterStore,
-                    resumeExportCoordinator: appEnvironment.resumeExportCoordinator
+                    resumeExportCoordinator: appEnvironment.resumeExportCoordinator,
+                    applicantProfileStore: applicantProfileStore
                 )
+            }
+            .onDisappear {
+                flushPendingNotesSave()
             }
             .onChange(of: jobApp.status) { _, newStatus in
                 selectedStatus = newStatus
@@ -254,14 +262,34 @@ struct ResumeExportView: View {
                         .stroke(Color(nsColor: .separatorColor), lineWidth: 1)
                 )
                 .onChange(of: notes) { _, newValue in
-                    let updated = jobApp
-                    updated.notes = newValue
-                    jobAppStore.updateJobApp(updated)
+                    debounceNotesSave(newValue, for: jobApp)
                 }
         }
     }
 
     // MARK: - Helpers
+
+    /// Debounces notes persistence so the store isn't written on every
+    /// keystroke (matches the `DispatchWorkItem` cancel-and-reschedule shape
+    /// used by `ResumeExportCoordinator.debounceExport`).
+    private func debounceNotesSave(_ newValue: String, for jobApp: JobApp) {
+        notesSaveWorkItem?.cancel()
+        let workItem = DispatchWorkItem {
+            jobApp.notes = newValue
+            jobAppStore.updateJobApp(jobApp)
+        }
+        notesSaveWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: workItem)
+    }
+
+    /// Runs any pending debounced notes save immediately so edits aren't lost
+    /// when the view disappears before the debounce interval elapses.
+    private func flushPendingNotesSave() {
+        guard let workItem = notesSaveWorkItem else { return }
+        workItem.perform()
+        workItem.cancel()
+        notesSaveWorkItem = nil
+    }
 
     private func sectionHeader(_ title: String) -> some View {
         Text(title)

@@ -4,7 +4,7 @@
 //
 import Foundation
 /// Centralized prompt management for resume review operations
-/// Follows the architecture pattern from ResumeQuery.swift and CoverLetterQuery.swift
+/// Follows the architecture pattern from CoverLetterQuery.swift
 @Observable class ResumeReviewQuery {
     // MARK: - General Resume Review Prompts
     /// Build the main review prompt based on review type
