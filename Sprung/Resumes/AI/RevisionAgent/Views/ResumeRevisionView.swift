@@ -216,9 +216,10 @@ struct ResumeRevisionView: View {
             return
         }
 
-        // Gather reference materials from stores
-        let knowledgeCards = knowledgeCardStore.knowledgeCards
-        let skills = skillStore.skills
+        // Gather reference materials from stores (approved only — pending
+        // onboarding cards/skills never feed operations)
+        let knowledgeCards = knowledgeCardStore.approvedCards
+        let skills = skillStore.approvedSkills
         let coverRefs = coverRefStore.storedCoverRefs
         // Canonical voice context: the same block every other LLM surface uses.
         let writersVoice = coverRefStore.writersVoice

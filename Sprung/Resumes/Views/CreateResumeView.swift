@@ -79,7 +79,7 @@ struct CreateResumeView: View {
                         return
                     }
                     do {
-                        try onCreateResume(selectedTemplate, knowledgeCardStore.knowledgeCards)
+                        try onCreateResume(selectedTemplate, knowledgeCardStore.approvedCards)
                         dismiss()
                     } catch {
                         createError = "Couldn't create resume — \(error.localizedDescription)"

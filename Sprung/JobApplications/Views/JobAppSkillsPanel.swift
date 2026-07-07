@@ -39,7 +39,7 @@ struct JobAppSkillsPanel: View {
     }
 
     private var existingCategories: [String] {
-        SkillCategoryUtils.sortedCategories(from: skillStore.skills)
+        SkillCategoryUtils.sortedCategories(from: skillStore.approvedSkills)
     }
 
     private var resolvedCategory: String {
@@ -258,6 +258,8 @@ struct JobAppSkillsPanel: View {
 
     // MARK: - Helpers
 
+    /// Bank MEMBERSHIP (not an ops read): pending skills count, so "Add to
+    /// Skill Bank" can't create a duplicate of a not-yet-approved skill.
     private func isSkillInBank(_ skill: JobSkillEvidence) -> Bool {
         recentlyAddedSkills.contains(skill.skillName)
             || !skillStore.skills(matching: skill.skillName).isEmpty

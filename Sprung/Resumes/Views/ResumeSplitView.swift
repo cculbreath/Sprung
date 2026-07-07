@@ -136,7 +136,7 @@ struct ResumeSplitView: View {
                         do {
                             try resStore.create(
                                 jobApp: selApp,
-                                sources: knowledgeCardStore.knowledgeCards,
+                                sources: knowledgeCardStore.approvedCards,
                                 template: template
                             )
                             refresh.toggle()

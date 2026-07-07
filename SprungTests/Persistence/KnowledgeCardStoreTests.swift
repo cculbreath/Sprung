@@ -104,22 +104,25 @@ final class KnowledgeCardStoreTests: InMemoryStoreCase {
     // MARK: - Pending-card ghost contract (app-audit-2026-07-06 §3.1)
     //
     // Cards onboarding persisted with isPending=true survive an abandoned
-    // interview. The pinned contract: they stay in `knowledgeCards` (the
-    // collection generation consumers read), they are approvable individually
-    // from the References browser (per-card Approve → approveCards(cardIds:)),
-    // and approving one card must not touch the others.
+    // interview. The pinned contract: they stay in `knowledgeCards` (the full
+    // collection browsers show, badged as pending), they are EXCLUDED from
+    // `approvedCards` (the ONLY collection operational consumers — SGM, cover
+    // letters, revision, preprocessing, Discovery, scout — may read), they are
+    // approvable individually from the References browser (per-card Approve →
+    // approveCards(cardIds:)), and approving one card must not touch the others.
 
-    func testPendingCardsRemainInFullCollectionUntilApproved() throws {
+    func testPendingCardsVisibleInBrowsersButExcludedFromOps() throws {
         let store = KnowledgeCardStore(context: context)
         store.addAll([
             makeCard(title: "Ghost", fromOnboarding: true, pending: true),
             makeCard(title: "Approved", fromOnboarding: false, pending: false)
         ])
 
-        // Pending cards are NOT hidden from the primary collection — they feed
-        // generation and must therefore stay visible/approvable in browsers.
+        // Pending cards stay visible/approvable in browsers…
         XCTAssertEqual(store.knowledgeCards.count, 2)
         XCTAssertEqual(store.pendingCards.map(\.title), ["Ghost"])
+        // …but never reach operations until approved.
+        XCTAssertEqual(store.approvedCards.map(\.title), ["Approved"])
     }
 
     func testApproveSingleCardLeavesOthersPending() throws {

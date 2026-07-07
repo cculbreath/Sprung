@@ -333,8 +333,8 @@ struct BatchCoverLetterView: View {
                     // Resolve knowledge cards based on inclusion mode
                     let resolvedCards: [KnowledgeCard] = {
                         switch knowledgeCardInclusion {
-                        case .all: return knowledgeCardStore.knowledgeCards
-                        case .selected: return knowledgeCardStore.knowledgeCards.filter { selectedKnowledgeCardIds.contains($0.id.uuidString) }
+                        case .all: return knowledgeCardStore.approvedCards
+                        case .selected: return knowledgeCardStore.approvedCards.filter { selectedKnowledgeCardIds.contains($0.id.uuidString) }
                         case .none: return []
                         }
                     }()
@@ -418,8 +418,8 @@ struct BatchCoverLetterView: View {
         for ref in writingSamples where ref.enabledByDefault {
             selectedWritingSamples.insert(ref.id.description)
         }
-        // Pre-select all knowledge cards for "Selected" mode
-        for card in knowledgeCardStore.knowledgeCards {
+        // Pre-select all approved knowledge cards for "Selected" mode
+        for card in knowledgeCardStore.approvedCards {
             selectedKnowledgeCardIds.insert(card.id.uuidString)
         }
     }

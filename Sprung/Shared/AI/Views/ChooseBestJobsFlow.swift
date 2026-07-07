@@ -82,8 +82,8 @@ struct ChooseBestJobsFlow: ViewModifier {
             return
         }
 
-        // Build knowledge context from KnowledgeCards
-        let knowledgeContext = dependencies.knowledgeCardStore.knowledgeCards
+        // Build knowledge context from approved KnowledgeCards
+        let knowledgeContext = dependencies.knowledgeCardStore.approvedCards
             .map { card in
                 let typeLabel = "[\(card.cardType?.rawValue ?? "general")]"
                 return "\(typeLabel) \(card.title):\n\(card.narrative)"

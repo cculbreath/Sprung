@@ -94,8 +94,8 @@ struct GenerateCoverLetterView: View {
         for ref in writingSamples where ref.enabledByDefault {
             selectedWritingSamples.insert(ref.id.description)
         }
-        // Pre-select all knowledge cards for "Selected" mode
-        for card in knowledgeCardStore.knowledgeCards {
+        // Pre-select all approved knowledge cards for "Selected" mode
+        for card in knowledgeCardStore.approvedCards {
             selectedKnowledgeCardIds.insert(card.id.uuidString)
         }
     }

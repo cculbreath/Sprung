@@ -83,8 +83,8 @@ struct CoverLetterGenerateButton: View {
         // Resolve knowledge cards based on inclusion mode
         let resolvedCards: [KnowledgeCard] = {
             switch knowledgeCardInclusion {
-            case .all: return knowledgeCardStore.knowledgeCards
-            case .selected: return knowledgeCardStore.knowledgeCards.filter { selectedKnowledgeCardIds.contains($0.id.uuidString) }
+            case .all: return knowledgeCardStore.approvedCards
+            case .selected: return knowledgeCardStore.approvedCards.filter { selectedKnowledgeCardIds.contains($0.id.uuidString) }
             case .none: return []
             }
         }()

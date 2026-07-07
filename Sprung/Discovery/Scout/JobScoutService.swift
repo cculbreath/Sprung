@@ -418,9 +418,9 @@ final class JobScoutService {
     // MARK: - Context Assembly
 
     /// Knowledge context, built the same way ChooseBestJobsFlow builds it:
-    /// every card's type, title, and narrative.
+    /// every approved card's type, title, and narrative.
     private func knowledgeContext() -> String {
-        knowledgeCardStore.knowledgeCards
+        knowledgeCardStore.approvedCards
             .map { card in
                 let typeLabel = "[\(card.cardType?.rawValue ?? "general")]"
                 return "\(typeLabel) \(card.title):\n\(card.narrative)"

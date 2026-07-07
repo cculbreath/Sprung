@@ -494,11 +494,11 @@ final class SecondaryWindowService {
         if seedGenerationWindow == nil {
             let appEnvironment = deps.appEnvironment
 
-            // Prerequisite: at least one knowledge card to generate from. Without any,
-            // generation has no source material — surface the paths to create some
-            // instead of failing silently.
-            guard !deps.knowledgeCardStore.knowledgeCards.isEmpty else {
-                Logger.error("Cannot show seed generation: no knowledge cards exist.", category: .ui)
+            // Prerequisite: at least one APPROVED knowledge card to generate from.
+            // Pending (unapproved) cards never feed generation — surface the paths
+            // to create/approve some instead of failing silently.
+            guard !deps.knowledgeCardStore.approvedCards.isEmpty else {
+                Logger.error("Cannot show seed generation: no approved knowledge cards exist.", category: .ui)
                 presentNoKnowledgeCardsAlert()
                 return
             }

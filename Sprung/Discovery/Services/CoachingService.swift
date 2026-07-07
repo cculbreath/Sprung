@@ -197,8 +197,8 @@ final class CoachingService: AnthropicToolLoopDelegate {
         // Build dossier context from CandidateDossier
         let dossierContext = candidateDossierStore.dossier?.exportForDiscovery() ?? "No dossier available."
 
-        // Build knowledge cards list from KnowledgeCardStore
-        let knowledgeCardsList = contextBuilder.buildKnowledgeCardsList(from: knowledgeCardStore.knowledgeCards)
+        // Build knowledge cards list from KnowledgeCardStore (approved only)
+        let knowledgeCardsList = contextBuilder.buildKnowledgeCardsList(from: knowledgeCardStore.approvedCards)
 
         // The delta the coach opens with: last task day + completion state,
         // today's list so far, completion streak.
@@ -524,7 +524,7 @@ final class CoachingService: AnthropicToolLoopDelegate {
     private func handleBackgroundTool(name: String, arguments: String) async -> String {
         switch name {
         case CoachingToolSchemas.getKnowledgeCardToolName:
-            return toolHandler.handleGetKnowledgeCard(arguments: arguments, knowledgeCards: knowledgeCardStore.knowledgeCards)
+            return toolHandler.handleGetKnowledgeCard(arguments: arguments, knowledgeCards: knowledgeCardStore.approvedCards)
 
         case CoachingToolSchemas.getJobDescriptionToolName:
             return toolHandler.handleGetJobDescription(arguments: arguments)
@@ -536,7 +536,7 @@ final class CoachingService: AnthropicToolLoopDelegate {
             return await toolHandler.handleChooseBestJobs(
                 arguments: arguments,
                 agentService: agentService,
-                knowledgeCards: knowledgeCardStore.knowledgeCards,
+                knowledgeCards: knowledgeCardStore.approvedCards,
                 dossier: candidateDossierStore.dossier
             )
 

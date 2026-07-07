@@ -339,7 +339,7 @@ class JobAppPreprocessor {
         var skillEvidence: [JobSkillEvidence] = []
 
         if let skillStore = skillStore {
-            let skills = await MainActor.run { skillStore.skills }
+            let skills = await MainActor.run { skillStore.approvedSkills }
             if !skills.isEmpty {
                 await MainActor.run {
                     activityTracker?.updatePhase(operationId: operationId, phase: "Skill Matching")

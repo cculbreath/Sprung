@@ -50,9 +50,10 @@ enum SeedGenerationContextBuilder {
             applicantProfile = ApplicantProfileDraft()
         }
 
-        // All knowledge cards feed generation — both onboarding-derived and any the
-        // user added manually in the Knowledge Card browser.
-        let knowledgeCards = knowledgeCardStore.knowledgeCards
+        // Only APPROVED cards feed generation. Cards persisted mid-interview
+        // stay pending until the user approves them (onboarding approves its
+        // own before generating; abandoned-interview ghosts never qualify).
+        let knowledgeCards = knowledgeCardStore.approvedCards
 
         // Get title sets from library for LLM selection
         let titleSets = titleSetStore?.allTitleSets ?? []
@@ -70,7 +71,7 @@ enum SeedGenerationContextBuilder {
             from: defaults,
             applicantProfile: applicantProfile,
             knowledgeCards: knowledgeCards,
-            skills: skillStore.skills,
+            skills: skillStore.approvedSkills,
             writersVoice: coverRefStore?.writersVoice ?? "",
             voiceSummary: coverRefStore?.voiceSummary ?? "",
             dossier: dossierJSON,

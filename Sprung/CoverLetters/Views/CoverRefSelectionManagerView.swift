@@ -48,7 +48,7 @@ struct CoverRefSelectionManagerView: View {
                 .labelsHidden()
                 // Show individual card selection when "Selected" is chosen
                 if knowledgeCardInclusion == .selected {
-                    let cards = knowledgeCardStore.knowledgeCards
+                    let cards = knowledgeCardStore.approvedCards
                     if cards.isEmpty {
                         Text("No knowledge cards available")
                             .font(.caption)

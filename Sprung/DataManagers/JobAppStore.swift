@@ -69,7 +69,7 @@ final class JobAppStore: EntityStore {
 
         preprocessor.preprocessInBackground(
             for: jobApp,
-            allCards: knowledgeCardStore.knowledgeCards,
+            allCards: knowledgeCardStore.approvedCards,
             modelContext: modelContext
         )
         Logger.info("🔄 [JobAppStore] Re-running preprocessing for: \(jobApp.jobPosition)", category: .ai)
@@ -94,7 +94,7 @@ final class JobAppStore: EntityStore {
             return 0
         }
 
-        let cards = knowledgeCardStore.knowledgeCards
+        let cards = knowledgeCardStore.approvedCards
         for jobApp in jobsNeedingPreprocessing {
             preprocessor.preprocessInBackground(
                 for: jobApp,
@@ -130,7 +130,7 @@ final class JobAppStore: EntityStore {
             return 0
         }
 
-        let cards = knowledgeCardStore.knowledgeCards
+        let cards = knowledgeCardStore.approvedCards
         for jobApp in activeJobs {
             // Clear existing preprocessing to force re-run
             jobApp.extractedRequirements = nil
@@ -173,7 +173,7 @@ final class JobAppStore: EntityStore {
            !jobApp.jobDescription.isEmpty {
             preprocessor.preprocessInBackground(
                 for: jobApp,
-                allCards: knowledgeCardStore.knowledgeCards,
+                allCards: knowledgeCardStore.approvedCards,
                 modelContext: modelContext
             )
         }
