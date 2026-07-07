@@ -12,6 +12,11 @@ class ResumeReviewViewModel {
     private(set) var reviewResponseText: String = ""
     private(set) var isProcessing: Bool = false
     private(set) var reviewError: String?
+    /// When the currently-displayed markdown was saved onto the resume (nil when
+    /// showing a fresh, unsaved placeholder or an error). Drives the "Saved …"
+    /// caption so the user can tell a revisited review from a just-run one.
+    private(set) var savedReviewDate: Date?
+    private(set) var savedReviewType: String?
 
     // MARK: - Dependencies
     private var reviewService: ResumeReviewService?
@@ -19,6 +24,16 @@ class ResumeReviewViewModel {
     // MARK: - Initialization
     func initialize(llmFacade: LLMFacade) {
         reviewService = ResumeReviewService(llmFacade: llmFacade)
+    }
+
+    /// Populate the sheet with the last review persisted on this resume (if any),
+    /// so reopening the Optimize sheet shows the previous analysis and its date
+    /// rather than a blank slate. Called on appear.
+    func loadStoredReview(from resume: Resume) {
+        guard let markdown = resume.lastReviewMarkdown, !markdown.isEmpty else { return }
+        reviewResponseText = markdown
+        savedReviewDate = resume.lastReviewDate
+        savedReviewType = resume.lastReviewType
     }
 
     // MARK: - Public Methods
@@ -59,12 +74,33 @@ class ResumeReviewViewModel {
         reviewResponseText = ""
         isProcessing = false
         reviewError = nil
+        savedReviewDate = nil
+        savedReviewType = nil
     }
 
     // MARK: - Private Methods
     private func resetState() {
         reviewResponseText = ""
         reviewError = nil
+        savedReviewDate = nil
+        savedReviewType = nil
+    }
+
+    /// Persist the completed review onto the resume so it survives dismiss and a
+    /// relaunch, and update the caption metadata to match.
+    private func persistReview(_ markdown: String, resume: Resume, reviewType: ResumeReviewType) {
+        guard !markdown.isEmpty else { return }
+        let now = Date()
+        resume.lastReviewMarkdown = markdown
+        resume.lastReviewDate = now
+        resume.lastReviewType = reviewType.rawValue
+        savedReviewDate = now
+        savedReviewType = reviewType.rawValue
+        do {
+            try resume.modelContext?.save()
+        } catch {
+            Logger.error("ResumeReviewViewModel: Failed to persist last review: \(error.localizedDescription)")
+        }
     }
 
     private func performReview(
@@ -103,6 +139,7 @@ class ResumeReviewViewModel {
                         if self.reviewResponseText.isEmpty {
                             self.reviewResponseText = "Review complete. No specific feedback provided."
                         }
+                        self.persistReview(self.reviewResponseText, resume: resume, reviewType: reviewType)
                     case let .failure(error):
                         self.handleReviewError(error)
                         if self.reviewResponseText == "Submitting request..." || !self.reviewResponseText.isEmpty {

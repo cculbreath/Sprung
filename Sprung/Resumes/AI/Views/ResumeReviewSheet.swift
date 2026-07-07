@@ -83,6 +83,16 @@ struct ResumeReviewSheet: View {
                             contentView // This already handles its internal scrolling for MarkdownView
                                 .frame(minHeight: 200, idealHeight: 280, maxHeight: 320) // Constrained max height for better layout
                         }
+                        // Saved-review caption: shows when the displayed markdown is the
+                        // last persisted review for this resume, with a clear run-again hint.
+                        if !viewModel.isProcessing,
+                           !viewModel.reviewResponseText.isEmpty,
+                           let savedDate = viewModel.savedReviewDate {
+                            Text(savedReviewCaption(date: savedDate, type: viewModel.savedReviewType))
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
                     }
                     .padding(.horizontal) // Padding for the scrollable content
                     .padding(.bottom) // Padding at the bottom of scrollable content
@@ -119,7 +129,17 @@ struct ResumeReviewSheet: View {
         .frame(width: 650, height: 600, alignment: .topLeading) // Increased sheet size for better content fit
         .onAppear {
             viewModel.initialize(llmFacade: llmFacade)
+            if let resume = selectedResume {
+                viewModel.loadStoredReview(from: resume)
+            }
         }
+    }
+
+    /// Caption shown under the analysis box when a persisted review is displayed.
+    private func savedReviewCaption(date: Date, type: String?) -> String {
+        let stamp = date.formatted(date: .abbreviated, time: .shortened)
+        let typeSuffix = type.map { " · \($0)" } ?? ""
+        return "Saved \(stamp)\(typeSuffix) — Submit to run a fresh review."
     }
     // View for custom options (extracted for clarity) - Unchanged
     struct CustomReviewOptionsView: View {
