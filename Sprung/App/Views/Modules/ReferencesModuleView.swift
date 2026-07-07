@@ -236,7 +236,13 @@ struct ReferencesModuleView: View {
             )
 
         case .dossier:
-            DossierBrowserTabInline(dossierStore: dossierStore, coverRefStore: coverRefStore)
+            DossierBrowserTabInline(
+                dossierStore: dossierStore,
+                coverRefStore: coverRefStore,
+                knowledgeCardStore: knowledgeCardStore,
+                skillStore: skillStore,
+                llmFacade: llmFacade
+            )
         }
     }
 }
@@ -277,8 +283,13 @@ private struct TabPill: View {
 private struct DossierBrowserTabInline: View {
     let dossierStore: CandidateDossierStore
     let coverRefStore: CoverRefStore
+    let knowledgeCardStore: KnowledgeCardStore
+    let skillStore: SkillStore
+    let llmFacade: LLMFacade
 
     @State private var showEditor = false
+    @State private var isResynthesizing = false
+    @State private var resynthesizeMessage: String?
 
     var body: some View {
         ScrollView {
@@ -367,9 +378,7 @@ private struct DossierBrowserTabInline: View {
             }
 
             // Career through-lines (AI synthesis)
-            if let throughLines = dossier.careerThroughLines, !throughLines.isEmpty {
-                dossierField(title: "Career Through-Lines", content: throughLines, required: false)
-            }
+            careerThroughLinesSection(dossier)
 
             // Preferences
             if let prefs = dossier.workArrangementPreferences, !prefs.isEmpty {
@@ -389,6 +398,119 @@ private struct DossierBrowserTabInline: View {
                 dossierField(title: "Interviewer Notes", content: notes, required: false, isPrivate: true)
             }
         }
+    }
+
+    // MARK: - Career Through-Lines (AI synthesis)
+
+    /// Career through-lines with a re-synthesize control. The synthesis is written
+    /// once at onboarding completion; as the knowledge-card library grows via
+    /// standalone ingest it goes stale, so this lets the user re-run
+    /// `CareerSynthesisService` against the current cards. Read-over-existing-cards:
+    /// no document re-ingest, cheap to re-run.
+    @ViewBuilder
+    private func careerThroughLinesSection(_ dossier: CandidateDossier) -> some View {
+        let hasCards = !knowledgeCardStore.knowledgeCards.isEmpty
+
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Text("Career Through-Lines")
+                    .font(.subheadline.weight(.semibold))
+                Text("AI synthesis")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+
+                Spacer()
+
+                Button {
+                    runCareerResynthesis()
+                } label: {
+                    HStack(spacing: 4) {
+                        if isResynthesizing {
+                            ProgressView()
+                                .controlSize(.small)
+                        } else {
+                            Image(systemName: "arrow.triangle.2.circlepath")
+                        }
+                        Text(dossier.careerThroughLines?.isEmpty == false ? "Re-synthesize" : "Synthesize")
+                    }
+                }
+                .disabled(isResynthesizing || !hasCards)
+                .help(hasCards
+                    ? "Regenerate the career through-lines from your current knowledge cards"
+                    : "Add knowledge cards first — synthesis reads across all of them")
+            }
+
+            if let throughLines = dossier.careerThroughLines, !throughLines.isEmpty {
+                Text(throughLines)
+                    .font(.body)
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                Text("Not yet synthesized. Synthesize to generate a cross-cutting portrait from your knowledge cards.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+
+            if let message = resynthesizeMessage {
+                Text(message)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    /// Re-run career-through-lines synthesis against the current knowledge cards,
+    /// skill bank, and dossier strategic notes, then persist the result. Surfaces
+    /// a missing-model configuration by routing to Settings → Models (never
+    /// substitutes a model); surfaces any other failure inline. No silent fallback.
+    private func runCareerResynthesis() {
+        let cards = knowledgeCardStore.knowledgeCards
+        guard !cards.isEmpty else { return }
+
+        isResynthesizing = true
+        resynthesizeMessage = nil
+        Task {
+            defer { isResynthesizing = false }
+            do {
+                let service = CareerSynthesisService(llmFacade: llmFacade)
+                let text = try await service.generate(
+                    cards: cards,
+                    skills: skillStore.skills,
+                    strategicNotes: careerSynthesisStrategicNotes()
+                )
+                dossierStore.setCareerThroughLines(text)
+                resynthesizeMessage = "Synthesized \(text.count) characters from \(cards.count) knowledge card\(cards.count == 1 ? "" : "s")."
+                Logger.info("🔄 Career through-lines re-synthesized from References tab (\(cards.count) cards)", category: .ai)
+            } catch let error as ModelConfigurationError {
+                NotificationCenter.default.post(
+                    name: .showModelSettings, object: nil,
+                    userInfo: ["settingKey": error.settingKey]
+                )
+                resynthesizeMessage = "Synthesis model is not configured. Choose one in Settings → Models, then try again."
+            } catch {
+                resynthesizeMessage = "Synthesis failed: \(error.localizedDescription)"
+                Logger.error("🔄 Career through-lines re-synthesis failed: \(error.localizedDescription)", category: .ai)
+            }
+        }
+    }
+
+    /// Orientation-only strategic notes for the synthesis: job-search context,
+    /// strengths, and pitfalls. Deliberately excludes private circumstances and the
+    /// prior synthesis (so a regeneration never feeds on its own output), matching
+    /// `DebugRegenerationService.regenerateCareerSynthesis`.
+    private func careerSynthesisStrategicNotes() -> String? {
+        guard let dossier = dossierStore.dossier else { return nil }
+        var parts: [String] = []
+        if !dossier.jobSearchContext.isEmpty {
+            parts.append("Job search context: \(dossier.jobSearchContext)")
+        }
+        if let strengths = dossier.strengthsToEmphasize, !strengths.isEmpty {
+            parts.append("Strengths to emphasize: \(strengths)")
+        }
+        if let pitfalls = dossier.pitfallsToAvoid, !pitfalls.isEmpty {
+            parts.append("Pitfalls to avoid: \(pitfalls)")
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: "\n\n")
     }
 
     // MARK: - Voice Profile

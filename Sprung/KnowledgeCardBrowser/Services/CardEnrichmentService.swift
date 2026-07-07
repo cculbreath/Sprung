@@ -89,6 +89,14 @@ actor CardEnrichmentService {
             if !result.verbatimExcerpts.isEmpty {
                 card.verbatimExcerpts = result.verbatimExcerpts
             }
+            // Baseline grade only — never overwrite an existing value. The
+            // document-analysis fabrication guard downgrades a card to "weak"
+            // (during verification, which runs BEFORE enrichment) when its anchors
+            // couldn't be verified, and the user can grade manually; both are
+            // authoritative over this LLM baseline.
+            if (card.evidenceQuality ?? "").isEmpty, !result.evidenceQuality.isEmpty {
+                card.evidenceQuality = result.evidenceQuality
+            }
         }
 
         Logger.info("CardEnrichmentService: Extracted \(result.facts.count) facts, \(result.suggestedBullets.count) bullets for \(card.title)", category: .ai)
@@ -182,6 +190,15 @@ actor CardEnrichmentService {
 
         ### technologies[]
         All technologies, tools, frameworks, and methodologies demonstrated.
+
+        ### evidence_quality
+        Grade how well THIS card's narrative is grounded in the source document, as one of:
+        - `strong`: claims are directly and specifically supported — named artifacts, \
+        quoted passages, concrete numbers, or unambiguous descriptions in the source.
+        - `moderate`: claims are reasonably grounded but partly inferred, generalized, \
+        or supported only in passing.
+        - `weak`: claims rest mostly on narrative assertion with little corroborating \
+        detail in the source. Grade honestly — do not inflate.
 
         ### verbatim_excerpts[]
         1-3 passages (100-500 words each) worth preserving verbatim. Each with:
@@ -315,9 +332,14 @@ actor CardEnrichmentService {
                     "required": ["context", "location", "text", "preservation_reason"],
                     "additionalProperties": false
                 ]
+            ],
+            "evidence_quality": [
+                "type": "string",
+                "enum": ["strong", "moderate", "weak"],
+                "description": "How well the card's claims are grounded in the source document"
             ]
         ],
-        "required": ["facts", "suggested_bullets", "outcomes", "technologies", "verbatim_excerpts"],
+        "required": ["facts", "suggested_bullets", "outcomes", "technologies", "verbatim_excerpts", "evidence_quality"],
         "additionalProperties": false
     ]
 }
@@ -330,6 +352,7 @@ private struct FactExtractionResult: Codable, Sendable {
     let outcomes: [String]
     let technologies: [String]
     let verbatimExcerpts: [VerbatimExcerpt]
+    let evidenceQuality: String
 
     enum CodingKeys: String, CodingKey {
         case facts
@@ -337,5 +360,6 @@ private struct FactExtractionResult: Codable, Sendable {
         case outcomes
         case technologies
         case verbatimExcerpts = "verbatim_excerpts"
+        case evidenceQuality = "evidence_quality"
     }
 }
