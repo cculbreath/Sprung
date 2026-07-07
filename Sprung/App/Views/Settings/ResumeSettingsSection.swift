@@ -6,30 +6,28 @@
 import SwiftUI
 
 struct ResumeSettingsSection: View {
-    @AppStorage("reasoningEffort") private var reasoningEffort: String = "medium"
+    @Environment(DebugSettingsStore.self) private var debugSettings
     @AppStorage("enableResumeCustomizationTools") private var enableResumeCustomizationTools: Bool = true
     @AppStorage("enableCoherencePass") private var enableCoherencePass: Bool = true
 
-    private let reasoningOptions: [(value: String, label: String, detail: String)] = [
-        ("none", "None", "Fastest responses, no reasoning tokens"),
-        ("minimal", "Minimal", "Lightweight reasoning"),
-        ("low", "Low", "Light reasoning for moderately complex tasks"),
-        ("medium", "Medium", "Balanced speed and reasoning depth"),
-        ("high", "High", "Maximum reasoning; best for complex tasks"),
-        ("xhigh", "Extra High", "GPT-5.2+ only; deepest reasoning for the hardest tasks")
-    ]
+    private var customizationReasoningEffortBinding: Binding<DebugSettingsStore.ReasoningEffortLevel> {
+        Binding(
+            get: { debugSettings.customizationReasoningEffort },
+            set: { debugSettings.customizationReasoningEffort = $0 }
+        )
+    }
 
     var body: some View {
         Form {
             Section {
                 VStack(alignment: .leading, spacing: 12) {
-                    Picker("Reasoning Effort", selection: $reasoningEffort) {
-                        ForEach(reasoningOptions, id: \.value) { option in
-                            Text(option.label).tag(option.value)
+                    Picker("Customization Reasoning", selection: customizationReasoningEffortBinding) {
+                        ForEach(DebugSettingsStore.ReasoningEffortLevel.allCases) { level in
+                            Text(level.title).tag(level)
                         }
                     }
                     .pickerStyle(.menu)
-                    Text("Controls AI reasoning depth for resume customization and cover letter writing.")
+                    Text("Enables extended thinking during resume customization. Shows live reasoning in the review queue. On Opus 4.6, thinking depth is adaptive regardless of effort level.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }

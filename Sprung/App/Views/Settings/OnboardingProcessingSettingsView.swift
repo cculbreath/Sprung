@@ -10,11 +10,18 @@ import SwiftUI
 
 struct OnboardingProcessingSettingsView: View {
     @AppStorage("onboardingMaxConcurrentExtractions") private var maxConcurrentExtractions: Int = 5
-    @AppStorage("maxConcurrentPDFExtractions") private var maxConcurrentPDFExtractions: Int = 30
-    @AppStorage("pdfJudgeUseFourUp") private var pdfJudgeUseFourUp: Bool = false
-    @AppStorage("pdfJudgeDPI") private var pdfJudgeDPI: Int = 150
     @AppStorage("onboardingEphemeralTurns") private var ephemeralTurns: Int = 15
     @AppStorage("onboardingInterviewAllowWebSearchDefault") private var onboardingWebSearchAllowed: Bool = true
+    @AppStorage("reasoningEffort") private var reasoningEffort: String = "medium"
+
+    private let reasoningOptions: [(value: String, label: String, detail: String)] = [
+        ("none", "None", "Fastest responses, no reasoning tokens"),
+        ("minimal", "Minimal", "Lightweight reasoning"),
+        ("low", "Low", "Light reasoning for moderately complex tasks"),
+        ("medium", "Medium", "Balanced speed and reasoning depth"),
+        ("high", "High", "Maximum reasoning; best for complex tasks"),
+        ("xhigh", "Extra High", "GPT-5.2+ only; deepest reasoning for the hardest tasks")
+    ]
 
     var body: some View {
         Form {
@@ -25,11 +32,31 @@ struct OnboardingProcessingSettingsView: View {
             } header: {
                 SettingsSectionHeader(title: "Processing Limits", systemImage: "slider.horizontal.3")
             }
+
+            Section {
+                reasoningEffortPicker
+            } header: {
+                SettingsSectionHeader(title: "AI Reasoning", systemImage: "brain")
+            }
         }
         .formStyle(.grouped)
     }
 
     // MARK: - Pickers
+
+    private var reasoningEffortPicker: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Picker("OpenRouter Reasoning Effort", selection: $reasoningEffort) {
+                ForEach(reasoningOptions, id: \.value) { option in
+                    Text(option.label).tag(option.value)
+                }
+            }
+            .pickerStyle(.menu)
+            Text("Controls reasoning depth for knowledge-card refinement, skills-bank processing, and voice-profile generation.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        }
+    }
 
     private var maxConcurrentExtractionsPicker: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -43,38 +70,6 @@ struct OnboardingProcessingSettingsView: View {
                 }
             }
             Text("Maximum parallel document extractions. Higher values may hit API rate limits.")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-
-            Stepper(value: $maxConcurrentPDFExtractions, in: 1...50) {
-                HStack {
-                    Text("PDF Vision Extraction Concurrency")
-                    Spacer()
-                    Text("\(maxConcurrentPDFExtractions)")
-                        .foregroundStyle(.secondary)
-                        .monospacedDigit()
-                }
-            }
-            Text("Pages processed in parallel for complex PDFs. Default 30, max 50.")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-
-            Divider()
-                .padding(.vertical, 4)
-
-            Toggle("Use 4-Up Composites for Judge", isOn: $pdfJudgeUseFourUp)
-            Text("When enabled, combines 4 pages into each composite image for quality judging.")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-
-            Picker("Judge Image Resolution", selection: $pdfJudgeDPI) {
-                Text("100 DPI (Fast)").tag(100)
-                Text("150 DPI (Balanced)").tag(150)
-                Text("200 DPI (Quality)").tag(200)
-                Text("300 DPI (Max)").tag(300)
-            }
-            .pickerStyle(.menu)
-            Text("Resolution for sample images sent to extraction quality judge.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
         }

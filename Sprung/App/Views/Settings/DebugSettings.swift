@@ -41,13 +41,6 @@ struct DebugSettingsView: View {
         )
     }
 
-    private var reasoningEffortBinding: Binding<DebugSettingsStore.ReasoningEffortLevel> {
-        Binding(
-            get: { debugSettings.customizationReasoningEffort },
-            set: { debugSettings.customizationReasoningEffort = $0 }
-        )
-    }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Toggle("Save debug files to Downloads", isOn: saveDebugPromptsBinding)
@@ -67,18 +60,6 @@ struct DebugSettingsView: View {
                 }
                 .pickerStyle(.menu)
                 Text("Controls diagnostic output verbosity. Debug files can include sensitive request payloads.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
-
-            VStack(alignment: .leading, spacing: 8) {
-                Picker("Customization Reasoning", selection: reasoningEffortBinding) {
-                    ForEach(DebugSettingsStore.ReasoningEffortLevel.allCases) { level in
-                        Text(level.title).tag(level)
-                    }
-                }
-                .pickerStyle(.menu)
-                Text("Enables extended thinking during resume customization. Shows live reasoning in the review queue. On Opus 4.6, thinking depth is adaptive regardless of effort level.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
@@ -156,9 +137,9 @@ struct DebugSettingsView: View {
         activeJobApps.count
     }
 
-    /// Count of active apps still waiting for preprocessing (extractedRequirements is nil)
+    /// Count of active apps still waiting for preprocessing (status still pending)
     private var pendingCount: Int {
-        activeJobApps.filter { $0.extractedRequirements == nil }.count
+        activeJobApps.filter { $0.preprocessingStatus == .pending }.count
     }
 
     private func rerunPreprocessingOnActiveApps() {

@@ -503,20 +503,24 @@ private extension ModelsSettingsView {
         do {
             let response = try await llmFacade.anthropicListModels()
             anthropicModels = response.data
-            if !filteredAnthropicModels.contains(where: { $0.id == onboardingAnthropicModelId }) {
-                if let first = filteredAnthropicModels.first {
-                    onboardingAnthropicModelId = first.id
-                }
-            }
-            if !filteredAnthropicModels.contains(where: { $0.id == seedGenerationAnthropicModelId }) {
-                if let first = filteredAnthropicModels.first {
-                    seedGenerationAnthropicModelId = first.id
-                }
-            }
+            // Never silently substitute a model. If a previously-selected model has
+            // disappeared from the fetched list, leave the picker unselected and box
+            // the row in red so the user explicitly re-picks.
+            flagIfSelectedModelMissing(selectedId: onboardingAnthropicModelId, key: "onboardingAnthropicModelId")
+            flagIfSelectedModelMissing(selectedId: seedGenerationAnthropicModelId, key: "seedGenerationAnthropicModelId")
         } catch {
             anthropicModelError = error.localizedDescription
         }
         isLoadingAnthropicModels = false
+    }
+
+    @MainActor
+    func flagIfSelectedModelMissing(selectedId: String, key: String) {
+        guard !selectedId.isEmpty else { return }
+        guard !filteredAnthropicModels.contains(where: { $0.id == selectedId }) else { return }
+        if highlightedKey == nil {
+            highlightedKey = key
+        }
     }
 
     @MainActor
