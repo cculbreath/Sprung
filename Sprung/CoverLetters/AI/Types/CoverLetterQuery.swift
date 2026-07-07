@@ -371,6 +371,13 @@ enum CoverLetterQueryError: LocalizedError {
         RESUME CONTEXT:
         \(resumeContextText)
         """
+        if !knowledgeCardDocs.isEmpty {
+            sections += """
+
+            BACKGROUND DOCUMENTS:
+            \(knowledgeCardDocs)
+            """
+        }
         if !writersVoice.isEmpty {
             sections += """
 

@@ -42,7 +42,7 @@ struct TextToSpeechSettingsView: View {
                     }
                 }
             if !appState.hasValidOpenAiKey {
-                Text("Add an OpenAI API key to enable the résumé narration preview.")
+                Text("Add an OpenAI API key to enable the cover letter narration preview.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }

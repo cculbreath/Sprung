@@ -332,8 +332,6 @@ class BatchCoverLetterGenerator {
             }
             letterName = baseName
         }
-        // Set up mode
-        let mode: CoverAiMode = revision != nil ? .rewrite : .generate
         // The voice block comes from the writing samples selected for the base
         // letter — the same selection the user made in the sheet.
         let query = CoverLetterQuery(
@@ -373,14 +371,7 @@ class BatchCoverLetterGenerator {
         newLetter.generated = true
         newLetter.moddedDate = Date()
         newLetter.generationModel = model
-        newLetter.currentMode = mode
         newLetter.editorPrompt = revision ?? CoverLetterPrompts.EditorPrompts.zinsser
-        // Store generation metadata - for revisions, preserve original generation sources
-        if revision != nil {
-            newLetter.generationSources = baseCoverLetter.generationSources.isEmpty ? baseCoverLetter.enabledRefs : baseCoverLetter.generationSources
-        } else {
-            newLetter.generationSources = baseCoverLetter.enabledRefs
-        }
         // Set the final name - always use "Option X" format for consistency
         let nextOptionLetter = newLetter.getNextOptionLetter()
         newLetter.name = "Option \(nextOptionLetter): \(letterName)"

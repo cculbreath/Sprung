@@ -26,8 +26,7 @@ struct SourcesUsedView: View {
                         .foregroundColor(.primary)
                 }
                 // Writing samples
-                let sourcesToShow = coverLetter.generated ? coverLetter.generationSources : coverLetter.enabledRefs
-                let writingSamples = sourcesToShow.filter { $0.type == .writingSample }
+                let writingSamples = coverLetter.enabledRefs.filter { $0.type == .writingSample }
                 if !writingSamples.isEmpty {
                     VStack(alignment: .leading, spacing: 6) {
                         HStack {

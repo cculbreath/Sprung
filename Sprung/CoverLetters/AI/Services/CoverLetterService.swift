@@ -62,8 +62,6 @@ final class CoverLetterService {
         newCoverLetter.knowledgeCardInclusion = knowledgeCardInclusion
         newCoverLetter.selectedKnowledgeCardIds = selectedKnowledgeCardIds
         newCoverLetter.enabledRefs = selectedRefs
-        // Store generation metadata (snapshot of sources and settings at generation time)
-        newCoverLetter.generationSources = selectedRefs
         // Set it as the selected cover letter
         jobApp.selectedCover = newCoverLetter
         do {
@@ -146,13 +144,16 @@ final class CoverLetterService {
     ///   - modelId: The model ID to use for revision
     ///   - feedback: Optional custom feedback
     ///   - editorPrompt: The type of revision to perform
+    ///   - knowledgeCards: Knowledge cards resolved from the letter's persisted inclusion
+    ///     selection (`knowledgeCardInclusion`/`selectedKnowledgeCardIds`), same as generation
     /// - Returns: The revised cover letter content
     func reviseCoverLetter(
         coverLetter: CoverLetter,
         resume: Resume,
         modelId: String,
         feedback: String? = nil,
-        editorPrompt: CoverLetterPrompts.EditorPrompts = .improve
+        editorPrompt: CoverLetterPrompts.EditorPrompts = .improve,
+        knowledgeCards: [KnowledgeCard] = []
     ) async throws -> String {
         // Ensure cover letter has an associated job application
         guard let jobApp = coverLetter.jobApp else {
@@ -174,6 +175,7 @@ final class CoverLetterService {
                 selectedRefs: coverLetter.enabledRefs,
                 allRefs: coverRefStore.storedCoverRefs
             ),
+            knowledgeCards: knowledgeCards,
             saveDebugPrompt: UserDefaults.standard.bool(forKey: "saveDebugPrompts")
         )
         let prompt = try await query.revisionPrompt(

@@ -4,12 +4,6 @@
 //
 //
 import Foundation
-enum CoverAiMode: String, Codable {
-    case generate
-    case revise
-    case rewrite
-    case none
-}
 enum CoverLetterPrompts {
     enum EditorPrompts: String, Codable, CaseIterable {
         case improve = """

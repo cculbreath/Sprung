@@ -57,7 +57,6 @@ class CoverLetter: Identifiable, Hashable {
     // The AI model used to generate this cover letter
     var generationModel: String?
     var encodedEnabledRefs: Data? // Store as Data
-    var currentMode: CoverAiMode? = CoverAiMode.none
     var editorPrompt: CoverLetterPrompts.EditorPrompts = CoverLetterPrompts.EditorPrompts.zinsser
     /// Indicates this is the chosen submission draft (star indicator)
     var isChosenSubmissionDraft: Bool = false
@@ -65,8 +64,6 @@ class CoverLetter: Identifiable, Hashable {
     var encodedAssessmentData: Data? // Stores AssessmentData as JSON
     /// Committee feedback summary (stored as encoded data)
     var encodedCommitteeFeedback: Data? // Stores CommitteeFeedbackSummary as JSON
-    /// Generation metadata: sources used at time of generation (stored as encoded data)
-    var encodedGenerationSources: Data? // Stores [CoverRef] as JSON
     var modDate: String {
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "hh:mm a 'on' MM/dd/yy"
@@ -160,27 +157,6 @@ class CoverLetter: Identifiable, Hashable {
                 encodedCommitteeFeedback = try JSONEncoder().encode(newValue)
             } catch {
                 Logger.error("Failed to encode committeeFeedback: \(error.localizedDescription)")
-            }
-        }
-    }
-    /// Generation sources computed properties (read-only snapshot of sources at generation time)
-    var generationSources: [CoverRef] {
-        get {
-            guard let data = encodedGenerationSources else {
-                return []
-            }
-            do {
-                return try JSONDecoder().decode([CoverRef].self, from: data)
-            } catch {
-                Logger.debug("Failed to decode generationSources: \(error.localizedDescription)")
-                return []
-            }
-        }
-        set {
-            do {
-                encodedGenerationSources = try JSONEncoder().encode(newValue)
-            } catch {
-                Logger.error("Failed to encode generationSources: \(error.localizedDescription)")
             }
         }
     }
@@ -295,37 +271,5 @@ class CoverLetter: Identifiable, Hashable {
     /// Leaves every other letter — and the job app's editor selection — untouched.
     func unmarkAsChosenSubmissionDraft() {
         isChosenSubmissionDraft = false
-    }
-}
-@Model
-class MessageParams: Identifiable, Codable {
-    var id: String = UUID().uuidString
-    var content: String
-    var role: MessageRole
-    // Manual Codable implementation
-    enum CodingKeys: String, CodingKey {
-        case id
-        case content
-        case role
-    }
-    // Required initializer for Decodable
-    required init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        id = try container.decode(String.self, forKey: .id)
-        content = try container.decode(String.self, forKey: .content)
-        role = try container.decode(MessageRole.self, forKey: .role)
-    }
-    // Required function for Encodable
-    func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(id, forKey: .id)
-        try container.encode(content, forKey: .content)
-        try container.encode(role, forKey: .role)
-    }
-    enum MessageRole: String, Codable {
-        case user
-        case assistant
-        case system
-        case none
     }
 }

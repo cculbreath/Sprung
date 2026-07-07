@@ -4,6 +4,7 @@ struct CoverLetterReviseButton: View {
     @Environment(JobAppStore.self) private var jobAppStore: JobAppStore
     @Environment(CoverLetterStore.self) private var coverLetterStore: CoverLetterStore
     @Environment(CoverLetterService.self) private var coverLetterService: CoverLetterService
+    @Environment(KnowledgeCardStore.self) private var knowledgeCardStore: KnowledgeCardStore
     @State private var showReviseCoverLetterSheet = false
     @State private var errorMessage: String?
     @State private var showErrorAlert = false
@@ -78,13 +79,20 @@ struct CoverLetterReviseButton: View {
                 targetLetter.content = coverLetter.content
                 targetLetter.generated = false
                 targetLetter.editorPrompt = operation
-                targetLetter.currentMode = operation == .custom ? .revise : .rewrite
                 // Don't add to store yet - wait for successful generation
             } else {
                 // For existing ungenerated letters, update in place
                 targetLetter = coverLetter
                 targetLetter.editorPrompt = operation
-                targetLetter.currentMode = operation == .custom ? .revise : .rewrite
+            }
+            // Resolve knowledge cards from the letter's persisted inclusion
+            // selection, same as generation, so revision prompts carry the
+            // same background documents the constraints block promises.
+            let resolvedCards: [KnowledgeCard]
+            switch targetLetter.knowledgeCardInclusion {
+            case .all: resolvedCards = knowledgeCardStore.approvedCards
+            case .selected: resolvedCards = knowledgeCardStore.approvedCards.filter { targetLetter.selectedKnowledgeCardIds.contains($0.id.uuidString) }
+            case .none: resolvedCards = []
             }
             // Try to generate the revision
             let generatedContent = try await coverLetterService.reviseCoverLetter(
@@ -92,7 +100,8 @@ struct CoverLetterReviseButton: View {
                 resume: resume,
                 modelId: modelId,
                 feedback: feedback,
-                editorPrompt: operation
+                editorPrompt: operation,
+                knowledgeCards: resolvedCards
             )
             // Only if generation was successful, persist the letter
             if isNewRevision && !generatedContent.isEmpty {
@@ -101,7 +110,6 @@ struct CoverLetterReviseButton: View {
                 persistedLetter.content = generatedContent
                 persistedLetter.generated = true
                 persistedLetter.editorPrompt = operation
-                persistedLetter.currentMode = targetLetter.currentMode
                 persistedLetter.generationModel = modelId
                 persistedLetter.moddedDate = Date()
                 // Update the name to include the revision type
