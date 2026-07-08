@@ -28,9 +28,9 @@ struct GetStartedProgress: Equatable {
 
 extension GetStartedProgress {
     /// Derive progress from real store state. `templateInstalled` and
-    /// `jobCaptured` are passed as flags because their sources (the template
-    /// store surfaced via `AppEnvironment.requiresTemplateSetup`, and the
-    /// `JobAppStore`) live outside the two lightweight stores this reads.
+    /// `jobCaptured` are passed as flags because their sources (a live fetch
+    /// from the `TemplateStore`, and the `JobAppStore`) live outside the two
+    /// lightweight stores this reads.
     @MainActor
     static func evaluate(
         knowledgeCardStore: KnowledgeCardStore,

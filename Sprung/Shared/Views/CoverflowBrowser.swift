@@ -37,12 +37,8 @@ struct CoverflowBrowser<Item: Identifiable, CardContent: View, FilterContent: Vi
 
     var body: some View {
         VStack(spacing: 0) {
-            // Filter bar (provided by caller) + progress dots
+            // Filter bar (provided by caller)
             filterContent($currentIndex)
-
-            if !items.isEmpty {
-                progressIndicator
-            }
 
             if items.isEmpty {
                 emptyState
@@ -78,6 +74,9 @@ struct CoverflowBrowser<Item: Identifiable, CardContent: View, FilterContent: Vi
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
+
+                // Progress dots below the deck.
+                progressIndicator
             }
         }
         .onKeyPress(.leftArrow) { navigatePrevious(); return .handled }

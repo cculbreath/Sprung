@@ -87,7 +87,11 @@ struct ContentViewLaunch: View {
             knowledgeCardStore: deps.knowledgeCardStore,
             skillStore: deps.skillStore,
             experienceDefaultsStore: deps.experienceDefaultsStore,
-            templateInstalled: !appEnvironment.requiresTemplateSetup,
+            // Live fetch (matches items 1/2/4) rather than
+            // `appEnvironment.requiresTemplateSetup`, which is only a snapshot
+            // taken at AppDependencies init and updated on Template Editor CRUD —
+            // reading it here caused a stale-then-corrected flash on relaunch.
+            templateInstalled: !deps.templateStore.templates().isEmpty,
             jobCaptured: !deps.jobAppStore.jobApps.isEmpty
         )
         didEvaluateGetStarted = true
