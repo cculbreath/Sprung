@@ -97,6 +97,11 @@ struct VerticalResizeHandle: View {
     let minWidth: CGFloat
     let maxWidth: CGFloat
     var inverted: Bool = false  // If true, dragging left increases width (for trailing panels)
+    /// The pane's actual laid-out width when the layout may compress it below
+    /// the stored `width`. Drags start from here, so the divider responds
+    /// immediately — otherwise a stored width far above the displayed one
+    /// leaves hundreds of points of dead travel before anything moves.
+    var displayedWidth: Double? = nil
 
     @State private var isHovered = false
     @State private var isDragging = false
@@ -137,7 +142,7 @@ struct VerticalResizeHandle: View {
                     .onChanged { value in
                         if !isDragging {
                             isDragging = true
-                            dragStartWidth = width
+                            dragStartWidth = displayedWidth ?? width
                         }
                         let delta = inverted ? -value.translation.width : value.translation.width
                         let newWidth = dragStartWidth + delta

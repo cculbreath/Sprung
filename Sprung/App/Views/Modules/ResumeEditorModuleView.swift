@@ -29,6 +29,25 @@ struct ResumeEditorModuleView: View {
     private let collapsedHandleWidth: CGFloat = 12
     private let minSidebarWidth: CGFloat = 200
     private let maxSidebarWidth: CGFloat = 400
+    private let resizeHandleWidth: CGFloat = 9
+
+    /// Width the detail column must always keep: resume editor min (300) +
+    /// preview chevron bar (16) + PDF resize handle (9) + compressed-PDF
+    /// floor (100). Nested HStacks can't negotiate this on their own — the
+    /// outer stack hands the sidebar its full stored width before the detail
+    /// column's minimums are known, overflowing the window and sliding the
+    /// editor under the sidebar.
+    private let detailMinBudget: CGFloat = 425
+
+    @State private var moduleWidth: CGFloat = 0
+
+    /// Stored sidebar width, capped so the detail column's minimum always
+    /// fits in the measured module width.
+    private var effectiveSidebarWidth: Double {
+        guard moduleWidth > 0 else { return sidebarWidth }
+        let cap = Double(moduleWidth - resizeHandleWidth - detailMinBudget)
+        return min(sidebarWidth, max(cap, Double(minSidebarWidth)))
+    }
 
     var body: some View {
         @Bindable var jobAppStore = jobAppStore
@@ -37,21 +56,16 @@ struct ResumeEditorModuleView: View {
         HStack(spacing: 0) {
             // Collapsible sidebar (skinny handle when collapsed)
             if isSidebarExpanded {
-                // Range frame, not a fixed width: the pane holds its stored
-                // width when there's room but compresses down to its minimum
-                // when the window can't fit every pane. A fixed frame here made
-                // the HStack overflow (and recenter) whenever the icon bar +
-                // panes exceeded the window width, which read as interface-wide
-                // jitter and dead resize handles.
                 sidebarContent
-                    .frame(minWidth: minSidebarWidth, idealWidth: sidebarWidth, maxWidth: sidebarWidth)
+                    .frame(width: effectiveSidebarWidth)
                     .transition(.move(edge: .leading).combined(with: .opacity))
 
                 // Draggable resize handle
                 VerticalResizeHandle(
                     width: $sidebarWidth,
                     minWidth: minSidebarWidth,
-                    maxWidth: maxSidebarWidth
+                    maxWidth: maxSidebarWidth,
+                    displayedWidth: effectiveSidebarWidth
                 )
             } else {
                 // Skinny collapsed handle
@@ -62,6 +76,10 @@ struct ResumeEditorModuleView: View {
             detailContent
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+        // Parent-driven width (the flexible detail column makes this stack
+        // fill it), so measuring here can't feed back into child sizing.
+        .frame(maxWidth: .infinity)
+        .onGeometryChange(for: CGFloat.self, of: { $0.size.width }) { moduleWidth = $0 }
         .animation(.easeInOut(duration: 0.2), value: isSidebarExpanded)
         .onChange(of: jobAppStore.selectedApp) { _, newValue in
             updateMyLetter()

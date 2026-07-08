@@ -67,6 +67,9 @@ struct ResumeSplitView: View {
             ResumeBannerView(jobApp: selApp)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // Parent-driven width (maxWidth: .infinity above), so measuring here
+        // can't feed back into the pane widths derived from it.
+        .onGeometryChange(for: CGFloat.self, of: { $0.size.width }) { contentWidth = $0 }
         .animation(.easeInOut(duration: 0.2), value: pdfPreviewVisible)
         .sheet(isPresented: $showCreateResumeSheet) {
             CreateResumeView(
@@ -82,8 +85,28 @@ struct ResumeSplitView: View {
         }
     }
 
-    private let minPdfPreviewWidth: CGFloat = 260
+    /// Must match the compression floor in `effectivePdfPreviewWidth`: if the
+    /// drag floor sat above it, a compressed pane could never be dragged
+    /// smaller — the stored width would pin at the floor while the displayed
+    /// width stayed below it, leaving the divider dead.
+    private let minPdfPreviewWidth: CGFloat = 100
     private let maxPdfPreviewWidth: CGFloat = 800
+
+    /// Width the rest of the row must always keep: editor minimum (300) +
+    /// preview chevron bar (16) + resize handle (9).
+    private let nonPdfMinBudget: CGFloat = 325
+
+    @State private var contentWidth: CGFloat = 0
+
+    /// Stored preview width, capped to the measured row so the editor never
+    /// loses its minimum. A persisted width larger than the window (e.g. set
+    /// while the window was wide, or by the old drag-jitter bug) must not
+    /// push the editor out of the layout.
+    private var effectivePdfPreviewWidth: Double {
+        guard contentWidth > 0 else { return pdfPreviewWidth }
+        let available = Double(contentWidth - nonPdfMinBudget)
+        return min(pdfPreviewWidth, max(available, Double(minPdfPreviewWidth)))
+    }
 
     @ViewBuilder
     private func pdfPreviewSection(resume: Resume) -> some View {
@@ -91,14 +114,12 @@ struct ResumeSplitView: View {
             width: $pdfPreviewWidth,
             minWidth: minPdfPreviewWidth,
             maxWidth: maxPdfPreviewWidth,
-            inverted: true
+            inverted: true,
+            displayedWidth: effectivePdfPreviewWidth
         )
 
-        // Range frame (see ResumeEditorModuleView's sidebar): holds the stored
-        // width when there's room, compresses toward minPdfPreviewWidth instead
-        // of overflowing the HStack when the window is narrow.
         ResumePDFView(resume: resume)
-            .frame(minWidth: minPdfPreviewWidth, idealWidth: pdfPreviewWidth, maxWidth: pdfPreviewWidth)
+            .frame(width: effectivePdfPreviewWidth)
             .id(resume.id)
     }
 
