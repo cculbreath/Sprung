@@ -36,22 +36,18 @@ struct ResumeEditorModuleView: View {
     private let maxSidebarWidth: CGFloat = 400
     private let resizeHandleWidth: CGFloat = 9
 
-    /// Width the detail column must always keep: resume editor min (300) +
-    /// preview chevron bar (16) + PDF resize handle (9) + compressed-PDF
-    /// floor (100). Nested HStacks can't negotiate this on their own — the
-    /// outer stack hands the sidebar its full stored width before the detail
-    /// column's minimums are known, overflowing the window and sliding the
-    /// editor under the sidebar.
-    private let detailMinBudget: CGFloat = 425
-
-    @State private var moduleWidth: CGFloat = 0
-
-    /// Stored sidebar width, capped so the detail column's minimum always
-    /// fits in the measured module width.
-    private var effectiveSidebarWidth: Double {
-        guard moduleWidth > 0 else { return sidebarWidth }
-        let cap = Double(moduleWidth - resizeHandleWidth - detailMinBudget)
-        return min(sidebarWidth, max(cap, Double(minSidebarWidth)))
+    /// Displayed sidebar width for a given available module width, computed
+    /// synchronously inside the layout pass (from a GeometryReader) so it never
+    /// lags behind a resize. The sidebar yields first when space is tight: it's
+    /// capped so the detail column always keeps its per-tab minimum, which
+    /// guarantees the panes sum to <= the available width and never overflow.
+    private func sidebarDisplayWidth(_ available: CGFloat) -> CGFloat {
+        guard isSidebarExpanded else { return collapsedHandleWidth }
+        // Before first layout GeometryReader reports 0; show the stored width so
+        // the sidebar doesn't flash to its minimum on every appearance.
+        guard available > 0 else { return CGFloat(sidebarWidth) }
+        let maxForSidebar = max(0, available - resizeHandleWidth - detailMinWidth)
+        return min(CGFloat(sidebarWidth), maxForSidebar)
     }
 
     /// Live minimum CONTENT width for this module (excluding the icon bar),
@@ -85,33 +81,36 @@ struct ResumeEditorModuleView: View {
         @Bindable var jobAppStore = jobAppStore
         @Bindable var navigationState = navigationState
 
-        HStack(spacing: 0) {
-            // Collapsible sidebar (skinny handle when collapsed)
-            if isSidebarExpanded {
-                sidebarContent
-                    .frame(width: effectiveSidebarWidth)
-                    .transition(.move(edge: .leading).combined(with: .opacity))
+        // GeometryReader gives the true available width up front, so panes are
+        // sized within the same layout pass and can never overflow it (the
+        // stuck, clipped state came from lagged onGeometryChange measurement).
+        GeometryReader { geo in
+            let sidebarW = sidebarDisplayWidth(geo.size.width)
+            HStack(spacing: 0) {
+                // Collapsible sidebar (skinny handle when collapsed)
+                if isSidebarExpanded {
+                    sidebarContent
+                        .frame(width: sidebarW)
+                        .transition(.move(edge: .leading).combined(with: .opacity))
 
-                // Draggable resize handle
-                VerticalResizeHandle(
-                    width: $sidebarWidth,
-                    minWidth: minSidebarWidth,
-                    maxWidth: maxSidebarWidth,
-                    displayedWidth: effectiveSidebarWidth
-                )
-            } else {
-                // Skinny collapsed handle
-                CollapsedPanelHandle(edge: .leading, isExpanded: $isSidebarExpanded)
+                    // Draggable resize handle
+                    VerticalResizeHandle(
+                        width: $sidebarWidth,
+                        minWidth: minSidebarWidth,
+                        maxWidth: maxSidebarWidth,
+                        displayedWidth: Double(sidebarW)
+                    )
+                } else {
+                    // Skinny collapsed handle
+                    CollapsedPanelHandle(edge: .leading, isExpanded: $isSidebarExpanded)
+                }
+
+                // Main content takes the remainder
+                detailContent
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-
-            // Main content
-            detailContent
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .frame(width: geo.size.width, height: geo.size.height)
         }
-        // Parent-driven width (the flexible detail column makes this stack
-        // fill it), so measuring here can't feed back into child sizing.
-        .frame(maxWidth: .infinity)
-        .onGeometryChange(for: CGFloat.self, of: { $0.size.width }) { moduleWidth = $0 }
         .moduleMinContentSize(CGSize(width: moduleMinContentWidth, height: 650))
         .animation(.easeInOut(duration: 0.2), value: isSidebarExpanded)
         .onChange(of: jobAppStore.selectedApp) { _, newValue in

@@ -39,37 +39,41 @@ struct ResumeSplitView: View {
 
     private func resumeEditorContent(selApp: JobApp, selRes: Resume) -> some View {
         VStack(spacing: 0) {
-            HStack(spacing: 0) {
-                // Editor column
-                ResumeDetailView(
-                    resume: selRes,
-                    tab: $tab,
-                    isWide: $isWide,
-                    sheets: $sheets,
-                    showCreateResumeSheet: $showCreateResumeSheet,
-                    exportCoordinator: appEnvironment.resumeExportCoordinator
-                )
-                .id(selRes.id)
-                .frame(
-                    minWidth: isWide ? 300 : 220,
-                    maxWidth: .infinity,
-                    maxHeight: .infinity
-                )
+            // GeometryReader gives the true available width up front, so the PDF
+            // pane is sized within the same layout pass and can never overflow
+            // it (the stuck, clipped state came from lagged measurement).
+            GeometryReader { geo in
+                let pdfW = pdfDisplayWidth(geo.size.width)
+                HStack(spacing: 0) {
+                    // Editor column takes the remainder
+                    ResumeDetailView(
+                        resume: selRes,
+                        tab: $tab,
+                        isWide: $isWide,
+                        sheets: $sheets,
+                        showCreateResumeSheet: $showCreateResumeSheet,
+                        exportCoordinator: appEnvironment.resumeExportCoordinator
+                    )
+                    .id(selRes.id)
+                    .frame(
+                        minWidth: isWide ? 300 : 220,
+                        maxWidth: .infinity,
+                        maxHeight: .infinity
+                    )
 
-                ResumePreviewChevronBar(pdfPreviewVisible: $pdfPreviewVisible)
+                    ResumePreviewChevronBar(pdfPreviewVisible: $pdfPreviewVisible)
 
-                if pdfPreviewVisible {
-                    pdfPreviewSection(resume: selRes)
-                        .transition(.move(edge: .trailing).combined(with: .opacity))
+                    if pdfPreviewVisible {
+                        pdfPreviewSection(resume: selRes, width: pdfW)
+                            .transition(.move(edge: .trailing).combined(with: .opacity))
+                    }
                 }
+                .frame(width: geo.size.width, height: geo.size.height)
             }
 
             ResumeBannerView(jobApp: selApp)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        // Parent-driven width (maxWidth: .infinity above), so measuring here
-        // can't feed back into the pane widths derived from it.
-        .onGeometryChange(for: CGFloat.self, of: { $0.size.width }) { contentWidth = $0 }
         .animation(.easeInOut(duration: 0.2), value: pdfPreviewVisible)
         .sheet(isPresented: $showCreateResumeSheet) {
             CreateResumeView(
@@ -96,30 +100,29 @@ struct ResumeSplitView: View {
     /// preview chevron bar (16) + resize handle (9).
     private let nonPdfMinBudget: CGFloat = 325
 
-    @State private var contentWidth: CGFloat = 0
-
-    /// Stored preview width, capped to the measured row so the editor never
-    /// loses its minimum. A persisted width larger than the window (e.g. set
-    /// while the window was wide, or by the old drag-jitter bug) must not
-    /// push the editor out of the layout.
-    private var effectivePdfPreviewWidth: Double {
-        guard contentWidth > 0 else { return pdfPreviewWidth }
-        let available = Double(contentWidth - nonPdfMinBudget)
-        return min(pdfPreviewWidth, max(available, Double(minPdfPreviewWidth)))
+    /// Stored preview width, clamped to the available row width so the editor
+    /// always keeps its minimum. Computed synchronously from the GeometryReader
+    /// width, so a persisted width larger than the window can never push the
+    /// editor out of the layout.
+    private func pdfDisplayWidth(_ available: CGFloat) -> Double {
+        // Before first layout GeometryReader reports 0; show the stored width.
+        guard available > 0 else { return pdfPreviewWidth }
+        let room = Double(available - nonPdfMinBudget)
+        return min(pdfPreviewWidth, max(room, Double(minPdfPreviewWidth)))
     }
 
     @ViewBuilder
-    private func pdfPreviewSection(resume: Resume) -> some View {
+    private func pdfPreviewSection(resume: Resume, width: Double) -> some View {
         VerticalResizeHandle(
             width: $pdfPreviewWidth,
             minWidth: minPdfPreviewWidth,
             maxWidth: maxPdfPreviewWidth,
             inverted: true,
-            displayedWidth: effectivePdfPreviewWidth
+            displayedWidth: width
         )
 
         ResumePDFView(resume: resume)
-            .frame(width: effectivePdfPreviewWidth)
+            .frame(width: width)
             .id(resume.id)
     }
 
