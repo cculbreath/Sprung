@@ -17,10 +17,8 @@ import SwiftyJSON
 /// - Subscribe to message request events
 /// - Build API requests with context
 /// - Emit message sent/status events
-/// - Coordinate with NetworkRouter for stream processing
 actor LLMMessenger: OnboardingEventEmitter {
     let eventBus: EventBus
-    private let networkRouter: NetworkRouter
     private let llmFacade: LLMFacade
     private let stateCoordinator: StateCoordinator
     private let anthropicRequestBuilder: AnthropicRequestBuilder
@@ -39,7 +37,6 @@ actor LLMMessenger: OnboardingEventEmitter {
         llmFacade: LLMFacade,
         baseSystemPrompt: String,
         eventBus: EventBus,
-        networkRouter: NetworkRouter,
         toolRegistry: ToolRegistry,
         state: StateCoordinator,
         todoStore: InterviewTodoStore,
@@ -47,7 +44,6 @@ actor LLMMessenger: OnboardingEventEmitter {
     ) {
         self.llmFacade = llmFacade
         self.eventBus = eventBus
-        self.networkRouter = networkRouter
         self.stateCoordinator = state
         self.toolRegistry = toolRegistry
         self.budgetPauseGate = budgetPauseGate
@@ -150,7 +146,6 @@ actor LLMMessenger: OnboardingEventEmitter {
         // task.cancel() can't unblock it — interrupt the gate to resolve it as .cancel.
         await budgetPauseGate.interrupt()
         currentStreamTask = nil
-        await networkRouter.cancelPendingStreams()
         await emit(.llm(.status( .idle)))
         Logger.info("✅ LLM stream cancelled and cleaned up", category: .ai)
     }

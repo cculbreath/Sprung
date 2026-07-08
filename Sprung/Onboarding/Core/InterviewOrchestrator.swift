@@ -10,13 +10,11 @@ import SwiftyJSON
 import SwiftOpenAI
 /// Orchestrates the interview conversation with the LLM.
 /// Delegates to LLMMessenger (§4.3) for message sending.
-/// Delegates to NetworkRouter (§4.4) for stream event processing.
 actor InterviewOrchestrator: OnboardingEventEmitter {
     // MARK: - Properties
     let eventBus: EventBus
     private let state: StateCoordinator
     private let llmMessenger: LLMMessenger
-    private let networkRouter: NetworkRouter
     private var isActive = false
     // MARK: - Initialization
     init(
@@ -30,12 +28,10 @@ actor InterviewOrchestrator: OnboardingEventEmitter {
     ) {
         self.eventBus = eventBus
         self.state = state
-        self.networkRouter = NetworkRouter(eventBus: eventBus)
         self.llmMessenger = LLMMessenger(
             llmFacade: llmFacade,
             baseSystemPrompt: baseSystemPrompt,
             eventBus: eventBus,
-            networkRouter: networkRouter,
             toolRegistry: toolRegistry,
             state: state,
             todoStore: todoStore,
