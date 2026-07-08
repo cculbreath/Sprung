@@ -102,12 +102,14 @@ final class DiscoverySettingsStore {
     private static let scoutEnabledBoardsKey = "discoveryScoutEnabledBoards"
 
     /// Boards the scout searches by default (persistent toggles; the run
-    /// modal can override per run). Defaults to all three until the user
-    /// saves a choice — including an explicitly-saved empty selection.
+    /// modal can override per run). Defaults to the no-key boards until the
+    /// user saves a choice — the aggregator boards (JSearch/SerpApi) stay off
+    /// until the user adds a key, so a keyless install never nags. An
+    /// explicitly-saved empty selection persists as empty.
     var scoutEnabledBoards: [JobScoutService.ScoutBoard] {
         get {
             guard let raw = defaults.array(forKey: Self.scoutEnabledBoardsKey) as? [String] else {
-                return JobScoutService.ScoutBoard.allCases
+                return JobScoutService.ScoutBoard.allCases.filter { !$0.requiresAPIKey }
             }
             return raw.compactMap(JobScoutService.ScoutBoard.init(rawValue:))
         }

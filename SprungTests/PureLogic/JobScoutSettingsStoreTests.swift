@@ -27,13 +27,15 @@ final class JobScoutSettingsStoreTests: XCTestCase {
 
     // MARK: - scoutEnabledBoards
 
-    func testScoutEnabledBoardsDefaultsToAllBoards() {
+    func testScoutEnabledBoardsDefaultsToNoKeyBoards() {
         let store = DiscoverySettingsStore(defaults: TestDefaults().store)
         XCTAssertEqual(
             store.scoutEnabledBoards,
-            JobScoutService.ScoutBoard.allCases,
-            "until the user saves a choice, every board participates"
+            [.dice, .zipRecruiter, .linkedIn],
+            "no-key boards are on by default; the aggregator boards stay off until a key is added"
         )
+        XCTAssertFalse(store.scoutEnabledBoards.contains(.jsearch))
+        XCTAssertFalse(store.scoutEnabledBoards.contains(.serpApi))
     }
 
     func testScoutEnabledBoardsRoundTripsAcrossStoreInstances() {

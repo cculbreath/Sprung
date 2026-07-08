@@ -82,6 +82,9 @@ struct DiscoverySettingsSection: View {
                         .toggleStyle(.checkbox)
                 }
             }
+            Text("JSearch, SerpApi, and Indeed are API-key aggregator boards — JSearch and Indeed share your RapidAPI key, SerpApi uses its own. Add them under Settings > API Keys; they're skipped until you do.")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
 
             Picker("Automatic runs", selection: scoutCadenceBinding) {
                 ForEach(DiscoverySettingsStore.ScoutCadence.allCases, id: \.self) { cadence in

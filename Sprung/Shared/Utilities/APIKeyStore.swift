@@ -11,6 +11,11 @@ enum APIKeyType: String {
     case openAI = "openAiApiKey"
     case gemini = "geminiApiKey"
     case anthropic = "anthropicApiKey"
+    /// The user's RapidAPI account key — shared by the Scout's RapidAPI-hosted
+    /// aggregator boards (JSearch and Indeed via jobs-api14).
+    case rapidApi = "rapidApiKey"
+    /// SerpApi (Google Jobs) — the user's SerpApi key for the Scout aggregator board.
+    case serpApi = "serpApiApiKey"
 }
 struct APIKeyStore {
     private static let service = Bundle.main.bundleIdentifier ?? "physicscloud.Sprung"

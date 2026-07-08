@@ -726,9 +726,177 @@ final class JobScoutServiceTests: XCTestCase {
 
     func testScoutBoardRawValuesAndDisplayNamesAreStable() {
         XCTAssertEqual(JobScoutService.ScoutBoard.allCases.map(\.rawValue),
-                       ["dice", "zipRecruiter", "linkedIn"])
+                       ["dice", "zipRecruiter", "linkedIn", "jsearch", "serpApi", "indeed"])
         XCTAssertEqual(JobScoutService.ScoutBoard.dice.displayName, "Dice")
         XCTAssertEqual(JobScoutService.ScoutBoard.zipRecruiter.displayName, "ZipRecruiter")
         XCTAssertEqual(JobScoutService.ScoutBoard.linkedIn.displayName, "LinkedIn")
+        XCTAssertEqual(JobScoutService.ScoutBoard.jsearch.displayName, "JSearch")
+        XCTAssertEqual(JobScoutService.ScoutBoard.serpApi.displayName, "SerpApi")
+        XCTAssertEqual(JobScoutService.ScoutBoard.indeed.displayName, "Indeed")
+    }
+
+    func testOnlyAggregatorBoardsRequireAnAPIKey() {
+        for board in [JobScoutService.ScoutBoard.jsearch, .serpApi, .indeed] {
+            XCTAssertTrue(board.requiresAPIKey, "\(board.rawValue) is a BYO-key aggregator")
+        }
+        for board in [JobScoutService.ScoutBoard.dice, .zipRecruiter, .linkedIn] {
+            XCTAssertFalse(board.requiresAPIKey, "\(board.rawValue) works without a user key")
+        }
+    }
+
+    // MARK: - Aggregator key gate
+
+    func testKeyGateDropsAggregatorsWithoutKeys() {
+        let (boards, notes) = JobScoutService.boardsAfterKeyGate(
+            [.dice, .jsearch, .serpApi, .indeed],
+            rapidApiKeyPresent: false,
+            serpApiKeyPresent: false
+        )
+        XCTAssertEqual(boards, [.dice])
+        XCTAssertEqual(notes.count, 3, "one note per dropped aggregator")
+        XCTAssertTrue(notes.contains { $0.contains("JSearch") })
+        XCTAssertTrue(notes.contains { $0.contains("SerpApi") })
+        XCTAssertTrue(notes.contains { $0.contains("Indeed") })
+    }
+
+    func testKeyGateSharesRapidApiKeyBetweenJSearchAndIndeed() {
+        // The shared RapidAPI key gates both; SerpApi has its own key present.
+        let (boards, notes) = JobScoutService.boardsAfterKeyGate(
+            [.jsearch, .indeed, .serpApi],
+            rapidApiKeyPresent: false,
+            serpApiKeyPresent: true
+        )
+        XCTAssertEqual(boards, [.serpApi], "no RapidAPI key drops both JSearch and Indeed")
+        XCTAssertEqual(notes.count, 2)
+    }
+
+    func testKeyGateKeepsAggregatorsWithKeys() {
+        let (boards, notes) = JobScoutService.boardsAfterKeyGate(
+            [.jsearch, .serpApi, .indeed],
+            rapidApiKeyPresent: true,
+            serpApiKeyPresent: true
+        )
+        XCTAssertEqual(boards, [.jsearch, .serpApi, .indeed])
+        XCTAssertTrue(notes.isEmpty)
+    }
+
+    func testKeyGateIgnoresAggregatorsNotRequested() {
+        let (boards, notes) = JobScoutService.boardsAfterKeyGate(
+            [.dice, .zipRecruiter],
+            rapidApiKeyPresent: false,
+            serpApiKeyPresent: false
+        )
+        XCTAssertEqual(boards, [.dice, .zipRecruiter], "no key needed for boards not in the run")
+        XCTAssertTrue(notes.isEmpty)
+    }
+
+    // MARK: - Aggregator DTO → ScoutSearchResult
+
+    func testJSearchResultMapsFieldsAndRemoteLocation() throws {
+        let json = """
+        {
+          "job_title": "Senior Medical Physicist",
+          "employer_name": "Acme Oncology",
+          "job_city": "Austin", "job_state": "TX", "job_country": "US",
+          "job_apply_link": "https://acme.com/careers/123?utm_source=google_jobs",
+          "job_description": "Commission and QA linear accelerators.",
+          "job_is_remote": true,
+          "job_min_salary": 150000, "job_max_salary": 190000, "job_salary_period": "YEAR",
+          "job_posted_at_datetime_utc": "2026-06-01T00:00:00.000Z"
+        }
+        """
+        let result = try JSONDecoder().decode(JSearchJobResult.self, from: Data(json.utf8))
+        let scout = try XCTUnwrap(JobScoutService.scoutResult(from: result))
+        XCTAssertEqual(scout.title, "Senior Medical Physicist")
+        XCTAssertEqual(scout.company, "Acme Oncology")
+        XCTAssertEqual(scout.location, "Austin, TX (Remote)")
+        XCTAssertEqual(scout.url, "https://acme.com/careers/123",
+                       "utm noise stripped for stable dedup identity")
+        XCTAssertEqual(scout.snippet, "Commission and QA linear accelerators.")
+        XCTAssertEqual(scout.salary, "$150,000 – $190,000/year")
+    }
+
+    func testJSearchResultWithoutEssentialsDropped() throws {
+        let json = #"{"job_title": "Physicist"}"#   // no apply link
+        let result = try JSONDecoder().decode(JSearchJobResult.self, from: Data(json.utf8))
+        XCTAssertNil(JobScoutService.scoutResult(from: result))
+    }
+
+    func testSerpApiResultUsesFirstApplyLinkAndDetectedExtensions() throws {
+        let json = """
+        {
+          "title": "Radiation Physicist",
+          "company_name": "Beta Health",
+          "location": "Dallas, TX",
+          "description": "Clinical QA role.",
+          "apply_options": [
+            {"title": "LinkedIn", "link": "https://www.linkedin.com/jobs/view/999/"},
+            {"title": "Indeed", "link": "https://indeed.com/viewjob?jk=abc"}
+          ],
+          "share_link": "https://www.google.com/search?q=share",
+          "detected_extensions": {"posted_at": "3 days ago", "work_from_home": false, "salary": "$160K–$200K a year"}
+        }
+        """
+        let result = try JSONDecoder().decode(SerpApiJobResult.self, from: Data(json.utf8))
+        let scout = try XCTUnwrap(JobScoutService.scoutResult(from: result))
+        XCTAssertEqual(scout.title, "Radiation Physicist")
+        XCTAssertEqual(scout.company, "Beta Health")
+        XCTAssertEqual(scout.location, "Dallas, TX")
+        XCTAssertEqual(scout.url, "https://www.linkedin.com/jobs/view/999/",
+                       "the first apply link wins over the share link")
+        XCTAssertEqual(scout.snippet, "Clinical QA role.")
+        XCTAssertEqual(scout.salary, "$160K–$200K a year")
+        XCTAssertEqual(scout.postedDate, "3 days ago")
+    }
+
+    func testSerpApiResultFallsBackToShareLinkAndDropsWhenNoURL() throws {
+        // No apply_options → share_link is the URL.
+        let withShare = try JSONDecoder().decode(SerpApiJobResult.self, from: Data("""
+        {"title": "Physicist", "company_name": "Gamma", "share_link": "https://share.example/x"}
+        """.utf8))
+        XCTAssertEqual(JobScoutService.scoutResult(from: withShare)?.url, "https://share.example/x")
+
+        // No links at all → dropped.
+        let noURL = try JSONDecoder().decode(SerpApiJobResult.self, from: Data(
+            #"{"title": "Physicist", "company_name": "Gamma"}"#.utf8))
+        XCTAssertNil(JobScoutService.scoutResult(from: noURL))
+    }
+
+    func testAggregatorSalaryFormatting() {
+        XCTAssertEqual(JobScoutService.aggregatorSalary(min: 150000, max: 190000, period: "YEAR"), "$150,000 – $190,000/year")
+        XCTAssertEqual(JobScoutService.aggregatorSalary(min: 120000, max: nil, period: nil), "From $120,000")
+        XCTAssertEqual(JobScoutService.aggregatorSalary(min: nil, max: 90000, period: "hour"), "Up to $90,000/hour")
+        XCTAssertNil(JobScoutService.aggregatorSalary(min: nil, max: nil, period: "YEAR"))
+    }
+
+    func testIndeedResultMapsNestedCompanyLocationAndDescription() throws {
+        let json = """
+        {
+          "title": "Java Software Engineer III",
+          "company": {"name": "Lockheed Martin", "image": "https://logo", "addresses": ["Bethesda, MD"]},
+          "location": {"country": "United States", "countryCode": "US", "location": "King of Prussia, PA"},
+          "applyUrl": "https://click.appcast.io/t/abc?utm_source=x",
+          "description": "Job ID: 691465BR. Design spacecraft software.",
+          "id": "56a1b7550fa78bba"
+        }
+        """
+        let result = try JSONDecoder().decode(IndeedJobResult.self, from: Data(json.utf8))
+        let scout = try XCTUnwrap(JobScoutService.scoutResult(from: result))
+        XCTAssertEqual(scout.title, "Java Software Engineer III")
+        XCTAssertEqual(scout.company, "Lockheed Martin", "company comes from the nested company.name")
+        XCTAssertEqual(scout.location, "King of Prussia, PA", "location from the nested location.location")
+        XCTAssertEqual(scout.url, "https://click.appcast.io/t/abc", "tracking params stripped")
+        XCTAssertEqual(scout.snippet, "Job ID: 691465BR. Design spacecraft software.")
+        XCTAssertNil(scout.salary, "Indeed search carries no reliable salary")
+        XCTAssertNil(scout.postedDate, "the API's date timestamps are unusable — omitted")
+    }
+
+    func testIndeedResultWithoutURLOrTitleDropped() throws {
+        let noURL = try JSONDecoder().decode(IndeedJobResult.self, from: Data(
+            #"{"title": "Engineer", "company": {"name": "Acme"}}"#.utf8))
+        XCTAssertNil(JobScoutService.scoutResult(from: noURL))
+        let noTitle = try JSONDecoder().decode(IndeedJobResult.self, from: Data(
+            #"{"applyUrl": "https://a/1", "company": {"name": "Acme"}}"#.utf8))
+        XCTAssertNil(JobScoutService.scoutResult(from: noTitle))
     }
 }

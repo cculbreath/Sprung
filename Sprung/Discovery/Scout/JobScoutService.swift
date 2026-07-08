@@ -34,6 +34,9 @@ final class JobScoutService {
         case dice
         case zipRecruiter
         case linkedIn
+        case jsearch
+        case serpApi
+        case indeed
 
         var id: String { rawValue }
 
@@ -42,6 +45,19 @@ final class JobScoutService {
             case .dice: return "Dice"
             case .zipRecruiter: return "ZipRecruiter"
             case .linkedIn: return "LinkedIn"
+            case .jsearch: return "JSearch"
+            case .serpApi: return "SerpApi"
+            case .indeed: return "Indeed"
+            }
+        }
+
+        /// Aggregator boards need a user-provided API key (BYO). Off by default,
+        /// and dropped from a run with a note when the key is missing — never a
+        /// silent no-result. JSearch and Indeed share the RapidAPI key.
+        var requiresAPIKey: Bool {
+            switch self {
+            case .jsearch, .serpApi, .indeed: return true
+            case .dice, .zipRecruiter, .linkedIn: return false
             }
         }
     }
@@ -239,18 +255,29 @@ final class JobScoutService {
     ) async throws -> ScoutRunReport {
         // Consent gate: LinkedIn participates only behind the accepted
         // one-time risk consent. Never bypassed, never prompted from here.
-        let (boards, consentNote) = Self.boardsAfterConsentGate(
+        let (consentBoards, consentNote) = Self.boardsAfterConsentGate(
             config.boards,
             linkedInConsentAccepted: linkedInServerService?.consentAccepted ?? false
+        )
+        // Aggregator boards (JSearch/SerpApi) need a BYO API key; drop keyless
+        // ones with a note rather than failing a search turn on them.
+        let (boards, keyNotes) = Self.boardsAfterKeyGate(
+            consentBoards,
+            rapidApiKeyPresent: APIKeyStore.get(.rapidApi) != nil,
+            serpApiKeyPresent: APIKeyStore.get(.serpApi) != nil
         )
         let runState = JobScoutRunState(dismissed: settingsStore.scoutDismissedPostings)
         if let consentNote {
             Logger.info("Job scout: \(consentNote)", category: .ai)
             runState.addNote(consentNote)
         }
+        for note in keyNotes {
+            Logger.info("Job scout: \(note)", category: .ai)
+            runState.addNote(note)
+        }
         guard !boards.isEmpty else {
             throw JobScoutError.noBoardsAvailable(
-                consentNote ?? "no boards were enabled for this run"
+                consentNote ?? keyNotes.first ?? "no boards were enabled for this run"
             )
         }
 
@@ -356,6 +383,31 @@ final class JobScoutService {
                 rawResults = payload.jobs.compactMap(Self.scoutResult(from:))
             case .linkedIn:
                 rawResults = try await searchLinkedIn(args: args)
+            case .jsearch:
+                let jobs = try await AggregatorJobSearchService.searchJSearch(
+                    keywords: args.keywords,
+                    location: args.location,
+                    datePosted: args.datePosted,
+                    country: Self.aggregatorCountry,
+                    apiKey: APIKeyStore.get(.rapidApi) ?? ""
+                )
+                rawResults = jobs.compactMap(Self.scoutResult(from:))
+            case .serpApi:
+                let jobs = try await AggregatorJobSearchService.searchSerpApi(
+                    keywords: args.keywords,
+                    location: args.location,
+                    apiKey: APIKeyStore.get(.serpApi) ?? ""
+                )
+                rawResults = jobs.compactMap(Self.scoutResult(from:))
+            case .indeed:
+                let jobs = try await AggregatorJobSearchService.searchIndeed(
+                    keywords: args.keywords,
+                    location: args.location,
+                    countryCode: Self.aggregatorCountry,
+                    datePosted: args.datePosted,
+                    apiKey: APIKeyStore.get(.rapidApi) ?? ""
+                )
+                rawResults = jobs.compactMap(Self.scoutResult(from:))
             }
         } catch {
             let explanation = Self.boardFailureExplanation(board: board, error: error)
@@ -722,6 +774,34 @@ final class JobScoutService {
         )
     }
 
+    /// Drop the aggregator boards whose BYO API key isn't configured, with a
+    /// note pointing at Settings. Returns the surviving boards and one note per
+    /// dropped board — never a silent no-result.
+    static func boardsAfterKeyGate(
+        _ boards: Set<ScoutBoard>,
+        rapidApiKeyPresent: Bool,
+        serpApiKeyPresent: Bool
+    ) -> (boards: Set<ScoutBoard>, notes: [String]) {
+        var remaining = boards
+        var notes: [String] = []
+        // JSearch and Indeed both authenticate with the shared RapidAPI key.
+        if !rapidApiKeyPresent {
+            if boards.contains(.jsearch) {
+                remaining.remove(.jsearch)
+                notes.append("JSearch was skipped: add your RapidAPI key under Settings > API Keys.")
+            }
+            if boards.contains(.indeed) {
+                remaining.remove(.indeed)
+                notes.append("Indeed was skipped: add your RapidAPI key under Settings > API Keys.")
+            }
+        }
+        if boards.contains(.serpApi), !serpApiKeyPresent {
+            remaining.remove(.serpApi)
+            notes.append("SerpApi was skipped: add your SerpApi API key under Settings > API Keys.")
+        }
+        return (remaining, notes)
+    }
+
     /// Map `search_board` args onto Dice's search query.
     static func diceQuery(keywords: String, location: String?) -> DiceSearchQuery {
         DiceSearchQuery(keyword: keywords, location: location ?? "")
@@ -811,6 +891,91 @@ final class JobScoutService {
             salary: nil,
             postedDate: nil
         )
+    }
+
+    /// ISO country code the aggregator boards search. Matches the US-oriented
+    /// Dice/ZipRecruiter/LinkedIn setup; a single place to change if the user
+    /// searches another market.
+    static let aggregatorCountry = "us"
+
+    static func scoutResult(from result: JSearchJobResult) -> ScoutSearchResult? {
+        guard let title = result.jobTitle, !title.isEmpty,
+              let rawURL = result.jobApplyLink, !rawURL.isEmpty else {
+            return nil
+        }
+        let cityState = [result.jobCity, result.jobState]
+            .compactMap { ($0?.isEmpty == false) ? $0 : nil }
+            .joined(separator: ", ")
+        var location = cityState.isEmpty ? (result.jobCountry ?? "") : cityState
+        if result.jobIsRemote == true {
+            location = location.isEmpty ? "Remote" : "\(location) (Remote)"
+        }
+        let description = (result.jobDescription ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let posted = result.jobPostedAtDatetimeUtc.map(JobMCPImportService.displayPostedDate) ?? result.jobPostedAt
+        return ScoutSearchResult(
+            title: title,
+            company: result.employerName,
+            location: location.isEmpty ? nil : location,
+            url: JobMCPImportService.normalizedPostingURL(rawURL),
+            snippet: description.isEmpty ? nil : String(description.prefix(maxSnippetLength)),
+            salary: Self.aggregatorSalary(min: result.jobMinSalary, max: result.jobMaxSalary, period: result.jobSalaryPeriod),
+            postedDate: posted
+        )
+    }
+
+    static func scoutResult(from result: SerpApiJobResult) -> ScoutSearchResult? {
+        guard let title = result.title, !title.isEmpty else { return nil }
+        // Prefer a real apply link; fall back to the Google Jobs share link.
+        let applyLink = result.applyOptions?.compactMap { $0.link }.first { !$0.isEmpty }
+        guard let rawURL = applyLink ?? result.shareLink, !rawURL.isEmpty else { return nil }
+        var location = result.location ?? ""
+        if result.detectedExtensions?.workFromHome == true {
+            location = location.isEmpty ? "Remote" : "\(location) (Remote)"
+        }
+        let description = (result.description ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        return ScoutSearchResult(
+            title: title,
+            company: result.companyName,
+            location: location.isEmpty ? nil : location,
+            url: JobMCPImportService.normalizedPostingURL(rawURL),
+            snippet: description.isEmpty ? nil : String(description.prefix(maxSnippetLength)),
+            salary: result.detectedExtensions?.salary,
+            postedDate: result.detectedExtensions?.postedAt
+        )
+    }
+
+    static func scoutResult(from result: IndeedJobResult) -> ScoutSearchResult? {
+        guard let title = result.title, !title.isEmpty,
+              let rawURL = result.applyUrl, !rawURL.isEmpty else {
+            return nil
+        }
+        let description = (result.description ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        return ScoutSearchResult(
+            title: title,
+            company: result.company?.name,
+            location: result.location?.location,
+            url: JobMCPImportService.normalizedPostingURL(rawURL),
+            snippet: description.isEmpty ? nil : String(description.prefix(maxSnippetLength)),
+            salary: nil,
+            postedDate: nil
+        )
+    }
+
+    /// Format an aggregator's numeric salary range for display (nil when the
+    /// posting gives no figures).
+    static func aggregatorSalary(min: Double?, max: Double?, period: String?) -> String? {
+        let money: (Double) -> String = { "$" + Int($0).formatted(.number) }
+        let range: String
+        switch (min, max) {
+        case let (low?, high?): range = "\(money(low)) – \(money(high))"
+        case let (low?, nil): range = "From \(money(low))"
+        case let (nil, high?): range = "Up to \(money(high))"
+        default: return nil
+        }
+        if let period, !period.isEmpty {
+            return "\(range)/\(period.lowercased())"
+        }
+        return range
     }
 
     /// How an existing pipeline job matched a search result.

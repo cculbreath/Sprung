@@ -62,7 +62,7 @@ final class JobScoutToolSchemasTests: XCTestCase {
         XCTAssertEqual(Set(properties.keys), ["board", "keywords", "location", "datePosted"])
 
         XCTAssertEqual(properties["board"]?["enum"] as? [String],
-                       ["dice", "zipRecruiter", "linkedIn"],
+                       ["dice", "zipRecruiter", "linkedIn", "jsearch", "serpApi", "indeed"],
                        "the board enum is exactly ScoutBoard's raw values")
         XCTAssertEqual(properties["keywords"]?["type"] as? String, "string")
         XCTAssertEqual(properties["location"]?["type"] as? [String], ["string", "null"])

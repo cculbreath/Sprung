@@ -11,6 +11,8 @@ struct APIKeysSettingsView: View {
     @State private var openRouterApiKey: String = APIKeyStore.get(.openRouter) ?? ""
     @State private var openAiTTSApiKey: String = APIKeyStore.get(.openAI) ?? ""
     @State private var anthropicApiKey: String = APIKeyStore.get(.anthropic) ?? ""
+    @State private var rapidApiKey: String = APIKeyStore.get(.rapidApi) ?? ""
+    @State private var serpApiApiKey: String = APIKeyStore.get(.serpApi) ?? ""
     @State private var showModelSelectionSheet = false
     @State private var keychainSaveError: String?
     var body: some View {
@@ -44,6 +46,24 @@ struct APIKeysSettingsView: View {
                 help: "Used for the onboarding interview and all document analysis (summaries, narrative cards, skill bank, enrichment).",
                 testEndpoint: .anthropic,
                 onSave: handleAnthropicSave
+            )
+            APIKeyEditor(
+                title: "RapidAPI (JSearch + Indeed)",
+                systemImage: "binoculars",
+                value: $rapidApiKey,
+                placeholder: "RapidAPI key",
+                help: "Optional. Your RapidAPI account key — powers the JSearch (Google-for-Jobs) and Indeed Scout boards.",
+                testEndpoint: .rapidApi,
+                onSave: handleRapidApiSave
+            )
+            APIKeyEditor(
+                title: "SerpApi (Google Jobs)",
+                systemImage: "binoculars",
+                value: $serpApiApiKey,
+                placeholder: "SerpApi key",
+                help: "Optional. Your SerpApi key for the SerpApi Scout board — Google-for-Jobs coverage via the google_jobs engine.",
+                testEndpoint: .serpApi,
+                onSave: handleSerpApiSave
             )
             Divider()
             HStack(spacing: 12) {
@@ -135,10 +155,40 @@ struct APIKeysSettingsView: View {
         }
         NotificationCenter.default.post(name: .apiKeysChanged, object: nil)
     }
+    private func handleRapidApiSave(_ newValue: String) {
+        let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty {
+            APIKeyStore.delete(.rapidApi)
+            rapidApiKey = ""
+        } else if APIKeyStore.set(.rapidApi, value: trimmed) {
+            rapidApiKey = trimmed
+        } else {
+            keychainSaveError = "Could not save the key to Keychain. Please try again."
+            refreshKeys()
+            return
+        }
+        NotificationCenter.default.post(name: .apiKeysChanged, object: nil)
+    }
+    private func handleSerpApiSave(_ newValue: String) {
+        let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty {
+            APIKeyStore.delete(.serpApi)
+            serpApiApiKey = ""
+        } else if APIKeyStore.set(.serpApi, value: trimmed) {
+            serpApiApiKey = trimmed
+        } else {
+            keychainSaveError = "Could not save the key to Keychain. Please try again."
+            refreshKeys()
+            return
+        }
+        NotificationCenter.default.post(name: .apiKeysChanged, object: nil)
+    }
     private func refreshKeys() {
         openRouterApiKey = APIKeyStore.get(.openRouter) ?? ""
         openAiTTSApiKey = APIKeyStore.get(.openAI) ?? ""
         anthropicApiKey = APIKeyStore.get(.anthropic) ?? ""
+        rapidApiKey = APIKeyStore.get(.rapidApi) ?? ""
+        serpApiApiKey = APIKeyStore.get(.serpApi) ?? ""
     }
 }
 
@@ -147,6 +197,8 @@ enum APITestEndpoint {
     case openRouter
     case openAI
     case anthropic
+    case rapidApi
+    case serpApi
 
     var testURL: URL {
         switch self {
@@ -156,11 +208,24 @@ enum APITestEndpoint {
             return URL(string: "https://api.openai.com/v1/models")!
         case .anthropic:
             return URL(string: "https://api.anthropic.com/v1/models")!
+        case .rapidApi:
+            return URL(string: "https://jsearch.p.rapidapi.com/search-v2?query=test&page=1&num_pages=1&country=us")!
+        case .serpApi:
+            // The account endpoint validates the key without spending a search.
+            return URL(string: "https://serpapi.com/account")!
         }
     }
 
     func buildRequest(apiKey: String) -> URLRequest {
-        var request = URLRequest(url: testURL)
+        var url = testURL
+        if case .serpApi = self {
+            // SerpApi authenticates via the api_key query parameter.
+            if var components = URLComponents(url: testURL, resolvingAgainstBaseURL: false) {
+                components.queryItems = [URLQueryItem(name: "api_key", value: apiKey)]
+                url = components.url ?? testURL
+            }
+        }
+        var request = URLRequest(url: url)
         request.httpMethod = "GET"
         request.timeoutInterval = 15
         switch self {
@@ -172,6 +237,11 @@ enum APITestEndpoint {
             // Anthropic uses x-api-key header
             request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
             request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
+        case .rapidApi:
+            request.setValue(apiKey, forHTTPHeaderField: "X-RapidAPI-Key")
+            request.setValue("jsearch.p.rapidapi.com", forHTTPHeaderField: "X-RapidAPI-Host")
+        case .serpApi:
+            break   // key rides in the query string
         }
         return request
     }

@@ -52,9 +52,12 @@ enum JobScoutToolSchemas {
                     user's pipeline, and repeats already returned this run, are removed before \
                     you see them (droppedDuplicates reports how many). Dice and ZipRecruiter \
                     results carry company/location details (Dice includes a short description \
-                    snippet); LinkedIn results carry only titles and canonical posting URLs. To \
-                    read a Dice or ZipRecruiter posting's full text before recommending it, fetch \
-                    its url with web_fetch.
+                    snippet); LinkedIn results carry only titles and canonical posting URLs; \
+                    jsearch and serpApi are Google-for-Jobs aggregators (Indeed, LinkedIn, \
+                    Glassdoor and more), and indeed searches Indeed directly — all three carry \
+                    company, location, and a description snippet. To read a posting's full text \
+                    before recommending it, fetch its url with web_fetch (LinkedIn postings use \
+                    get_job_details instead).
                     """,
                 inputSchema: searchBoardSchema,
                 strict: true
