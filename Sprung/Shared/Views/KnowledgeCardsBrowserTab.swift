@@ -227,18 +227,14 @@ struct KnowledgeCardsBrowserTab: View {
 
             Button(action: { showIngestionSheet = true }) {
                 Label("Ingest", systemImage: "tray.and.arrow.down")
-                    .font(.caption)
-                    .foregroundStyle(.orange)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(KCToolbarButtonStyle(tint: .orange))
             .help("Ingest documents or git repos to create knowledge cards")
 
             Button(action: { showAddSheet = true }) {
                 Label("New", systemImage: "plus.circle.fill")
-                    .font(.caption)
-                    .foregroundStyle(.purple)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(KCToolbarButtonStyle(tint: .purple))
             .help("Manually create a new knowledge card")
         }
         .padding(.horizontal, 20)
@@ -263,12 +259,10 @@ struct KnowledgeCardsBrowserTab: View {
                         .font(.caption2.weight(.semibold))
                         .padding(.horizontal, 5)
                         .padding(.vertical, 1)
-                        .background(Capsule().fill(Color.orange.opacity(0.2)))
+                        .background(Capsule().fill(Color.orange.opacity(0.25)))
                 }
-                .font(.caption)
-                .foregroundStyle(.orange)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(KCToolbarButtonStyle(tint: .orange))
             .disabled(isProcessing)
             .help("Approve \(pendingCount) card\(pendingCount == 1 ? "" : "s") left pending by onboarding")
         }
@@ -282,13 +276,11 @@ struct KnowledgeCardsBrowserTab: View {
                         .font(.caption2.weight(.semibold))
                         .padding(.horizontal, 5)
                         .padding(.vertical, 1)
-                        .background(Capsule().fill(Color.blue.opacity(0.2)))
+                        .background(Capsule().fill(Color.blue.opacity(0.25)))
                 }
             }
-            .font(.caption)
-            .foregroundStyle(.blue)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(KCToolbarButtonStyle(tint: .blue))
         .disabled(enrichCount == 0 || isProcessing)
         .help("Extract structured facts for \(enrichCount) card\(enrichCount == 1 ? "" : "s")")
 
@@ -297,10 +289,8 @@ struct KnowledgeCardsBrowserTab: View {
                 Image(systemName: "arrow.triangle.merge")
                 Text("Merge")
             }
-            .font(.caption)
-            .foregroundStyle(.green)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(KCToolbarButtonStyle(tint: .green))
         .disabled(cards.count < 2 || isProcessing)
         .help("Merge similar cards using AI-powered deduplication")
     }
@@ -441,4 +431,38 @@ private struct RefinementReviewContext: Identifiable {
     let card: KnowledgeCard
     let modelId: String
     let diffs: [KCFieldDiff]
+}
+
+/// Tinted, bordered capsule button for the Knowledge-Card browser toolbar
+/// actions (Enrich / Merge / Ingest / New / Approve). Gives them a clear
+/// button affordance and legible size instead of bare colored caption text.
+private struct KCToolbarButtonStyle: ButtonStyle {
+    let tint: Color
+
+    func makeBody(configuration: Configuration) -> some View {
+        KCToolbarButtonBody(tint: tint, configuration: configuration)
+    }
+}
+
+private struct KCToolbarButtonBody: View {
+    let tint: Color
+    let configuration: ButtonStyleConfiguration
+    @Environment(\.isEnabled) private var isEnabled
+    @State private var isHovering = false
+
+    var body: some View {
+        configuration.label
+            .font(.system(size: 12, weight: .medium))
+            .foregroundStyle(tint)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(
+                Capsule().fill(tint.opacity(configuration.isPressed ? 0.24 : (isHovering ? 0.18 : 0.12)))
+            )
+            .overlay(Capsule().strokeBorder(tint.opacity(0.4), lineWidth: 1))
+            .contentShape(Capsule())
+            .opacity(isEnabled ? 1 : 0.4)
+            .onHover { isHovering = $0 }
+            .animation(.easeInOut(duration: 0.12), value: isHovering)
+    }
 }
