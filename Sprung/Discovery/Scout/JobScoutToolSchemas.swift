@@ -28,10 +28,22 @@ enum JobScoutToolSchemas {
     /// service maps them onto LinkedIn's snake_case wire facet).
     static let datePostedValues = ["pastHour", "past24Hours", "pastWeek", "pastMonth"]
 
+    // MARK: - web_fetch Budget (drill into the promising few)
+
+    /// Server-side web_fetch invocations per run: enough to read the handful of
+    /// genuinely promising Dice/ZipRecruiter postings, never every result.
+    /// (LinkedIn postings go through get_job_details / the local MCP instead.)
+    static let webFetchMaxUses = 8
+    /// Token cap per fetched posting — enough to judge the requirements and
+    /// responsibilities without one page dominating the conversation across
+    /// several fetches. Judgment needs the gist, not a verbatim extraction.
+    static let webFetchMaxContentTokens = 4000
+
     // MARK: - Complete Tool Definitions
 
     static var allTools: [AnthropicTool] {
         [
+            .serverTool(.webFetch(maxUses: webFetchMaxUses, maxContentTokens: webFetchMaxContentTokens)),
             .function(AnthropicFunctionTool(
                 name: searchBoardToolName,
                 description: """
@@ -39,8 +51,10 @@ enum JobScoutToolSchemas {
                     may be searched. Results come back deduplicated: postings already in the \
                     user's pipeline, and repeats already returned this run, are removed before \
                     you see them (droppedDuplicates reports how many). Dice and ZipRecruiter \
-                    results carry company/location details (Dice includes a description \
-                    snippet); LinkedIn results carry only titles and canonical posting URLs.
+                    results carry company/location details (Dice includes a short description \
+                    snippet); LinkedIn results carry only titles and canonical posting URLs. To \
+                    read a Dice or ZipRecruiter posting's full text before recommending it, fetch \
+                    its url with web_fetch.
                     """,
                 inputSchema: searchBoardSchema,
                 strict: true
@@ -49,10 +63,11 @@ enum JobScoutToolSchemas {
                 name: getJobDetailsToolName,
                 description: """
                     Fetch the full posting text behind a LinkedIn job URL. LinkedIn URLs ONLY — \
-                    Dice search results already include a description snippet and ZipRecruiter \
-                    URLs cannot be fetched deterministically, so this tool rejects both. Calls \
-                    share a limited hourly LinkedIn budget with the rest of the app: drill into \
-                    the handful of genuinely promising titles, never every result.
+                    LinkedIn needs the signed-in session the app holds, so its postings can't be \
+                    read with web_fetch. For Dice and ZipRecruiter postings, use web_fetch on the \
+                    posting url instead. Calls here share a limited hourly LinkedIn budget with \
+                    the rest of the app: drill into the handful of genuinely promising titles, \
+                    never every result.
                     """,
                 inputSchema: getJobDetailsSchema,
                 strict: true

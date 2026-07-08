@@ -31,6 +31,7 @@ enum JobScoutError: Error, LocalizedError {
     case notConfigured(String)
     case noBoardsAvailable(String)
     case llmError(String)
+    case serverToolRejected
 
     var errorDescription: String? {
         switch self {
@@ -44,6 +45,9 @@ enum JobScoutError: Error, LocalizedError {
             return "No boards were available to scout: \(detail)"
         case .llmError(let reason):
             return "LLM error: \(reason)"
+        case .serverToolRejected:
+            return "The configured Discovery model rejected Anthropic's web_fetch tool. "
+                + "Select a current-generation Anthropic model for Discovery under Settings > Models, then retry."
         }
     }
 }
@@ -129,13 +133,20 @@ final class JobScoutLoop: AnthropicToolLoopDelegate {
     /// Terse progress lines for the background-activity pill.
     private let onProgress: (@MainActor (String) async -> Void)?
 
-    /// Set after repeated no-tool turns so the next turn forces `recommend_jobs`.
+    /// Set after repeated idle turns so the next turn forces `recommend_jobs`.
     private var forceCompletionNextTurn = false
+    /// Consecutive turns with neither client tool calls nor server-tool
+    /// (web_fetch) activity — a productive fetch turn must not count toward the
+    /// force-completion threshold, so this resets whenever a turn did real work.
+    private var idleNoToolTurns = 0
 
     let maxTurns = 16
     /// Explicit output cap — a truncated recommend_jobs payload fails to
     /// decode and silently loses recommendations, so leave generous headroom.
     private let maxResponseTokens = 8192
+    /// Bound on pause_turn continuations within a single runner turn (web_fetch
+    /// pauses server-side while it works).
+    private let maxPauseContinuations = 6
 
     init(
         llmFacade: LLMFacade,
@@ -173,28 +184,17 @@ final class JobScoutLoop: AnthropicToolLoopDelegate {
             : .auto
         forceCompletionNextTurn = false
 
-        // Prompt-cache breakpoints: one on the system block (caches tools +
-        // system) plus SiteJobSearchLoop's moving tail breakpoint on a
-        // per-request copy — turn N+1 reads the conversation prefix turn N
-        // wrote instead of re-paying the search-result-heavy history.
-        let parameters = AnthropicMessageParameter(
-            model: modelId,
-            messages: SiteJobSearchLoop.applyingMovingCacheBreakpoint(to: messages),
-            system: .blocks([AnthropicSystemBlock(text: systemPrompt, cacheControl: .ephemeral)]),
-            maxTokens: maxResponseTokens,
-            stream: false,
-            tools: JobScoutToolSchemas.allTools,
+        let (response, pausedSegments, hadServerActivity) = try await runPausableRequest(
+            conversation: messages,
             toolChoice: toolChoice
         )
-        let response = try await llmFacade.anthropicMessages(parameters: parameters)
-        let usage = response.usage
-        Logger.debug(
-            "🔭 JobScout usage (\(modelId)): input=\(usage.inputTokens) "
-            + "cache_read=\(usage.cacheReadInputTokens ?? 0) cache_create=\(usage.cacheCreationInputTokens ?? 0) "
-            + "output=\(usage.outputTokens)",
-            category: .ai
-        )
-        return AnthropicTurnResult(response: response)
+        let result = AnthropicTurnResult(response: response, pausedSegments: pausedSegments)
+        // A web_fetch turn produces no client tool call — count it as productive
+        // so the force-completion threshold only trips on genuinely idle turns.
+        if hadServerActivity || !result.toolCalls.isEmpty {
+            idleNoToolTurns = 0
+        }
+        return result
     }
 
     func executeTools(_ toolCalls: [AnthropicToolUseResponseBlock]) async -> [String: AnthropicToolOutput] {
@@ -252,7 +252,8 @@ final class JobScoutLoop: AnthropicToolLoopDelegate {
     }
 
     func handleNoTool(turnCount: Int, consecutiveNoToolTurns: Int) -> AnthropicNoToolDecision {
-        if consecutiveNoToolTurns >= 2 {
+        idleNoToolTurns += 1
+        if idleNoToolTurns >= 2 {
             forceCompletionNextTurn = true
             return .nudge(
                 "Call \(completionToolName) now with the best recommendations you have so far "
@@ -260,8 +261,9 @@ final class JobScoutLoop: AnthropicToolLoopDelegate {
             )
         }
         return .nudge(
-            "Continue: search another enabled board or drill into a promising result — or, if your "
-            + "judgment is complete, call \(completionToolName) with your final recommendations."
+            "Continue: search another enabled board, read a promising posting with web_fetch "
+            + "(or get_job_details for LinkedIn) — or, if your judgment is complete, call "
+            + "\(completionToolName) with your final recommendations."
         )
     }
 
@@ -274,16 +276,10 @@ final class JobScoutLoop: AnthropicToolLoopDelegate {
             "You are out of research turns. Call \(completionToolName) NOW with the best recommendations "
             + "you have so far — an empty list with emptyReason if none. Do not call any other tool."
         ))
-        let parameters = AnthropicMessageParameter(
-            model: modelId,
-            messages: SiteJobSearchLoop.applyingMovingCacheBreakpoint(to: conversation),
-            system: .blocks([AnthropicSystemBlock(text: systemPrompt, cacheControl: .ephemeral)]),
-            maxTokens: maxResponseTokens,
-            stream: false,
-            tools: JobScoutToolSchemas.allTools,
+        let (response, _, _) = try await runPausableRequest(
+            conversation: conversation,
             toolChoice: .tool(name: completionToolName)
         )
-        let response = try await llmFacade.anthropicMessages(parameters: parameters)
         let completionCall = response.content.compactMap { block -> AnthropicToolUseResponseBlock? in
             if case .toolUse(let call) = block, call.name == completionToolName { return call }
             return nil
@@ -300,6 +296,112 @@ final class JobScoutLoop: AnthropicToolLoopDelegate {
             Logger.error("Job scout: forced completion payload invalid: \(error.localizedDescription)", category: .ai)
             return nil
         }
+    }
+
+    // MARK: - Request Execution (pause_turn handling)
+
+    /// Send the conversation, transparently continuing while the server-side
+    /// web_fetch loop pauses (`stop_reason == "pause_turn"`). Mirrors
+    /// JobImportLoop.runPausableRequest — the moving cache breakpoint keeps the
+    /// fetched-posting-heavy history off the paid prefix on later turns.
+    private func runPausableRequest(
+        conversation: [AnthropicMessage],
+        toolChoice: AnthropicToolChoice
+    ) async throws -> (
+        response: AnthropicMessageResponse,
+        pausedSegments: [[AnthropicResponseContentBlock]],
+        hadServerActivity: Bool
+    ) {
+        var conversation = conversation
+        var pausedSegments: [[AnthropicResponseContentBlock]] = []
+        var hadServerActivity = false
+        var pauseContinuations = 0
+
+        while true {
+            let parameters = AnthropicMessageParameter(
+                model: modelId,
+                messages: SiteJobSearchLoop.applyingMovingCacheBreakpoint(to: conversation),
+                system: .blocks([AnthropicSystemBlock(text: systemPrompt, cacheControl: .ephemeral)]),
+                maxTokens: maxResponseTokens,
+                stream: false,
+                tools: JobScoutToolSchemas.allTools,
+                toolChoice: toolChoice
+            )
+
+            let response: AnthropicMessageResponse
+            do {
+                response = try await llmFacade.anthropicMessages(parameters: parameters)
+            } catch {
+                throw Self.mapServerToolRejection(error)
+            }
+
+            let usage = response.usage
+            Logger.debug(
+                "🔭 JobScout usage (\(modelId)): input=\(usage.inputTokens) "
+                + "cache_read=\(usage.cacheReadInputTokens ?? 0) cache_create=\(usage.cacheCreationInputTokens ?? 0) "
+                + "output=\(usage.outputTokens)",
+                category: .ai
+            )
+
+            let sawServerBlocks = await reportServerToolActivity(response.content)
+            hadServerActivity = hadServerActivity || sawServerBlocks
+
+            if response.stopReason == "pause_turn", pauseContinuations < maxPauseContinuations {
+                pauseContinuations += 1
+                pausedSegments.append(response.content)
+                conversation.append(AnthropicTurnResult.assistantEcho(of: response.content))
+                continue
+            }
+            if response.stopReason == "pause_turn" {
+                Logger.warning("Job scout: pause_turn continuation cap reached; treating turn as final", category: .ai)
+            }
+            return (response, pausedSegments, hadServerActivity)
+        }
+    }
+
+    /// Emit a terse progress line for each web_fetch and surface fetch errors.
+    /// Returns whether any server-tool block was present this response.
+    private func reportServerToolActivity(_ content: [AnthropicResponseContentBlock]) async -> Bool {
+        var sawServerBlock = false
+        for block in content {
+            switch block {
+            case .serverToolUse(let use):
+                sawServerBlock = true
+                if use.name == "web_fetch", let url = use.input["url"]?.value as? String {
+                    await onProgress?("Reading posting: \(url)")
+                }
+            case .webFetchToolResult(let result):
+                sawServerBlock = true
+                if case .error(let error) = result.content {
+                    await onProgress?("Posting fetch failed: \(error.errorCode)")
+                    Logger.warning("Job scout web_fetch error: \(error.errorCode)", category: .ai)
+                }
+            case .webSearchToolResult(let result):
+                // web_search isn't declared for the scout, but keep the switch
+                // exhaustive and loud if a stray result ever appears.
+                sawServerBlock = true
+                if case .error(let error) = result.content {
+                    Logger.warning("Job scout web_search error: \(error.errorCode)", category: .ai)
+                }
+            case .text, .toolUse:
+                break
+            }
+        }
+        return sawServerBlock
+    }
+
+    /// The web_fetch tool variant requires a current-generation model. When the
+    /// API 400s on the tool declaration, name the fix (the Discovery model
+    /// setting) instead of surfacing a raw wire error.
+    static func mapServerToolRejection(_ error: Error) -> Error {
+        guard let apiError = error as? APIError,
+              case .responseUnsuccessful(_, let statusCode, let responseBody) = apiError,
+              statusCode == 400,
+              let body = responseBody?.lowercased(),
+              body.contains("web_fetch") || body.contains("web_search") else {
+            return error
+        }
+        return JobScoutError.serverToolRejected
     }
 
     // MARK: - Pure Helpers (static — covered by JobScoutLoopTests)

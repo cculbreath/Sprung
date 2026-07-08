@@ -398,9 +398,8 @@ final class JobScoutService {
     ) async -> AnthropicToolOutput {
         guard let jobId = LinkedInJobDetailsService.jobId(fromURL: url) else {
             return AnthropicToolOutput(
-                content: "get_job_details supports LinkedIn posting URLs only — Dice results already "
-                    + "carry a description snippet and ZipRecruiter URLs cannot be fetched. Judge those "
-                    + "boards' results on what search_board returned.",
+                content: "get_job_details is for LinkedIn posting URLs only. Read Dice and ZipRecruiter "
+                    + "postings with web_fetch on the posting url instead.",
                 isError: true
             )
         }

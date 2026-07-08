@@ -158,4 +158,36 @@ final class JobScoutLoopTests: XCTestCase {
                           "an out-of-enum rating fails to decode, naming the tool")
         }
     }
+
+    // MARK: - 4. Server-tool rejection mapping (web_fetch)
+
+    func testMapServerToolRejectionMapsWebFetch400() {
+        let apiError = APIError.responseUnsuccessful(
+            description: "bad request",
+            statusCode: 400,
+            responseBody: "The model does not support the web_fetch tool."
+        )
+        let mapped = JobScoutLoop.mapServerToolRejection(apiError)
+        guard case JobScoutError.serverToolRejected = mapped else {
+            return XCTFail("a 400 naming web_fetch maps to the actionable serverToolRejected error")
+        }
+    }
+
+    func testMapServerToolRejectionPassesThroughUnrelated400() {
+        let apiError = APIError.responseUnsuccessful(
+            description: "bad request",
+            statusCode: 400,
+            responseBody: "messages: at least one message is required"
+        )
+        let mapped = JobScoutLoop.mapServerToolRejection(apiError)
+        if case JobScoutError.serverToolRejected = mapped {
+            XCTFail("an unrelated 400 must keep its own error, not be relabeled a tool rejection")
+        }
+    }
+
+    func testMapServerToolRejectionPassesThroughNonAPIError() {
+        struct Boom: Error {}
+        let mapped = JobScoutLoop.mapServerToolRejection(Boom())
+        XCTAssertTrue(mapped is Boom, "a non-API error passes through unchanged")
+    }
 }

@@ -116,7 +116,7 @@ final class JobScoutToolSchemasTests: XCTestCase {
 
     // MARK: - Tool declarations
 
-    func testAllToolsDeclaresThreeStrictFunctionTools() throws {
+    func testAllToolsDeclaresThreeStrictFunctionToolsPlusWebFetch() throws {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
         let json = String(decoding: try encoder.encode(JobScoutToolSchemas.allTools), as: UTF8.self)
@@ -125,8 +125,10 @@ final class JobScoutToolSchemasTests: XCTestCase {
         XCTAssertTrue(json.contains(#""name":"get_job_details""#))
         XCTAssertTrue(json.contains(#""name":"recommend_jobs""#))
         XCTAssertEqual(json.components(separatedBy: #""strict":true"#).count - 1, 3,
-                       "every scout tool is strict — the schemas guarantee decodable inputs")
+                       "the three client tools are strict — the schemas guarantee decodable inputs")
+        XCTAssertTrue(json.contains("web_fetch"),
+                      "Dice/ZipRecruiter postings are read with the server-side web_fetch tool")
         XCTAssertFalse(json.contains("web_search"),
-                       "the scout runs client-side tools only — no server tools")
+                       "the scout reads specific posting urls — it declares web_fetch but not web_search")
     }
 }
