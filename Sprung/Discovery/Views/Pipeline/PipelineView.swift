@@ -57,37 +57,17 @@ struct PipelineView: View {
                 Spacer()
 
                 HStack(spacing: 8) {
-                    Menu {
-                        ForEach(Statuses.pipelineStatuses, id: \.self) { status in
-                            let count = coordinator.jobAppStore.jobApps(forStatus: status).count
-                            Text("\(status.displayName): \(count)")
-                        }
-                    } label: {
-                        Label("Summary", systemImage: "chart.bar")
-                    }
-
-                    Button {
-                        showingJobSearch = true
-                    } label: {
-                        Label("Search Boards", systemImage: "magnifyingglass")
-                    }
-                    .help("Search Dice, ZipRecruiter, or any job site via the custom-site agent, and import results as leads")
-
                     scoutButton
 
                     chooseBestButton
-
-                    Toggle(isOn: $showClosedColumns) {
-                        Label("Closed", systemImage: "archivebox")
-                    }
-                    .toggleStyle(.button)
-                    .help("Show the Rejected and Withdrawn columns")
 
                     Button {
                         showingAddLead = true
                     } label: {
                         Label("Add Lead", systemImage: "plus")
                     }
+
+                    overflowMenu
                 }
             }
             .padding(.horizontal, 16)
@@ -96,6 +76,8 @@ struct PipelineView: View {
             .overlay(alignment: .bottom) {
                 Divider()
             }
+
+            filterBar
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(alignment: .top, spacing: 16) {
@@ -112,6 +94,7 @@ struct PipelineView: View {
                 .padding()
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .navigationTitle("")
         .sheet(isPresented: $showingAddLead) {
             // Leads enter through the same URL-import path as every other job
@@ -167,6 +150,51 @@ struct PipelineView: View {
 
     private var scoutPendingCount: Int {
         JobScoutService.pendingCount(in: coordinator.jobScout.lastReport)
+    }
+
+    // MARK: - Overflow & Filters
+
+    /// Secondary, low-frequency actions that don't earn a spot in the L1
+    /// header: the per-stage count breakdown and the custom-site board
+    /// search. `Summary` stays a static breakdown here rather than a
+    /// Board/Summary `ViewModeToggle` — there is no separate Summary view to
+    /// switch into, so inventing one is out of scope for this pass.
+    private var overflowMenu: some View {
+        Menu {
+            Menu {
+                ForEach(Statuses.pipelineStatuses, id: \.self) { status in
+                    let count = coordinator.jobAppStore.jobApps(forStatus: status).count
+                    Text("\(status.displayName): \(count)")
+                }
+            } label: {
+                Label("Summary", systemImage: "chart.bar")
+            }
+
+            Button {
+                showingJobSearch = true
+            } label: {
+                Label("Search Boards", systemImage: "magnifyingglass")
+            }
+            .help("Search Dice, ZipRecruiter, or any job site via the custom-site agent, and import results as leads")
+        } label: {
+            Image(systemName: "ellipsis.circle")
+        }
+        .help("More: stage summary, board search")
+    }
+
+    /// L3 filter-bar row: the show-closed-columns toggle promoted out of the
+    /// overflow menu into a first-class filter chip.
+    private var filterBar: some View {
+        HStack(spacing: 8) {
+            FilterChip(label: "Closed", isSelected: showClosedColumns) {
+                showClosedColumns.toggle()
+            }
+            .help("Show the Rejected and Withdrawn columns")
+
+            Spacer()
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
     }
 
     // MARK: - Scout
@@ -358,6 +386,7 @@ struct PipelineLeadCard: View {
                 Spacer()
 
                 Menu {
+                    advanceMenuItem
                     moveMenuItems
                 } label: {
                     Image(systemName: "ellipsis.circle")
@@ -403,14 +432,18 @@ struct PipelineLeadCard: View {
                 }
             }
 
-            // Quick advance (hover); non-linear moves live in the stage menu
-            if isHovered && status.canAdvance {
-                Button("Advance") {
+            // Persistent advance affordance — faint at rest so the card isn't
+            // busy, full-strength on hover. Discoverable without hovering
+            // too: the same action is in the ⋯ menu and context menu above.
+            if status.canAdvance {
+                Button {
                     onAdvance()
+                } label: {
+                    Label("Advance", systemImage: "arrow.right.circle.fill")
+                        .font(.caption.weight(.medium))
                 }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.small)
-                .transition(.opacity)
+                .buttonStyle(.tintedPill(tint: status.color))
+                .opacity(isHovered ? 1 : 0.4)
             }
         }
         .padding(12)
@@ -434,6 +467,7 @@ struct PipelineLeadCard: View {
             }
         }
         .contextMenu {
+            advanceMenuItem
             moveMenuItems
         }
         .onTapGesture {
@@ -442,12 +476,28 @@ struct PipelineLeadCard: View {
         .padding(.horizontal, 8)
     }
 
+    /// Persistent-menu route for the advance action (F2 fix) — mirrors the
+    /// inline pill button so advancing never depends on hovering. Only
+    /// rendered when there's a next stage to advance to.
+    @ViewBuilder
+    private var advanceMenuItem: some View {
+        if let next = status.next {
+            Button {
+                onAdvance()
+            } label: {
+                Label("Advance to \(next.displayName)", systemImage: "arrow.right.circle")
+            }
+            Divider()
+        }
+    }
+
     /// Direct move to any other stage — pipeline reality is non-linear
-    /// (lead → interview happens), so every stage is one click away.
+    /// (lead → interview happens), so every stage is one click away. The
+    /// next stage is excluded here since `advanceMenuItem` already offers it.
     @ViewBuilder
     private var moveMenuItems: some View {
         Section("Move to") {
-            ForEach(Statuses.pipelineStatuses.filter { $0 != status }, id: \.self) { target in
+            ForEach(Statuses.pipelineStatuses.filter { $0 != status && $0 != status.next }, id: \.self) { target in
                 Button {
                     onMove(target)
                 } label: {
