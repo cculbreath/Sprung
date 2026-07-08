@@ -169,25 +169,40 @@ final class JobScoutServiceTests: XCTestCase {
         )
     }
 
+    private func dismissedPosting(
+        url: String,
+        title: String = "Physicist",
+        company: String = "Acme",
+        reason: String? = nil
+    ) -> JobScoutService.ScoutDismissedPosting {
+        JobScoutService.ScoutDismissedPosting(
+            url: url, title: title, company: company,
+            dismissedAt: Date(timeIntervalSince1970: 1_780_000_000), reason: reason
+        )
+    }
+
     func testDedupDropsURLsAlreadySeenThisRunAcrossBoards() {
         var seen: Set<String> = ["https://example.com/job/1"]
-        let (kept, dropped) = JobScoutService.dedupSearchResults(
+        let (kept, dropped, dismissedDropped) = JobScoutService.dedupSearchResults(
             [result(url: "https://example.com/job/1"), result(url: "https://example.com/job/2")],
             board: .dice,
-            seenURLs: &seen
+            seenURLs: &seen,
+            dismissed: []
         ) { _, _, _ in nil }
         XCTAssertEqual(kept.map(\.url), ["https://example.com/job/2"])
         XCTAssertEqual(dropped, 1)
+        XCTAssertEqual(dismissedDropped, 0)
         XCTAssertTrue(seen.contains("https://example.com/job/2"),
                       "kept URLs join the cross-board seen set")
     }
 
     func testDedupDropsWithinBatchRepeats() {
         var seen: Set<String> = []
-        let (kept, dropped) = JobScoutService.dedupSearchResults(
+        let (kept, dropped, _) = JobScoutService.dedupSearchResults(
             [result(url: "https://example.com/job/1"), result(url: "https://example.com/job/1")],
             board: .dice,
-            seenURLs: &seen
+            seenURLs: &seen,
+            dismissed: []
         ) { _, _, _ in nil }
         XCTAssertEqual(kept.count, 1)
         XCTAssertEqual(dropped, 1)
@@ -196,10 +211,11 @@ final class JobScoutServiceTests: XCTestCase {
     func testDedupDiceDropsOnEitherPipelineMatchKind() {
         var seen: Set<String> = []
         var matchKinds: [JobScoutService.PipelineMatchKind?] = [.byURL, .byTitleCompany, nil]
-        let (kept, dropped) = JobScoutService.dedupSearchResults(
+        let (kept, dropped, _) = JobScoutService.dedupSearchResults(
             [result(url: "https://a"), result(url: "https://b"), result(url: "https://c")],
             board: .dice,
-            seenURLs: &seen
+            seenURLs: &seen,
+            dismissed: []
         ) { _, _, _ in matchKinds.removeFirst() }
         XCTAssertEqual(kept.map(\.url), ["https://c"])
         XCTAssertEqual(dropped, 2)
@@ -210,13 +226,14 @@ final class JobScoutServiceTests: XCTestCase {
         // hit would false-match unrelated postings, so only URL matches count.
         var seen: Set<String> = []
         var matchKinds: [JobScoutService.PipelineMatchKind?] = [.byTitleCompany, .byURL]
-        let (kept, dropped) = JobScoutService.dedupSearchResults(
+        let (kept, dropped, _) = JobScoutService.dedupSearchResults(
             [
                 result(url: "https://www.linkedin.com/jobs/view/1/", company: nil),
                 result(url: "https://www.linkedin.com/jobs/view/2/", company: nil)
             ],
             board: .linkedIn,
-            seenURLs: &seen
+            seenURLs: &seen,
+            dismissed: []
         ) { _, _, _ in matchKinds.removeFirst() }
         XCTAssertEqual(kept.map(\.url), ["https://www.linkedin.com/jobs/view/1/"])
         XCTAssertEqual(dropped, 1)
@@ -230,7 +247,8 @@ final class JobScoutServiceTests: XCTestCase {
         _ = JobScoutService.dedupSearchResults(
             [result(url: "https://www.ziprecruiter.com/k/t/AAAA")],
             board: .zipRecruiter,
-            seenURLs: &seen
+            seenURLs: &seen,
+            dismissed: []
         ) { url, _, _ in
             receivedURLs.append(url)
             return .byTitleCompany
@@ -244,12 +262,80 @@ final class JobScoutServiceTests: XCTestCase {
         _ = JobScoutService.dedupSearchResults(
             [result(url: "https://www.dice.com/job-detail/abc")],
             board: .dice,
-            seenURLs: &seen
+            seenURLs: &seen,
+            dismissed: []
         ) { url, _, _ in
             receivedURLs.append(url)
             return nil
         }
         XCTAssertEqual(receivedURLs, ["https://www.dice.com/job-detail/abc"])
+    }
+
+    // MARK: - 4b. Cross-run dismissed memory
+
+    func testIsDismissedMatchesByURL() {
+        let dismissed = [dismissedPosting(url: "https://www.dice.com/job-detail/abc", title: "X", company: "Y")]
+        XCTAssertTrue(JobScoutService.isDismissed(
+            result(url: "https://www.dice.com/job-detail/abc", title: "Totally", company: "Different"),
+            in: dismissed
+        ), "a URL match dismisses regardless of title/company drift")
+    }
+
+    func testIsDismissedMatchesByTitleCompanyCaseInsensitive() {
+        // Same posting, unstable URL (ZipRecruiter redirect) — the title+company
+        // arm must still recognize it.
+        let dismissed = [dismissedPosting(url: "https://www.ziprecruiter.com/k/t/OLD", title: "Medical Physicist", company: "Acme Oncology")]
+        XCTAssertTrue(JobScoutService.isDismissed(
+            result(url: "https://www.ziprecruiter.com/k/t/NEW", title: "medical physicist", company: "acme oncology"),
+            in: dismissed
+        ))
+    }
+
+    func testIsDismissedRequiresBothTitleAndCompanyForFallback() {
+        // A dismissed LinkedIn posting stored with empty company must not
+        // title-only match an unrelated posting that shares the title.
+        let dismissed = [dismissedPosting(url: "https://www.linkedin.com/jobs/view/1/", title: "Physicist", company: "")]
+        XCTAssertFalse(JobScoutService.isDismissed(
+            result(url: "https://www.linkedin.com/jobs/view/2/", title: "Physicist", company: "Acme"),
+            in: dismissed
+        ), "empty company blocks the title-only fallback — never false-match unrelated postings")
+        // And a result with no company can't title-match either.
+        let dismissed2 = [dismissedPosting(url: "https://old", title: "Physicist", company: "Acme")]
+        XCTAssertFalse(JobScoutService.isDismissed(
+            result(url: "https://new", title: "Physicist", company: nil),
+            in: dismissed2
+        ))
+    }
+
+    func testDedupDropsDismissedPostingsSeparatelyFromPipelineDuplicates() {
+        var seen: Set<String> = []
+        let dismissed = [dismissedPosting(url: "https://b", title: "X", company: "Y")]
+        // Only https://a and https://c reach the pipeline lookup — https://b is
+        // dismissed and short-circuits before it, so it never consumes a kind.
+        var matchKinds: [JobScoutService.PipelineMatchKind?] = [nil, .byURL]
+        let (kept, dropped, dismissedDropped) = JobScoutService.dedupSearchResults(
+            [result(url: "https://a"), result(url: "https://b"), result(url: "https://c")],
+            board: .dice,
+            seenURLs: &seen,
+            dismissed: dismissed
+        ) { _, _, _ in matchKinds.removeFirst() }
+        XCTAssertEqual(kept.map(\.url), ["https://a"], "https://c is a pipeline dup, https://b was dismissed")
+        XCTAssertEqual(dismissedDropped, 1)
+        XCTAssertEqual(dropped, 1)
+        XCTAssertEqual(matchKinds, [], "the dismissed result short-circuits before its pipeline check")
+    }
+
+    func testDedupDismissedFilterUsesTitleCompanyForZipRecruiter() {
+        var seen: Set<String> = []
+        let dismissed = [dismissedPosting(url: "https://old-token", title: "Physicist", company: "Acme")]
+        let (kept, _, dismissedDropped) = JobScoutService.dedupSearchResults(
+            [result(url: "https://new-token", title: "Physicist", company: "Acme")],
+            board: .zipRecruiter,
+            seenURLs: &seen,
+            dismissed: dismissed
+        ) { _, _, _ in nil }
+        XCTAssertTrue(kept.isEmpty)
+        XCTAssertEqual(dismissedDropped, 1)
     }
 
     // MARK: - Search tool output
@@ -372,9 +458,9 @@ final class JobScoutServiceTests: XCTestCase {
 
     func testRunStateAccumulatesSearchesNotesAndBuildsReport() {
         let state = JobScoutRunState()
-        state.recordSearch(board: .dice, found: 20, duplicatesDropped: 5)
+        state.recordSearch(board: .dice, found: 20, duplicatesDropped: 5, previouslyDismissedDropped: 3)
         state.recordSearch(board: .linkedIn, found: 10, duplicatesDropped: 2)
-        state.recordSearch(board: .dice, found: 8, duplicatesDropped: 1)
+        state.recordSearch(board: .dice, found: 8, duplicatesDropped: 1, previouslyDismissedDropped: 1)
         state.addNote("LinkedIn call limit reached")
 
         let startedAt = Date(timeIntervalSince1970: 1_782_000_000)
@@ -388,6 +474,8 @@ final class JobScoutServiceTests: XCTestCase {
                        "boards appear once each, in first-search order")
         XCTAssertEqual(report.resultsFound, 38)
         XCTAssertEqual(report.duplicatesDropped, 8)
+        XCTAssertEqual(report.previouslyDismissedDropped, 4,
+                       "dismissed drops accumulate apart from pipeline duplicates")
         XCTAssertEqual(report.recommendations.count, 1)
         XCTAssertEqual(report.notes, ["LinkedIn call limit reached"])
     }

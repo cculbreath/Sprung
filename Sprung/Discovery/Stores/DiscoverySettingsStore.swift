@@ -178,4 +178,68 @@ final class DiscoverySettingsStore {
             }
         }
     }
+
+    // MARK: - Job-Scout Dismissed Postings (cross-run memory)
+
+    private static let scoutDismissedPostingsKey = "discoveryScoutDismissedPostings"
+
+    /// Postings the user dismissed in a scout review stay dismissed for this
+    /// long; older entries are pruned so a job the user passed on months ago
+    /// can surface again if it's still open.
+    static let scoutDismissedTTLDays = 60
+    /// Hard ceiling on the dismissed set — the oldest are dropped beyond it so
+    /// the blob never grows without bound.
+    static let scoutDismissedCap = 500
+
+    /// The postings the user dismissed in past scout reviews. Filtered out of
+    /// future runs' search results (URL or title+company match) so a rejected
+    /// posting stays gone. Pruned on every read and write: entries past the TTL
+    /// are dropped and the set is capped oldest-first. A decode failure reads as
+    /// an empty set (logged, never a crash).
+    var scoutDismissedPostings: [JobScoutService.ScoutDismissedPosting] {
+        get {
+            guard let data = defaults.data(forKey: Self.scoutDismissedPostingsKey) else { return [] }
+            do {
+                let stored = try JSONDecoder().decode([JobScoutService.ScoutDismissedPosting].self, from: data)
+                return Self.pruneDismissed(stored)
+            } catch {
+                Logger.error("❌ [DiscoverySettings] Couldn't decode dismissed scout postings: \(error.localizedDescription)", category: .data)
+                return []
+            }
+        }
+        set {
+            let pruned = Self.pruneDismissed(newValue)
+            do {
+                let data = try JSONEncoder().encode(pruned)
+                defaults.set(data, forKey: Self.scoutDismissedPostingsKey)
+            } catch {
+                Logger.error("❌ [DiscoverySettings] Couldn't encode dismissed scout postings: \(error.localizedDescription)", category: .data)
+            }
+        }
+    }
+
+    /// Append postings to the dismissed set, deduplicated by URL against what's
+    /// already stored. Pruning happens as a side effect of the setter.
+    func recordDismissedPostings(_ postings: [JobScoutService.ScoutDismissedPosting]) {
+        guard !postings.isEmpty else { return }
+        var current = scoutDismissedPostings
+        let existingURLs = Set(current.map(\.url).filter { !$0.isEmpty })
+        current.append(contentsOf: postings.filter { $0.url.isEmpty || !existingURLs.contains($0.url) })
+        scoutDismissedPostings = current
+    }
+
+    /// Drop entries past the TTL, then cap the survivors oldest-first. Returns
+    /// them in chronological (oldest-first) order for stable storage.
+    static func pruneDismissed(
+        _ postings: [JobScoutService.ScoutDismissedPosting],
+        now: Date = Date()
+    ) -> [JobScoutService.ScoutDismissedPosting] {
+        let cutoff = Calendar.current.date(byAdding: .day, value: -scoutDismissedTTLDays, to: now) ?? now
+        let live = postings.filter { $0.dismissedAt >= cutoff }
+        guard live.count > scoutDismissedCap else { return live }
+        return live
+            .sorted { $0.dismissedAt > $1.dismissedAt }
+            .prefix(scoutDismissedCap)
+            .sorted { $0.dismissedAt < $1.dismissedAt }
+    }
 }

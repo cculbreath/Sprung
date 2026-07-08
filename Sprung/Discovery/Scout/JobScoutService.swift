@@ -66,8 +66,27 @@ final class JobScoutService {
         let boardsSearched: [String]
         let resultsFound: Int
         let duplicatesDropped: Int
+        /// Results removed because the user dismissed them in a past review —
+        /// counted apart from pipeline duplicates so the report can explain why
+        /// the list shrank (cross-run memory, not this-run bookkeeping).
+        let previouslyDismissedDropped: Int
         let recommendations: [ScoutRecommendation]
         let notes: [String]
+    }
+
+    /// A posting the user dismissed in a scout review. Persisted (with a TTL)
+    /// in `DiscoverySettingsStore.scoutDismissedPostings` and filtered out of
+    /// future runs' search results so a rejected posting stays gone. Matched by
+    /// URL, or by title+company when the URL is unstable (ZipRecruiter redirect
+    /// tokens), where the same posting can return under a different link.
+    struct ScoutDismissedPosting: Codable, Equatable {
+        let url: String
+        let title: String
+        let company: String
+        let dismissedAt: Date
+        /// The reason the user gave when dismissing, if any — carried into the
+        /// next run's outcome-feedback context so the agent calibrates.
+        let reason: String?
     }
 
     // MARK: - Observable State
@@ -192,7 +211,7 @@ final class JobScoutService {
             config.boards,
             linkedInConsentAccepted: linkedInServerService?.consentAccepted ?? false
         )
-        let runState = JobScoutRunState()
+        let runState = JobScoutRunState(dismissed: settingsStore.scoutDismissedPostings)
         if let consentNote {
             Logger.info("Job scout: \(consentNote)", category: .ai)
             runState.addNote(consentNote)
@@ -303,10 +322,11 @@ final class JobScoutService {
             return AnthropicToolOutput(content: explanation, isError: true)
         }
 
-        let (kept, dropped) = Self.dedupSearchResults(
+        let (kept, dropped, dismissedDropped) = Self.dedupSearchResults(
             rawResults,
             board: board,
-            seenURLs: &runState.seenURLs
+            seenURLs: &runState.seenURLs,
+            dismissed: runState.dismissed
         ) { [weak self] url, title, company in
             guard let self,
                   let existing = self.jobAppStore.findDuplicateJobApp(url: url, title: title, company: company) else {
@@ -314,7 +334,12 @@ final class JobScoutService {
             }
             return (url != nil && !url!.isEmpty && existing.postingURL == url) ? .byURL : .byTitleCompany
         }
-        runState.recordSearch(board: board, found: rawResults.count, duplicatesDropped: dropped)
+        runState.recordSearch(
+            board: board,
+            found: rawResults.count,
+            duplicatesDropped: dropped,
+            previouslyDismissedDropped: dismissedDropped
+        )
 
         return Self.searchToolOutput(board: board, kept: kept, droppedDuplicates: dropped)
     }
@@ -545,10 +570,35 @@ final class JobScoutService {
         case byTitleCompany
     }
 
+    /// Whether a search result matches a previously-dismissed posting: the
+    /// same posting URL, or the same title+company (both non-empty,
+    /// case-insensitive). The title+company arm keeps a dismissed posting gone
+    /// on boards whose URLs are unstable (ZipRecruiter redirect tokens), where
+    /// the same posting can return under a different link.
+    static func isDismissed(
+        _ result: ScoutSearchResult,
+        in dismissed: [ScoutDismissedPosting]
+    ) -> Bool {
+        guard !dismissed.isEmpty else { return false }
+        let resultCompany = result.company ?? ""
+        return dismissed.contains { entry in
+            if !entry.url.isEmpty, entry.url == result.url {
+                return true
+            }
+            guard !result.title.isEmpty, !resultCompany.isEmpty,
+                  !entry.title.isEmpty, !entry.company.isEmpty else {
+                return false
+            }
+            return entry.title.caseInsensitiveCompare(result.title) == .orderedSame
+                && entry.company.caseInsensitiveCompare(resultCompany) == .orderedSame
+        }
+    }
+
     /// Filter a board's raw results before the agent sees them: drop postings
-    /// already returned this run (cross-board seen-URL set) and postings
-    /// already in the pipeline. Per-board pipeline-match rules mirror each
-    /// board's import path:
+    /// already returned this run (cross-board seen-URL set), postings the user
+    /// dismissed in a past review (cross-run memory — returned as a separate
+    /// count), and postings already in the pipeline. Per-board pipeline-match
+    /// rules mirror each board's import path:
     ///  - dice: URL match or title+company match
     ///  - zipRecruiter: title+company only (`url` passed nil — redirect
     ///    tokens are unstable, never a dedup key)
@@ -558,16 +608,26 @@ final class JobScoutService {
         _ results: [ScoutSearchResult],
         board: ScoutBoard,
         seenURLs: inout Set<String>,
+        dismissed: [ScoutDismissedPosting],
         pipelineMatch: (_ url: String?, _ title: String, _ company: String) -> PipelineMatchKind?
-    ) -> (kept: [ScoutSearchResult], dropped: Int) {
+    ) -> (kept: [ScoutSearchResult], dropped: Int, dismissedDropped: Int) {
         var kept: [ScoutSearchResult] = []
         var dropped = 0
+        var dismissedDropped = 0
         for result in results {
             if seenURLs.contains(result.url) {
                 dropped += 1
                 continue
             }
             seenURLs.insert(result.url)
+
+            // Cross-run memory: a posting the user dismissed in a past review
+            // never comes back. Counted apart from pipeline duplicates so the
+            // report can tell the user why the list shrank.
+            if isDismissed(result, in: dismissed) {
+                dismissedDropped += 1
+                continue
+            }
 
             let dedupURL: String? = (board == .zipRecruiter) ? nil : result.url
             let match = pipelineMatch(dedupURL, result.title, result.company ?? "")
@@ -586,7 +646,7 @@ final class JobScoutService {
                 kept.append(result)
             }
         }
-        return (kept, dropped)
+        return (kept, dropped, dismissedDropped)
     }
 
     /// The `search_board` tool-result payload (camelCase keys we control).
@@ -730,17 +790,31 @@ final class JobScoutRunState {
     private(set) var boardsSearched: [JobScoutService.ScoutBoard] = []
     private(set) var resultsFound = 0
     private(set) var duplicatesDropped = 0
+    private(set) var previouslyDismissedDropped = 0
     private(set) var notes: [String] = []
     /// Cross-board run-local dedup: every result URL already returned to the
     /// agent this run.
     var seenURLs: Set<String> = []
+    /// Snapshot of the user's dismissed postings, captured at run start; the
+    /// dedup filter reads it to keep rejected postings out of this run.
+    let dismissed: [JobScoutService.ScoutDismissedPosting]
 
-    func recordSearch(board: JobScoutService.ScoutBoard, found: Int, duplicatesDropped: Int) {
+    init(dismissed: [JobScoutService.ScoutDismissedPosting] = []) {
+        self.dismissed = dismissed
+    }
+
+    func recordSearch(
+        board: JobScoutService.ScoutBoard,
+        found: Int,
+        duplicatesDropped: Int,
+        previouslyDismissedDropped: Int = 0
+    ) {
         if !boardsSearched.contains(board) {
             boardsSearched.append(board)
         }
         resultsFound += found
         self.duplicatesDropped += duplicatesDropped
+        self.previouslyDismissedDropped += previouslyDismissedDropped
     }
 
     func addNote(_ note: String) {
@@ -756,6 +830,7 @@ final class JobScoutRunState {
             boardsSearched: boardsSearched.map(\.displayName),
             resultsFound: resultsFound,
             duplicatesDropped: duplicatesDropped,
+            previouslyDismissedDropped: previouslyDismissedDropped,
             recommendations: recommendations,
             notes: notes
         )

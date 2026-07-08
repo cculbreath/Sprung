@@ -188,6 +188,7 @@ final class JobScoutSettingsStoreTests: XCTestCase {
             boardsSearched: ["Dice", "LinkedIn"],
             resultsFound: 42,
             duplicatesDropped: 7,
+            previouslyDismissedDropped: 3,
             recommendations: [
                 JobScoutService.ScoutRecommendation(
                     url: "https://www.dice.com/job-detail/abc-123",
@@ -216,6 +217,7 @@ final class JobScoutSettingsStoreTests: XCTestCase {
         XCTAssertEqual(decoded.boardsSearched, ["Dice", "LinkedIn"])
         XCTAssertEqual(decoded.resultsFound, 42)
         XCTAssertEqual(decoded.duplicatesDropped, 7)
+        XCTAssertEqual(decoded.previouslyDismissedDropped, 3)
         XCTAssertEqual(decoded.recommendations.count, 2)
         XCTAssertEqual(decoded.recommendations[0].title, "Senior Medical Physicist")
         XCTAssertTrue(decoded.recommendations[0].imported)
@@ -232,6 +234,7 @@ final class JobScoutSettingsStoreTests: XCTestCase {
             boardsSearched: [],
             resultsFound: 0,
             duplicatesDropped: 0,
+            previouslyDismissedDropped: 0,
             recommendations: [],
             notes: []
         )
@@ -247,5 +250,80 @@ final class JobScoutSettingsStoreTests: XCTestCase {
         defaults.store.set(Data("not json".utf8), forKey: "discoveryLastScoutReport")
         let store = DiscoverySettingsStore(defaults: defaults.store)
         XCTAssertNil(store.lastScoutReport, "a corrupt blob reads as no report, never a crash")
+    }
+
+    // MARK: - scoutDismissedPostings (cross-run memory)
+
+    private func dismissed(
+        url: String,
+        title: String = "Physicist",
+        company: String = "Acme",
+        daysAgo: Int,
+        now: Date
+    ) -> JobScoutService.ScoutDismissedPosting {
+        JobScoutService.ScoutDismissedPosting(
+            url: url, title: title, company: company,
+            dismissedAt: now.addingTimeInterval(TimeInterval(-daysAgo) * 86_400),
+            reason: nil
+        )
+    }
+
+    func testScoutDismissedPostingsDefaultsEmpty() {
+        let store = DiscoverySettingsStore(defaults: TestDefaults().store)
+        XCTAssertEqual(store.scoutDismissedPostings, [])
+    }
+
+    func testScoutDismissedPostingsRoundTripsAcrossStoreInstances() {
+        let defaults = TestDefaults()
+        let store = DiscoverySettingsStore(defaults: defaults.store)
+        let now = Date()
+        store.scoutDismissedPostings = [
+            dismissed(url: "https://a", daysAgo: 1, now: now),
+            dismissed(url: "https://b", title: "Engineer", company: "Beta", daysAgo: 2, now: now)
+        ]
+        let reloaded = DiscoverySettingsStore(defaults: defaults.store)
+        XCTAssertEqual(reloaded.scoutDismissedPostings.map(\.url), ["https://a", "https://b"])
+        XCTAssertEqual(reloaded.scoutDismissedPostings[1].company, "Beta")
+    }
+
+    func testRecordDismissedPostingsDedupsByURL() {
+        let store = DiscoverySettingsStore(defaults: TestDefaults().store)
+        let now = Date()
+        store.recordDismissedPostings([dismissed(url: "https://a", daysAgo: 0, now: now)])
+        store.recordDismissedPostings([
+            dismissed(url: "https://a", daysAgo: 0, now: now),   // already recorded
+            dismissed(url: "https://b", daysAgo: 0, now: now)
+        ])
+        XCTAssertEqual(store.scoutDismissedPostings.map(\.url), ["https://a", "https://b"],
+                       "a URL already dismissed is not appended twice")
+    }
+
+    func testPruneDismissedDropsEntriesPastTheTTL() {
+        let now = Date()
+        let fresh = dismissed(url: "https://fresh", daysAgo: 10, now: now)
+        let stale = dismissed(url: "https://stale", daysAgo: DiscoverySettingsStore.scoutDismissedTTLDays + 5, now: now)
+        let pruned = DiscoverySettingsStore.pruneDismissed([stale, fresh], now: now)
+        XCTAssertEqual(pruned.map(\.url), ["https://fresh"],
+                       "entries older than the TTL are dropped")
+    }
+
+    func testPruneDismissedCapsOldestFirst() {
+        let now = Date()
+        let cap = DiscoverySettingsStore.scoutDismissedCap
+        // cap + 3 entries, all within the TTL (seconds apart so the cap, not the
+        // TTL, is what trims them). Index 0 is newest.
+        let entries = (0..<(cap + 3)).map { index in
+            JobScoutService.ScoutDismissedPosting(
+                url: "https://\(index)", title: "T", company: "C",
+                dismissedAt: now.addingTimeInterval(-Double(index)), reason: nil
+            )
+        }
+        let pruned = DiscoverySettingsStore.pruneDismissed(entries, now: now)
+        XCTAssertEqual(pruned.count, cap)
+        XCTAssertTrue(pruned.contains { $0.url == "https://0" }, "the newest survives")
+        XCTAssertFalse(pruned.contains { $0.url == "https://\(cap + 2)" }, "the oldest is dropped")
+        // Survivors stay chronological: oldest-kept first, newest last.
+        XCTAssertEqual(pruned.first?.url, "https://\(cap - 1)")
+        XCTAssertEqual(pruned.last?.url, "https://0")
     }
 }

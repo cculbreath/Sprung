@@ -81,6 +81,11 @@ struct JobScoutReportSheet: View {
             Text("Found \(report.resultsFound) postings — \(report.duplicatesDropped) already in your pipeline")
                 .font(.callout)
                 .foregroundStyle(.secondary)
+            if report.previouslyDismissedDropped > 0 {
+                Text("\(report.previouslyDismissedDropped) posting\(report.previouslyDismissedDropped == 1 ? "" : "s") you dismissed before, filtered out")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
         }
     }
 
