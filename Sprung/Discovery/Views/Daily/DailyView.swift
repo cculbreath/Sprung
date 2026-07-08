@@ -255,7 +255,7 @@ struct DailyView: View {
                     Text("Suggestions that couldn't be added:")
                         .font(.caption)
                         .fontWeight(.medium)
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(.statusFailed)
                     ForEach(outcome.droppedTasks.indices, id: \.self) { index in
                         let droppedTask = outcome.droppedTasks[index]
                         Text("• \(droppedTask.title) — \(droppedTask.reason)")
@@ -276,7 +276,7 @@ struct DailyView: View {
         VStack(alignment: .leading, spacing: 12) {
             Label("NEEDS DEBRIEF", systemImage: "exclamationmark.triangle")
                 .font(.headline)
-                .foregroundStyle(.orange)
+                .foregroundStyle(.statusPending)
 
             ForEach(coordinator.eventStore.needsDebrief) { event in
                 EventDebriefCard(event: event)
@@ -589,11 +589,9 @@ struct TaskSection: View {
                                 .scaleEffect(0.7)
                         } else {
                             Image(systemName: "arrow.trianglehead.2.clockwise.rotate.90")
-                                .font(.caption)
                         }
                     }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(.secondary)
+                    .buttonStyle(.tintedPill(tint: iconColor))
                     .disabled(isRegenerating)
                     .help("Regenerate \(category?.displayName ?? "") tasks")
                 }
@@ -634,7 +632,7 @@ struct DailyTaskRow: View {
         HStack {
             Button(action: onComplete) {
                 Image(systemName: task.isCompleted ? "checkmark.circle.fill" : "circle")
-                    .foregroundStyle(task.isCompleted ? .green : .secondary)
+                    .foregroundStyle(task.isCompleted ? .statusSuccess : .secondary)
             }
             .buttonStyle(.plain)
 
@@ -692,7 +690,7 @@ struct EventDebriefCard: View {
             Spacer()
         }
         .padding()
-        .background(Color.orange.opacity(0.1))
+        .background(Color.statusPending.opacity(0.1))
         .cornerRadius(8)
     }
 }
@@ -703,7 +701,7 @@ struct UpcomingEventCard: View {
     var body: some View {
         HStack {
             Image(systemName: "calendar")
-                .foregroundStyle(.blue)
+                .foregroundStyle(.statusInformational)
 
             VStack(alignment: .leading) {
                 Text(event.name)
@@ -718,7 +716,7 @@ struct UpcomingEventCard: View {
             Spacer()
         }
         .padding()
-        .background(Color.blue.opacity(0.1))
+        .background(Color.statusInformational.opacity(0.1))
         .cornerRadius(8)
     }
 }

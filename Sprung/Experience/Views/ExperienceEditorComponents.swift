@@ -18,6 +18,7 @@ struct ExperienceCard<Content: View>: View {
     var isEditing: Bool = false
     let content: Content
     @State private var isHovered = false
+    @FocusState private var isSelected: Bool
     init(onDelete: @escaping () -> Void, onToggleEdit: (() -> Void)? = nil, onRefine: (() -> Void)? = nil, isEditing: Bool = false, @ViewBuilder content: () -> Content) {
         self.onDelete = onDelete
         self.onToggleEdit = onToggleEdit
@@ -25,6 +26,11 @@ struct ExperienceCard<Content: View>: View {
         self.isEditing = isEditing
         self.content = content()
     }
+    /// Actions are discoverable via three routes: hover (mouse), selection
+    /// (click or Tab-key focus — trackpad/keyboard), and the context menu
+    /// (right-click). Hover is no longer the only path (§4 F2). Also stays
+    /// visible while the entry is actively being edited.
+    private var showsActions: Bool { isHovered || isSelected || isEditing }
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             content
@@ -36,42 +42,71 @@ struct ExperienceCard<Content: View>: View {
         )
         .overlay(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(isHovered ? Color.accentColor : Color.gray.opacity(0.2), lineWidth: isHovered ? 2 : 1)
+                .stroke(showsActions ? Color.accentColor : Color.gray.opacity(0.2), lineWidth: showsActions ? 2 : 1)
         )
         .overlay(alignment: .topTrailing) {
-            if isHovered {
-                HStack(spacing: 6) {
-                    if let onRefine {
-                        Button(action: onRefine, label: {
-                            Image(systemName: "wand.and.stars")
-                        })
-                        .buttonStyle(.bordered)
-                        .controlSize(.small)
-                        .help("Refine with AI")
-                        .accessibilityLabel("Refine Entry with AI")
-                    }
-                    if let onToggleEdit {
-                        Button(action: onToggleEdit, label: {
-                            Image(systemName: isEditing ? "checkmark.circle.fill" : "pencil")
-                        })
-                        .buttonStyle(.bordered)
-                        .controlSize(.small)
-                        .accessibilityLabel(isEditing ? "Finish Editing" : "Edit Entry")
-                    }
-                    Button(role: .destructive, action: onDelete, label: {
-                        Image(systemName: "trash")
-                    })
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                    .accessibilityLabel("Delete Entry")
-                }
-                .padding(8)
+            if showsActions {
+                actionCluster
+                    .padding(8)
             }
+        }
+        .contentShape(Rectangle())
+        .focusable(interactions: .automatic)
+        .focused($isSelected)
+        .onTapGesture {
+            isSelected = true
         }
         .onHover { hovering in
             withAnimation(.easeInOut(duration: 0.15)) {
                 isHovered = hovering
             }
+        }
+        .contextMenu {
+            contextMenuItems
+        }
+    }
+    @ViewBuilder
+    private var actionCluster: some View {
+        HStack(spacing: 6) {
+            if let onRefine {
+                Button(action: onRefine, label: {
+                    Image(systemName: "wand.and.stars")
+                })
+                .buttonStyle(.tintedPill(tint: .teal))
+                .help("Refine with AI")
+                .accessibilityLabel("Refine Entry with AI")
+            }
+            if let onToggleEdit {
+                Button(action: onToggleEdit, label: {
+                    Image(systemName: isEditing ? "checkmark.circle.fill" : "pencil")
+                })
+                .buttonStyle(.tintedPill(tint: .blue))
+                .accessibilityLabel(isEditing ? "Finish Editing" : "Edit Entry")
+            }
+            Button(role: .destructive, action: onDelete, label: {
+                Image(systemName: "trash")
+            })
+            .buttonStyle(.tintedPill(tint: .red))
+            .accessibilityLabel("Delete Entry")
+        }
+    }
+    @ViewBuilder
+    private var contextMenuItems: some View {
+        if let onRefine {
+            Button(action: onRefine) {
+                Label("Refine with AI", systemImage: "wand.and.stars")
+            }
+        }
+        if let onToggleEdit {
+            Button(action: onToggleEdit) {
+                Label(isEditing ? "Finish Editing" : "Edit Entry", systemImage: isEditing ? "checkmark.circle.fill" : "pencil")
+            }
+        }
+        if onRefine != nil || onToggleEdit != nil {
+            Divider()
+        }
+        Button(role: .destructive, action: onDelete) {
+            Label("Delete Entry", systemImage: "trash")
         }
     }
 }
@@ -99,7 +134,7 @@ struct ExperienceAddButton: View {
     let action: () -> Void
     var body: some View {
         Button(title, action: action)
-            .buttonStyle(.bordered)
+            .buttonStyle(.tintedPill(tint: .blue))
     }
 }
 struct ExperienceFieldRow<Content: View>: View {

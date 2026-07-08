@@ -21,13 +21,12 @@ struct ApplicantProfileView: View {
     @State private var signatureLoadError: String?
     var body: some View {
         VStack(spacing: 0) {
+            header
             if isLoading {
                 ProgressView("Loading profile…")
                     .padding()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                modeToolbar
-                Divider()
                 ScrollView {
                     VStack(alignment: .leading, spacing: 24) {
                         if isEditing {
@@ -66,39 +65,48 @@ struct ApplicantProfileView: View {
         }
     }
 
-    // MARK: - Mode Toolbar
+    // MARK: - Header
 
-    /// Switches between the read-only viewer and the editor, and hosts the
-    /// Save/Cancel controls while editing.
-    private var modeToolbar: some View {
-        HStack(spacing: 12) {
+    /// Single L1 header row: module identity plus the mode-dependent action
+    /// slot (Edit, or Save/Cancel while editing). Replaces the old separate
+    /// mode toolbar — there is only ever one header row.
+    private var header: some View {
+        ModuleHeader(
+            title: "Profile",
+            subtitle: "Manage your contact information and professional details"
+        ) {
+            headerActions
+        }
+    }
+
+    @ViewBuilder
+    private var headerActions: some View {
+        if !isLoading {
             if isEditing {
-                Text("Editing Profile")
-                    .font(.headline)
-                Spacer()
-                Button("Cancel") { cancelEditing() }
-                    .buttonStyle(.bordered)
-                Button("Save") { commitEditing() }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(!hasChanges)
+                HStack(spacing: 12) {
+                    Button("Cancel") { cancelEditing() }
+                        .buttonStyle(.bordered)
+                    Button("Save") { commitEditing() }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(!hasChanges)
+                }
             } else {
-                Spacer()
-                if !successMessage.isEmpty {
-                    Label(successMessage, systemImage: "checkmark.circle.fill")
-                        .foregroundStyle(.green)
-                        .font(.callout)
+                HStack(spacing: 12) {
+                    if !successMessage.isEmpty {
+                        Label(successMessage, systemImage: "checkmark.circle.fill")
+                            .foregroundStyle(.green)
+                            .font(.callout)
+                    }
+                    Button {
+                        successMessage = ""
+                        isEditing = true
+                    } label: {
+                        Label("Edit", systemImage: "pencil")
+                    }
+                    .buttonStyle(.borderedProminent)
                 }
-                Button {
-                    successMessage = ""
-                    isEditing = true
-                } label: {
-                    Label("Edit", systemImage: "pencil")
-                }
-                .buttonStyle(.borderedProminent)
             }
         }
-        .padding(.horizontal, 24)
-        .padding(.vertical, 10)
     }
 
     private func commitEditing() {

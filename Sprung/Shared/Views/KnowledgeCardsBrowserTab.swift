@@ -8,6 +8,11 @@ struct KnowledgeCardsBrowserTab: View {
     let onCardDeleted: (KnowledgeCard) -> Void
     let onCardAdded: (KnowledgeCard) -> Void
     let llmFacade: LLMFacade?
+    /// Identity tint for this browser — the Knowledge tab's accent color from
+    /// `ReferencesModuleView.Tab.accentColor`, threaded in rather than
+    /// hardcoded so the coverflow accent and selected-filter chip always
+    /// match the single per-tab identity map.
+    let tint: Color
 
     @Environment(ArtifactRecordStore.self) private var artifactRecordStore
     @Environment(SkillStore.self) private var skillStore
@@ -87,7 +92,7 @@ struct KnowledgeCardsBrowserTab: View {
                 ),
                 cardWidth: 520,
                 cardHeight: 500,
-                accentColor: .purple
+                accentColor: tint
             ) { card, isTopCard in
                 // Card content
                 KnowledgeCardView(
@@ -228,13 +233,13 @@ struct KnowledgeCardsBrowserTab: View {
             Button(action: { showIngestionSheet = true }) {
                 Label("Ingest", systemImage: "tray.and.arrow.down")
             }
-            .buttonStyle(KCToolbarButtonStyle(tint: .orange))
+            .buttonStyle(.tintedPill(tint: .orange))
             .help("Ingest documents or git repos to create knowledge cards")
 
             Button(action: { showAddSheet = true }) {
                 Label("New", systemImage: "plus.circle.fill")
             }
-            .buttonStyle(KCToolbarButtonStyle(tint: .purple))
+            .buttonStyle(.tintedPill(tint: .purple))
             .help("Manually create a new knowledge card")
         }
         .padding(.horizontal, 20)
@@ -262,7 +267,7 @@ struct KnowledgeCardsBrowserTab: View {
                         .background(Capsule().fill(Color.orange.opacity(0.25)))
                 }
             }
-            .buttonStyle(KCToolbarButtonStyle(tint: .orange))
+            .buttonStyle(.tintedPill(tint: .orange))
             .disabled(isProcessing)
             .help("Approve \(pendingCount) card\(pendingCount == 1 ? "" : "s") left pending by onboarding")
         }
@@ -280,7 +285,7 @@ struct KnowledgeCardsBrowserTab: View {
                 }
             }
         }
-        .buttonStyle(KCToolbarButtonStyle(tint: .blue))
+        .buttonStyle(.tintedPill(tint: .blue))
         .disabled(enrichCount == 0 || isProcessing)
         .help("Extract structured facts for \(enrichCount) card\(enrichCount == 1 ? "" : "s")")
 
@@ -290,7 +295,7 @@ struct KnowledgeCardsBrowserTab: View {
                 Text("Merge")
             }
         }
-        .buttonStyle(KCToolbarButtonStyle(tint: .green))
+        .buttonStyle(.tintedPill(tint: .green))
         .disabled(cards.count < 2 || isProcessing)
         .help("Merge similar cards using AI-powered deduplication")
     }
@@ -401,7 +406,7 @@ struct KnowledgeCardsBrowserTab: View {
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
-            .background(isSelected ? Color.purple : Color(nsColor: .controlBackgroundColor))
+            .background(isSelected ? tint : Color(nsColor: .controlBackgroundColor))
             .foregroundStyle(isSelected ? .white : .primary)
             .clipShape(Capsule())
         }
@@ -431,38 +436,4 @@ private struct RefinementReviewContext: Identifiable {
     let card: KnowledgeCard
     let modelId: String
     let diffs: [KCFieldDiff]
-}
-
-/// Tinted, bordered capsule button for the Knowledge-Card browser toolbar
-/// actions (Enrich / Merge / Ingest / New / Approve). Gives them a clear
-/// button affordance and legible size instead of bare colored caption text.
-private struct KCToolbarButtonStyle: ButtonStyle {
-    let tint: Color
-
-    func makeBody(configuration: Configuration) -> some View {
-        KCToolbarButtonBody(tint: tint, configuration: configuration)
-    }
-}
-
-private struct KCToolbarButtonBody: View {
-    let tint: Color
-    let configuration: ButtonStyleConfiguration
-    @Environment(\.isEnabled) private var isEnabled
-    @State private var isHovering = false
-
-    var body: some View {
-        configuration.label
-            .font(.system(size: 12, weight: .medium))
-            .foregroundStyle(tint)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background(
-                Capsule().fill(tint.opacity(configuration.isPressed ? 0.24 : (isHovering ? 0.18 : 0.12)))
-            )
-            .overlay(Capsule().strokeBorder(tint.opacity(0.4), lineWidth: 1))
-            .contentShape(Capsule())
-            .opacity(isEnabled ? 1 : 0.4)
-            .onHover { isHovering = $0 }
-            .animation(.easeInOut(duration: 0.12), value: isHovering)
-    }
 }

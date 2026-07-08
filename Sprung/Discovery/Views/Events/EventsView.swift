@@ -20,6 +20,29 @@ enum EventsViewMode: String, CaseIterable {
     }
 }
 
+/// Per-type identity tint for networking events (doctrine §5, decision
+/// E3a) — replaces the module's former monochrome blue with a distinct hue
+/// per `NetworkingEventType`, applied to both the type filter chips and
+/// each row's icon.
+extension NetworkingEventType {
+    var tint: Color {
+        switch self {
+        case .meetup: return .blue
+        case .happyHour: return .pink
+        case .conference: return .purple
+        case .workshop: return .orange
+        case .techTalk: return .indigo
+        case .openHouse: return .teal
+        case .careerFair: return .cyan
+        case .panelDiscussion: return .mint
+        case .hackathon: return .red
+        case .virtualEvent: return .yellow
+        case .coffeeChat: return .brown
+        case .other: return .gray
+        }
+    }
+}
+
 /// Buckets an event date relative to a 7-day "this week" window.
 /// Pure and testable: no `Date()` inside — `now` is always injected.
 enum EventWeekBucket {
@@ -90,7 +113,7 @@ struct EventsView: View {
             } else if coordinator.eventStore.allEvents.isEmpty {
                 emptyStateView
             } else {
-                controlBar
+                filterBar
                 switch viewMode {
                 case .list:
                     eventListView
@@ -109,27 +132,41 @@ struct EventsView: View {
         }
     }
 
-    /// List/Calendar mode switch plus the discover trigger. Lives inside
-    /// EventsView so every host gets both; the guidance popover on
-    /// DiscoverEventsButton is the single discovery entry point.
-    private var controlBar: some View {
-        HStack {
-            Picker("View Mode", selection: $viewMode) {
-                ForEach(EventsViewMode.allCases, id: \.self) { mode in
-                    Label(mode.rawValue, systemImage: mode.icon)
-                        .tag(mode)
+    /// Event-type filter chips (left) plus the List/Calendar mode switch
+    /// (right) — the shared "browser" filter-bar row (doctrine §5/§8). The
+    /// mode switch is unconditional so it stays reachable even when there's
+    /// only one event type in play. The Discover action lives in the
+    /// module's L1 header now (`EventsModuleView`), not here.
+    private var filterBar: some View {
+        HStack(spacing: 8) {
+            if availableEventTypes.count > 1 {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        FilterChip(label: "All", isSelected: selectedEventType == nil) {
+                            selectedEventType = nil
+                        }
+                        ForEach(availableEventTypes, id: \.self) { eventType in
+                            FilterChip(
+                                label: eventType.rawValue,
+                                isSelected: selectedEventType == eventType,
+                                tint: eventType.tint
+                            ) {
+                                selectedEventType = selectedEventType == eventType ? nil : eventType
+                            }
+                        }
+                    }
                 }
             }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .frame(width: 180)
 
             Spacer()
 
-            DiscoverEventsButton(coordinator: coordinator)
+            ViewModeToggle(
+                selection: $viewMode,
+                options: EventsViewMode.allCases.map { ViewModeOption($0, symbol: $0.icon, label: $0.rawValue) }
+            )
         }
         .padding(.horizontal)
-        .padding(.top, 8)
+        .padding(.vertical, 8)
     }
 
     private var emptyStateView: some View {
@@ -180,24 +217,6 @@ struct EventsView: View {
 
     private var eventListView: some View {
         VStack(spacing: 0) {
-            // Event type filter bar
-            if availableEventTypes.count > 1 {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 6) {
-                        FilterChip(label: "All", isSelected: selectedEventType == nil) {
-                            selectedEventType = nil
-                        }
-                        ForEach(availableEventTypes, id: \.self) { eventType in
-                            FilterChip(label: eventType.rawValue, isSelected: selectedEventType == eventType) {
-                                selectedEventType = selectedEventType == eventType ? nil : eventType
-                            }
-                        }
-                    }
-                    .padding(.horizontal)
-                }
-                .padding(.vertical, 8)
-            }
-
             List {
                 if !thisWeekUpcoming.isEmpty {
                     Section("This Week") {
@@ -324,8 +343,11 @@ struct EventsView: View {
 
 /// Discover-events trigger with an optional one-run guidance popover.
 /// Leaving the field empty runs plain discovery; guidance steers the agent's
-/// searches and selection but never waives page verification.
-private struct DiscoverEventsButton: View {
+/// searches and selection but never waives page verification. The compact
+/// (non-prominent) form is the module's L1 header action — the "✨" marks it
+/// as AI-driven per the app's AI-marker convention. Internal (not private)
+/// so `EventsModuleView` can host it in the header actions slot.
+struct DiscoverEventsButton: View {
     let coordinator: DiscoveryCoordinator
     var prominent = false
 
@@ -335,17 +357,15 @@ private struct DiscoverEventsButton: View {
     var body: some View {
         Group {
             if prominent {
-                Button("Discover Events") {
+                Button("✨ Discover Events") {
                     showPopover = true
                 }
                 .buttonStyle(.borderedProminent)
             } else {
-                Button {
+                Button("✨ Discover Events") {
                     showPopover = true
-                } label: {
-                    Label("Discover", systemImage: "magnifyingglass")
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.tintedPill(tint: .blue))
             }
         }
         .popover(isPresented: $showPopover, arrowEdge: .bottom) {
@@ -387,7 +407,7 @@ struct EventRowView: View {
     var body: some View {
         HStack {
             Image(systemName: event.eventType.icon)
-                .foregroundStyle(.blue)
+                .foregroundStyle(event.eventType.tint)
                 .frame(width: 20)
 
             VStack(alignment: .leading, spacing: 4) {
@@ -418,16 +438,10 @@ struct EventRowView: View {
 
             Spacer()
 
-            // Status transition button
-            statusButton(for: event)
+            // Status transition action (only for discovered/planned)
+            statusActionButton(for: event)
 
-            Text(event.status.rawValue)
-                .font(.caption)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(statusColor(for: event.status).opacity(0.15))
-                .foregroundStyle(statusColor(for: event.status))
-                .cornerRadius(4)
+            StatusTag(label: event.status.rawValue, tint: statusColor(for: event.status))
 
             Button {
                 store.delete(event)
@@ -445,21 +459,22 @@ struct EventRowView: View {
         }
     }
 
+    /// The transition button is tinted with the *destination* status's
+    /// color, so it previews the state the action leads to — the same
+    /// mapping `statusColor(for:)` uses for the passive `StatusTag`.
     @ViewBuilder
-    private func statusButton(for event: NetworkingEventOpportunity) -> some View {
+    private func statusActionButton(for event: NetworkingEventOpportunity) -> some View {
         switch event.status {
         case .discovered:
             Button("Plan") {
                 store.markAsPlanned(event)
             }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
+            .buttonStyle(.tintedPill(tint: statusColor(for: .planned)))
         case .planned:
             Button("Attended") {
                 store.markAsAttended(event)
             }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
+            .buttonStyle(.tintedPill(tint: statusColor(for: .attended)))
         default:
             EmptyView()
         }

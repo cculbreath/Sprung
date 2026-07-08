@@ -29,3 +29,22 @@ extension Color {
     /// judgment implied).
     static let statusInformational = Color.blue
 }
+
+// Bridge the STATUS tokens into the `ShapeStyle` leading-dot position so they
+// work directly in `.foregroundStyle(.statusFailed)` / `.fill(.statusSuccess)`
+// / `.tint(.statusPending)` — exactly how SwiftUI's own `.red`/`.blue` resolve.
+// A plain `Color` static only resolves where the compiler already wants a
+// `Color`; this extension covers every `ShapeStyle` context too.
+extension ShapeStyle where Self == Color {
+    /// STATUS role — waiting/not yet acted on.
+    static var statusPending: Color { .statusPending }
+
+    /// STATUS role — completed or sent successfully.
+    static var statusSuccess: Color { .statusSuccess }
+
+    /// STATUS role — failed or destructive.
+    static var statusFailed: Color { .statusFailed }
+
+    /// STATUS role — neutral, informational.
+    static var statusInformational: Color { .statusInformational }
+}

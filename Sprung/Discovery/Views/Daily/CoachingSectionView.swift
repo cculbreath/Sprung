@@ -243,9 +243,8 @@ struct TodaysRecommendationsView: View {
 
                 Button(action: onRegenerate) {
                     Label("Regenerate", systemImage: "arrow.clockwise")
-                        .font(.caption)
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.tintedPill(tint: .indigo))
             }
         }
     }
@@ -259,7 +258,7 @@ struct ErrorStateView: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Image(systemName: "exclamationmark.triangle")
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(.statusFailed)
                 Text(message)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
@@ -268,7 +267,7 @@ struct ErrorStateView: View {
             Button(action: onRetry) {
                 Label("Try Again", systemImage: "arrow.clockwise")
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(.tintedPill(tint: .statusFailed))
         }
     }
 }

@@ -16,19 +16,19 @@ struct ResumeBannerView: View {
     @State private var showDeleteConfirmation = false
 
     var body: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: 10) {
             Text("\(jobApp.companyName): \(jobApp.jobPosition)")
-                .font(.system(size: 10))
+                .font(.system(size: 12))
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
-            Spacer()
+            Spacer(minLength: 16)
             createResumeButton
             resumePicker
         }
         .controlSize(.small)
-        .padding(.leading, 12)
+        .padding(.leading, 14)
         .padding(.trailing, 20)
-        .padding(.vertical, 6)
+        .padding(.vertical, 9)
         .background {
             Color(nsColor: .controlBackgroundColor).opacity(0.85)
         }
@@ -45,7 +45,7 @@ struct ResumeBannerView: View {
     // MARK: - Components
 
     private var resumePicker: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: 8) {
             Picker("", selection: $jobApp.selectedRes) {
                 if jobApp.resumes.isEmpty {
                     Text("None").tag(Resume?.none)

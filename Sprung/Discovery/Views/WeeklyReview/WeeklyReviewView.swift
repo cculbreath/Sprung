@@ -268,14 +268,14 @@ struct WeeklyReviewView: View {
                         Label("Generate Reflection", systemImage: "sparkles")
                     }
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.tintedPill(tint: .indigo))
                 .disabled(isGeneratingReflection)
             }
 
             if let reflectionError {
                 Text(reflectionError)
                     .font(.caption)
-                    .foregroundStyle(.red)
+                    .foregroundStyle(.statusFailed)
             }
 
             generatedReflectionCard
@@ -491,7 +491,7 @@ struct GoalProgressCard: View {
                 Spacer()
                 if isComplete {
                     Image(systemName: "checkmark.circle.fill")
-                        .foregroundStyle(.green)
+                        .foregroundStyle(.statusSuccess)
                 }
             }
 
@@ -500,7 +500,7 @@ struct GoalProgressCard: View {
                 .fontWeight(.bold)
 
             ProgressView(value: progress)
-                .tint(isComplete ? .green : color)
+                .tint(isComplete ? .statusSuccess : color)
         }
         .padding()
         .background(Color(.windowBackgroundColor).opacity(0.5))

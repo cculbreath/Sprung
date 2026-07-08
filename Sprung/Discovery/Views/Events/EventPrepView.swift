@@ -117,7 +117,7 @@ struct EventPrepView: View {
             HStack {
                 Image(systemName: event.eventType.icon)
                     .font(.title)
-                    .foregroundStyle(.blue)
+                    .foregroundStyle(event.eventType.tint)
 
                 VStack(alignment: .leading) {
                     Text(event.name)

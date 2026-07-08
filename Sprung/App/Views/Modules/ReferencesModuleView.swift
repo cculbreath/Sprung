@@ -76,10 +76,11 @@ struct ReferencesModuleView: View {
                 // Pill-style tab picker
                 HStack(spacing: 4) {
                     ForEach(Tab.allCases) { tab in
-                        TabPill(
-                            tab: tab,
+                        ChipNav(
+                            label: tab.rawValue,
                             count: countFor(tab),
                             isSelected: selectedTab == tab,
+                            tint: tab.accentColor,
                             action: { selectedTab = tab }
                         )
                     }
@@ -214,7 +215,8 @@ struct ReferencesModuleView: View {
                 onCardUpdated: { card in knowledgeCardStore.update(card) },
                 onCardDeleted: { card in knowledgeCardStore.delete(card) },
                 onCardAdded: { card in knowledgeCardStore.add(card) },
-                llmFacade: llmFacade
+                llmFacade: llmFacade,
+                tint: Tab.knowledge.accentColor
             )
 
         case .writing:
@@ -247,37 +249,6 @@ struct ReferencesModuleView: View {
                 llmFacade: llmFacade
             )
         }
-    }
-}
-
-// MARK: - Tab Pill
-
-private struct TabPill: View {
-    let tab: ReferencesModuleView.Tab
-    let count: Int
-    let isSelected: Bool
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 4) {
-                Text(tab.rawValue)
-                    .font(.subheadline.weight(isSelected ? .semibold : .regular))
-                if count > 0 {
-                    Text("(\(count))")
-                        .font(.caption)
-                        .foregroundStyle(isSelected ? .primary : .secondary)
-                }
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-            .background(
-                Capsule()
-                    .fill(isSelected ? tab.accentColor : Color.clear)
-            )
-            .foregroundStyle(isSelected ? .white : .primary)
-        }
-        .buttonStyle(.plain)
     }
 }
 

@@ -2,8 +2,9 @@
 //  EventsModuleView.swift
 //  Sprung
 //
-//  Networking Events module wrapper. View-mode switching and the discover
-//  trigger (with its guidance popover) live inside EventsView itself.
+//  Networking Events module wrapper. The Discover action (with its guidance
+//  popover) lives in the L1 header here; view-mode switching and the
+//  event-type filter bar live inside EventsView itself.
 //
 
 import SwiftUI
@@ -19,7 +20,9 @@ struct EventsModuleView: View {
             ModuleHeader(
                 title: "Networking Events",
                 subtitle: "Discover events, prepare for them, and debrief afterward"
-            )
+            ) {
+                DiscoverEventsButton(coordinator: coordinator)
+            }
 
             // Existing EventsView (NavigationStack for detail push)
             NavigationStack {
