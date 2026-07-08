@@ -9,35 +9,6 @@ import AppKit
 import SwiftUI
 /// Utilities for AI model management and display
 struct AIModels {
-    // Model provider prefixes for displaying and identifying models
-    struct Provider {
-        static let openai = "OpenAI"
-        static let claude = "Claude"
-        static let grok = "Grok"
-        static let gemini = "Gemini"
-    }
-    // Check which provider a model belongs to
-    static func providerForModel(_ model: String) -> String {
-        let modelLower = model.lowercased()
-        // Handle empty or invalid model strings
-        if model.isEmpty || model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            Logger.warning("⚠️ Empty model string passed to providerForModel - this indicates a bug in the calling code")
-            return Provider.openai // Default to OpenAI for empty models
-        }
-        // More precise model family detection
-        if modelLower.contains("gpt") || modelLower.contains("dalle") || modelLower.starts(with: "o1") || modelLower.starts(with: "o3") || modelLower.starts(with: "o4") {
-            return Provider.openai
-        } else if modelLower.contains("claude") {
-            return Provider.claude
-        } else if modelLower.contains("grok") {
-            return Provider.grok
-        } else if modelLower.contains("gemini") {
-            return Provider.gemini
-        }
-        // Log a warning for unrecognized models
-        Logger.warning("⚠️ Using default provider (OpenAI) for unrecognized model: '\(model)'")
-        return Provider.openai // Default to OpenAI for unknown models
-    }
     /// Returns a friendly, human-readable name for a model
     /// - Parameter modelName: The raw model name
     /// - Returns: A simplified, user-friendly model name
