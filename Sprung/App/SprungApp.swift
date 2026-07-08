@@ -111,6 +111,13 @@ struct SprungApp: App {
                 }
         }
         .modelContainer(modelContainer)
+        // Make the content's declared minWidth/minHeight (set on UnifiedAppLayout)
+        // an actual hard floor for the window. Without this the default
+        // `.automatic` resizability lets the window be dragged narrower than its
+        // content minimum; the too-wide content then overflows and centers,
+        // pushing the icon bar and jobs sidebar off the left edge into an
+        // unreachable region.
+        .windowResizability(.contentMinSize)
         .windowToolbarStyle(.expanded)
         .commands {
             ToolbarCommands()
