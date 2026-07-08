@@ -165,7 +165,8 @@ struct CoverflowBrowser<Item: Identifiable, CardContent: View, FilterContent: Vi
                 }
             }
         }
-        .padding(.vertical, 6)
+        .padding(.top, 6)
+        .padding(.bottom, 16)
     }
 
     private func dotIndex(for displayIndex: Int) -> Int {
