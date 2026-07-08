@@ -9,14 +9,22 @@ struct JobAppRowView: View {
     var deleteAction: () -> Void
     var rerunPreprocessingAction: (() -> Void)?
 
+    // Inherited from SidebarView; 1.0 when the user hasn't zoomed the list.
+    @Environment(\.fontScale) private var fontScale
+
+    /// Row vertical padding tracks the font scale so rows loosen slightly as
+    /// the text grows (and tighten when it shrinks). -2 preserves the original
+    /// compact look at 1.0.
+    private var rowVerticalPadding: CGFloat { -2 + (fontScale - 1) * 4 }
+
     var body: some View {
         HStack(spacing: 4) {
             Text(jobApp.companyName)
-                .font(.system(size: 11))
+                .scaledFont(size: 11)
                 .foregroundStyle(.primary)
                 .lineLimit(1)
             Text("- \(jobApp.jobPosition)")
-                .font(.system(size: 11))
+                .scaledFont(size: 11)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
             Spacer(minLength: 4)
@@ -28,12 +36,12 @@ struct JobAppRowView: View {
                 case .pending:
                     Image(systemName: "clock.arrow.circlepath")
                         .foregroundStyle(.orange)
-                        .font(.system(size: 9))
+                        .scaledFont(size: 9)
                         .help("Awaiting analysis")
                 case .failed:
                     Image(systemName: "exclamationmark.triangle.fill")
                         .foregroundStyle(.red)
-                        .font(.system(size: 9))
+                        .scaledFont(size: 9)
                         .help("Analysis failed — right-click to retry")
                 case .complete:
                     EmptyView()
@@ -41,7 +49,7 @@ struct JobAppRowView: View {
             }
         }
         .tag(jobApp)
-        .padding(.vertical, -2)
+        .padding(.vertical, rowVerticalPadding)
         .padding(.horizontal, 4)
         .listRowInsets(EdgeInsets(top: 2, leading: 4, bottom: 2, trailing: 4))
         .contextMenu {

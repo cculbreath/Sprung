@@ -186,6 +186,35 @@ struct SprungApp: App {
                     NotificationCenter.default.post(name: .showCoverLetterInspector, object: nil)
                 }
                 .keyboardShortcut("1", modifiers: [.command, .option])
+                Divider()
+                Menu("Resume Editor Font") {
+                    Button("Increase") {
+                        EditorFontScale.adjust(EditorFontScale.resumeEditorKey, by: EditorFontScale.step)
+                    }
+                    .keyboardShortcut("+", modifiers: .command)
+                    Button("Decrease") {
+                        EditorFontScale.adjust(EditorFontScale.resumeEditorKey, by: -EditorFontScale.step)
+                    }
+                    .keyboardShortcut("-", modifiers: .command)
+                    Button("Actual Size") {
+                        EditorFontScale.reset(EditorFontScale.resumeEditorKey)
+                    }
+                    .keyboardShortcut("0", modifiers: .command)
+                }
+                Menu("Job List Font") {
+                    Button("Increase") {
+                        EditorFontScale.adjust(EditorFontScale.jobListKey, by: EditorFontScale.step)
+                    }
+                    .keyboardShortcut("+", modifiers: [.command, .control])
+                    Button("Decrease") {
+                        EditorFontScale.adjust(EditorFontScale.jobListKey, by: -EditorFontScale.step)
+                    }
+                    .keyboardShortcut("-", modifiers: [.command, .control])
+                    Button("Actual Size") {
+                        EditorFontScale.reset(EditorFontScale.jobListKey)
+                    }
+                    .keyboardShortcut("0", modifiers: [.command, .control])
+                }
             }
         }
         // MARK: - Applicant Menu

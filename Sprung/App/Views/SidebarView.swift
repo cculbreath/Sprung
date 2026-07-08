@@ -11,6 +11,8 @@ struct SidebarView: View {
     @Query(sort: \JobApp.createdAt, order: .forward) private var jobApps: [JobApp]
     // Binding for the main list selection
     @Binding var selectedApp: JobApp?
+    // User-adjustable font scale for this pane (View menu → Job List Font).
+    @AppStorage(EditorFontScale.jobListKey) private var fontScale: Double = EditorFontScale.defaultScale
     var body: some View {
         VStack(spacing: 0) {
             // --- Main Content ---
@@ -53,5 +55,9 @@ struct SidebarView: View {
             .frame(maxHeight: .infinity) // List takes remaining space
         }
         .frame(maxHeight: .infinity)
+        // Scale every explicitly-sized label in the job list (rows + status
+        // chips) by the user-chosen factor. 11pt is the base row font.
+        .environment(\.fontScale, CGFloat(fontScale))
+        .font(.system(size: 11 * fontScale))
     }
 }

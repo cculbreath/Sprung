@@ -32,11 +32,11 @@ struct EditingControls: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 if let validationError, !validationError.isEmpty {
                     Text(validationError)
-                        .font(.footnote)
+                        .scaledFont(size: 10)
                         .foregroundColor(.red)
                 } else if let helper = helperText {
                     Text(helper)
-                        .font(.footnote)
+                        .scaledFont(size: 10)
                         .foregroundColor(.secondary)
                 }
             }
@@ -212,7 +212,7 @@ struct EditingControls: View {
                         .foregroundColor(tempValue.isEmpty ? .secondary : .primary)
                     Spacer()
                     Image(systemName: "chevron.down")
-                        .font(.system(size: 12))
+                        .scaledFont(size: 12)
                         .foregroundColor(.secondary)
                 }
                 .padding(.vertical, 6)
@@ -257,7 +257,7 @@ private struct ChipsEditor: View {
                         HStack(spacing: 4) {
                             Text(chip)
                             Button(action: { remove(chip) }) {
-                                Image(systemName: "xmark.circle.fill").font(.system(size: 12))
+                                Image(systemName: "xmark.circle.fill").scaledFont(size: 12)
                             }
                             .buttonStyle(PlainButtonStyle())
                         }

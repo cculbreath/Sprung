@@ -52,7 +52,7 @@ struct NodeLeafView: View {
                 if node.status == LeafStatus.disabled {
                     Image(systemName: "lock.fill")
                         .foregroundColor(.gray)
-                        .font(.system(size: 12))
+                        .scaledFont(size: 12)
                 }
                 if isEditing {
                     EditingControls(
@@ -147,7 +147,7 @@ private struct SectionLabelRow: View {
         Button(action: startEditing) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(node.name.titleCased)
-                    .font(.caption)
+                    .scaledFont(size: 10)
                     .foregroundStyle(.secondary)
 
                 Text(node.value)

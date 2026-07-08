@@ -86,7 +86,7 @@ struct ResumeEntryCardView: View {
             if isRenamingTitle {
                 TextField("Name", text: $renameTitleText)
                     .textFieldStyle(.plain)
-                    .font(.system(size: 13, weight: .semibold))
+                    .scaledFont(size: 13, weight: .semibold)
                     .focused($isRenameFocused)
                     .onSubmit { commitTitleRename() }
                     .onExitCommand { cancelTitleRename() }
@@ -96,7 +96,7 @@ struct ResumeEntryCardView: View {
                     .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(Color.accentColor.opacity(0.5), lineWidth: 1))
             } else {
                 Text(node.computedTitle)
-                    .font(.system(size: 13, weight: .semibold))
+                    .scaledFont(size: 13, weight: .semibold)
                     .foregroundStyle(.primary)
                     .lineLimit(2)
                     .onTapGesture {
@@ -113,7 +113,7 @@ struct ResumeEntryCardView: View {
             if node.allowsChildAddition {
                 Button(action: { vm.addChild(to: node) }) {
                     Image(systemName: "plus")
-                        .font(.system(size: 10, weight: .semibold))
+                        .scaledFont(size: 10, weight: .semibold)
                         .foregroundStyle(.secondary)
                 }
                 .buttonStyle(.plain)
@@ -123,7 +123,7 @@ struct ResumeEntryCardView: View {
             if node.allowsDeletion {
                 Button(action: { vm.deleteNode(node, context: modelContext) }) {
                     Image(systemName: "trash")
-                        .font(.system(size: 10, weight: .semibold))
+                        .scaledFont(size: 10, weight: .semibold)
                         .foregroundStyle(.secondary)
                 }
                 .buttonStyle(.plain)
@@ -254,7 +254,7 @@ struct ResumeEntryCardView: View {
                 }
 
                 Text(child.displayLabel.titleCased)
-                    .font(.system(size: 11, weight: .medium))
+                    .scaledFont(size: 11, weight: .medium)
                     .foregroundStyle(.secondary)
 
                 Spacer()
@@ -262,7 +262,7 @@ struct ResumeEntryCardView: View {
                 if child.allowsChildAddition {
                     Button(action: { vm.addChild(to: child) }) {
                         Image(systemName: "plus")
-                            .font(.system(size: 9, weight: .medium))
+                            .scaledFont(size: 9, weight: .medium)
                             .foregroundStyle(.tertiary)
                     }
                     .buttonStyle(.plain)
@@ -447,17 +447,17 @@ private struct FieldValueEditor: View {
             VStack(alignment: .leading, spacing: 1) {
                 if showLabel && !node.name.isEmpty {
                     Text(node.name.titleCased)
-                        .font(.system(size: 10))
+                        .scaledFont(size: 10)
                         .foregroundStyle(.tertiary)
                 }
 
                 if !node.value.isEmpty {
                     Text(node.value)
-                        .font(.system(size: 12))
+                        .scaledFont(size: 12)
                         .foregroundStyle(.primary)
                 } else if node.value.isEmpty && node.name.isEmpty {
                     Text("Empty")
-                        .font(.system(size: 12))
+                        .scaledFont(size: 12)
                         .foregroundStyle(.tertiary)
                         .italic()
                 }
@@ -553,7 +553,7 @@ private struct BulletItemEditor: View {
             } else {
                 Button(action: { vm.startEditing(node: node) }) {
                     Text(node.value.isEmpty ? node.name : node.value)
-                        .font(.system(size: 12))
+                        .scaledFont(size: 12)
                         .foregroundStyle(.primary)
 
                     Spacer(minLength: 0)

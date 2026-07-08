@@ -40,7 +40,7 @@ struct JobTitlesPanelView: View {
     private var currentTitlesCard: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Current Titles")
-                .font(.subheadline.weight(.semibold))
+                .scaledFont(size: 11, weight: .semibold)
 
             Divider()
 
@@ -51,7 +51,7 @@ struct JobTitlesPanelView: View {
             if sectionNode.allowsChildAddition {
                 Button(action: { vm.addChild(to: sectionNode) }) {
                     Label("Add Title", systemImage: "plus")
-                        .font(.subheadline)
+                        .scaledFont(size: 11)
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(.secondary)

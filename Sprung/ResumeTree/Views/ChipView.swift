@@ -55,12 +55,12 @@ struct ChipView: View {
         HStack(spacing: 4) {
             if isMatched {
                 Image(systemName: "checkmark")
-                    .font(.system(size: 9, weight: .bold))
+                    .scaledFont(size: 9, weight: .bold)
                     .foregroundStyle(.green)
             }
 
             Text(node.value)
-                .font(.system(size: 11, weight: .medium))
+                .scaledFont(size: 11, weight: .medium)
                 .lineLimit(1)
 
             // AI status icon (trailing): group members get menu, ungrouped toggle directly
@@ -87,7 +87,7 @@ struct ChipView: View {
                 onDelete()
             } label: {
                 Image(systemName: "xmark")
-                    .font(.system(size: 8, weight: .bold))
+                    .scaledFont(size: 8, weight: .bold)
                     .foregroundStyle(.secondary)
             }
             .buttonStyle(.plain)
@@ -126,7 +126,7 @@ struct ChipView: View {
             HStack(spacing: 4) {
                 TextField("", text: $editText)
                     .textFieldStyle(.plain)
-                    .font(.system(size: 11, weight: .medium))
+                    .scaledFont(size: 11, weight: .medium)
                     .frame(minWidth: 60, maxWidth: 140)
                     .focused($isFieldFocused)
                     .onChange(of: editText) { _, newValue in
@@ -147,7 +147,7 @@ struct ChipView: View {
                     commitEdit()
                 } label: {
                     Image(systemName: "checkmark")
-                        .font(.system(size: 9, weight: .bold))
+                        .scaledFont(size: 9, weight: .bold)
                         .foregroundStyle(.green)
                 }
                 .buttonStyle(.plain)
@@ -167,7 +167,7 @@ struct ChipView: View {
                             commitEdit()
                         } label: {
                             Text(skill.canonical)
-                                .font(.system(size: 11))
+                                .scaledFont(size: 11)
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 4)
                                 .frame(maxWidth: .infinity, alignment: .leading)

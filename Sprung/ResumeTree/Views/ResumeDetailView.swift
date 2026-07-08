@@ -23,6 +23,9 @@ struct ResumeDetailView: View {
     // Persisted UI state
     @AppStorage("resumeEditorSelectedSection") private var selectedSection: String = "work"
     @AppStorage("resumeEditorStylingDrawerExpanded") private var isStylingDrawerExpanded: Bool = false
+    // User-adjustable font scale for the editor content (View menu → Resume
+    // Editor Font). Independent of the job-list sidebar scale.
+    @AppStorage(EditorFontScale.resumeEditorKey) private var fontScale: Double = EditorFontScale.defaultScale
 
     // MARK: - Init
 
@@ -79,6 +82,12 @@ struct ResumeDetailView: View {
                     .padding(.top, 8)
                 }
                 .id(selectedSection)
+                // Scale the editable resume content by the user-chosen factor.
+                // `\.fontScale` drives `.scaledFont` on explicitly-sized text;
+                // the default-font override (13pt base) scales the unstyled
+                // field values and inline text fields for free.
+                .environment(\.fontScale, CGFloat(fontScale))
+                .font(.system(size: 13 * fontScale))
 
                 Spacer(minLength: 0)
 
@@ -293,7 +302,7 @@ private struct LeafSectionCardView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(node.displayLabel)
-                .font(.subheadline.weight(.semibold))
+                .scaledFont(size: 11, weight: .semibold)
 
             Divider()
 
@@ -346,7 +355,7 @@ private struct SingleEntrySectionView: View {
                     // Container - show with label
                     VStack(alignment: .leading, spacing: 4) {
                         Text(node.displayLabel)
-                            .font(.caption)
+                            .scaledFont(size: 10)
                             .foregroundStyle(.secondary)
                         ForEach(node.orderedChildren, id: \.id) { child in
                             NodeLeafView(node: child)

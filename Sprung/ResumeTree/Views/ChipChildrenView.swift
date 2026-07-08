@@ -150,9 +150,9 @@ struct ChipChildrenView: View {
         } label: {
             HStack(spacing: 2) {
                 Image(systemName: "plus")
-                    .font(.system(size: 9, weight: .semibold))
+                    .scaledFont(size: 9, weight: .semibold)
                 Text("Add")
-                    .font(.system(size: 10, weight: .medium))
+                    .scaledFont(size: 10, weight: .medium)
             }
             .foregroundStyle(.secondary)
             .padding(.horizontal, 8)
@@ -168,7 +168,7 @@ struct ChipChildrenView: View {
             HStack(spacing: 4) {
                 TextField("Type to search...", text: $newChipText)
                     .textFieldStyle(.plain)
-                    .font(.system(size: 11))
+                    .scaledFont(size: 11)
                     .frame(minWidth: 80, maxWidth: 140)
                     .focused($isTextFieldFocused)
                     .onChange(of: newChipText) { _, newValue in
@@ -189,7 +189,7 @@ struct ChipChildrenView: View {
                     cancelAdd()
                 } label: {
                     Image(systemName: "xmark")
-                        .font(.system(size: 8, weight: .bold))
+                        .scaledFont(size: 8, weight: .bold)
                         .foregroundStyle(.secondary)
                 }
                 .buttonStyle(.plain)
@@ -208,10 +208,10 @@ struct ChipChildrenView: View {
                         } label: {
                             HStack {
                                 Text(skill.canonical)
-                                    .font(.system(size: 11))
+                                    .scaledFont(size: 11)
                                 Spacer()
                                 Text(skill.category)
-                                    .font(.system(size: 9))
+                                    .scaledFont(size: 9)
                                     .foregroundStyle(.tertiary)
                             }
                             .padding(.horizontal, 8)
@@ -240,9 +240,9 @@ struct ChipChildrenView: View {
         } label: {
             HStack(spacing: 2) {
                 Image(systemName: "list.bullet.rectangle")
-                    .font(.system(size: 9, weight: .medium))
+                    .scaledFont(size: 9, weight: .medium)
                 Text("Browse")
-                    .font(.system(size: 10, weight: .medium))
+                    .scaledFont(size: 10, weight: .medium)
             }
             .foregroundStyle(.secondary)
             .padding(.horizontal, 8)
@@ -257,10 +257,10 @@ struct ChipChildrenView: View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 3) {
                 Image(systemName: "checkmark.seal")
-                    .font(.system(size: 8))
+                    .scaledFont(size: 8)
                     .foregroundStyle(.green.opacity(0.8))
                 Text("Matched skills not added:")
-                    .font(.system(size: 9))
+                    .scaledFont(size: 9)
                     .foregroundStyle(.tertiary)
             }
 
@@ -271,9 +271,9 @@ struct ChipChildrenView: View {
                     } label: {
                         HStack(spacing: 2) {
                             Image(systemName: "plus")
-                                .font(.system(size: 7, weight: .bold))
+                                .scaledFont(size: 7, weight: .bold)
                             Text(skill.canonical)
-                                .font(.system(size: 10, weight: .medium))
+                                .scaledFont(size: 10, weight: .medium)
                         }
                         .foregroundStyle(.green.opacity(0.9))
                         .padding(.horizontal, 6)
@@ -292,10 +292,10 @@ struct ChipChildrenView: View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 3) {
                 Image(systemName: "sparkles")
-                    .font(.system(size: 8))
+                    .scaledFont(size: 8)
                     .foregroundStyle(.orange.opacity(0.8))
                 Text("Suggested skills:")
-                    .font(.system(size: 9))
+                    .scaledFont(size: 9)
                     .foregroundStyle(.tertiary)
             }
 
@@ -306,9 +306,9 @@ struct ChipChildrenView: View {
                     } label: {
                         HStack(spacing: 2) {
                             Image(systemName: "plus")
-                                .font(.system(size: 7, weight: .bold))
+                                .scaledFont(size: 7, weight: .bold)
                             Text(rec.skillName)
-                                .font(.system(size: 10, weight: .medium))
+                                .scaledFont(size: 10, weight: .medium)
                         }
                         .foregroundStyle(.orange.opacity(0.9))
                         .padding(.horizontal, 6)
@@ -329,10 +329,10 @@ struct ChipChildrenView: View {
             Toggle(isOn: $syncToSkillLibrary) {
                 HStack(spacing: 3) {
                     Image(systemName: "arrow.triangle.2.circlepath")
-                        .font(.system(size: 9))
+                        .scaledFont(size: 9)
                         .foregroundStyle(.tertiary)
                     Text("Apply changes to skill library")
-                        .font(.system(size: 10))
+                        .scaledFont(size: 10)
                         .foregroundStyle(.tertiary)
                 }
             }
@@ -345,9 +345,9 @@ struct ChipChildrenView: View {
             } label: {
                 HStack(spacing: 3) {
                     Image(systemName: "arrow.triangle.2.circlepath.circle")
-                        .font(.system(size: 9))
+                        .scaledFont(size: 9)
                     Text("Sync all to skill bank")
-                        .font(.system(size: 10))
+                        .scaledFont(size: 10)
                 }
                 .foregroundStyle(.secondary)
             }
