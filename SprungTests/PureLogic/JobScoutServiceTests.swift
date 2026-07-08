@@ -19,6 +19,7 @@
 //
 
 import XCTest
+import SwiftOpenAI
 @testable import Sprung
 
 @MainActor
@@ -535,6 +536,7 @@ final class JobScoutServiceTests: XCTestCase {
             guidance: "favor clinical roles",
             knowledgeContext: "[experience] Linac Commissioning:\nDid the work.",
             dossierContext: "Seeking senior clinical roles.",
+            learnedPreferences: "",
             outcomeContext: "",
             today: Date(timeIntervalSince1970: 1_782_000_000)
         )
@@ -560,6 +562,7 @@ final class JobScoutServiceTests: XCTestCase {
             guidance: "   ",
             knowledgeContext: "",
             dossierContext: "",
+            learnedPreferences: "   ",
             outcomeContext: "",
             today: Date()
         )
@@ -567,6 +570,8 @@ final class JobScoutServiceTests: XCTestCase {
         XCTAssertFalse(message.contains("## CANDIDATE KNOWLEDGE CARDS"))
         XCTAssertFalse(message.contains("## CANDIDATE DOSSIER"))
         XCTAssertFalse(message.contains("## RECENT SCOUT OUTCOMES"))
+        XCTAssertFalse(message.contains("## LEARNED PREFERENCES"),
+                       "a whitespace-only profile is omitted, not rendered as an empty block")
     }
 
     func testScoutUserMessageIncludesOutcomeBlockWhenPresent() {
@@ -579,11 +584,30 @@ final class JobScoutServiceTests: XCTestCase {
             guidance: "",
             knowledgeContext: "",
             dossierContext: "",
+            learnedPreferences: "",
             outcomeContext: "Applied to or advanced — the strongest signal:\n- Staff Physicist — Acme (Submitted)",
             today: Date()
         )
         XCTAssertTrue(message.contains("## RECENT SCOUT OUTCOMES"))
         XCTAssertTrue(message.contains("Staff Physicist — Acme (Submitted)"))
+    }
+
+    func testScoutUserMessageIncludesLearnedPreferencesWhenPresent() {
+        let message = JobScoutService.scoutUserMessage(
+            boards: [.dice],
+            keywords: ["Physicist"],
+            location: "Austin, TX",
+            preferences: SearchPreferences(),
+            recommendationCount: 5,
+            guidance: "",
+            knowledgeContext: "",
+            dossierContext: "",
+            learnedPreferences: "Pursues clinical medical-physics roles; dismisses anything requiring relocation.",
+            outcomeContext: "",
+            today: Date()
+        )
+        XCTAssertTrue(message.contains("## LEARNED PREFERENCES (distilled from your past decisions)"))
+        XCTAssertTrue(message.contains("Pursues clinical medical-physics roles; dismisses anything requiring relocation."))
     }
 
     // MARK: - Outcome-feedback context builder
@@ -628,6 +652,48 @@ final class JobScoutServiceTests: XCTestCase {
         XCTAssertTrue(onlyDismissed.contains("Dismissed"))
         XCTAssertTrue(onlyDismissed.contains("- T — C"), "a dismissal with no reason still lists the posting")
         XCTAssertFalse(onlyDismissed.contains("reason:"), "no reason clause when none was given")
+    }
+
+    // MARK: - Taste-profile synthesis (pure halves)
+
+    func testTasteProfileUserMessageWithPreviousProfile() {
+        let message = JobScoutService.tasteProfileUserMessage(
+            previousProfile: "Pursues clinical roles.",
+            outcomeSummary: "Applied to: Staff Physicist — Acme"
+        )
+        XCTAssertTrue(message.contains("Previous taste profile:\nPursues clinical roles."))
+        XCTAssertTrue(message.contains("Applied to: Staff Physicist — Acme"))
+        XCTAssertTrue(message.contains("Write the updated taste profile now."))
+    }
+
+    func testTasteProfileUserMessageWithNoPreviousProfile() {
+        let message = JobScoutService.tasteProfileUserMessage(
+            previousProfile: "   ",
+            outcomeSummary: "Dismissed: Contract QA — Gamma"
+        )
+        XCTAssertTrue(message.contains("There is no previous taste profile yet."))
+        XCTAssertFalse(message.contains("Previous taste profile:"))
+    }
+
+    func testParseTasteProfileExtractsAndTrimsText() throws {
+        let json = """
+        {"id":"msg_1","type":"message","role":"assistant","model":"claude-x",
+         "content":[{"type":"text","text":"  Pursues clinical medical-physics roles.  "}],
+         "stop_reason":"end_turn","stop_sequence":null,"usage":{"input_tokens":1,"output_tokens":1}}
+        """
+        let response = try JSONDecoder().decode(AnthropicMessageResponse.self, from: Data(json.utf8))
+        XCTAssertEqual(JobScoutService.parseTasteProfile(from: response), "Pursues clinical medical-physics roles.")
+    }
+
+    func testParseTasteProfileReturnsNilForEmptyText() throws {
+        let json = """
+        {"id":"msg_1","type":"message","role":"assistant","model":"claude-x",
+         "content":[{"type":"text","text":"   \\n  "}],
+         "stop_reason":"end_turn","stop_sequence":null,"usage":{"input_tokens":1,"output_tokens":1}}
+        """
+        let response = try JSONDecoder().decode(AnthropicMessageResponse.self, from: Data(json.utf8))
+        XCTAssertNil(JobScoutService.parseTasteProfile(from: response),
+                     "an all-whitespace response yields no profile, never an empty-string overwrite")
     }
 
     // MARK: - Report building (JobScoutRunState)

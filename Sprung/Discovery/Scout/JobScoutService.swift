@@ -22,6 +22,7 @@
 //
 
 import Foundation
+import SwiftOpenAI
 
 @Observable
 @MainActor
@@ -272,6 +273,7 @@ final class JobScoutService {
             guidance: config.guidance,
             knowledgeContext: knowledgeContext(),
             dossierContext: dossierContext(),
+            learnedPreferences: settingsStore.scoutTasteProfile,
             outcomeContext: outcomeFeedbackContext(),
             today: Date()
         )
@@ -322,6 +324,10 @@ final class JobScoutService {
         activityTracker?.updatePhase(operationId: operationId, phase: "Preparing recommendations for review")
         let autoImportStrong = settingsStore.scoutAutoImportStrongMatches
         let recommendations = drafts.map { buildInitialRecommendation($0, autoImportStrong: autoImportStrong) }
+
+        // Refresh the learned taste profile if enough decisions have accrued
+        // since the last synthesis (uses the model already resolved for this run).
+        await synthesizeTasteProfileIfDue(modelId: modelId, runState: runState)
 
         return runState.makeReport(startedAt: startedAt, recommendations: recommendations)
     }
@@ -496,6 +502,7 @@ final class JobScoutService {
     func acceptRecommendation(runStartedAt: Date, url: String) {
         guard let recommendation = report(forRunStartedAt: runStartedAt)?
             .recommendations.first(where: { $0.url == url }) else { return }
+        settingsStore.recordScoutDecision()
         let draft = JobScoutRecommendationDraft(
             url: recommendation.url,
             title: recommendation.title,
@@ -512,6 +519,7 @@ final class JobScoutService {
     func dismissRecommendation(runStartedAt: Date, url: String, reason: String?) {
         guard let recommendation = report(forRunStartedAt: runStartedAt)?
             .recommendations.first(where: { $0.url == url }) else { return }
+        settingsStore.recordScoutDecision()
         settingsStore.recordDismissedPostings([
             ScoutDismissedPosting(
                 url: recommendation.url,
@@ -565,12 +573,13 @@ final class JobScoutService {
         candidateDossierStore.dossier?.exportForJobMatching() ?? ""
     }
 
-    /// Outcome-feedback context: what the user actually did with past scout
-    /// picks. Scout-sourced pipeline leads partition by how far they
-    /// progressed (applied-and-beyond = strong signal; still-a-lead = mild),
-    /// and the dismissed set supplies the negatives with their reasons. Empty
-    /// string when there's no history yet.
-    private func outcomeFeedbackContext() -> String {
+    /// Gather scout-outcome signal from the pipeline (scout-sourced leads
+    /// partitioned by how far they progressed) and the dismissed set, each
+    /// section capped (most recent first). Shared by the per-run outcome block
+    /// and the taste-profile synthesis (which uses a larger cap).
+    private func scoutOutcomeSignal(
+        cap: Int
+    ) -> (applied: [ScoutOutcomePick], imported: [ScoutOutcomePick], dismissed: [ScoutDismissedPosting]) {
         let scoutApps = jobAppStore.jobApps
             .filter { $0.source == "Scout" }
             .sorted { ($0.identifiedDate ?? .distantPast) > ($1.identifiedDate ?? .distantPast) }
@@ -592,15 +601,104 @@ final class JobScoutService {
             }
         }
 
-        let recentDismissed = settingsStore.scoutDismissedPostings
+        let dismissed = settingsStore.scoutDismissedPostings
             .sorted { $0.dismissedAt > $1.dismissedAt }
-            .prefix(Self.outcomeFeedbackMaxPerSection)
+            .prefix(cap)
 
+        return (Array(applied.prefix(cap)), Array(imported.prefix(cap)), Array(dismissed))
+    }
+
+    /// Outcome-feedback context: what the user actually did with past scout
+    /// picks. Empty string when there's no history yet.
+    private func outcomeFeedbackContext() -> String {
+        let signal = scoutOutcomeSignal(cap: Self.outcomeFeedbackMaxPerSection)
         return Self.outcomeFeedbackContext(
-            appliedOrBeyond: Array(applied.prefix(Self.outcomeFeedbackMaxPerSection)),
-            importedPending: Array(imported.prefix(Self.outcomeFeedbackMaxPerSection)),
-            dismissed: Array(recentDismissed)
+            appliedOrBeyond: signal.applied,
+            importedPending: signal.imported,
+            dismissed: signal.dismissed
         )
+    }
+
+    // MARK: - Learned Taste Profile Synthesis
+
+    /// Re-synthesize the learned taste profile after this many accept/dismiss
+    /// decisions accrue — often enough to track shifting taste, rare enough to
+    /// stay cheap.
+    static let tasteProfileSynthesisThreshold = 10
+    /// A larger outcome slice for synthesis than the per-run block uses — the
+    /// profile distills the longer tail of decisions.
+    static let tasteProfileSynthesisCap = 40
+    /// Output cap for the synthesis call — a few sentences of prose, never
+    /// structured output, so no truncation trap.
+    static let tasteProfileMaxTokens = 500
+
+    static let tasteProfileSystemPrompt = """
+        You maintain a short "taste profile" for one job seeker — a few plain sentences capturing what kinds of roles they actually pursue and what they pass on, learned from their real decisions. You are given the previous profile (if any) and a record of what they recently applied to, imported, and dismissed (with their reasons).
+
+        Write 3 to 6 plain sentences. Capture concrete, durable preferences: the role types and seniority they pursue, work-arrangement and location constraints, compensation expectations if evident, sectors or company types they favor or avoid, and consistent dealbreakers (especially from stated dismissal reasons). Update the previous profile toward the pattern the evidence shows; drop anything the latest evidence contradicts.
+
+        Be specific and honest in the candidate's own terms. No hedging, no invented specifics, no recruiter buzzwords ("leverage", "synergy", "dynamic", "results-driven", "cutting-edge", "fast-paced"), no "[verb] [thing] resulting in [X]% improvement" formulas. If the evidence is too thin to say anything durable, keep the previous profile (or write one honest sentence if there was none).
+
+        Output only the profile text — no preamble, no headings, no list.
+        """
+
+    /// Build the synthesis user message from the previous profile and a summary
+    /// of recent decisions (pure — the LLM-driven half is the service call).
+    static func tasteProfileUserMessage(previousProfile: String, outcomeSummary: String) -> String {
+        let trimmed = previousProfile.trimmingCharacters(in: .whitespacesAndNewlines)
+        return [
+            trimmed.isEmpty ? "There is no previous taste profile yet." : "Previous taste profile:\n\(trimmed)",
+            "The user's recent decisions:\n\(outcomeSummary)",
+            "Write the updated taste profile now."
+        ].joined(separator: "\n\n")
+    }
+
+    /// Extract the profile text from a synthesis response (pure). Nil when the
+    /// model returned no usable text.
+    static func parseTasteProfile(from response: AnthropicMessageResponse) -> String? {
+        let text = response.content.compactMap { block -> String? in
+            if case .text(let textBlock) = block { return textBlock.text }
+            return nil
+        }.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+        return text.isEmpty ? nil : text
+    }
+
+    /// When enough review decisions have accrued, distill them into a refreshed
+    /// taste profile. Loud but non-fatal — a failure notes the report and keeps
+    /// the previous profile; it never blocks or fails the run.
+    private func synthesizeTasteProfileIfDue(modelId: String, runState: JobScoutRunState) async {
+        guard settingsStore.scoutDecisionsSinceSynthesis >= Self.tasteProfileSynthesisThreshold,
+              let llmFacade else { return }
+        let signal = scoutOutcomeSignal(cap: Self.tasteProfileSynthesisCap)
+        let outcomeSummary = Self.outcomeFeedbackContext(
+            appliedOrBeyond: signal.applied, importedPending: signal.imported, dismissed: signal.dismissed
+        )
+        guard !outcomeSummary.isEmpty else { return }
+
+        let decisionCount = settingsStore.scoutDecisionsSinceSynthesis
+        let parameters = AnthropicMessageParameter(
+            model: modelId,
+            messages: [.user(Self.tasteProfileUserMessage(
+                previousProfile: settingsStore.scoutTasteProfile,
+                outcomeSummary: outcomeSummary
+            ))],
+            system: .text(Self.tasteProfileSystemPrompt),
+            maxTokens: Self.tasteProfileMaxTokens,
+            stream: false
+        )
+        do {
+            let response = try await llmFacade.anthropicMessages(parameters: parameters)
+            guard let profile = Self.parseTasteProfile(from: response) else {
+                runState.addNote("Couldn't refresh the scout's learned preferences: the model returned no text.")
+                Logger.warning("Job scout: taste-profile synthesis returned empty", category: .ai)
+                return
+            }
+            settingsStore.applyTasteProfile(profile)
+            Logger.info("Job scout: refreshed the learned-preferences profile from \(decisionCount) decisions", category: .ai)
+        } catch {
+            runState.addNote("Couldn't refresh the scout's learned preferences: \(error.localizedDescription)")
+            Logger.error("❌ Job scout: taste-profile synthesis failed: \(error.localizedDescription)", category: .ai)
+        }
     }
 
     // MARK: - Pure Helpers (static — covered by JobScoutServiceTests)
@@ -977,6 +1075,7 @@ final class JobScoutService {
         guidance: String,
         knowledgeContext: String,
         dossierContext: String,
+        learnedPreferences: String,
         outcomeContext: String,
         today: Date
     ) -> String {
@@ -1008,6 +1107,10 @@ final class JobScoutService {
         }
         if !dossierContext.isEmpty {
             message += "\n\n## CANDIDATE DOSSIER\n\(dossierContext)"
+        }
+        let trimmedPreferences = learnedPreferences.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmedPreferences.isEmpty {
+            message += "\n\n## LEARNED PREFERENCES (distilled from your past decisions)\n\(trimmedPreferences)"
         }
         if !outcomeContext.isEmpty {
             message += "\n\n## RECENT SCOUT OUTCOMES\n\(outcomeContext)"

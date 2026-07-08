@@ -13,6 +13,7 @@
 //   - lastSuccessfulScoutRunAt — stamped only through recordSuccessfulScoutRun
 //   - scoutRunHistory — the capped, newest-first ScoutRunReport blob round-trip
 //   - scoutDismissedPostings — cross-run dismissed memory (TTL + cap)
+//   - scoutTasteProfile — learned-preferences text + decision counter + stamp
 //
 //  Uses the store's `defaults:` injection seam with a `TestDefaults` suite so
 //  these round-trips never touch the developer's real UserDefaults.standard.
@@ -327,5 +328,43 @@ final class JobScoutSettingsStoreTests: XCTestCase {
         // Survivors stay chronological: oldest-kept first, newest last.
         XCTAssertEqual(pruned.first?.url, "https://\(cap - 1)")
         XCTAssertEqual(pruned.last?.url, "https://0")
+    }
+
+    // MARK: - Learned taste profile
+
+    func testScoutTasteProfileDefaultsEmpty() {
+        let store = DiscoverySettingsStore(defaults: TestDefaults().store)
+        XCTAssertEqual(store.scoutTasteProfile, "")
+        XCTAssertNil(store.scoutTasteProfileUpdatedAt)
+        XCTAssertEqual(store.scoutDecisionsSinceSynthesis, 0)
+    }
+
+    func testRecordScoutDecisionIncrementsCounter() {
+        let store = DiscoverySettingsStore(defaults: TestDefaults().store)
+        store.recordScoutDecision()
+        store.recordScoutDecision()
+        XCTAssertEqual(store.scoutDecisionsSinceSynthesis, 2)
+    }
+
+    func testApplyTasteProfileStoresResetsCounterAndStamps() {
+        let defaults = TestDefaults()
+        let store = DiscoverySettingsStore(defaults: defaults.store)
+        store.recordScoutDecision()
+        store.recordScoutDecision()
+
+        let when = Date(timeIntervalSince1970: 1_760_000_000)
+        store.applyTasteProfile("Pursues clinical roles; avoids relocation.", at: when)
+
+        XCTAssertEqual(store.scoutTasteProfile, "Pursues clinical roles; avoids relocation.")
+        XCTAssertEqual(store.scoutDecisionsSinceSynthesis, 0, "installing a profile means we're current")
+        XCTAssertEqual(
+            store.scoutTasteProfileUpdatedAt?.timeIntervalSince1970 ?? -1,
+            when.timeIntervalSince1970, accuracy: 0.001
+        )
+
+        // Survives a relaunch.
+        let reloaded = DiscoverySettingsStore(defaults: defaults.store)
+        XCTAssertEqual(reloaded.scoutTasteProfile, "Pursues clinical roles; avoids relocation.")
+        XCTAssertEqual(reloaded.scoutDecisionsSinceSynthesis, 0)
     }
 }

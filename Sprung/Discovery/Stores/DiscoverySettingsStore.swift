@@ -191,6 +191,54 @@ final class DiscoverySettingsStore {
         set { defaults.set(newValue, forKey: Self.scoutAutoImportStrongMatchesKey) }
     }
 
+    // MARK: - Job-Scout Learned Taste Profile
+
+    private static let scoutTasteProfileKey = "discoveryScoutTasteProfile"
+    private static let scoutTasteProfileUpdatedAtKey = "discoveryScoutTasteProfileUpdatedAt"
+    private static let scoutDecisionsSinceSynthesisKey = "discoveryScoutDecisionsSinceSynthesis"
+
+    /// A few plain sentences the scout distills from the user's accept/dismiss
+    /// decisions over time and injects into every run to calibrate what it
+    /// surfaces. Empty until enough decisions accrue (or the user writes one).
+    /// User-editable in Settings — a manual edit is authoritative.
+    var scoutTasteProfile: String {
+        get { defaults.string(forKey: Self.scoutTasteProfileKey) ?? "" }
+        set { defaults.set(newValue, forKey: Self.scoutTasteProfileKey) }
+    }
+
+    /// When the profile was last written (by synthesis or a manual edit).
+    var scoutTasteProfileUpdatedAt: Date? {
+        get { defaults.object(forKey: Self.scoutTasteProfileUpdatedAtKey) as? Date }
+        set {
+            if let newValue {
+                defaults.set(newValue, forKey: Self.scoutTasteProfileUpdatedAtKey)
+            } else {
+                defaults.removeObject(forKey: Self.scoutTasteProfileUpdatedAtKey)
+            }
+        }
+    }
+
+    /// Accept/dismiss decisions recorded since the profile was last synthesized.
+    /// The scout re-synthesizes when this crosses its threshold.
+    var scoutDecisionsSinceSynthesis: Int {
+        get { defaults.integer(forKey: Self.scoutDecisionsSinceSynthesisKey) }
+        set { defaults.set(newValue, forKey: Self.scoutDecisionsSinceSynthesisKey) }
+    }
+
+    /// Count one review decision toward the next synthesis.
+    func recordScoutDecision() {
+        scoutDecisionsSinceSynthesis += 1
+    }
+
+    /// Install a taste profile (from synthesis or a manual edit): store the
+    /// text, stamp the time, and reset the decision counter — both paths mean
+    /// "the profile is current as of now."
+    func applyTasteProfile(_ text: String, at date: Date = Date()) {
+        scoutTasteProfile = text
+        scoutTasteProfileUpdatedAt = date
+        scoutDecisionsSinceSynthesis = 0
+    }
+
     // MARK: - Job-Scout Dismissed Postings (cross-run memory)
 
     private static let scoutDismissedPostingsKey = "discoveryScoutDismissedPostings"

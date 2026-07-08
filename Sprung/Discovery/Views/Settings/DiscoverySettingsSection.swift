@@ -12,6 +12,9 @@ struct DiscoverySettingsSection: View {
     @Bindable var coordinator: DiscoveryCoordinator
 
     @State private var showResetConfirmation = false
+    /// Local draft of the learned taste profile; seeded from the store on
+    /// appear and saved back on demand so an in-progress edit isn't clobbered.
+    @State private var tasteProfileDraft = ""
 
     var body: some View {
         Section {
@@ -121,6 +124,48 @@ struct DiscoverySettingsSection: View {
             ))
 
             Text("Scout runs use the Discovery Anthropic model and share LinkedIn's 30-calls-per-hour budget with manual searches. Recommendations wait in the run's review sheet — you import the ones worth pursuing. With auto-import on, picks the agent rates a strong overall match land in the pipeline automatically; the rest still wait for review.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+
+            learnedPreferencesEditor
+        }
+        .onAppear { tasteProfileDraft = coordinator.settingsStore.scoutTasteProfile }
+    }
+
+    private var learnedPreferencesEditor: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Learned preferences")
+                .font(.subheadline.weight(.semibold))
+
+            TextEditor(text: $tasteProfileDraft)
+                .font(.body)
+                .frame(minHeight: 72)
+                .padding(6)
+                .scrollContentBackground(.hidden)
+                .background(Color(.textBackgroundColor))
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+                .overlay(RoundedRectangle(cornerRadius: 6).stroke(.quaternary, lineWidth: 1))
+
+            HStack {
+                if let updated = coordinator.settingsStore.scoutTasteProfileUpdatedAt {
+                    Text("Updated \(updated.formatted(date: .abbreviated, time: .shortened))")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text("Not learned yet — builds after a few review decisions.")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button("Save") {
+                    coordinator.settingsStore.applyTasteProfile(
+                        tasteProfileDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+                    )
+                }
+                .disabled(tasteProfileDraft == coordinator.settingsStore.scoutTasteProfile)
+            }
+
+            Text("The scout distills this from your import and dismiss decisions over time and uses it to calibrate future runs. Edit it to correct or steer what it learned.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
         }
