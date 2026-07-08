@@ -136,7 +136,7 @@ enum ResumeExportError: Error, LocalizedError {
         case .templateSelectionFailed:
             return "Failed to select or load template files"
         case .noTemplatesConfigured:
-            return "No resume templates are configured. Add a template in the Template Editor before exporting."
+            return "No resume templates are configured. Add a template in References → Templates before exporting."
         }
     }
 }

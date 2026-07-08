@@ -22,8 +22,14 @@ struct CreateResumeView: View {
                 .padding(.bottom, 10)
             // Resume Model Selector
             VStack(alignment: .leading, spacing: 8) {
-                Text("Select Template")
-                    .font(.headline)
+                HStack {
+                    Text("Select Template")
+                        .font(.headline)
+                    Spacer()
+                    Button("Manage Templates…", action: manageTemplates)
+                        .buttonStyle(.link)
+                        .controlSize(.small)
+                }
                 Picker("Select Template", selection: $selectedTemplateID) {
                     Text("Select a template").tag(nil as UUID?)
                     ForEach(templates) { template in
@@ -35,10 +41,8 @@ struct CreateResumeView: View {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("No templates available")
                             .foregroundColor(.secondary)
-                        Button("Open Template Editor") {
-                            NotificationCenter.default.post(name: .showTemplateEditor, object: nil)
-                        }
-                        .buttonStyle(.borderedProminent)
+                        Button("Manage Templates…", action: manageTemplates)
+                            .buttonStyle(.borderedProminent)
                     }
                 }
                 if let templateID = selectedTemplateID,
@@ -107,5 +111,19 @@ struct CreateResumeView: View {
                 }
             }
         }
+    }
+
+    /// Dismiss and deep-link to the References module's Templates tab, where
+    /// templates are created and edited.
+    private func manageTemplates() {
+        dismiss()
+        NotificationCenter.default.post(
+            name: .navigateToModule, object: nil,
+            userInfo: ["module": AppModule.references.rawValue]
+        )
+        NotificationCenter.default.post(
+            name: .navigateToReferencesTab, object: nil,
+            userInfo: ["tab": "Templates"]
+        )
     }
 }

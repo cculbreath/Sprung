@@ -43,6 +43,22 @@ struct ResumeStylingDrawer: View {
                         if vm.hasSectionVisibilityOptions {
                             SectionVisibilityPanelView()
                         }
+
+                        Divider()
+                        Button {
+                            NotificationCenter.default.post(
+                                name: .navigateToModule, object: nil,
+                                userInfo: ["module": AppModule.references.rawValue]
+                            )
+                            NotificationCenter.default.post(
+                                name: .navigateToReferencesTab, object: nil,
+                                userInfo: ["tab": "Templates"]
+                            )
+                        } label: {
+                            Label("Manage Templates…", systemImage: "doc.richtext")
+                                .font(.system(size: 11))
+                        }
+                        .buttonStyle(.link)
                     }
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)

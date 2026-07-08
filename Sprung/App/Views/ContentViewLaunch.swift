@@ -41,7 +41,16 @@ struct ContentViewLaunch: View {
                         )
                     },
                     onOpenTemplateEditor: {
-                        NotificationCenter.default.post(name: .showTemplateEditor, object: nil)
+                        NotificationCenter.default.post(
+                            name: .navigateToModule,
+                            object: nil,
+                            userInfo: ["module": AppModule.references.rawValue]
+                        )
+                        NotificationCenter.default.post(
+                            name: .navigateToReferencesTab,
+                            object: nil,
+                            userInfo: ["tab": "Templates"]
+                        )
                     },
                     onCaptureJob: {
                         NotificationCenter.default.post(name: .newJobApp, object: nil)

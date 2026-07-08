@@ -10,11 +10,6 @@ import SwiftData
 import SwiftUI
 typealias TemplatePreviewResult = (pdfData: Data, text: String)
 extension TemplateEditorView {
-    func closeEditor() {
-        if let window = NSApplication.shared.windows.first(where: { $0.title == "Template Editor" }) {
-            window.close()
-        }
-    }
     func refreshTemplatePreview(force: Bool = false) {
         guard selectedTemplate.isEmpty == false else {
             previewPDFData = nil

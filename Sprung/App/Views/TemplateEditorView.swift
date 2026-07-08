@@ -154,16 +154,28 @@ struct TemplateEditorView: View {
         )
     }
     var body: some View {
-        HStack(spacing: 0) {
-            if showSidebar {
-                sidebarContainer()
-                    .clipped()
-                    .frame(width: sidebarWidth)
-                    .transition(.move(edge: .leading))
+        VStack(spacing: 0) {
+            TemplateEditorToolbar(
+                showSidebar: $showSidebar,
+                hasUnsavedChanges: hasAnyUnsavedChanges,
+                onToggleSidebar: toggleSidebar,
+                onOpenApplicant: openApplicantEditor,
+                onOpenExperience: openExperienceEditor,
+                onRevert: { showRevertConfirmation = true },
+                onSave: { _ = saveAllChanges() }
+            )
+            Divider()
+            HStack(spacing: 0) {
+                if showSidebar {
+                    sidebarContainer()
+                        .clipped()
+                        .frame(width: sidebarWidth)
+                        .transition(.move(edge: .leading))
+                }
+                mainContent()
             }
-            mainContent()
         }
-        .frame(minWidth: 1024, minHeight: 640)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(NSColor.windowBackgroundColor))
         .onAppear {
             loadAvailableTemplates()
@@ -261,21 +273,6 @@ struct TemplateEditorView: View {
                 Text(error)
             }
         }
-        .toolbar(id: "templateEditorToolbar") {
-            TemplateEditorToolbar(
-                showSidebar: $showSidebar,
-                hasUnsavedChanges: hasAnyUnsavedChanges,
-                onToggleSidebar: toggleSidebar,
-                onOpenApplicant: openApplicantEditor,
-                onOpenExperience: openExperienceEditor,
-                onCloseWithoutSaving: {
-                    closeWithoutSaving()
-                },
-                onRevert: { showRevertConfirmation = true },
-                onSaveAndClose: saveAndClose
-            )
-        }
-        .toolbarRole(.editor)
     }
     @ViewBuilder
     private func mainContent() -> some View {

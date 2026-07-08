@@ -280,11 +280,6 @@ struct SprungApp: App {
                     NotificationCenter.default.post(name: .optimizeResume, object: nil)
                 }
                 .keyboardShortcut("o", modifiers: [.command])
-                Divider()
-                Button("Template Editor...") {
-                    appDelegate.showTemplateEditorWindow()
-                }
-                .keyboardShortcut("t", modifiers: [.command, .shift])
             }
         }
         // MARK: - Cover Letter Menu

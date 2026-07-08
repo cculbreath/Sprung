@@ -82,12 +82,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Window-level notifications that must work regardless of which module is active.
         NotificationCenter.default.addObserver(
             self,
-            selector: #selector(showTemplateEditorWindow),
-            name: .showTemplateEditor,
-            object: nil
-        )
-        NotificationCenter.default.addObserver(
-            self,
             selector: #selector(showSettingsWindow),
             name: .showSettings,
             object: nil
@@ -152,7 +146,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private func setupAppMenu() {
         AppMenuBuilder.install(
             navigateToProfile: #selector(navigateToProfileModule),
-            showTemplateEditor: #selector(showTemplateEditorWindow),
             navigateToExperience: #selector(navigateToExperienceModule),
             target: self
         )
@@ -176,10 +169,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             name: .navigateToModule, object: nil,
             userInfo: ["module": AppModule.profile.rawValue]
         )
-    }
-
-    @objc func showTemplateEditorWindow() {
-        windowManager.showTemplateEditor()
     }
 
     @objc func showOnboardingInterviewWindow() {

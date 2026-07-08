@@ -85,7 +85,6 @@ import Foundation
 
 extension NSToolbarItem.Identifier {
     static let newListing = NSToolbarItem.Identifier("newListing")
-    static let templateEditor = NSToolbarItem.Identifier("templateEditor")
     static let bestJob = NSToolbarItem.Identifier("bestJob")
     static let onboardingInterview = NSToolbarItem.Identifier("onboardingInterview")
     static let createResume = NSToolbarItem.Identifier("createResume")
@@ -151,7 +150,6 @@ final class ToolbarCoordinator: NSObject, NSToolbarDelegate, NSToolbarItemValida
     func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
         [
             .newListing,
-            .templateEditor,
             .flexibleSpace,
             .createResume,
             .customize,
@@ -166,7 +164,6 @@ final class ToolbarCoordinator: NSObject, NSToolbarDelegate, NSToolbarItemValida
     func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
         [
             .newListing,
-            .templateEditor,
             .bestJob,
             .onboardingInterview,
             .createResume,
@@ -200,13 +197,6 @@ final class ToolbarCoordinator: NSObject, NSToolbarDelegate, NSToolbarItemValida
             item.toolTip = "Create new job listing"
             item.image = NSImage(systemSymbolName: "plus.rectangle.on.folder", accessibilityDescription: "New Listing")
             item.action = #selector(newListingAction)
-
-        case .templateEditor:
-            item.label = "Templates"
-            item.paletteLabel = "Template Editor"
-            item.toolTip = "Open Template Editor"
-            item.image = NSImage(systemSymbolName: "compass.drawing", accessibilityDescription: "Templates")
-            item.action = #selector(templateEditorAction)
 
         case .bestJob:
             item.label = "Best Job"
@@ -330,10 +320,6 @@ final class ToolbarCoordinator: NSObject, NSToolbarDelegate, NSToolbarItemValida
 
     @objc private func newListingAction() {
         NotificationCenter.default.post(name: .newJobApp, object: nil)
-    }
-
-    @objc private func templateEditorAction() {
-        NotificationCenter.default.post(name: .showTemplateEditor, object: nil)
     }
 
     @objc private func bestJobAction() {

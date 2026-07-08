@@ -15,6 +15,7 @@ struct ReferencesModuleView: View {
     @Environment(SkillStore.self) private var skillStore
     @Environment(TitleSetStore.self) private var titleSetStore
     @Environment(CandidateDossierStore.self) private var dossierStore
+    @Environment(TemplateStore.self) private var templateStore
     @Environment(LLMFacade.self) private var llmFacade
 
     enum Tab: String, CaseIterable, Identifiable {
@@ -23,6 +24,7 @@ struct ReferencesModuleView: View {
         case skills = "Skills"
         case titles = "Titles"
         case dossier = "Dossier"
+        case templates = "Templates"
 
         var id: String { rawValue }
 
@@ -33,6 +35,7 @@ struct ReferencesModuleView: View {
             case .skills: return "star.fill"
             case .titles: return "person.crop.rectangle.stack"
             case .dossier: return "person.text.rectangle"
+            case .templates: return "doc.richtext"
             }
         }
 
@@ -43,6 +46,7 @@ struct ReferencesModuleView: View {
             case .skills: return .orange
             case .titles: return .cyan
             case .dossier: return .green
+            case .templates: return .pink
             }
         }
     }
@@ -199,6 +203,7 @@ struct ReferencesModuleView: View {
         case .skills: return skillStore.skills.count
         case .titles: return titleSetStore.titleSetCount
         case .dossier: return dossierStore.dossier != nil ? 1 : 0
+        case .templates: return templateStore.templates().count
         }
     }
 
@@ -248,6 +253,9 @@ struct ReferencesModuleView: View {
                 skillStore: skillStore,
                 llmFacade: llmFacade
             )
+
+        case .templates:
+            TemplateEditorView()
         }
     }
 }

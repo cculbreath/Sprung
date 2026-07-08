@@ -2,10 +2,9 @@
 //  AppMenuBuilder.swift
 //  Sprung
 //
-//  Imperatively inserts Sprung-specific items (Profile, Template Editor,
-//  Experience) into the running application menu. Call once, after
-//  applicationDidFinishLaunching, on the main queue. Profile and Experience
-//  navigate to their main-window modules; only Template Editor opens a window.
+//  Imperatively inserts Sprung-specific items (Profile, Experience) into the
+//  running application menu. Call once, after applicationDidFinishLaunching, on
+//  the main queue. Both items navigate to their main-window modules.
 //
 import Cocoa
 
@@ -13,7 +12,6 @@ import Cocoa
 enum AppMenuBuilder {
     static func install(
         navigateToProfile: Selector,
-        showTemplateEditor: Selector,
         navigateToExperience: Selector,
         target: AnyObject
     ) {
@@ -67,15 +65,6 @@ enum AppMenuBuilder {
         )
         profileMenuItem.target = target
         appMenu.insertItem(profileMenuItem, at: aboutSeparatorIndex + 1)
-        // Add Template Editor menu item
-        let templateMenuItem = NSMenuItem(
-            title: "Template Editor...",
-            action: showTemplateEditor,
-            keyEquivalent: "T"
-        )
-        templateMenuItem.target = target
-        templateMenuItem.keyEquivalentModifierMask = [.command, .shift]
-        appMenu.insertItem(templateMenuItem, at: aboutSeparatorIndex + 2)
         let experienceMenuItem = NSMenuItem(
             title: "Experience Editor",
             action: navigateToExperience,
@@ -83,6 +72,6 @@ enum AppMenuBuilder {
         )
         experienceMenuItem.keyEquivalentModifierMask = [.command, .shift]
         experienceMenuItem.target = target
-        appMenu.insertItem(experienceMenuItem, at: aboutSeparatorIndex + 3)
+        appMenu.insertItem(experienceMenuItem, at: aboutSeparatorIndex + 2)
     }
 }

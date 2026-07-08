@@ -86,14 +86,6 @@ extension TemplateEditorView {
             refreshCustomFieldWarnings()
         }
     }
-    func saveAndClose() {
-        guard saveAllChanges() else { return }
-        closeEditor()
-    }
-    func closeWithoutSaving() {
-        revertAllChanges()
-        closeEditor()
-    }
     private func discardPendingChanges() {
         htmlHasChanges = false
         textHasChanges = false

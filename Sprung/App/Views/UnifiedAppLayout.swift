@@ -25,7 +25,6 @@ struct UnifiedAppLayout: View {
     @Environment(NavigationStateService.self) private var navigationState
 
     @State private var showSetupWizard: Bool = false
-    @State private var didPromptTemplateEditor = false
     @State private var sheets = AppSheets()
     @State private var menuHandler = MenuNotificationHandler()
     @State private var moduleMinContentSize = ModuleMinSizeKey.defaultValue
@@ -102,12 +101,6 @@ struct UnifiedAppLayout: View {
         }
         // Module navigation keyboard shortcuts
         .moduleNavigationShortcuts()
-        // Template setup overlay
-        .overlay(alignment: .center) {
-            if appEnvironment.requiresTemplateSetup {
-                TemplateSetupOverlayUnified()
-            }
-        }
         // Setup wizard sheet
         .sheet(isPresented: $showSetupWizard) {
             SetupWizardSheetUnified(onComplete: {
@@ -133,15 +126,6 @@ struct UnifiedAppLayout: View {
             }
             if shouldShowSetupWizard() {
                 showSetupWizard = true
-            }
-            if appEnvironment.requiresTemplateSetup && !didPromptTemplateEditor {
-                openTemplateEditor()
-                didPromptTemplateEditor = true
-            }
-        }
-        .onChange(of: appEnvironment.requiresTemplateSetup) { _, requiresSetup in
-            if requiresSetup {
-                openTemplateEditor()
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .apiKeysChanged)) { _ in
@@ -179,43 +163,6 @@ struct UnifiedAppLayout: View {
 
         let hasModels = !enabledLLMStore.enabledModels.isEmpty
         return !hasModels
-    }
-
-    private func openTemplateEditor() {
-        Task { @MainActor in
-            NotificationCenter.default.post(name: .showTemplateEditor, object: nil)
-            if let delegate = NSApplication.shared.delegate as? AppDelegate {
-                delegate.showTemplateEditorWindow()
-            }
-        }
-    }
-}
-
-// MARK: - Template Setup Overlay
-
-private struct TemplateSetupOverlayUnified: View {
-    var body: some View {
-        VStack(spacing: 12) {
-            Text("Add a Template to Get Started")
-                .font(.headline)
-            Text("No resume templates are available. Open the Template Editor to create or import one before continuing.")
-                .multilineTextAlignment(.center)
-                .foregroundColor(.secondary)
-                .frame(maxWidth: 360)
-            Button("Open Template Editor") {
-                Task { @MainActor in
-                    NotificationCenter.default.post(name: .showTemplateEditor, object: nil)
-                    if let delegate = NSApplication.shared.delegate as? AppDelegate {
-                        delegate.showTemplateEditorWindow()
-                    }
-                }
-            }
-            .buttonStyle(.borderedProminent)
-        }
-        .padding(24)
-        .background(.regularMaterial)
-        .cornerRadius(16)
-        .shadow(radius: 8)
     }
 }
 

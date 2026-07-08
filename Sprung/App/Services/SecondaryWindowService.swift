@@ -30,7 +30,6 @@ final class SecondaryWindowService {
     // MARK: - Window References
 
     var settingsWindow: NSWindow?
-    var templateEditorWindow: NSWindow?
     var onboardingInterviewWindow: NSWindow?
     var debugLogsWindow: NSWindow?
     var seedGenerationWindow: NSWindow?
@@ -165,9 +164,7 @@ final class SecondaryWindowService {
     // MARK: - Window Close Handler
 
     @objc func windowWillClose(_ notification: Notification) {
-        if notification.object as? NSWindow == templateEditorWindow {
-            templateEditorWindow = nil
-        } else if notification.object as? NSWindow == resumeRevisionWindow {
+        if notification.object as? NSWindow == resumeRevisionWindow {
             // Single teardown choke point for the revision session: every close
             // path (title-bar close, in-view Cancel/Close, window replacement
             // for a different resume) lands here and cancels the live agent
@@ -177,39 +174,6 @@ final class SecondaryWindowService {
             activeRevisionResume = nil
             resumeRevisionWindow = nil
         }
-    }
-
-    // MARK: - Template Editor Window
-
-    func showTemplateEditor() {
-        guard let deps else {
-            Logger.warning("Template Editor window requested before app services were configured", category: .appLifecycle)
-            return
-        }
-        if let window = templateEditorWindow, !window.isVisible {
-            templateEditorWindow = nil
-        }
-        if templateEditorWindow == nil {
-            let appEnvironment = deps.appEnvironment
-            let root = TemplateEditorView()
-                .modelContainer(deps.modelContainer)
-                .environment(appEnvironment)
-                .environment(appEnvironment.appState)
-                .environment(appEnvironment.navigationState)
-                .environment(deps.jobAppStore)
-                .environment(appEnvironment.experienceDefaultsStore)
-                .environment(appEnvironment.careerKeywordStore)
-                .environment(appEnvironment.applicantProfileStore)
-            templateEditorWindow = makeWindow(
-                WindowSpec(
-                    title: "Template Editor", width: 1200, height: 760,
-                    minSize: NSSize(width: 960, height: 640), disallowTabbing: true
-                ),
-                content: toastHosted(root)
-            )
-        }
-        templateEditorWindow?.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
     }
 
     // MARK: - Onboarding Interview Window

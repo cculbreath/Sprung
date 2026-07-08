@@ -180,8 +180,15 @@ struct ResumeSplitView: View {
                     .disabled(emptyStateTemplateID == nil)
 
                     if templates.isEmpty {
-                        Button("Open Template Editor") {
-                            NotificationCenter.default.post(name: .showTemplateEditor, object: nil)
+                        Button("Manage Templates…") {
+                            NotificationCenter.default.post(
+                                name: .navigateToModule, object: nil,
+                                userInfo: ["module": AppModule.references.rawValue]
+                            )
+                            NotificationCenter.default.post(
+                                name: .navigateToReferencesTab, object: nil,
+                                userInfo: ["tab": "Templates"]
+                            )
                         }
                         .buttonStyle(.bordered)
                         .controlSize(.small)
