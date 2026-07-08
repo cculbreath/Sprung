@@ -62,13 +62,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             object: nil
         )
 
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(handleShowSeedGeneration(_:)),
-            name: .showSeedGeneration,
-            object: nil
-        )
-
         // Customize entry choke point: observed here so the revision window
         // opens regardless of which module is active. Gating lives in
         // SecondaryWindowService.showResumeRevision().
@@ -195,13 +188,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         windowManager.showDebugLogs(coordinator: coordinator)
-    }
-
-    @objc private func handleShowSeedGeneration(_ notification: Notification) {
-        Logger.info("Seed generation notification received", category: .ui)
-        Task {
-            await self.windowManager.showSeedGeneration()
-        }
     }
 
     @objc private func handleCustomizeResume(_ notification: Notification) {

@@ -86,5 +86,4 @@ extension Notification.Name {
     static let captureJobFromURL = Notification.Name("captureJobFromURL")
     // Secondary Window Notifications
     static let showDebugLogs = Notification.Name("showDebugLogs")
-    static let showSeedGeneration = Notification.Name("showSeedGeneration")
 }

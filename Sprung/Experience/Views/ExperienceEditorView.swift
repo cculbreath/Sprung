@@ -4,6 +4,13 @@ struct ExperienceEditorView: View {
     @Environment(ExperienceDefaultsStore.self) private var defaultsStore: ExperienceDefaultsStore
     @Environment(AppEnvironment.self) private var appEnvironment: AppEnvironment
     @Environment(ExperienceEntryRefinementService.self) private var refinementService: ExperienceEntryRefinementService
+    // Stores the SeedGenerationContextBuilder needs (all injected above this view).
+    @Environment(KnowledgeCardStore.self) private var knowledgeCardStore: KnowledgeCardStore
+    @Environment(SkillStore.self) private var skillStore: SkillStore
+    @Environment(ApplicantProfileStore.self) private var applicantProfileStore: ApplicantProfileStore
+    @Environment(CoverRefStore.self) private var coverRefStore: CoverRefStore
+    @Environment(CandidateDossierStore.self) private var candidateDossierStore: CandidateDossierStore
+    @Environment(TitleSetStore.self) private var titleSetStore: TitleSetStore
     @State private var draft = ExperienceDefaultsDraft()
     @State private var originalDraft = ExperienceDefaultsDraft()
     @State private var isLoading = true
@@ -13,6 +20,12 @@ struct ExperienceEditorView: View {
     @State private var editingEntries: Set<UUID> = []
     @State private var showImportSheet = false
     @State private var refineRequest: ExperienceRefineRequest?
+    /// Seed Generation (one-shot Experience Defaults generator) presented as a
+    /// sheet from this module. The orchestrator is built by `presentSeedGeneration()`
+    /// only after all prerequisite guards pass; `showSeedSheet` drives presentation
+    /// (SeedGenerationOrchestrator is not Identifiable, so `.sheet(isPresented:)`).
+    @State private var seedOrchestrator: SeedGenerationOrchestrator?
+    @State private var showSeedSheet = false
     private enum SaveState: Equatable {
         case idle
         case saving
@@ -80,6 +93,11 @@ struct ExperienceEditorView: View {
                 .environment(refinementService)
             }
         }
+        .sheet(isPresented: $showSeedSheet) {
+            if let seedOrchestrator {
+                SeedGenerationView(orchestrator: seedOrchestrator)
+            }
+        }
     }
     // MARK: - Seed Generation Banner
 
@@ -100,7 +118,7 @@ struct ExperienceEditorView: View {
             Spacer()
 
             Button {
-                NotificationCenter.default.post(name: .showSeedGeneration, object: nil)
+                Task { await presentSeedGeneration() }
             } label: {
                 Label("Generate", systemImage: "wand.and.stars")
             }
@@ -108,6 +126,132 @@ struct ExperienceEditorView: View {
         }
         .padding()
         .background(Color.blue.opacity(0.08))
+    }
+
+    // MARK: - Seed Generation
+
+    /// Run the seed-generation prerequisite guards and, if all pass, build the
+    /// orchestrator and present `SeedGenerationView` as a sheet. Mirrors the
+    /// gating the detached window used to perform, in order: approved knowledge
+    /// cards → context build → configured backend+model. HARD RULE: never
+    /// proceed without a configured backend AND model — surface Model Settings.
+    @MainActor
+    private func presentSeedGeneration() async {
+        // Prerequisite: at least one APPROVED knowledge card to generate from.
+        // Pending (unapproved) cards never feed generation — surface the paths
+        // to create/approve some instead of failing silently.
+        guard !knowledgeCardStore.approvedCards.isEmpty else {
+            Logger.error("Cannot show seed generation: no approved knowledge cards exist.", category: .ui)
+            presentNoKnowledgeCardsAlert()
+            return
+        }
+
+        // Build SeedGenerationContext from onboarding artifacts
+        guard let context = await SeedGenerationContextBuilder.build(
+            knowledgeCardStore: knowledgeCardStore,
+            skillStore: skillStore,
+            experienceDefaultsStore: defaultsStore,
+            applicantProfileStore: applicantProfileStore,
+            coverRefStore: coverRefStore,
+            candidateDossierStore: candidateDossierStore,
+            titleSetStore: titleSetStore
+        ) else {
+            Logger.error("Failed to build SeedGenerationContext", category: .ui)
+            presentContextBuildFailureAlert()
+            return
+        }
+
+        // Get model and backend from settings (per-backend model persistence).
+        // No silent backend default — an unconfigured backend surfaces the picker.
+        guard let backendString = UserDefaults.standard.string(forKey: "seedGenerationBackend"),
+              !backendString.isEmpty else {
+            Logger.error("Cannot show seed generation: no backend configured.", category: .ui)
+            presentSeedModelAlert(
+                message: "Choose a backend and model for Experience Defaults generation before continuing.",
+                highlightKey: "seedGenerationBackend"
+            )
+            return
+        }
+        let backend: LLMFacade.Backend = backendString == "anthropic" ? .anthropic : .openRouter
+        let modelKey = backendString == "anthropic" ? "seedGenerationAnthropicModelId" : "seedGenerationOpenRouterModelId"
+        guard let modelId = UserDefaults.standard.string(forKey: modelKey),
+              !modelId.isEmpty else {
+            Logger.error("Cannot show seed generation: no model configured.", category: .ui)
+            presentSeedModelAlert(
+                message: "Select \(backend == .anthropic ? "an Anthropic" : "an OpenRouter") model for Experience Defaults generation before continuing.",
+                highlightKey: modelKey
+            )
+            return
+        }
+
+        seedOrchestrator = SeedGenerationOrchestrator(
+            context: context,
+            llmFacade: appEnvironment.llmFacade,
+            modelId: modelId,
+            backend: backend,
+            experienceDefaultsStore: defaultsStore
+        )
+        showSeedSheet = true
+    }
+
+    /// Missing backend/model for Experience Defaults: explain, then route to the
+    /// Models settings tab with the unconfigured picker boxed in red.
+    @MainActor
+    private func presentSeedModelAlert(message: String, highlightKey: String) {
+        NSApp.activate(ignoringOtherApps: true)
+        let alert = NSAlert()
+        alert.messageText = "Model Required for Experience Defaults"
+        alert.informativeText = message
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "Open Model Settings")
+        alert.addButton(withTitle: "Cancel")
+        if alert.runModal() == .alertFirstButtonReturn {
+            NotificationCenter.default.post(
+                name: .showModelSettings, object: nil,
+                userInfo: ["settingKey": highlightKey]
+            )
+        }
+    }
+
+    /// No knowledge cards to generate from: offer the two ways to create some
+    /// (onboarding interview, or the Knowledge Card browser) or cancel.
+    @MainActor
+    private func presentNoKnowledgeCardsAlert() {
+        NSApp.activate(ignoringOtherApps: true)
+        let alert = NSAlert()
+        alert.messageText = "No Knowledge Cards Yet"
+        alert.informativeText = "Experience Defaults are generated from your knowledge cards, but none exist yet. Run the onboarding interview to build them from your documents, or add cards manually in the Knowledge Card browser."
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "Start Onboarding Interview")
+        alert.addButton(withTitle: "Open Knowledge Card Browser")
+        alert.addButton(withTitle: "Cancel")
+        switch alert.runModal() {
+        case .alertFirstButtonReturn:
+            NotificationCenter.default.post(name: .startOnboardingInterview, object: nil)
+        case .alertSecondButtonReturn:
+            NotificationCenter.default.post(
+                name: .navigateToModule, object: nil,
+                userInfo: ["module": AppModule.references.rawValue]
+            )
+            NotificationCenter.default.post(
+                name: .navigateToReferencesTab, object: nil,
+                userInfo: ["tab": ReferencesModuleView.Tab.knowledge.rawValue]
+            )
+        default:
+            break
+        }
+    }
+
+    /// SeedGenerationContextBuilder returned nil — onboarding likely incomplete.
+    @MainActor
+    private func presentContextBuildFailureAlert() {
+        NSApp.activate(ignoringOtherApps: true)
+        let alert = NSAlert()
+        alert.messageText = "Couldn't Assemble Generation Context"
+        alert.informativeText = "Couldn't assemble generation context. Ensure the onboarding interview has been completed."
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "OK")
+        alert.runModal()
     }
 
     // MARK: - Header

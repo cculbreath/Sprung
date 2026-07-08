@@ -228,10 +228,6 @@ struct SprungApp: App {
                     NotificationCenter.default.post(name: .navigateToModule, object: nil, userInfo: ["module": AppModule.experience.rawValue])
                 }
                 .keyboardShortcut("x", modifiers: [.command, .shift])
-                Button("Generate Experience Defaults...") {
-                    NotificationCenter.default.post(name: .showSeedGeneration, object: nil)
-                }
-                .keyboardShortcut("g", modifiers: [.command, .shift])
                 Divider()
                 Button("References") {
                     NotificationCenter.default.post(name: .navigateToModule, object: nil, userInfo: ["module": AppModule.references.rawValue])

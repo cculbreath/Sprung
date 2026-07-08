@@ -194,7 +194,10 @@ struct OnboardingCompletionReviewSheet: View {
                         .multilineTextAlignment(.center)
 
                     Button {
-                        NotificationCenter.default.post(name: .showSeedGeneration, object: nil)
+                        NotificationCenter.default.post(
+                            name: .navigateToModule, object: nil,
+                            userInfo: ["module": AppModule.experience.rawValue]
+                        )
                     } label: {
                         Label("Generate Experience Defaults", systemImage: "wand.and.stars")
                             .font(.headline)
