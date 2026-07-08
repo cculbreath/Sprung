@@ -24,13 +24,6 @@ struct SidebarView: View {
                     jobAppStore.selectedApp = newSelection
                 }
             )) {
-                // Add empty spacer section to ensure the first real section isn't hidden under the toolbar
-                Section {
-                    EmptyView()
-                }
-                .padding(.top, 8) // This padding acts as a spacer
-                .listRowBackground(Color.clear)
-                .listRowInsets(EdgeInsets())
                 ForEach(Statuses.sidebarOrder, id: \.self) { status in
                     let filteredApps = jobApps.filter { $0.status == status }
                     if !filteredApps.isEmpty {
@@ -52,6 +45,10 @@ struct SidebarView: View {
             }
             .listStyle(.inset)
             .scrollContentBackground(.hidden)
+            // Breathing room below the toolbar (replaces the old empty spacer
+            // Section, which parked the first section header exactly on the
+            // float threshold and made it jitter during live pane resizes).
+            .contentMargins(.top, 8, for: .scrollContent)
             .environment(\.defaultMinListRowHeight, 20)
             .frame(maxHeight: .infinity) // List takes remaining space
         }
