@@ -33,7 +33,6 @@ final class SecondaryWindowService {
     var onboardingInterviewWindow: NSWindow?
     var debugLogsWindow: NSWindow?
     var resumeRevisionWindow: NSWindow?
-    var backgroundActivityWindow: NSWindow?
 
     // MARK: - Resume Revision Session State
 
@@ -362,29 +361,5 @@ final class SecondaryWindowService {
             )
         }
         debugLogsWindow?.makeKeyAndOrderFront(nil)
-    }
-
-    // MARK: - Background Activity Window
-
-    func showBackgroundActivity() {
-        if let window = backgroundActivityWindow, window.isVisible {
-            window.makeKeyAndOrderFront(nil)
-            return
-        }
-
-        guard let tracker = deps?.backgroundActivityTracker else {
-            Logger.warning("Background activity tracker not configured", category: .appLifecycle)
-            return
-        }
-
-        let window = makeWindow(
-            WindowSpec(
-                title: "Background Activity", width: 700, height: 450,
-                minSize: NSSize(width: 500, height: 300)
-            ),
-            content: toastHosted(BackgroundActivityContent(tracker: tracker))
-        )
-        backgroundActivityWindow = window
-        window.makeKeyAndOrderFront(nil)
     }
 }

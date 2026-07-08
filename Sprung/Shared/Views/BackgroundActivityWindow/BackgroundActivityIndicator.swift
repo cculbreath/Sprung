@@ -4,20 +4,20 @@
 //
 //  Compact pill shown in the main window whenever any background AI
 //  operation is running (preprocessing, event discovery, lead enrichment).
-//  Hidden entirely when nothing is running. Clicking it opens the
-//  Background Activity window.
+//  Hidden entirely when nothing is running. Clicking it reveals the activity
+//  detail (operation list + transcript) in an in-window popover.
 //
 
-import AppKit
 import SwiftUI
 
 struct BackgroundActivityIndicator: View {
     @Environment(BackgroundActivityTracker.self) private var tracker
+    @State private var showPopover = false
 
     var body: some View {
         if tracker.hasRunningOperations {
             Button {
-                (NSApplication.shared.delegate as? AppDelegate)?.showBackgroundActivityWindow()
+                showPopover.toggle()
             } label: {
                 HStack(spacing: 6) {
                     ProgressView()
@@ -35,6 +35,10 @@ struct BackgroundActivityIndicator: View {
             .help(tooltipText)
             .accessibilityLabel("\(tracker.runningCount) background AI operation\(tracker.runningCount == 1 ? "" : "s") running")
             .transition(.opacity)
+            .popover(isPresented: $showPopover, arrowEdge: .bottom) {
+                BackgroundActivityContent(tracker: tracker)
+                    .frame(width: 720, height: 440)
+            }
         }
     }
 
@@ -42,7 +46,7 @@ struct BackgroundActivityIndicator: View {
         let lines = tracker.runningOperations.map { operation in
             "• \(operation.operationType.displayName): \(operation.name)"
         }
-        return (["Background AI activity:"] + lines + ["Click to open Background Activity"])
+        return (["Background AI activity:"] + lines + ["Click to view details"])
             .joined(separator: "\n")
     }
 }

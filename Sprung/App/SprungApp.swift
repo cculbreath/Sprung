@@ -361,16 +361,6 @@ struct SprungApp: App {
                 }
             }
         }
-        // MARK: - Window Menu
-        .commands {
-            CommandGroup(before: .windowArrangement) {
-                Button("Background Activity") {
-                    appDelegate.showBackgroundActivityWindow()
-                }
-                .keyboardShortcut("b", modifiers: [.command, .option])
-                Divider()
-            }
-        }
     }
 }
 private extension SprungApp {

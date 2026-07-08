@@ -177,10 +177,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         )
     }
 
-    @objc func showBackgroundActivityWindow() {
-        windowManager.showBackgroundActivity()
-    }
-
     @objc private func handleShowDebugLogs(_ notification: Notification) {
         Logger.info("Debug logs notification received", category: .ui)
         guard let coordinator = notification.object as? OnboardingInterviewCoordinator else {
