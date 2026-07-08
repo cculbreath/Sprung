@@ -67,8 +67,9 @@ struct ResumeEditorModuleView: View {
         let primaryColumn: CGFloat = 300
         switch navigationState.selectedTab {
         case .resume:
-            // editor + PDF chevron bar + (PDF handle + preview floor when shown)
-            return primaryColumn + 16 + (pdfPreviewVisible ? (resizeHandleWidth + 100) : 0)
+            // editor + PDF chevron bar + (PDF handle + preview floor when shown).
+            // The 250 preview floor MUST match ResumeSplitView.minPdfPreviewWidth.
+            return primaryColumn + 16 + (pdfPreviewVisible ? (resizeHandleWidth + 250) : 0)
         case .coverLetter:
             // letter column + (divider + inspector when shown, per CoverLetterView)
             return primaryColumn + (sheets.showCoverLetterInspector ? (1 + 340) : 0)

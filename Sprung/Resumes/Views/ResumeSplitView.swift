@@ -89,11 +89,12 @@ struct ResumeSplitView: View {
         }
     }
 
-    /// Must match the compression floor in `effectivePdfPreviewWidth`: if the
-    /// drag floor sat above it, a compressed pane could never be dragged
-    /// smaller — the stored width would pin at the floor while the displayed
-    /// width stayed below it, leaving the divider dead.
-    private let minPdfPreviewWidth: CGFloat = 100
+    /// Smallest the PDF preview may be dragged or squeezed to (points). ~250pt
+    /// renders as ~500px in a 2x Retina screenshot — enough to keep a page
+    /// legible. MUST match the PDF floor in ResumeEditorModuleView.detailMinWidth
+    /// so the window minimum reserves the same width; both are the drag floor and
+    /// the squeeze floor in pdfDisplayWidth, so a compressed pane stays draggable.
+    private let minPdfPreviewWidth: CGFloat = 250
     private let maxPdfPreviewWidth: CGFloat = 800
 
     /// Width the rest of the row must always keep: editor minimum (300) +
