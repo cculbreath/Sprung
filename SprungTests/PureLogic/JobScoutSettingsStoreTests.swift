@@ -9,8 +9,10 @@
 //     default to .off: unattended LLM spend never fires until enabled), plus
 //     the cadence-elapsed date math the auto-run guard keys on (injected now)
 //   - scoutStandingGuidance / scoutRecommendationCount — run parameters
+//   - scoutAutoImportStrongMatches — opt-in auto-import toggle (defaults false)
 //   - lastSuccessfulScoutRunAt — stamped only through recordSuccessfulScoutRun
-//   - lastScoutReport — the full ScoutRunReport Codable blob round-trip
+//   - scoutRunHistory — the capped, newest-first ScoutRunReport blob round-trip
+//   - scoutDismissedPostings — cross-run dismissed memory (TTL + cap)
 //
 //  Uses the store's `defaults:` injection seam with a `TestDefaults` suite so
 //  these round-trips never touch the developer's real UserDefaults.standard.
@@ -171,96 +173,85 @@ final class JobScoutSettingsStoreTests: XCTestCase {
         )
     }
 
-    // MARK: - lastScoutReport (Codable blob)
+    // MARK: - scoutRunHistory (Codable blob, newest-first, capped)
 
-    func testLastScoutReportNilByDefault() {
-        let store = DiscoverySettingsStore(defaults: TestDefaults().store)
-        XCTAssertNil(store.lastScoutReport)
-    }
-
-    func testLastScoutReportRoundTripsFullReport() throws {
-        let defaults = TestDefaults()
-        let store = DiscoverySettingsStore(defaults: defaults.store)
-
-        let startedAt = Date(timeIntervalSince1970: 1_751_500_000)
-        let report = JobScoutService.ScoutRunReport(
+    private func report(
+        startedAt: Date,
+        verdict: JobScoutMatchAssessment.Verdict = .strong,
+        disposition: JobScoutService.ScoutRecommendation.Disposition = .pending
+    ) -> JobScoutService.ScoutRunReport {
+        JobScoutService.ScoutRunReport(
             startedAt: startedAt,
-            boardsSearched: ["Dice", "LinkedIn"],
-            resultsFound: 42,
-            duplicatesDropped: 7,
-            previouslyDismissedDropped: 3,
+            boardsSearched: ["Dice"],
+            resultsFound: 5,
+            duplicatesDropped: 1,
+            previouslyDismissedDropped: 0,
             recommendations: [
                 JobScoutService.ScoutRecommendation(
-                    url: "https://www.dice.com/job-detail/abc-123",
+                    url: "https://\(startedAt.timeIntervalSince1970)",
                     title: "Senior Medical Physicist",
                     company: "Acme Oncology",
                     reasoning: "Their commissioning work matches the linac experience in the dossier.",
                     match: JobScoutMatchAssessment(
                         skills: .strong, seniority: .strong, locationFit: .moderate,
-                        compensation: .unknown, verdict: .strong
+                        compensation: .unknown, verdict: verdict
                     ),
-                    imported: true
-                ),
-                JobScoutService.ScoutRecommendation(
-                    url: "https://www.linkedin.com/jobs/view/999/",
-                    title: "Physicist II",
-                    company: "Beta Health",
-                    reasoning: "A close fit for the clinical QA background.",
-                    match: JobScoutMatchAssessment(
-                        skills: .moderate, seniority: .strong, locationFit: .strong,
-                        compensation: .weak, verdict: .promising
-                    ),
-                    imported: false
+                    disposition: disposition
                 )
             ],
             notes: ["LinkedIn was skipped: the one-time LinkedIn consent hasn't been accepted."]
         )
+    }
 
-        store.lastScoutReport = report
+    func testScoutRunHistoryDefaultsEmpty() {
+        let store = DiscoverySettingsStore(defaults: TestDefaults().store)
+        XCTAssertTrue(store.scoutRunHistory.isEmpty)
+    }
 
-        // Reload through a fresh store instance: the blob survives relaunches.
+    func testScoutRunHistoryRoundTripsWithDispositions() throws {
+        let defaults = TestDefaults()
+        let store = DiscoverySettingsStore(defaults: defaults.store)
+        let older = report(startedAt: Date(timeIntervalSince1970: 1_751_000_000), disposition: .dismissed)
+        let newer = report(startedAt: Date(timeIntervalSince1970: 1_752_000_000), verdict: .promising, disposition: .imported)
+        store.scoutRunHistory = [newer, older]   // newest first
+
         let reloaded = DiscoverySettingsStore(defaults: defaults.store)
-        let decoded = try XCTUnwrap(reloaded.lastScoutReport)
-        XCTAssertEqual(decoded.startedAt.timeIntervalSince1970, startedAt.timeIntervalSince1970, accuracy: 0.001)
-        XCTAssertEqual(decoded.boardsSearched, ["Dice", "LinkedIn"])
-        XCTAssertEqual(decoded.resultsFound, 42)
-        XCTAssertEqual(decoded.duplicatesDropped, 7)
-        XCTAssertEqual(decoded.previouslyDismissedDropped, 3)
-        XCTAssertEqual(decoded.recommendations.count, 2)
-        XCTAssertEqual(decoded.recommendations[0].title, "Senior Medical Physicist")
-        XCTAssertTrue(decoded.recommendations[0].imported)
-        XCTAssertEqual(decoded.recommendations[0].match.verdict, .strong)
-        XCTAssertEqual(decoded.recommendations[0].match.compensation, .unknown)
-        XCTAssertEqual(decoded.recommendations[1].company, "Beta Health")
-        XCTAssertFalse(decoded.recommendations[1].imported)
-        XCTAssertEqual(decoded.recommendations[1].match.verdict, .promising)
-        XCTAssertEqual(decoded.notes.count, 1)
+        XCTAssertEqual(reloaded.scoutRunHistory.count, 2)
+        XCTAssertEqual(reloaded.scoutRunHistory[0].recommendations[0].disposition, .imported)
+        XCTAssertEqual(reloaded.scoutRunHistory[0].recommendations[0].match.verdict, .promising)
+        XCTAssertEqual(reloaded.scoutRunHistory[1].recommendations[0].disposition, .dismissed)
+        XCTAssertEqual(reloaded.scoutRunHistory[1].previouslyDismissedDropped, 0)
     }
 
-    func testLastScoutReportSetNilClearsTheBlob() {
-        let defaults = TestDefaults()
-        let store = DiscoverySettingsStore(defaults: defaults.store)
-        store.lastScoutReport = JobScoutService.ScoutRunReport(
-            startedAt: Date(),
-            boardsSearched: [],
-            resultsFound: 0,
-            duplicatesDropped: 0,
-            previouslyDismissedDropped: 0,
-            recommendations: [],
-            notes: []
-        )
-        XCTAssertNotNil(store.lastScoutReport)
-
-        store.lastScoutReport = nil
-        XCTAssertNil(store.lastScoutReport)
-        XCTAssertNil(defaults.store.data(forKey: "discoveryLastScoutReport"))
+    func testScoutRunHistoryCapsAtTheLimit() {
+        let store = DiscoverySettingsStore(defaults: TestDefaults().store)
+        let cap = DiscoverySettingsStore.scoutRunHistoryCap
+        let reports = (0..<(cap + 5)).map {
+            report(startedAt: Date(timeIntervalSince1970: TimeInterval(1_750_000_000 + $0)))
+        }
+        store.scoutRunHistory = reports
+        XCTAssertEqual(store.scoutRunHistory.count, cap, "history keeps at most the cap, newest-first prefix")
     }
 
-    func testLastScoutReportUndecodableBlobReadsAsNil() {
+    func testScoutRunHistoryUndecodableBlobReadsAsEmpty() {
         let defaults = TestDefaults()
-        defaults.store.set(Data("not json".utf8), forKey: "discoveryLastScoutReport")
+        defaults.store.set(Data("not json".utf8), forKey: "discoveryScoutRunHistory")
         let store = DiscoverySettingsStore(defaults: defaults.store)
-        XCTAssertNil(store.lastScoutReport, "a corrupt blob reads as no report, never a crash")
+        XCTAssertTrue(store.scoutRunHistory.isEmpty, "a corrupt blob reads as empty history, never a crash")
+    }
+
+    // MARK: - scoutAutoImportStrongMatches
+
+    func testScoutAutoImportStrongMatchesDefaultsFalseAndRoundTrips() {
+        let defaults = TestDefaults()
+        let store = DiscoverySettingsStore(defaults: defaults.store)
+        XCTAssertFalse(store.scoutAutoImportStrongMatches, "curation is the default — auto-import is opt-in")
+
+        store.scoutAutoImportStrongMatches = true
+        XCTAssertTrue(store.scoutAutoImportStrongMatches)
+
+        let reloaded = DiscoverySettingsStore(defaults: defaults.store)
+        XCTAssertTrue(reloaded.scoutAutoImportStrongMatches)
     }
 
     // MARK: - scoutDismissedPostings (cross-run memory)

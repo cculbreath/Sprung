@@ -415,6 +415,84 @@ final class JobScoutServiceTests: XCTestCase {
                        "ties keep the agent's submission order, never reshuffle")
     }
 
+    // MARK: - Disposition + review helpers
+
+    private func recommendation(
+        url: String = "https://a",
+        disposition: JobScoutService.ScoutRecommendation.Disposition = .pending
+    ) -> JobScoutService.ScoutRecommendation {
+        JobScoutService.ScoutRecommendation(
+            url: url, title: "T", company: "C", reasoning: "R", match: matchFixture(), disposition: disposition
+        )
+    }
+
+    private func reportFixture(
+        startedAt: Date = Date(timeIntervalSince1970: 1_782_000_000),
+        urls: [String]? = nil,
+        dispositions: [JobScoutService.ScoutRecommendation.Disposition]
+    ) -> JobScoutService.ScoutRunReport {
+        let recs = dispositions.enumerated().map { index, disposition in
+            recommendation(url: urls?[index] ?? "https://\(index)", disposition: disposition)
+        }
+        return JobScoutService.ScoutRunReport(
+            startedAt: startedAt, boardsSearched: ["Dice"], resultsFound: 10,
+            duplicatesDropped: 0, previouslyDismissedDropped: 0, recommendations: recs, notes: []
+        )
+    }
+
+    func testInitialDispositionDuplicateIsAlreadyInPipeline() {
+        XCTAssertEqual(
+            JobScoutService.initialDisposition(isDuplicate: true, verdict: .strong, autoImportStrong: true),
+            .alreadyInPipeline,
+            "a duplicate is never re-imported, not even a strong one with auto-import on"
+        )
+    }
+
+    func testInitialDispositionAutoImportsStrongOnlyWhenEnabled() {
+        XCTAssertEqual(
+            JobScoutService.initialDisposition(isDuplicate: false, verdict: .strong, autoImportStrong: true),
+            .imported
+        )
+        XCTAssertEqual(
+            JobScoutService.initialDisposition(isDuplicate: false, verdict: .strong, autoImportStrong: false),
+            .pending,
+            "curation is the default — a strong match still waits when auto-import is off"
+        )
+    }
+
+    func testInitialDispositionNonStrongVerdictsStayPending() {
+        for verdict in [JobScoutMatchAssessment.Verdict.promising, .marginal] {
+            XCTAssertEqual(
+                JobScoutService.initialDisposition(isDuplicate: false, verdict: verdict, autoImportStrong: true),
+                .pending,
+                "auto-import only ever brings in a strong verdict, never promising/marginal"
+            )
+        }
+    }
+
+    func testPendingCountCountsOnlyPending() {
+        let report = reportFixture(dispositions: [.pending, .imported, .pending, .dismissed, .alreadyInPipeline])
+        XCTAssertEqual(JobScoutService.pendingCount(in: report), 2)
+        XCTAssertEqual(JobScoutService.pendingCount(in: nil), 0)
+    }
+
+    func testSettingDispositionUpdatesTheMatchingRecommendation() {
+        let started = Date(timeIntervalSince1970: 1_782_000_000)
+        let report = reportFixture(startedAt: started, urls: ["https://a", "https://b"], dispositions: [.pending, .pending])
+        let updated = JobScoutService.settingDisposition(.imported, forURL: "https://b", runStartedAt: started, in: [report])
+        XCTAssertEqual(updated[0].recommendations[0].disposition, .pending, "the other pick is untouched")
+        XCTAssertEqual(updated[0].recommendations[1].disposition, .imported)
+    }
+
+    func testSettingDispositionIsANoOpWhenRunOrURLNotFound() {
+        let started = Date(timeIntervalSince1970: 1_782_000_000)
+        let report = reportFixture(startedAt: started, urls: ["https://a"], dispositions: [.pending])
+        let unknownURL = JobScoutService.settingDisposition(.imported, forURL: "https://missing", runStartedAt: started, in: [report])
+        XCTAssertEqual(unknownURL[0].recommendations[0].disposition, .pending)
+        let unknownRun = JobScoutService.settingDisposition(.imported, forURL: "https://a", runStartedAt: Date(timeIntervalSince1970: 1), in: [report])
+        XCTAssertEqual(unknownRun[0].recommendations[0].disposition, .pending)
+    }
+
     // MARK: - 5. Recommendation → JobApp
 
     func testMakeJobAppSetsScoutSourceAndHighPriority() throws {
@@ -499,7 +577,7 @@ final class JobScoutServiceTests: XCTestCase {
 
         let startedAt = Date(timeIntervalSince1970: 1_782_000_000)
         let recommendation = JobScoutService.ScoutRecommendation(
-            url: "https://a", title: "T", company: "C", reasoning: "R", match: matchFixture(), imported: true
+            url: "https://a", title: "T", company: "C", reasoning: "R", match: matchFixture(), disposition: .imported
         )
         let report = state.makeReport(startedAt: startedAt, recommendations: [recommendation])
 

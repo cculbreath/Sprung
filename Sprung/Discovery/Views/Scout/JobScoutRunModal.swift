@@ -45,7 +45,7 @@ struct JobScoutRunModal: View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Scout Job Boards")
                 .font(.headline)
-            Text("The Discovery agent searches the selected boards for new postings and imports its best matches as high-priority leads.")
+            Text("The Discovery agent searches the selected boards for new postings and recommends its best matches for your review.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -99,8 +99,8 @@ struct JobScoutRunModal: View {
             )
         }
         .sheet(isPresented: $showingLastReport) {
-            if let report = coordinator.settingsStore.lastScoutReport {
-                JobScoutReportSheet(report: report)
+            if let startedAt = coordinator.jobScout.lastReport?.startedAt {
+                JobScoutReviewSheet(service: coordinator.jobScout, runStartedAt: startedAt)
             }
         }
     }
@@ -143,16 +143,18 @@ struct JobScoutRunModal: View {
 
     @ViewBuilder
     private var lastRunLine: some View {
-        if let report = coordinator.settingsStore.lastScoutReport {
+        if let report = coordinator.jobScout.lastReport {
+            let pending = JobScoutService.pendingCount(in: report)
             HStack(spacing: 8) {
                 Text(
                     "Last run \(report.startedAt.formatted(date: .abbreviated, time: .shortened)) — "
                     + "found \(report.resultsFound), recommended \(report.recommendations.count)"
+                    + (pending > 0 ? " (\(pending) to review)" : "")
                 )
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
-                Button("View Report") {
+                Button(pending > 0 ? "Review" : "View Report") {
                     showingLastReport = true
                 }
                 .buttonStyle(.link)

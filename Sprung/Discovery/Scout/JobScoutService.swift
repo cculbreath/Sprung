@@ -54,12 +54,23 @@ final class JobScoutService {
     }
 
     struct ScoutRecommendation: Codable {
+        /// Where a recommendation stands in the user's review. A run produces
+        /// `pending` picks — or `alreadyInPipeline` for duplicates, or
+        /// `imported` when the auto-import-strong setting is on and the verdict
+        /// is strong. The review UI moves each `pending` pick to `imported` or
+        /// `dismissed`; nothing enters the pipeline without passing through it.
+        enum Disposition: String, Codable {
+            case pending
+            case imported
+            case dismissed
+            case alreadyInPipeline
+        }
         let url: String
         let title: String
         let company: String
         let reasoning: String
         let match: JobScoutMatchAssessment
-        let imported: Bool
+        var disposition: Disposition
     }
 
     struct ScoutRunReport: Codable {
@@ -71,7 +82,7 @@ final class JobScoutService {
         /// counted apart from pipeline duplicates so the report can explain why
         /// the list shrank (cross-run memory, not this-run bookkeeping).
         let previouslyDismissedDropped: Int
-        let recommendations: [ScoutRecommendation]
+        var recommendations: [ScoutRecommendation]
         let notes: [String]
     }
 
@@ -93,7 +104,16 @@ final class JobScoutService {
     // MARK: - Observable State
 
     private(set) var isActive = false
-    private(set) var lastReport: ScoutRunReport?
+    /// Completed runs, newest first, capped. The source of truth the review UI
+    /// observes so import/dismiss decisions render live; written through to
+    /// `DiscoverySettingsStore.scoutRunHistory` on every change so pending
+    /// picks survive relaunches (an unattended run's recommendations wait here
+    /// until the user curates them).
+    private(set) var runHistory: [ScoutRunReport] = []
+
+    /// The most recent run's report — the one PipelineView surfaces and the
+    /// review sheet curates by default.
+    var lastReport: ScoutRunReport? { runHistory.first }
 
     // MARK: - Dependencies
 
@@ -122,6 +142,7 @@ final class JobScoutService {
         self.candidateDossierStore = candidateDossierStore
         self.preferencesStore = preferencesStore
         self.settingsStore = settingsStore
+        self.runHistory = settingsStore.scoutRunHistory
     }
 
     /// Late LLM wiring — DiscoveryCoordinator calls this from
@@ -175,21 +196,21 @@ final class JobScoutService {
 
         do {
             let report = try await runScout(config: config, startedAt: startedAt, operationId: operationId)
-            lastReport = report
-            settingsStore.lastScoutReport = report
+            prependToHistory(report)
             settingsStore.recordSuccessfulScoutRun()
-            let importedCount = report.recommendations.filter(\.imported).count
+            let pendingCount = Self.pendingCount(in: report)
+            let importedCount = report.recommendations.filter { $0.disposition == .imported }.count
             Logger.info(
                 "✅ Job scout run complete: searched [\(report.boardsSearched.joined(separator: ", "))], "
                 + "found \(report.resultsFound) (\(report.duplicatesDropped) duplicates dropped), "
-                + "recommended \(report.recommendations.count), imported \(importedCount)"
+                + "recommended \(report.recommendations.count) (\(pendingCount) awaiting review, \(importedCount) auto-imported)"
                 + (report.notes.isEmpty ? "" : "; notes: \(report.notes.joined(separator: " | "))"),
                 category: .ai
             )
             activityTracker?.appendTranscript(
                 operationId: operationId,
                 entryType: .system,
-                content: "Completed: \(report.recommendations.count) recommendation\(report.recommendations.count == 1 ? "" : "s"), \(importedCount) imported"
+                content: "Completed: \(report.recommendations.count) recommendation\(report.recommendations.count == 1 ? "" : "s") for review"
             )
             activityTracker?.markCompleted(operationId: operationId)
         } catch is CancellationError {
@@ -288,8 +309,9 @@ final class JobScoutService {
         // above already kept the agent's own top picks.
         drafts = Self.sortedByVerdict(drafts)
 
-        activityTracker?.updatePhase(operationId: operationId, phase: "Importing recommendations")
-        let recommendations = drafts.map { importRecommendation($0, runState: runState) }
+        activityTracker?.updatePhase(operationId: operationId, phase: "Preparing recommendations for review")
+        let autoImportStrong = settingsStore.scoutAutoImportStrongMatches
+        let recommendations = drafts.map { buildInitialRecommendation($0, autoImportStrong: autoImportStrong) }
 
         return runState.makeReport(startedAt: startedAt, recommendations: recommendations)
     }
@@ -405,37 +427,114 @@ final class JobScoutService {
     /// never need more, and fetched pages otherwise dominate the conversation.
     static let maxPostingTextLength = 6000
 
-    // MARK: - Recommendation Import (shared two-stage lead pipeline)
+    // MARK: - Recommendation Build + Review
 
-    /// Import one accepted recommendation as a `.new` high-priority pipeline
-    /// lead: dedup through the shared `JobAppStore.findDuplicateJobApp`, land
-    /// instantly with preprocessing deferred, queue background enrichment
-    /// (which fetches the full posting and drives preprocessing). Returns the
-    /// report record with the actual import outcome.
-    private func importRecommendation(
+    /// Turn a fresh draft into a report record. Nothing enters the pipeline by
+    /// default — the pick lands `pending` for the user's review. A draft that
+    /// duplicates an existing pipeline job is `alreadyInPipeline`; a strong
+    /// verdict is auto-imported only when the user has opted into that setting.
+    private func buildInitialRecommendation(
         _ draft: JobScoutRecommendationDraft,
-        runState: JobScoutRunState
+        autoImportStrong: Bool
     ) -> ScoutRecommendation {
-        let imported: Bool
-        if jobAppStore.findDuplicateJobApp(url: draft.url, title: draft.title, company: draft.company) != nil {
-            imported = false
-        } else if let jobApp = Self.makeJobApp(from: draft),
-                  let inserted = jobAppStore.addJobApp(jobApp, deferringPreprocessing: true) {
-            jobAppStore.leadEnrichment.enqueue(inserted, store: jobAppStore)
-            imported = true
-        } else {
-            runState.addNote("Couldn't save the recommended lead '\(draft.title)' at \(draft.company).")
-            Logger.error("❌ Job scout: failed to import recommendation '\(draft.title)' (\(draft.url))", category: .ai)
-            imported = false
-        }
+        let isDuplicate = jobAppStore.findDuplicateJobApp(
+            url: draft.url, title: draft.title, company: draft.company
+        ) != nil
+        let intended = Self.initialDisposition(
+            isDuplicate: isDuplicate,
+            verdict: draft.match.verdict,
+            autoImportStrong: autoImportStrong
+        )
+        let disposition = (intended == .imported) ? importIntoPipeline(draft) : intended
         return ScoutRecommendation(
             url: draft.url,
             title: draft.title,
             company: draft.company,
             reasoning: draft.reasoning,
             match: draft.match,
-            imported: imported
+            disposition: disposition
         )
+    }
+
+    /// Bring one recommendation into the pipeline as a `.new` high-priority
+    /// lead: dedup through the shared `JobAppStore.findDuplicateJobApp`, land
+    /// instantly with preprocessing deferred, queue background enrichment
+    /// (which fetches the full posting and drives preprocessing). Returns the
+    /// resulting disposition — `.alreadyInPipeline` if a duplicate appeared,
+    /// `.pending` (logged) if the save failed so the user can retry from the
+    /// review sheet. Shared by auto-import and the manual accept action.
+    private func importIntoPipeline(_ draft: JobScoutRecommendationDraft) -> ScoutRecommendation.Disposition {
+        if jobAppStore.findDuplicateJobApp(url: draft.url, title: draft.title, company: draft.company) != nil {
+            return .alreadyInPipeline
+        }
+        guard let jobApp = Self.makeJobApp(from: draft),
+              let inserted = jobAppStore.addJobApp(jobApp, deferringPreprocessing: true) else {
+            Logger.error("❌ Job scout: failed to import recommendation '\(draft.title)' (\(draft.url))", category: .ai)
+            return .pending
+        }
+        jobAppStore.leadEnrichment.enqueue(inserted, store: jobAppStore)
+        return .imported
+    }
+
+    /// The report for a completed run, addressed by its start time (stable
+    /// identity across the review UI and relaunches).
+    func report(forRunStartedAt startedAt: Date) -> ScoutRunReport? {
+        runHistory.first { $0.startedAt == startedAt }
+    }
+
+    /// Accept a pending recommendation: import it into the pipeline and record
+    /// the outcome. A no-op if the run or url isn't found.
+    func acceptRecommendation(runStartedAt: Date, url: String) {
+        guard let recommendation = report(forRunStartedAt: runStartedAt)?
+            .recommendations.first(where: { $0.url == url }) else { return }
+        let draft = JobScoutRecommendationDraft(
+            url: recommendation.url,
+            title: recommendation.title,
+            company: recommendation.company,
+            reasoning: recommendation.reasoning,
+            match: recommendation.match
+        )
+        let disposition = importIntoPipeline(draft)
+        setDisposition(disposition, forURL: url, runStartedAt: runStartedAt)
+    }
+
+    /// Dismiss a pending recommendation: record it in the cross-run dismissed
+    /// set (so it never returns) and mark it dismissed. A no-op if not found.
+    func dismissRecommendation(runStartedAt: Date, url: String, reason: String?) {
+        guard let recommendation = report(forRunStartedAt: runStartedAt)?
+            .recommendations.first(where: { $0.url == url }) else { return }
+        settingsStore.recordDismissedPostings([
+            ScoutDismissedPosting(
+                url: recommendation.url,
+                title: recommendation.title,
+                company: recommendation.company,
+                dismissedAt: Date(),
+                reason: reason?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false ? reason : nil
+            )
+        ])
+        setDisposition(.dismissed, forURL: url, runStartedAt: runStartedAt)
+    }
+
+    /// Apply a disposition change through the pure helper and persist.
+    private func setDisposition(
+        _ disposition: ScoutRecommendation.Disposition,
+        forURL url: String,
+        runStartedAt: Date
+    ) {
+        let updated = Self.settingDisposition(disposition, forURL: url, runStartedAt: runStartedAt, in: runHistory)
+        runHistory = updated
+        settingsStore.scoutRunHistory = updated
+    }
+
+    /// Prepend a completed run to the history (newest first), cap it, and
+    /// persist. The in-memory array is the observable source of truth; the
+    /// settings-store blob is its durable mirror.
+    private func prependToHistory(_ report: ScoutRunReport) {
+        var history = runHistory
+        history.insert(report, at: 0)
+        history = Array(history.prefix(DiscoverySettingsStore.scoutRunHistoryCap))
+        runHistory = history
+        settingsStore.scoutRunHistory = history
     }
 
     // MARK: - Context Assembly
@@ -573,6 +672,44 @@ final class JobScoutService {
     enum PipelineMatchKind {
         case byURL
         case byTitleCompany
+    }
+
+    /// The disposition a fresh recommendation starts in. A duplicate of an
+    /// existing pipeline job is `alreadyInPipeline`; otherwise a strong verdict
+    /// is `imported` only when the user opted into auto-import; everything else
+    /// waits for review as `pending`. Curation is the default — nothing is
+    /// imported behind the user's back unless they asked for it.
+    static func initialDisposition(
+        isDuplicate: Bool,
+        verdict: JobScoutMatchAssessment.Verdict,
+        autoImportStrong: Bool
+    ) -> ScoutRecommendation.Disposition {
+        if isDuplicate { return .alreadyInPipeline }
+        if autoImportStrong, verdict == .strong { return .imported }
+        return .pending
+    }
+
+    /// Return a copy of the run history with one recommendation's disposition
+    /// replaced (matched by run start time + posting url). A no-op copy when
+    /// the run or the recommendation isn't found.
+    static func settingDisposition(
+        _ disposition: ScoutRecommendation.Disposition,
+        forURL url: String,
+        runStartedAt: Date,
+        in history: [ScoutRunReport]
+    ) -> [ScoutRunReport] {
+        guard let reportIndex = history.firstIndex(where: { $0.startedAt == runStartedAt }),
+              let recIndex = history[reportIndex].recommendations.firstIndex(where: { $0.url == url }) else {
+            return history
+        }
+        var updated = history
+        updated[reportIndex].recommendations[recIndex].disposition = disposition
+        return updated
+    }
+
+    /// How many of a run's recommendations still await the user's decision.
+    static func pendingCount(in report: ScoutRunReport?) -> Int {
+        report?.recommendations.filter { $0.disposition == .pending }.count ?? 0
     }
 
     /// Order recommendations strongest verdict first (strong > promising >

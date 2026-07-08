@@ -149,34 +149,46 @@ final class DiscoverySettingsStore {
         defaults.set(date, forKey: Self.lastSuccessfulScoutRunKey)
     }
 
-    private static let lastScoutReportKey = "discoveryLastScoutReport"
+    private static let scoutRunHistoryKey = "discoveryScoutRunHistory"
 
-    /// The most recent completed run's full report, persisted as a JSON blob
-    /// so the run modal's last-run summary survives relaunches. Codec
-    /// failures are logged, never silent: a decode failure reads as "no
-    /// report", an encode failure leaves the previous report in place.
-    var lastScoutReport: JobScoutService.ScoutRunReport? {
+    /// How many completed runs are retained — enough for the run-history UI and
+    /// the outcome-feedback context without unbounded growth.
+    static let scoutRunHistoryCap = 10
+
+    /// Durable mirror of `JobScoutService.runHistory` (newest first). The
+    /// service holds the observable copy the review UI watches; this is where
+    /// it survives relaunches so an unattended run's pending picks aren't lost.
+    /// A decode failure reads as empty history (logged, never a crash).
+    var scoutRunHistory: [JobScoutService.ScoutRunReport] {
         get {
-            guard let data = defaults.data(forKey: Self.lastScoutReportKey) else { return nil }
+            guard let data = defaults.data(forKey: Self.scoutRunHistoryKey) else { return [] }
             do {
-                return try JSONDecoder().decode(JobScoutService.ScoutRunReport.self, from: data)
+                return try JSONDecoder().decode([JobScoutService.ScoutRunReport].self, from: data)
             } catch {
-                Logger.error("❌ [DiscoverySettings] Couldn't decode the stored scout report: \(error.localizedDescription)", category: .data)
-                return nil
+                Logger.error("❌ [DiscoverySettings] Couldn't decode the scout run history: \(error.localizedDescription)", category: .data)
+                return []
             }
         }
         set {
-            guard let newValue else {
-                defaults.removeObject(forKey: Self.lastScoutReportKey)
-                return
-            }
+            let capped = Array(newValue.prefix(Self.scoutRunHistoryCap))
             do {
-                let data = try JSONEncoder().encode(newValue)
-                defaults.set(data, forKey: Self.lastScoutReportKey)
+                let data = try JSONEncoder().encode(capped)
+                defaults.set(data, forKey: Self.scoutRunHistoryKey)
             } catch {
-                Logger.error("❌ [DiscoverySettings] Couldn't encode the scout report: \(error.localizedDescription)", category: .data)
+                Logger.error("❌ [DiscoverySettings] Couldn't encode the scout run history: \(error.localizedDescription)", category: .data)
             }
         }
+    }
+
+    private static let scoutAutoImportStrongMatchesKey = "discoveryScoutAutoImportStrongMatches"
+
+    /// Opt-in: when set, a run auto-imports recommendations whose overall
+    /// verdict is `strong`, leaving the rest for review. Defaults to `false` —
+    /// curation is the default; nothing enters the pipeline behind the user's
+    /// back unless they ask for it.
+    var scoutAutoImportStrongMatches: Bool {
+        get { defaults.bool(forKey: Self.scoutAutoImportStrongMatchesKey) }
+        set { defaults.set(newValue, forKey: Self.scoutAutoImportStrongMatchesKey) }
     }
 
     // MARK: - Job-Scout Dismissed Postings (cross-run memory)

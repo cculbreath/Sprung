@@ -113,7 +113,14 @@ struct DiscoverySettingsSection: View {
                 in: 1...10
             )
 
-            Text("Scout runs use the Discovery Anthropic model and share LinkedIn's 30-calls-per-hour budget with manual searches. Recommended leads land in the pipeline's Identified column at high priority.")
+            Toggle("Auto-import strong matches", isOn: Binding(
+                get: { coordinator.settingsStore.scoutAutoImportStrongMatches },
+                set: { newValue in
+                    coordinator.settingsStore.scoutAutoImportStrongMatches = newValue
+                }
+            ))
+
+            Text("Scout runs use the Discovery Anthropic model and share LinkedIn's 30-calls-per-hour budget with manual searches. Recommendations wait in the run's review sheet — you import the ones worth pursuing. With auto-import on, picks the agent rates a strong overall match land in the pipeline automatically; the rest still wait for review.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
         }

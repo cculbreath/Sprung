@@ -151,18 +151,22 @@ struct PipelineView: View {
             }
         }
         .sheet(isPresented: $showingScoutReport) {
-            if let report = coordinator.jobScout.lastReport {
-                JobScoutReportSheet(report: report)
+            if let startedAt = coordinator.jobScout.lastReport?.startedAt {
+                JobScoutReviewSheet(service: coordinator.jobScout, runStartedAt: startedAt)
             }
         }
         .onChange(of: coordinator.jobScout.isActive) { wasActive, isActive in
-            // Auto-present the report when a manually launched run finishes.
+            // Auto-present the review sheet when a manually launched run finishes.
             guard wasActive, !isActive, scoutManualRunInFlight else { return }
             scoutManualRunInFlight = false
             if coordinator.jobScout.lastReport != nil {
                 showingScoutReport = true
             }
         }
+    }
+
+    private var scoutPendingCount: Int {
+        JobScoutService.pendingCount(in: coordinator.jobScout.lastReport)
     }
 
     // MARK: - Scout
@@ -181,7 +185,9 @@ struct PipelineView: View {
         .help(
             coordinator.jobScout.isActive
                 ? "Scout run in progress"
-                : "Have the Discovery agent scout the job boards and import recommended leads"
+                : scoutPendingCount > 0
+                    ? "Have the Discovery agent scout the job boards — \(scoutPendingCount) recommendation\(scoutPendingCount == 1 ? "" : "s") awaiting your review"
+                    : "Have the Discovery agent scout the job boards and recommend leads for your review"
         )
     }
 
@@ -192,6 +198,17 @@ struct PipelineView: View {
                     .symbolEffect(.rotate.byLayer)
             } else {
                 Label("Scout", systemImage: "binoculars")
+            }
+        }
+        .overlay(alignment: .topTrailing) {
+            if !coordinator.jobScout.isActive, scoutPendingCount > 0 {
+                Text("\(scoutPendingCount)")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 1)
+                    .background(Capsule().fill(Color.red))
+                    .offset(x: 10, y: -10)
             }
         }
     }
