@@ -89,10 +89,29 @@ final class JobScoutToolSchemasTests: XCTestCase {
 
         let items = try XCTUnwrap(properties["recommendations"]?["items"] as? [String: Any])
         let recommendationProperties = try XCTUnwrap(items["properties"] as? [String: [String: Any]])
-        XCTAssertEqual(Set(recommendationProperties.keys), ["url", "title", "company", "reasoning"])
+        XCTAssertEqual(Set(recommendationProperties.keys), ["url", "title", "company", "reasoning", "match"])
         for key in ["url", "title", "company", "reasoning"] {
             XCTAssertEqual(recommendationProperties[key]?["type"] as? String, "string")
         }
+    }
+
+    func testRecommendJobsSchemaPinsMatchAssessment() throws {
+        let schema = JobScoutToolSchemas.recommendJobsSchema
+        let properties = try XCTUnwrap(schema["properties"] as? [String: [String: Any]])
+        let items = try XCTUnwrap(properties["recommendations"]?["items"] as? [String: Any])
+        let recommendationProperties = try XCTUnwrap(items["properties"] as? [String: [String: Any]])
+        let match = try XCTUnwrap(recommendationProperties["match"])
+        let matchProperties = try XCTUnwrap(match["properties"] as? [String: [String: Any]])
+
+        XCTAssertEqual(Set(matchProperties.keys),
+                       ["skills", "seniority", "locationFit", "compensation", "verdict"])
+        for dimension in ["skills", "seniority", "locationFit", "compensation"] {
+            XCTAssertEqual(matchProperties[dimension]?["enum"] as? [String],
+                           ["strong", "moderate", "weak", "unknown"],
+                           "\(dimension) is an honest enum with an explicit unknown, never a number")
+        }
+        XCTAssertEqual(matchProperties["verdict"]?["enum"] as? [String],
+                       ["strong", "promising", "marginal"])
     }
 
     // MARK: - Tool declarations

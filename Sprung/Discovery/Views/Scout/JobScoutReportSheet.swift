@@ -164,6 +164,10 @@ struct JobScoutReportSheet: View {
                 }
             }
 
+            ScrollView(.horizontal, showsIndicators: false) {
+                ScoutMatchBadges(match: recommendation.match)
+            }
+
             Text(recommendation.reasoning)
                 .font(.callout)
                 .fixedSize(horizontal: false, vertical: true)

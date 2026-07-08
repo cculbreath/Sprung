@@ -59,6 +59,37 @@ struct JobScoutSearchBoardArgs: Codable {
     let datePosted: String?
 }
 
+/// A dimensioned fit assessment the agent attaches to every recommendation,
+/// so the report and review UI can rank and explain a pick — the score
+/// augments the prose reasoning, never replaces it. Ratings are honest enums
+/// (never numbers: an LLM "87% match" is false precision), with an explicit
+/// `unknown` so "the posting doesn't say" is a deliberate answer, not a gap.
+struct JobScoutMatchAssessment: Codable, Hashable {
+    enum Rating: String, Codable, Hashable, CaseIterable {
+        case strong, moderate, weak, unknown
+    }
+
+    /// Overall recommendation strength — a ceiling on enthusiasm, not a quota.
+    enum Verdict: String, Codable, Hashable, CaseIterable {
+        case strong, promising, marginal
+
+        /// Sort rank, strongest first.
+        var sortRank: Int {
+            switch self {
+            case .strong: return 0
+            case .promising: return 1
+            case .marginal: return 2
+            }
+        }
+    }
+
+    let skills: Rating
+    let seniority: Rating
+    let locationFit: Rating
+    let compensation: Rating
+    let verdict: Verdict
+}
+
 /// One recommendation from the `recommend_jobs` completion payload — the
 /// pre-import draft. JobScoutService turns each into a
 /// `JobScoutService.ScoutRecommendation` with its `imported` outcome.
@@ -67,6 +98,7 @@ struct JobScoutRecommendationDraft: Codable, Hashable {
     let title: String
     let company: String
     let reasoning: String
+    let match: JobScoutMatchAssessment
 }
 
 /// The `recommend_jobs` payload: the picks, plus an honest reason when the

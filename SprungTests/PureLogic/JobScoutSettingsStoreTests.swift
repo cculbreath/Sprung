@@ -195,6 +195,10 @@ final class JobScoutSettingsStoreTests: XCTestCase {
                     title: "Senior Medical Physicist",
                     company: "Acme Oncology",
                     reasoning: "Their commissioning work matches the linac experience in the dossier.",
+                    match: JobScoutMatchAssessment(
+                        skills: .strong, seniority: .strong, locationFit: .moderate,
+                        compensation: .unknown, verdict: .strong
+                    ),
                     imported: true
                 ),
                 JobScoutService.ScoutRecommendation(
@@ -202,6 +206,10 @@ final class JobScoutSettingsStoreTests: XCTestCase {
                     title: "Physicist II",
                     company: "Beta Health",
                     reasoning: "A close fit for the clinical QA background.",
+                    match: JobScoutMatchAssessment(
+                        skills: .moderate, seniority: .strong, locationFit: .strong,
+                        compensation: .weak, verdict: .promising
+                    ),
                     imported: false
                 )
             ],
@@ -221,8 +229,11 @@ final class JobScoutSettingsStoreTests: XCTestCase {
         XCTAssertEqual(decoded.recommendations.count, 2)
         XCTAssertEqual(decoded.recommendations[0].title, "Senior Medical Physicist")
         XCTAssertTrue(decoded.recommendations[0].imported)
+        XCTAssertEqual(decoded.recommendations[0].match.verdict, .strong)
+        XCTAssertEqual(decoded.recommendations[0].match.compensation, .unknown)
         XCTAssertEqual(decoded.recommendations[1].company, "Beta Health")
         XCTAssertFalse(decoded.recommendations[1].imported)
+        XCTAssertEqual(decoded.recommendations[1].match.verdict, .promising)
         XCTAssertEqual(decoded.notes.count, 1)
     }
 

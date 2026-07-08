@@ -374,16 +374,56 @@ final class JobScoutServiceTests: XCTestCase {
         XCTAssertFalse(explanation.contains(LinkedInMCPImportService.noSessionMessage))
     }
 
+    // MARK: - Match-assessment fixtures + verdict sort
+
+    private func matchFixture(_ verdict: JobScoutMatchAssessment.Verdict = .strong) -> JobScoutMatchAssessment {
+        JobScoutMatchAssessment(
+            skills: .strong, seniority: .strong, locationFit: .moderate,
+            compensation: .unknown, verdict: verdict
+        )
+    }
+
+    private func draft(
+        url: String,
+        title: String = "Physicist",
+        company: String = "Acme",
+        reasoning: String = "fit",
+        verdict: JobScoutMatchAssessment.Verdict = .strong
+    ) -> JobScoutRecommendationDraft {
+        JobScoutRecommendationDraft(
+            url: url, title: title, company: company, reasoning: reasoning, match: matchFixture(verdict)
+        )
+    }
+
+    func testSortedByVerdictOrdersStrongestFirst() {
+        let sorted = JobScoutService.sortedByVerdict([
+            draft(url: "https://marginal", verdict: .marginal),
+            draft(url: "https://strong", verdict: .strong),
+            draft(url: "https://promising", verdict: .promising)
+        ])
+        XCTAssertEqual(sorted.map(\.url), ["https://strong", "https://promising", "https://marginal"])
+    }
+
+    func testSortedByVerdictIsStableWithinATier() {
+        // Two picks share a verdict — the agent's original order is preserved.
+        let sorted = JobScoutService.sortedByVerdict([
+            draft(url: "https://a", verdict: .promising),
+            draft(url: "https://strong", verdict: .strong),
+            draft(url: "https://b", verdict: .promising)
+        ])
+        XCTAssertEqual(sorted.map(\.url), ["https://strong", "https://a", "https://b"],
+                       "ties keep the agent's submission order, never reshuffle")
+    }
+
     // MARK: - 5. Recommendation → JobApp
 
     func testMakeJobAppSetsScoutSourceAndHighPriority() throws {
-        let draft = JobScoutRecommendationDraft(
+        let jobApp = try XCTUnwrap(JobScoutService.makeJobApp(from: draft(
             url: "https://www.dice.com/job-detail/abc",
             title: "Senior Medical Physicist",
             company: "Acme Oncology",
             reasoning: "Strong fit."
-        )
-        let jobApp = try XCTUnwrap(JobScoutService.makeJobApp(from: draft))
+        )))
         XCTAssertEqual(jobApp.jobPosition, "Senior Medical Physicist")
         XCTAssertEqual(jobApp.companyName, "Acme Oncology")
         XCTAssertEqual(jobApp.postingURL, "https://www.dice.com/job-detail/abc")
@@ -396,15 +436,9 @@ final class JobScoutServiceTests: XCTestCase {
     }
 
     func testMakeJobAppRejectsMissingEssentials() {
-        XCTAssertNil(JobScoutService.makeJobApp(from: JobScoutRecommendationDraft(
-            url: "https://a", title: "  ", company: "Acme", reasoning: "r"
-        )))
-        XCTAssertNil(JobScoutService.makeJobApp(from: JobScoutRecommendationDraft(
-            url: "https://a", title: "Physicist", company: "", reasoning: "r"
-        )))
-        XCTAssertNil(JobScoutService.makeJobApp(from: JobScoutRecommendationDraft(
-            url: "", title: "Physicist", company: "Acme", reasoning: "r"
-        )))
+        XCTAssertNil(JobScoutService.makeJobApp(from: draft(url: "https://a", title: "  ", company: "Acme")))
+        XCTAssertNil(JobScoutService.makeJobApp(from: draft(url: "https://a", title: "Physicist", company: "")))
+        XCTAssertNil(JobScoutService.makeJobApp(from: draft(url: "", title: "Physicist", company: "Acme")))
     }
 
     // MARK: - 6. Task-message assembly
@@ -465,7 +499,7 @@ final class JobScoutServiceTests: XCTestCase {
 
         let startedAt = Date(timeIntervalSince1970: 1_782_000_000)
         let recommendation = JobScoutService.ScoutRecommendation(
-            url: "https://a", title: "T", company: "C", reasoning: "R", imported: true
+            url: "https://a", title: "T", company: "C", reasoning: "R", match: matchFixture(), imported: true
         )
         let report = state.makeReport(startedAt: startedAt, recommendations: [recommendation])
 

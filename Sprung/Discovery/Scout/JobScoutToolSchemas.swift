@@ -158,10 +158,54 @@ enum JobScoutToolSchemas {
                 "reasoning": [
                     "type": "string",
                     "description": "2-3 plain sentences, in a natural voice, connecting this posting to the candidate's actual background. No formulas, no invented metrics, no buzzwords."
+                ],
+                "match": matchAssessmentSchema
+            ],
+            "required": ["url", "title", "company", "reasoning", "match"],
+            "additionalProperties": false
+        ]
+    }
+
+    // MARK: - match Assessment Schema (strict: closed, every dimension required)
+
+    /// A dimensioned fit assessment attached to each recommendation. Ratings
+    /// are honest enums — `unknown` is a real answer ("the posting doesn't
+    /// say"), never a number.
+    private static var matchAssessmentSchema: [String: Any] {
+        [
+            "type": "object",
+            "description": "A dimensioned fit assessment for this posting against the candidate's real background. Augments the reasoning; never replaces it.",
+            "properties": [
+                "skills": ratingProperty(
+                    "How well the candidate's demonstrated skills and experience meet the posting's requirements."
+                ),
+                "seniority": ratingProperty(
+                    "How well the candidate's seniority fits the role's level — under- or over-qualified both weaken it."
+                ),
+                "locationFit": ratingProperty(
+                    "How well the posting's location and work arrangement fit the candidate's stated preferences."
+                ),
+                "compensation": ratingProperty(
+                    "How well the stated compensation fits the candidate; unknown when the posting gives no salary."
+                ),
+                "verdict": [
+                    "type": "string",
+                    "enum": ["strong", "promising", "marginal"],
+                    "description": "Overall recommendation strength. A ceiling on enthusiasm, never a quota — marginal is the honest verdict when the fit is thin."
                 ]
             ],
-            "required": ["url", "title", "company", "reasoning"],
+            "required": ["skills", "seniority", "locationFit", "compensation", "verdict"],
             "additionalProperties": false
+        ]
+    }
+
+    /// One rating dimension: a required enum with an explicit `unknown` so an
+    /// unstated fact is a deliberate answer, not an omission.
+    private static func ratingProperty(_ description: String) -> [String: Any] {
+        [
+            "type": "string",
+            "enum": ["strong", "moderate", "weak", "unknown"],
+            "description": description
         ]
     }
 }

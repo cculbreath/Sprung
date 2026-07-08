@@ -61,14 +61,19 @@ final class JobScoutLoopTests: XCTestCase {
         let call = try decodeToolUse(inputJSON: #"""
         {"recommendations":[
           {"url":"https://www.dice.com/job-detail/abc","title":"Senior Medical Physicist",
-           "company":"Acme Oncology","reasoning":"Their linac commissioning work lines up with the dossier."},
+           "company":"Acme Oncology","reasoning":"Their linac commissioning work lines up with the dossier.",
+           "match":{"skills":"strong","seniority":"strong","locationFit":"moderate","compensation":"unknown","verdict":"strong"}},
           {"url":"https://www.linkedin.com/jobs/view/4242/","title":"Physicist II",
-           "company":"Beta Health","reasoning":"A close fit for the clinical QA background."}
+           "company":"Beta Health","reasoning":"A close fit for the clinical QA background.",
+           "match":{"skills":"moderate","seniority":"strong","locationFit":"strong","compensation":"weak","verdict":"promising"}}
         ],"emptyReason":null}
         """#)
         let submission = try JobScoutLoop.decodeSubmission(call)
         XCTAssertEqual(submission.recommendations.count, 2)
         XCTAssertEqual(submission.recommendations[0].title, "Senior Medical Physicist")
+        XCTAssertEqual(submission.recommendations[0].match.verdict, .strong)
+        XCTAssertEqual(submission.recommendations[0].match.compensation, .unknown)
+        XCTAssertEqual(submission.recommendations[1].match.verdict, .promising)
         XCTAssertNil(submission.emptyReason)
     }
 
@@ -92,7 +97,8 @@ final class JobScoutLoopTests: XCTestCase {
     func testDecodeSubmissionRejectsMissingEssentials() throws {
         let call = try decodeToolUse(inputJSON: #"""
         {"recommendations":[
-          {"url":"https://a.example.com/1","title":"Physicist","company":"  ","reasoning":"fit"}
+          {"url":"https://a.example.com/1","title":"Physicist","company":"  ","reasoning":"fit",
+           "match":{"skills":"strong","seniority":"strong","locationFit":"strong","compensation":"strong","verdict":"strong"}}
         ],"emptyReason":null}
         """#)
         XCTAssertThrowsError(try JobScoutLoop.decodeSubmission(call)) { error in
@@ -103,7 +109,8 @@ final class JobScoutLoopTests: XCTestCase {
     func testDecodeSubmissionRejectsNonHTTPURLs() throws {
         let call = try decodeToolUse(inputJSON: #"""
         {"recommendations":[
-          {"url":"ftp://boards.example.com/1","title":"Physicist","company":"Acme","reasoning":"fit"}
+          {"url":"ftp://boards.example.com/1","title":"Physicist","company":"Acme","reasoning":"fit",
+           "match":{"skills":"strong","seniority":"strong","locationFit":"strong","compensation":"strong","verdict":"strong"}}
         ],"emptyReason":null}
         """#)
         XCTAssertThrowsError(try JobScoutLoop.decodeSubmission(call)) { error in
@@ -114,12 +121,41 @@ final class JobScoutLoopTests: XCTestCase {
     func testDecodeSubmissionRejectsDuplicateURLs() throws {
         let call = try decodeToolUse(inputJSON: #"""
         {"recommendations":[
-          {"url":"https://a.example.com/1","title":"Physicist","company":"Acme","reasoning":"fit"},
-          {"url":"https://a.example.com/1","title":"Physicist (again)","company":"Acme","reasoning":"same"}
+          {"url":"https://a.example.com/1","title":"Physicist","company":"Acme","reasoning":"fit",
+           "match":{"skills":"strong","seniority":"strong","locationFit":"strong","compensation":"strong","verdict":"strong"}},
+          {"url":"https://a.example.com/1","title":"Physicist (again)","company":"Acme","reasoning":"same",
+           "match":{"skills":"weak","seniority":"weak","locationFit":"weak","compensation":"unknown","verdict":"marginal"}}
         ],"emptyReason":null}
         """#)
         XCTAssertThrowsError(try JobScoutLoop.decodeSubmission(call)) { error in
             XCTAssertTrue("\(error)".contains("exactly once"))
+        }
+    }
+
+    // MARK: - 3. Match assessment decoding
+
+    func testDecodeSubmissionRejectsMissingMatch() throws {
+        let call = try decodeToolUse(inputJSON: #"""
+        {"recommendations":[
+          {"url":"https://a.example.com/1","title":"Physicist","company":"Acme","reasoning":"fit"}
+        ],"emptyReason":null}
+        """#)
+        XCTAssertThrowsError(try JobScoutLoop.decodeSubmission(call)) { error in
+            XCTAssertTrue("\(error)".contains("recommend_jobs"),
+                          "a recommendation missing its match assessment fails to decode, naming the tool")
+        }
+    }
+
+    func testDecodeSubmissionRejectsInvalidRating() throws {
+        let call = try decodeToolUse(inputJSON: #"""
+        {"recommendations":[
+          {"url":"https://a.example.com/1","title":"Physicist","company":"Acme","reasoning":"fit",
+           "match":{"skills":"excellent","seniority":"strong","locationFit":"strong","compensation":"strong","verdict":"strong"}}
+        ],"emptyReason":null}
+        """#)
+        XCTAssertThrowsError(try JobScoutLoop.decodeSubmission(call)) { error in
+            XCTAssertTrue("\(error)".contains("recommend_jobs"),
+                          "an out-of-enum rating fails to decode, naming the tool")
         }
     }
 }

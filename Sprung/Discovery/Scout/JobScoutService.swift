@@ -58,6 +58,7 @@ final class JobScoutService {
         let title: String
         let company: String
         let reasoning: String
+        let match: JobScoutMatchAssessment
         let imported: Bool
     }
 
@@ -283,6 +284,9 @@ final class JobScoutService {
             )
             drafts = Array(drafts.prefix(config.recommendationCount))
         }
+        // Order strongest verdict first for the report and review UI; the cap
+        // above already kept the agent's own top picks.
+        drafts = Self.sortedByVerdict(drafts)
 
         activityTracker?.updatePhase(operationId: operationId, phase: "Importing recommendations")
         let recommendations = drafts.map { importRecommendation($0, runState: runState) }
@@ -429,6 +433,7 @@ final class JobScoutService {
             title: draft.title,
             company: draft.company,
             reasoning: draft.reasoning,
+            match: draft.match,
             imported: imported
         )
     }
@@ -568,6 +573,19 @@ final class JobScoutService {
     enum PipelineMatchKind {
         case byURL
         case byTitleCompany
+    }
+
+    /// Order recommendations strongest verdict first (strong > promising >
+    /// marginal), preserving the agent's original order within each tier
+    /// (stable — decorated with the source index so ties never reshuffle).
+    static func sortedByVerdict(_ drafts: [JobScoutRecommendationDraft]) -> [JobScoutRecommendationDraft] {
+        drafts.enumerated()
+            .sorted { lhs, rhs in
+                let lRank = lhs.element.match.verdict.sortRank
+                let rRank = rhs.element.match.verdict.sortRank
+                return lRank == rRank ? lhs.offset < rhs.offset : lRank < rRank
+            }
+            .map(\.element)
     }
 
     /// Whether a search result matches a previously-dismissed posting: the
