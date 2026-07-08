@@ -20,5 +20,8 @@ struct ProfileModuleView: View {
             // Embedded applicant profile editor
             ApplicantProfileView()
         }
+        // ApplicantProfileView declares minHeight 750; publish it so the window
+        // floor honors it and Profile can't be vertically clipped.
+        .moduleMinContentSize(CGSize(width: 520, height: 750))
     }
 }

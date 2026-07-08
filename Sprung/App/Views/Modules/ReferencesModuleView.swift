@@ -96,6 +96,9 @@ struct ReferencesModuleView: View {
             tabContent
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+        // Skills/Titles tabs carry non-wrapping toolbar rows (~730pt natural
+        // width); floor the window there so they don't clip.
+        .moduleMinContentSize(CGSize(width: 730, height: 650))
         .onReceive(NotificationCenter.default.publisher(for: .navigateToReferencesTab)) { notification in
             if let tabString = notification.userInfo?["tab"] as? String,
                let tab = Tab(rawValue: tabString) {

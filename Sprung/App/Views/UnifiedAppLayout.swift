@@ -30,7 +30,14 @@ struct UnifiedAppLayout: View {
     @State private var didPromptTemplateEditor = false
     @State private var sheets = AppSheets()
     @State private var menuHandler = MenuNotificationHandler()
+    @State private var moduleMinContentSize = ModuleMinSizeKey.defaultValue
     @AppStorage("hasCompletedSetupWizard") private var hasCompletedSetupWizard = false
+
+    /// Live icon-bar width, added to the active module's minimum to form the
+    /// window's hard floor.
+    private var iconBarWidth: CGFloat {
+        navigation.isIconBarExpanded ? IconBarView.expandedWidth : IconBarView.collapsedWidth
+    }
 
     var body: some View {
         HStack(spacing: 0) {
@@ -40,7 +47,17 @@ struct UnifiedAppLayout: View {
             // Module content
             ModuleContentView(module: navigation.selectedModule, sheets: $sheets)
         }
-        .frame(minWidth: 1000, minHeight: 650)
+        // Dynamic window floor: the active module publishes its minimum CONTENT
+        // size (excluding the icon bar) via ModuleMinSizeKey; we add the live
+        // icon-bar width and hand the total to .windowResizability(.contentMinSize)
+        // (in SprungApp) as the window's hard minimum. Collapsing a module's
+        // panes shrinks its published minimum, so the window can then be dragged
+        // narrower; re-expanding grows it and macOS clamps the window back up.
+        .frame(
+            minWidth: iconBarWidth + moduleMinContentSize.width,
+            minHeight: moduleMinContentSize.height
+        )
+        .onPreferenceChange(ModuleMinSizeKey.self) { moduleMinContentSize = $0 }
         // Headless toolbar-button views: kept alive at the shell so their
         // notification-driven sheets/alerts present from menu and toolbar
         // commands in every module (single observer per trigger).

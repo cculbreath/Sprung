@@ -11,8 +11,10 @@ import SwiftUI
 struct IconBarView: View {
     @Environment(ModuleNavigationService.self) private var navigation
 
-    private let collapsedWidth: CGFloat = 52
-    private let expandedWidth: CGFloat = 200
+    // Static so the layout (UnifiedAppLayout) can add the live icon-bar width
+    // to the active module's minimum when computing the window floor.
+    static let collapsedWidth: CGFloat = 52
+    static let expandedWidth: CGFloat = 200
 
     var body: some View {
         VStack(spacing: 0) {
@@ -45,7 +47,7 @@ struct IconBarView: View {
             // Expand/collapse toggle
             IconBarExpandToggle(isExpanded: navigation.isIconBarExpanded)
         }
-        .frame(width: navigation.isIconBarExpanded ? expandedWidth : collapsedWidth)
+        .frame(width: navigation.isIconBarExpanded ? Self.expandedWidth : Self.collapsedWidth)
         .background(Color(.windowBackgroundColor))
         .overlay(alignment: .trailing) {
             Rectangle()

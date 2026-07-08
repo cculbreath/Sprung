@@ -18,6 +18,8 @@ struct PipelineModuleView: View {
     var body: some View {
         // Full-width Kanban board - no sidebar needed
         PipelineView(coordinator: coordinator)
+            // Non-wrapping toolbar row (~620pt natural width) sets the floor.
+            .moduleMinContentSize(CGSize(width: 620, height: 650))
             .onReceive(NotificationCenter.default.publisher(for: .selectJobApp)) { notification in
                 // When a job card is clicked in the Kanban, navigate to Resume Editor
                 if let jobAppId = notification.userInfo?["jobAppId"] as? UUID,

@@ -25,8 +25,13 @@ struct ResumeEditorModuleView: View {
     // Sidebar collapse state - persisted
     @AppStorage("resumeEditorSidebarExpanded") private var isSidebarExpanded: Bool = true
     @AppStorage("resumeEditorSidebarWidth") private var sidebarWidth: Double = 280
+    // PDF preview visibility (owned by ResumeSplitView) — read here only to size
+    // the dynamic window floor; hiding the preview lets the window get narrower.
+    @AppStorage("pdfPreviewVisible") private var pdfPreviewVisible = true
 
-    private let collapsedHandleWidth: CGFloat = 12
+    // Matches CollapsedPanelHandle.handleWidth — the skinny strip shown in place
+    // of the jobs sidebar when it's collapsed.
+    private let collapsedHandleWidth: CGFloat = 24
     private let minSidebarWidth: CGFloat = 200
     private let maxSidebarWidth: CGFloat = 400
     private let resizeHandleWidth: CGFloat = 9
@@ -47,6 +52,33 @@ struct ResumeEditorModuleView: View {
         guard moduleWidth > 0 else { return sidebarWidth }
         let cap = Double(moduleWidth - resizeHandleWidth - detailMinBudget)
         return min(sidebarWidth, max(cap, Double(minSidebarWidth)))
+    }
+
+    /// Live minimum CONTENT width for this module (excluding the icon bar),
+    /// published up to UnifiedAppLayout as part of the window floor. Shrinks as
+    /// the jobs sidebar and PDF preview are collapsed.
+    private var moduleMinContentWidth: CGFloat {
+        let sidebarPart = isSidebarExpanded
+            ? (minSidebarWidth + resizeHandleWidth)
+            : collapsedHandleWidth
+        return sidebarPart + detailMinWidth
+    }
+
+    /// Minimum width of the detail column for the active tab. Mirrors the
+    /// pane layouts in ResumeSplitView (resume) and CoverLetterView (cover),
+    /// so no tab's expanded panes get clipped at the window floor.
+    private var detailMinWidth: CGFloat {
+        let primaryColumn: CGFloat = 300
+        switch navigationState.selectedTab {
+        case .resume:
+            // editor + PDF chevron bar + (PDF handle + preview floor when shown)
+            return primaryColumn + 16 + (pdfPreviewVisible ? (resizeHandleWidth + 100) : 0)
+        case .coverLetter:
+            // letter column + (divider + inspector when shown, per CoverLetterView)
+            return primaryColumn + (sheets.showCoverLetterInspector ? (1 + 340) : 0)
+        case .listing, .submitApp, .none:
+            return primaryColumn
+        }
     }
 
     var body: some View {
@@ -80,6 +112,7 @@ struct ResumeEditorModuleView: View {
         // fill it), so measuring here can't feed back into child sizing.
         .frame(maxWidth: .infinity)
         .onGeometryChange(for: CGFloat.self, of: { $0.size.width }) { moduleWidth = $0 }
+        .moduleMinContentSize(CGSize(width: moduleMinContentWidth, height: 650))
         .animation(.easeInOut(duration: 0.2), value: isSidebarExpanded)
         .onChange(of: jobAppStore.selectedApp) { _, newValue in
             updateMyLetter()
