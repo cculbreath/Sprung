@@ -13,7 +13,6 @@ actor ObjectiveWorkflowEngine: OnboardingEventEmitter {
     let eventBus: EventBus
     private let phaseRegistry: PhaseScriptRegistry
     private let state: StateCoordinator
-    private var subscriptionTask: Task<Void, Never>?
     private var isActive = false
     // MARK: - Initialization
     init(
@@ -30,7 +29,7 @@ actor ObjectiveWorkflowEngine: OnboardingEventEmitter {
     func start() {
         guard !isActive else { return }
         isActive = true
-        subscriptionTask = Task { [weak self] in
+        Task { [weak self] in
             guard let self else { return }
             for await event in await self.eventBus.stream(topic: .objective) {
                 if Task.isCancelled { break }
@@ -80,7 +79,7 @@ actor ObjectiveWorkflowEngine: OnboardingEventEmitter {
             Logger.debug("No workflow defined for objective: \(id)", category: .ai)
             return
         }
-        // Build the context with source, notes, and details from the event
+        // Objectives completed or skipped so far — used to auto-start dependent objectives.
         let completedObjectives = await state.getAllObjectives()
             .filter { $0.status == .completed || $0.status == .skipped }
             .map { $0.id }
@@ -92,11 +91,7 @@ actor ObjectiveWorkflowEngine: OnboardingEventEmitter {
         if let notes = notes {
             details["notes"] = notes
         }
-        let context = ObjectiveWorkflowContext(
-            completedObjectives: Set(completedObjectives),
-            status: newStatus,
-            details: details
-        )
+        let context = ObjectiveWorkflowContext(details: details)
         // Execute the workflow callbacks
         let outputs = workflow.outputs(for: newStatus, context: context)
         for output in outputs {

@@ -367,8 +367,6 @@ enum CoverLetterPDFGenerator {
     private struct SignatureLineIndices {
         var regardsLineIndex: Int?
         var nameLineIndex: Int?
-        var contactInfoLineIndex: Int?
-        var emailLineIndex: Int?
     }
     private static func findSignatureLineIndices(
         in frameLines: [CTLine],
@@ -396,12 +394,6 @@ enum CoverLetterPDFGenerator {
             }
             if trimmedContent.contains(applicantName) {
                 indices.nameLineIndex = idx
-            }
-            if containsLikelyPhoneNumber(trimmedContent) || containsAddressKeyword(trimmedContent) {
-                indices.contactInfoLineIndex = idx
-            }
-            if containsEmailAddress(trimmedContent) {
-                indices.emailLineIndex = idx
             }
         }
         return indices

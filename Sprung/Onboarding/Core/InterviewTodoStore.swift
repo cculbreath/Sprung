@@ -60,11 +60,6 @@ actor InterviewTodoStore {
         self.eventBus = eventBus
     }
 
-    /// Set the event bus after initialization (for dependency injection)
-    func setEventBus(_ eventBus: EventBus) {
-        self.eventBus = eventBus
-    }
-
     // MARK: - Public API (for tool)
 
     /// Update the todo list from LLM input.
@@ -110,49 +105,6 @@ actor InterviewTodoStore {
         Logger.info("📋 Todo list set from script: \(items.count) item(s) (all locked)", category: .ai)
         logCurrentState()
         emitUpdateEvent()
-    }
-
-    /// Add a single item to the list
-    func addItem(content: String, activeForm: String? = nil) {
-        let item = InterviewTodoItem(content: content, activeForm: activeForm)
-        items.append(item)
-        Logger.info("📋 Todo added: \(content)", category: .ai)
-    }
-
-    /// Mark an item as in_progress by index (0-based)
-    func markInProgress(index: Int) {
-        guard index >= 0 && index < items.count else {
-            Logger.warning("📋 Invalid todo index for markInProgress: \(index)", category: .ai)
-            return
-        }
-        items[index].status = .inProgress
-        Logger.info("📋 Todo in progress: \(items[index].content)", category: .ai)
-    }
-
-    /// Mark an item as completed by index (0-based)
-    func markCompleted(index: Int) {
-        guard index >= 0 && index < items.count else {
-            Logger.warning("📋 Invalid todo index for markCompleted: \(index)", category: .ai)
-            return
-        }
-        items[index].status = .completed
-        Logger.info("📋 Todo completed: \(items[index].content)", category: .ai)
-    }
-
-    /// Remove an item by index (0-based)
-    func removeItem(index: Int) {
-        guard index >= 0 && index < items.count else {
-            Logger.warning("📋 Invalid todo index for remove: \(index)", category: .ai)
-            return
-        }
-        let removed = items.remove(at: index)
-        Logger.info("📋 Todo removed: \(removed.content)", category: .ai)
-    }
-
-    /// Clear all items
-    func clear() {
-        items.removeAll()
-        Logger.info("📋 Todo list cleared", category: .ai)
     }
 
     // MARK: - Rendering for Interview Context

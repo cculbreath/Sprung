@@ -83,31 +83,3 @@ enum ToolResultHelpers {
         return .immediate(response)
     }
 }
-
-/// Extension to ToolError for common validation patterns
-extension ToolError {
-
-    /// Creates an invalidParameters error for a missing field
-    /// - Parameter fieldName: The name of the missing field
-    /// - Returns: ToolError.invalidParameters
-    static func missingField(_ fieldName: String) -> ToolError {
-        .invalidParameters("\(fieldName) is required")
-    }
-
-    /// Creates an invalidParameters error for an invalid enum value
-    /// - Parameters:
-    ///   - fieldName: The field name
-    ///   - value: The invalid value
-    ///   - validValues: List of valid values
-    /// - Returns: ToolError.invalidParameters
-    static func invalidEnum(
-        field fieldName: String,
-        value: String,
-        validValues: [String]
-    ) -> ToolError {
-        let options = validValues.joined(separator: ", ")
-        return .invalidParameters(
-            "\(fieldName) must be one of: \(options). Got: '\(value)'"
-        )
-    }
-}

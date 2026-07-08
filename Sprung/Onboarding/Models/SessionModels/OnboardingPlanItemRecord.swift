@@ -25,14 +25,7 @@ class OnboardingPlanItemRecord {
 
     var session: OnboardingSession?
 
-    init(
-        itemId: String,
-        title: String,
-        type: String,
-        descriptionText: String? = nil,
-        status: String = "pending",
-        timelineEntryId: String? = nil
-    ) {
+    init(itemId: String, title: String, type: String, descriptionText: String? = nil, status: String, timelineEntryId: String? = nil) {
         self.itemId = itemId
         self.title = title
         self.type = type

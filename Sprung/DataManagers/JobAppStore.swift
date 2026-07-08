@@ -357,13 +357,6 @@ final class JobAppStore: EntityStore {
         allJobAppsSorted.first { $0.id == id }
     }
 
-    // MARK: - Pipeline CRUD
-
-    /// Add a new job app to the pipeline
-    func addToPipeline(_ jobApp: JobApp) {
-        add(jobApp)
-    }
-
     // MARK: - Status Management
 
     /// Advance a job app to the next status in the pipeline

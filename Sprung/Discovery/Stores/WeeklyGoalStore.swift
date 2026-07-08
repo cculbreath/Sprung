@@ -108,32 +108,11 @@ final class WeeklyGoalStore: SwiftDataStore {
         saveContext()
     }
 
-    func goal(byId id: UUID) -> WeeklyGoal? {
-        allGoals.first { $0.id == id }
-    }
-
-    func goal(forWeekStarting date: Date) -> WeeklyGoal? {
-        let calendar = Calendar.current
-        return allGoals.first {
-            calendar.isDate($0.weekStartDate, equalTo: date, toGranularity: .weekOfYear)
-        }
-    }
-
     // MARK: - Application Count (Data-Driven)
 
     /// Count applications submitted during the current ISO week by querying JobApp.appliedDate
     func applicationsSubmittedThisWeek() -> Int {
         let (weekStart, weekEnd) = currentWeekRange()
-        return jobAppStore.jobApps.filter { jobApp in
-            guard let appliedDate = jobApp.appliedDate else { return false }
-            return appliedDate >= weekStart && appliedDate < weekEnd
-        }.count
-    }
-
-    /// Count applications submitted during a specific week (for historical queries)
-    func applicationsSubmittedInWeek(_ weekStart: Date) -> Int {
-        let calendar = Calendar.current
-        guard let weekEnd = calendar.date(byAdding: .weekOfYear, value: 1, to: weekStart) else { return 0 }
         return jobAppStore.jobApps.filter { jobApp in
             guard let appliedDate = jobApp.appliedDate else { return false }
             return appliedDate >= weekStart && appliedDate < weekEnd
@@ -188,21 +167,6 @@ final class WeeklyGoalStore: SwiftDataStore {
             let notes = goal.userNotes?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             return !notes.isEmpty
         })?.userNotes
-    }
-
-    // MARK: - Statistics
-
-    /// Get previous N weeks of goals for trend analysis
-    func recentGoals(count: Int = 4) -> [WeeklyGoal] {
-        Array(allGoals.prefix(count))
-    }
-
-    /// Average application rate over recent weeks (data-driven from JobApp.appliedDate)
-    func averageApplicationRate(weeks: Int = 4) -> Double {
-        let recent = recentGoals(count: weeks)
-        guard !recent.isEmpty else { return 0 }
-        let total = recent.reduce(0) { $0 + applicationsSubmittedInWeek($1.weekStartDate) }
-        return Double(total) / Double(recent.count)
     }
 
     /// Reset current week's progress (keeps targets)

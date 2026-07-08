@@ -20,10 +20,6 @@ struct ReviewItem: Identifiable, Equatable {
     var editedContent: String?
     /// User-edited children if they made changes (for array values like highlights)
     var editedChildren: [String]?
-    /// Timestamp when added to queue
-    let addedAt: Date
-    /// Whether regeneration is in progress
-    var isRegenerating: Bool
 
     init(
         id: UUID = UUID(),
@@ -31,9 +27,7 @@ struct ReviewItem: Identifiable, Equatable {
         generatedContent: GeneratedContent,
         userAction: UserAction? = nil,
         editedContent: String? = nil,
-        editedChildren: [String]? = nil,
-        addedAt: Date = Date(),
-        isRegenerating: Bool = false
+        editedChildren: [String]? = nil
     ) {
         self.id = id
         self.task = task
@@ -41,8 +35,6 @@ struct ReviewItem: Identifiable, Equatable {
         self.userAction = userAction
         self.editedContent = editedContent
         self.editedChildren = editedChildren
-        self.addedAt = addedAt
-        self.isRegenerating = isRegenerating
     }
 
     /// User action on a review item
@@ -55,23 +47,8 @@ struct ReviewItem: Identifiable, Equatable {
         case regenerationFailed(reason: String)
     }
 
-    /// Whether this item has been acted upon
-    var hasAction: Bool {
-        userAction != nil
-    }
-
     /// Whether this item was approved
     var isApproved: Bool {
-        switch userAction {
-        case .approved, .edited:
-            return true
-        default:
-            return false
-        }
-    }
-
-    /// Whether the generated content should be applied
-    var shouldApplyContent: Bool {
         switch userAction {
         case .approved, .edited:
             return true
@@ -123,16 +100,6 @@ final class ReviewQueue {
         approvedItems.filter { !applied.contains($0.id) }
     }
 
-    /// Items that have been rejected
-    var rejectedItems: [ReviewItem] {
-        items.filter { $0.isRejected }
-    }
-
-    /// Whether there are any items in the queue
-    var hasItems: Bool {
-        !items.isEmpty
-    }
-
     /// Whether there are pending items
     var hasPendingItems: Bool {
         !pendingItems.isEmpty
@@ -144,11 +111,6 @@ final class ReviewQueue {
     }
 
     // MARK: - Queue Management
-
-    /// Add a new item to the queue
-    func add(_ item: ReviewItem) {
-        items.append(item)
-    }
 
     /// Add a task result to the queue
     func add(task: GenerationTask, content: GeneratedContent) {
@@ -172,9 +134,6 @@ final class ReviewQueue {
                 return nil
             }()
 
-            // Mark as regenerating
-            items[index].isRegenerating = true
-
             // Trigger regeneration asynchronously
             let item = items[index]
             Task { [weak self] in
@@ -192,7 +151,6 @@ final class ReviewQueue {
         guard let onRegenerationRequested else {
             Logger.warning("ReviewQueue: No regeneration callback configured", category: .ai)
             if let index = items.firstIndex(where: { $0.id == item.id }) {
-                items[index].isRegenerating = false
                 items[index].userAction = .regenerationFailed(reason: "Regeneration is not available — please restart seed generation.")
             }
             return
@@ -215,7 +173,6 @@ final class ReviewQueue {
             Logger.info("✅ Regeneration complete for: \(item.task.displayName)", category: .ai)
         } catch {
             if let index = items.firstIndex(where: { $0.id == item.id }) {
-                items[index].isRegenerating = false
                 items[index].userAction = .regenerationFailed(reason: error.localizedDescription)
             }
             Logger.error("❌ Regeneration failed for: \(item.task.displayName) — \(error.localizedDescription)", category: .ai)
@@ -241,11 +198,6 @@ final class ReviewQueue {
     /// Remove an item from the queue
     func remove(_ itemId: UUID) {
         items.removeAll { $0.id == itemId }
-    }
-
-    /// Clear all items from the queue
-    func clear() {
-        items.removeAll()
     }
 
     /// Get item by ID

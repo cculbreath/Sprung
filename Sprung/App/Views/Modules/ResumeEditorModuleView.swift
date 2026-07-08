@@ -9,11 +9,9 @@ import SwiftUI
 
 /// Resume Editor module - embeds existing resume editor with collapsible sidebar
 struct ResumeEditorModuleView: View {
-    @Environment(AppState.self) private var appState
     @Environment(JobAppStore.self) private var jobAppStore
     @Environment(CoverLetterStore.self) private var coverLetterStore
     @Environment(NavigationStateService.self) private var navigationState
-    @Environment(WindowCoordinator.self) private var windowCoordinator
     @Environment(UnifiedJobFocusState.self) private var focusState
 
     @State var tabRefresh: Bool = false

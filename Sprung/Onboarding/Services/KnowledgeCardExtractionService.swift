@@ -24,10 +24,6 @@ actor KnowledgeCardExtractionService {
         Logger.info("📖 KnowledgeCardExtractionService initialized", category: .ai)
     }
 
-    func updateLLMFacade(_ facade: LLMFacade?) {
-        self.llmFacade = facade
-    }
-
     /// Extract knowledge cards from raw document text.
     /// Text documents are capped at 200K characters upstream and go in one pass.
     func extractCards(

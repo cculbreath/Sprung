@@ -204,12 +204,6 @@ class TokenUsageTracker {
         return "\(seconds)s"
     }
 
-    /// Models sorted by total usage
-    var modelsSortedByUsage: [(modelId: String, stats: TokenUsageStats)] {
-        statsByModel.sorted { $0.value.totalTokens > $1.value.totalTokens }
-            .map { (modelId: $0.key, stats: $0.value) }
-    }
-
     /// Sources sorted by total usage
     var sourcesSortedByUsage: [(source: UsageSource, stats: TokenUsageStats)] {
         statsBySource.sorted { $0.value.totalTokens > $1.value.totalTokens }

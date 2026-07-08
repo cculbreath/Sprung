@@ -39,11 +39,6 @@ final class ArtifactArchiveService {
 
     // MARK: - Accessors
 
-    /// Get archived artifacts for UI display (directly from SwiftData)
-    var archivedArtifacts: [ArtifactRecord] {
-        artifactRecordStore.archivedArtifacts
-    }
-
     /// Get current session artifacts for UI display (directly from SwiftData)
     func currentSessionArtifacts() -> [ArtifactRecord] {
         guard let session = sessionPersistenceHandler.getActiveSession() else { return [] }

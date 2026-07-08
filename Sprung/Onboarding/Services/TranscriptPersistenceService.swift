@@ -39,13 +39,6 @@ actor TranscriptPersistenceService: OnboardingEventEmitter {
         }
         Logger.info("▶️ TranscriptPersistenceService started", category: .ai)
     }
-    func stop() {
-        guard isActive else { return }
-        isActive = false
-        subscriptionTask?.cancel()
-        subscriptionTask = nil
-        Logger.info("⏹️ TranscriptPersistenceService stopped", category: .ai)
-    }
     // MARK: - Event Handling
     private func handleLLMEvent(_ event: OnboardingEvent) async {
         switch event {

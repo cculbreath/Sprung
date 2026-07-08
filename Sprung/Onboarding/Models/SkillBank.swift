@@ -13,30 +13,8 @@ struct SkillBank: Codable {
     let generatedAt: Date
     let sourceDocumentIds: [String]
 
-    /// Find skills matching ATS terms from job listing
-    func matchingSkills(for terms: [String]) -> [Skill] {
-        let normalizedTerms = terms.map { $0.lowercased() }
-        return skills.filter { skill in
-            let allVariants = ([skill.canonical] + skill.atsVariants).map { $0.lowercased() }
-            return normalizedTerms.contains { term in
-                allVariants.contains { variant in
-                    variant.contains(term) || term.contains(variant)
-                }
-            }
-        }
-    }
-
     /// Group skills by category string
     func groupedByCategory() -> [String: [Skill]] {
         Dictionary(grouping: skills, by: { $0.category })
-    }
-
-    /// Get top N skills per category (by evidence count)
-    func topSkills(perCategory limit: Int) -> [String: [Skill]] {
-        groupedByCategory().mapValues { categorySkills in
-            categorySkills.sorted { a, b in
-                a.evidence.count > b.evidence.count
-            }.prefix(limit).map { $0 }
-        }
     }
 }

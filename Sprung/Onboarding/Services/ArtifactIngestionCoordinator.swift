@@ -37,31 +37,6 @@ actor ArtifactIngestionCoordinator {
 
     // MARK: - Public API
 
-    /// Process an evidence upload and store as artifact (Phase 2 evidence requirements)
-    func handleEvidenceUpload(url: URL, requirementId: String) async {
-        Logger.info("📎 Handling evidence upload for requirement: \(requirementId)", category: .ai)
-        await eventBus.publish(.processing(.stateChanged(isProcessing: true, statusMessage: "Processing evidence...")))
-
-        do {
-            var metadata = JSON()
-            metadata["evidenceRequirementId"].string = requirementId
-
-            let record = try await documentProcessingService.processDocument(
-                fileURL: url,
-                documentType: "evidence",
-                callId: nil,
-                metadata: metadata
-            )
-            await eventBus.publish(.artifact(.recordProduced(record: record)))
-            Logger.info("✅ Evidence processed and artifact stored (ID: \(record["id"].stringValue))", category: .ai)
-        } catch {
-            Logger.error("❌ Evidence upload failed: \(error.localizedDescription)", category: .ai)
-            await eventBus.publish(.processing(.errorOccurred("Failed to process evidence: \(error.localizedDescription)")))
-        }
-
-        await eventBus.publish(.processing(.stateChanged(isProcessing: false)))
-    }
-
     /// Ingest a git repository
     func ingestGitRepository(
         repoURL: URL,

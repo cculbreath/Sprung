@@ -293,31 +293,4 @@ class CandidateDossier: Identifiable, Codable {
         return result
     }
 
-    /// Export full dossier including private fields (for backup/restore)
-    func exportFull() -> String {
-        var parts: [String] = []
-
-        parts.append("Job Search Context:\n\(jobSearchContext)")
-
-        if let strengths = strengthsToEmphasize, !strengths.isEmpty {
-            parts.append("Strengths to Emphasize:\n\(strengths)")
-        }
-        if let pitfalls = pitfallsToAvoid, !pitfalls.isEmpty {
-            parts.append("Pitfalls to Avoid:\n\(pitfalls)")
-        }
-        if let prefs = workArrangementPreferences, !prefs.isEmpty {
-            parts.append("Work Arrangement Preferences:\n\(prefs)")
-        }
-        if let avail = availability, !avail.isEmpty {
-            parts.append("Availability:\n\(avail)")
-        }
-        if let circumstances = uniqueCircumstances, !circumstances.isEmpty {
-            parts.append("Unique Circumstances:\n\(circumstances)")
-        }
-        if let notes = interviewerNotes, !notes.isEmpty {
-            parts.append("Interviewer Notes:\n\(notes)")
-        }
-
-        return parts.joined(separator: "\n\n")
-    }
 }

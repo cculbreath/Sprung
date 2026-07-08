@@ -34,7 +34,6 @@ struct ContextPreviewItem: Identifiable {
 
 /// Complete context preview snapshot
 struct ContextPreviewSnapshot {
-    let timestamp: Date
     let items: [ContextPreviewItem]
     let toolCount: Int
     let toolSchemaTokens: Int
@@ -163,7 +162,6 @@ final class ContextPreviewService {
         let toolSchemaTokens = estimateToolSchemaTokens(tools)
 
         return ContextPreviewSnapshot(
-            timestamp: Date(),
             items: items,
             toolCount: tools.count,
             toolSchemaTokens: toolSchemaTokens

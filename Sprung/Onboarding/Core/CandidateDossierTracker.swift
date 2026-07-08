@@ -69,11 +69,6 @@ enum CandidateDossierField: String, CaseIterable {
 struct CandidateDossierTracker {
     private(set) var collectedFields: Set<String> = []
 
-    /// Mark a field as collected
-    mutating func recordFieldCollected(_ field: String) {
-        collectedFields.insert(field)
-    }
-
     /// Get the next field to collect for the given phase, or nil if all applicable fields are collected
     func getNextField(for phase: InterviewPhase) -> CandidateDossierField? {
         for field in CandidateDossierField.allCases {

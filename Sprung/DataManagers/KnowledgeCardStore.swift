@@ -91,19 +91,6 @@ final class KnowledgeCardStore: EntityStore {
         Logger.info("🗑️ Deleted \(cardsToDelete.count) cards from artifact \(artifactId)", category: .ai)
     }
 
-    /// Deletes only non-pending (approved) cards that originated from a specific artifact
-    /// Used during regeneration to clear old approved cards before adding new pending ones
-    /// - Parameter artifactId: The artifact ID to match against evidenceAnchors
-    func deleteApprovedCardsFromArtifact(_ artifactId: String) {
-        let cardsToDelete = knowledgeCards.filter { card in
-            !card.isPending && card.evidenceAnchors.contains { $0.documentId == artifactId }
-        }
-        deleteAll(cardsToDelete)
-        if !cardsToDelete.isEmpty {
-            Logger.info("🗑️ Deleted \(cardsToDelete.count) approved cards from artifact \(artifactId)", category: .ai)
-        }
-    }
-
     /// Deletes non-pending (approved) cards from multiple artifacts
     /// - Parameter artifactIds: Set of artifact IDs to match against evidenceAnchors
     func deleteApprovedCardsFromArtifacts(_ artifactIds: Set<String>) {
@@ -128,14 +115,5 @@ final class KnowledgeCardStore: EntityStore {
     /// Find cards by type
     func cards(ofType type: CardType) -> [KnowledgeCard] {
         knowledgeCards.filter { $0.cardType == type }
-    }
-
-    /// Find cards containing a keyword in title or narrative
-    func cards(matching query: String) -> [KnowledgeCard] {
-        let lowercased = query.lowercased()
-        return knowledgeCards.filter { card in
-            card.title.lowercased().contains(lowercased) ||
-            card.narrative.lowercased().contains(lowercased)
-        }
     }
 }

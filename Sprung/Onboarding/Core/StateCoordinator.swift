@@ -116,11 +116,6 @@ actor StateCoordinator: OnboardingEventEmitter {
         await agentActivityReporter.getRunningAgentStatus()
     }
 
-    /// Get count of running agents
-    func getRunningAgentCount() async -> Int {
-        await agentActivityReporter.getRunningAgentCount()
-    }
-
     /// Get recently completed agents (within last 30 seconds) for inclusion in interview context
     func getRecentlyCompletedAgents() async -> [(type: String, name: String, succeeded: Bool, duration: String)]? {
         await agentActivityReporter.getRecentlyCompletedAgents()
@@ -586,21 +581,9 @@ actor StateCoordinator: OnboardingEventEmitter {
     func setModelId(_ modelId: String) async {
         await llmStateManager.setModelId(modelId)
     }
-    /// Get current model ID
-    func getCurrentModelId() async -> String {
-        await llmStateManager.getCurrentModelId()
-    }
-    /// Get whether flex processing is enabled
-    func getUseFlexProcessing() async -> Bool {
-        await llmStateManager.getUseFlexProcessing()
-    }
     /// Set whether to use flex processing tier (50% cost savings, variable latency)
     func setUseFlexProcessing(_ enabled: Bool) async {
         await llmStateManager.setUseFlexProcessing(enabled)
-    }
-    /// Get the default reasoning effort level
-    func getDefaultReasoningEffort() async -> String {
-        await llmStateManager.getDefaultReasoningEffort()
     }
     /// Set the default reasoning effort level (none, minimal, low, medium, high)
     func setDefaultReasoningEffort(_ effort: String) async {
@@ -712,20 +695,11 @@ actor StateCoordinator: OnboardingEventEmitter {
         return Dictionary(uniqueKeysWithValues: objectives.map { ($0.id, $0.status.rawValue) })
     }
 
-    /// Get Phase 4 UI context for tool gating (title set curation state)
-    func getPhase4UIContext() async -> ToolBundlePolicy.Phase4UIContext {
-        await uiState.getPhase4UIContext()
-    }
-
     /// Set whether title sets are required (called when entering Phase 4)
     func setTitleSetsRequired(_ required: Bool) async {
         await uiState.setTitleSetsRequired(required)
     }
 
-    /// Mark title sets as curated (called when user saves their selections)
-    func setTitleSetsCurated(_ curated: Bool) async {
-        await uiState.setTitleSetsCurated(curated)
-    }
     /// Restore an objective status from persisted session
     func restoreObjectiveStatus(objectiveId: String, status: String) async {
         guard let objectiveStatus = ObjectiveStatus(rawValue: status) else {
@@ -800,26 +774,9 @@ actor StateCoordinator: OnboardingEventEmitter {
         await artifactRepository.setSectionConfig(config)
     }
 
-    /// Get section configuration
-    func getSectionConfig() async -> SectionConfig {
-        await artifactRepository.getSectionConfig()
-    }
-
-    /// Store custom field definitions
-    func storeCustomFieldDefinitions(_ definitions: [CustomFieldDefinition]) async {
-        await artifactRepository.setCustomFieldDefinitions(definitions)
-    }
-
     /// Get custom field definitions configured by user in Phase 2
     func getCustomFieldDefinitions() async -> [CustomFieldDefinition] {
         await artifactRepository.getCustomFieldDefinitions()
-    }
-
-    /// Direct access to artifact records for UI sync
-    var artifactRecords: [JSON] {
-        get async {
-            await artifactRepository.getArtifacts().artifactRecords
-        }
     }
 
     // Chat delegation - ConversationLog is source of truth, plus streaming message
@@ -983,13 +940,6 @@ actor StateCoordinator: OnboardingEventEmitter {
         dossierNotes
     }
 
-    /// Re-include a previously excluded tool (e.g., when user action enables it)
-    func includeTool(_ toolName: String) async {
-        excludedTools.remove(toolName)
-        Logger.info("✅ Tool re-included in allowed calls: \(toolName)", category: .ai)
-        // Update SessionUIState's excluded tools (this also republishes permissions)
-        await uiState.includeTool(toolName)
-    }
     var isActive: Bool {
         get async {
             await uiState.isActive

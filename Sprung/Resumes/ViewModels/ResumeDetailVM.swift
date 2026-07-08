@@ -70,11 +70,6 @@ final class ResumeDetailVM {
         return keysInEditor.first { !$0.contains(".") }
     }
 
-    /// Check if a section key is transparent (children promoted to top level).
-    func isTransparentContainer(_ key: String) -> Bool {
-        transparentKeys.contains(key)
-    }
-
     /// Look up a bespoke editor panel for a section name.
     /// Handles promoted child format (e.g., "custom_jobTitles") by converting to dot notation.
     func editorPanel(for sectionName: String) -> String? {
@@ -182,11 +177,6 @@ final class ResumeDetailVM {
             }
         )
     }
-
-    /// Triggers SwiftUI to re-evaluate revnode count display
-    func refreshRevnodeCount() {
-        revnodeRefreshTrigger += 1
-    }
     // MARK: - Editing -------------------------------------------------------
     private(set) var editingNodeID: String?
     var tempName: String = ""
@@ -221,18 +211,6 @@ final class ResumeDetailVM {
         validationError = nil
         // Trigger PDF export and view refresh
         refreshPDF()
-    }
-    // MARK: - Expansion state ---------------------------------------------
-    func isExpanded(_ node: TreeNode) -> Bool {
-        if node.parent == nil { return true } // Root always expanded
-        return expandedIDs.contains(node.id)
-    }
-    func toggleExpansion(for node: TreeNode) {
-        if expandedIDs.contains(node.id) {
-            expandedIDs.remove(node.id)
-        } else {
-            expandedIDs.insert(node.id)
-        }
     }
     // MARK: - Section Visibility -----------------------------------------
     func sectionVisibilityBinding(for key: String) -> Binding<Bool> {

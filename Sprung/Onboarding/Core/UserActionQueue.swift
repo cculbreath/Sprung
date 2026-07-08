@@ -60,12 +60,6 @@ final class UserActionQueue {
 
     private(set) var queue: [QueuedUserAction] = []
 
-    /// Number of pending actions
-    var pendingCount: Int { queue.count }
-
-    /// Whether queue has any pending actions
-    var hasPendingActions: Bool { !queue.isEmpty }
-
     // MARK: - Queue Operations
 
     /// Enqueue a user action for later processing
@@ -87,32 +81,11 @@ final class UserActionQueue {
         return action.id
     }
 
-    /// Peek at the next action without removing it
-    func peek() -> QueuedUserAction? {
-        queue.first
-    }
-
     /// Dequeue the next action for processing
     func dequeue() -> QueuedUserAction? {
         guard !queue.isEmpty else { return nil }
         let action = queue.removeFirst()
         Logger.debug("📤 UserActionQueue: Dequeued \(action.type.description) (remaining: \(queue.count))", category: .ai)
-        return action
-    }
-
-    /// Check if a specific action is still queued
-    func contains(actionId: UUID) -> Bool {
-        queue.contains { $0.id == actionId }
-    }
-
-    /// Remove a specific action by ID (e.g., if it becomes stale)
-    @discardableResult
-    func remove(actionId: UUID) -> QueuedUserAction? {
-        guard let index = queue.firstIndex(where: { $0.id == actionId }) else {
-            return nil
-        }
-        let action = queue.remove(at: index)
-        Logger.debug("🗑️ UserActionQueue: Removed \(action.type.description) (remaining: \(queue.count))", category: .ai)
         return action
     }
 

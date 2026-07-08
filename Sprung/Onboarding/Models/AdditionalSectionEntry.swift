@@ -60,56 +60,6 @@ struct AdditionalSectionEntry: Identifiable, Equatable, Codable {
     var referenceText: String?
     var referenceUrl: String?
 
-    init(
-        id: String = UUID().uuidString,
-        sectionType: AdditionalSectionType,
-        title: String? = nil,
-        date: String? = nil,
-        awarder: String? = nil,
-        awardSummary: String? = nil,
-        language: String? = nil,
-        fluency: String? = nil,
-        referenceName: String? = nil,
-        referenceText: String? = nil,
-        referenceUrl: String? = nil
-    ) {
-        self.id = id
-        self.sectionType = sectionType
-        self.title = title
-        self.date = date
-        self.awarder = awarder
-        self.awardSummary = awardSummary
-        self.language = language
-        self.fluency = fluency
-        self.referenceName = referenceName
-        self.referenceText = referenceText
-        self.referenceUrl = referenceUrl
-    }
-
-    /// Initialize from JSON with type-specific field extraction
-    init?(json: JSON, sectionType: AdditionalSectionType) {
-        guard let idString = json["id"].string, !idString.isEmpty else {
-            return nil
-        }
-        self.id = idString
-        self.sectionType = sectionType
-
-        switch sectionType {
-        case .award:
-            self.title = json["title"].string
-            self.date = json["date"].string
-            self.awarder = json["awarder"].string
-            self.awardSummary = json["summary"].string
-        case .language:
-            self.language = json["language"].string
-            self.fluency = json["fluency"].string
-        case .reference:
-            self.referenceName = json["name"].string
-            self.referenceText = json["reference"].string
-            self.referenceUrl = json["url"].string
-        }
-    }
-
     /// Initialize with fields JSON for tool-based creation
     init(id: String = UUID().uuidString, sectionType: AdditionalSectionType, fields: JSON) {
         self.id = id

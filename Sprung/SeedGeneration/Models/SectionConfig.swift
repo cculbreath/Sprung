@@ -45,21 +45,6 @@ struct SectionConfig: Codable, Equatable {
 
     // MARK: - Convenience Methods
 
-    /// Check if a section is enabled
-    func isEnabled(_ sectionKey: ExperienceSectionKey) -> Bool {
-        enabledSections.contains(sectionKey.rawValue)
-    }
-
-    /// Check if a custom field key is enabled
-    func isCustomFieldEnabled(_ key: String) -> Bool {
-        enabledSections.contains(key)
-    }
-
-    /// Get custom field definition for a key
-    func customField(for key: String) -> CustomFieldDefinition? {
-        customFields.first { $0.key == key }
-    }
-
     /// All enabled standard sections (non-custom)
     var enabledStandardSections: [ExperienceSectionKey] {
         ExperienceSectionKey.allCases.filter { sectionKey in

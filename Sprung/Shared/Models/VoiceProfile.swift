@@ -29,36 +29,6 @@ struct VoiceProfile: Codable, Equatable {
     var rhetoricalMoves: [String]?      // Named recurring moves with mini-examples
     var openingStyle: String?           // How pieces open
     var closingStyle: String?           // How pieces close
-
-    init(
-        enthusiasm: EnthusiasmLevel = .moderate,
-        useFirstPerson: Bool = true,
-        connectiveStyle: String = "causal",
-        aspirationalPhrases: [String] = [],
-        avoidPhrases: [String] = [],
-        sampleExcerpts: [String] = [],
-        vocabularyRegister: String? = nil,
-        registerModulation: String? = nil,
-        voiceSummary: String? = nil,
-        sentenceRhythm: String? = nil,
-        rhetoricalMoves: [String]? = nil,
-        openingStyle: String? = nil,
-        closingStyle: String? = nil
-    ) {
-        self.enthusiasm = enthusiasm
-        self.useFirstPerson = useFirstPerson
-        self.connectiveStyle = connectiveStyle
-        self.aspirationalPhrases = aspirationalPhrases
-        self.avoidPhrases = avoidPhrases
-        self.sampleExcerpts = sampleExcerpts
-        self.vocabularyRegister = vocabularyRegister
-        self.registerModulation = registerModulation
-        self.voiceSummary = voiceSummary
-        self.sentenceRhythm = sentenceRhythm
-        self.rhetoricalMoves = rhetoricalMoves
-        self.openingStyle = openingStyle
-        self.closingStyle = closingStyle
-    }
 }
 
 extension VoiceProfile {

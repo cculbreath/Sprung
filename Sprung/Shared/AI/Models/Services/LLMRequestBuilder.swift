@@ -200,34 +200,4 @@ struct LLMRequestBuilder {
             model: .custom(modelId)
         ), modelId: modelId)
     }
-    /// Build parameters for structured conversation requests
-    static func buildStructuredConversationRequest<T: Codable>(
-        messages: [LLMMessageDTO],
-        modelId: String,
-        responseType: T.Type,
-        jsonSchema: JSONSchema? = nil
-    ) -> ChatCompletionParameters {
-        let vendorMessages = LLMVendorMapper.vendorMessages(from: messages)
-        if let schema = jsonSchema {
-            let responseFormatSchema = JSONSchemaResponseFormat(
-                name: String(describing: responseType).lowercased(),
-                strict: true,
-                schema: schema
-            )
-            Logger.debug("📝 Conversation using structured output with JSON Schema enforcement")
-            return withProviderPreferences(ChatCompletionParameters(
-                messages: vendorMessages,
-                model: .custom(modelId),
-                responseFormat: .jsonSchema(responseFormatSchema)
-            ), modelId: modelId)
-        } else {
-            Logger.debug("📝 Conversation using basic JSON object mode (no schema enforcement)")
-            return withProviderPreferences(ChatCompletionParameters(
-                messages: vendorMessages,
-                model: .custom(modelId),
-                responseFormat: .jsonObject
-            ), modelId: modelId)
-        }
-    }
-
 }

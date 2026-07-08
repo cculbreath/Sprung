@@ -42,7 +42,6 @@ struct RevisionMessage: Identifiable {
     let id = UUID()
     let role: RevisionMessageRole
     let content: String
-    let timestamp = Date()
 }
 
 enum RevisionMessageRole {

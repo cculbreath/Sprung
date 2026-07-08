@@ -42,10 +42,6 @@ final class SkillsProcessingService {
         Logger.info("🔧 SkillsProcessingService initialized", category: .ai)
     }
 
-    func updateFacade(_ facade: LLMFacade?) {
-        self.facade = facade
-    }
-
     // MARK: - Deduplication
 
     /// LLM-powered intelligent deduplication of skills.
@@ -537,12 +533,5 @@ final class SkillsProcessingService {
         }
 
         return results
-    }
-
-    func reset() {
-        status = .idle
-        progress = 0.0
-        currentBatch = 0
-        totalBatches = 0
     }
 }

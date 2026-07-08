@@ -99,93 +99,6 @@ final class CardMergeWorkspaceService {
         Logger.info("📤 Exported \(cards.count) cards to workspace", category: .ai)
     }
 
-    // MARK: - Agent Tools
-
-    /// Lists all cards in the workspace (returns index content).
-    func listCards() throws -> JSON {
-        guard let indexFile = indexPath else {
-            throw WorkspaceError.workspaceNotCreated
-        }
-
-        let data = try Data(contentsOf: indexFile)
-        return try JSON(data: data)
-    }
-
-    /// Reads a single card by ID.
-    func readCard(id: String) throws -> JSON {
-        guard let cardsDir = cardsPath else {
-            throw WorkspaceError.workspaceNotCreated
-        }
-
-        let cardFile = cardsDir.appendingPathComponent("\(id).json")
-        guard FileManager.default.fileExists(atPath: cardFile.path) else {
-            throw WorkspaceError.cardNotFound(id)
-        }
-
-        let data = try Data(contentsOf: cardFile)
-        return try JSON(data: data)
-    }
-
-    /// Writes a merged card to the workspace.
-    /// Also updates the index with the new card's summary.
-    func writeMergedCard(_ cardJSON: JSON) throws {
-        guard let cardsDir = cardsPath, let indexFile = indexPath else {
-            throw WorkspaceError.workspaceNotCreated
-        }
-
-        let cardId = cardJSON["id"].stringValue
-        guard !cardId.isEmpty else {
-            throw WorkspaceError.invalidCard("Missing card ID")
-        }
-
-        // Write the card file
-        let cardFile = cardsDir.appendingPathComponent("\(cardId).json")
-        let cardData = try cardJSON.rawData(options: [.prettyPrinted, .sortedKeys])
-        try cardData.write(to: cardFile)
-
-        // Update index - add the new card's summary
-        var index = try listCards().arrayValue
-        let summary: [String: Any] = [
-            "id": cardId,
-            "cardType": cardJSON["cardType"].stringValue,
-            "title": cardJSON["title"].stringValue,
-            "organization": cardJSON["organization"].stringValue,
-            "dateRange": cardJSON["dateRange"].stringValue,
-            "narrative_preview": String(cardJSON["narrative"].stringValue.prefix(200))
-        ]
-        index.append(JSON(summary))
-
-        let indexJSON = JSON(index)
-        let indexData = try indexJSON.rawData(options: [.prettyPrinted, .sortedKeys])
-        try indexData.write(to: indexFile)
-
-        Logger.info("✍️ Wrote merged card: \(cardId)", category: .ai)
-    }
-
-    /// Deletes a card from the workspace.
-    /// Also removes it from the index.
-    func deleteCard(id: String) throws {
-        guard let cardsDir = cardsPath, let indexFile = indexPath else {
-            throw WorkspaceError.workspaceNotCreated
-        }
-
-        // Delete the card file
-        let cardFile = cardsDir.appendingPathComponent("\(id).json")
-        if FileManager.default.fileExists(atPath: cardFile.path) {
-            try FileManager.default.removeItem(at: cardFile)
-        }
-
-        // Update index - remove the deleted card
-        var index = try listCards().arrayValue
-        index.removeAll { $0["id"].stringValue == id }
-
-        let indexJSON = JSON(index)
-        let indexData = try indexJSON.rawData(options: [.prettyPrinted, .sortedKeys])
-        try indexData.write(to: indexFile)
-
-        Logger.info("🗑️ Deleted card: \(id)", category: .ai)
-    }
-
     // MARK: - Import
 
     /// Imports all remaining cards from the workspace as KnowledgeCard objects.
@@ -213,20 +126,6 @@ final class CardMergeWorkspaceService {
 
         Logger.info("📥 Imported \(cards.count) cards from workspace", category: .ai)
         return cards
-    }
-
-    /// Returns the count of cards currently in the workspace.
-    func cardCount() throws -> Int {
-        guard let cardsDir = cardsPath else {
-            throw WorkspaceError.workspaceNotCreated
-        }
-
-        let fileURLs = try FileManager.default.contentsOfDirectory(
-            at: cardsDir,
-            includingPropertiesForKeys: nil
-        ).filter { $0.pathExtension == "json" }
-
-        return fileURLs.count
     }
 
     // MARK: - Errors

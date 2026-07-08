@@ -23,10 +23,6 @@ final class OnboardingInterviewCoordinator {
     var timeline: TimelineManagementService { container.timelineManagementService }
     // Section Card Management (awards, languages, references, publications)
     var sectionCards: SectionCardManagementService { container.sectionCardManagementService }
-    // Extraction Management
-    var extraction: ExtractionManagementService { container.extractionManagementService }
-    // Phase & Objective Management
-    var phases: PhaseTransitionService { container.phaseTransitionController }
 
     // MARK: - Private Accessors (for internal use)
     // Lifecycle
@@ -38,7 +34,6 @@ final class OnboardingInterviewCoordinator {
     // Profile Persistence
     private var profilePersistenceHandler: ProfilePersistenceService { container.profilePersistenceHandler }
     // Data Stores (used for data existence checks, reset, and view access)
-    private var applicantProfileStore: ApplicantProfileStore { container.getApplicantProfileStore() }
     var knowledgeCardStore: KnowledgeCardStore { container.getKnowledgeCardStore() }
     var skillStore: SkillStore { container.getSkillStore() }
     private var coverRefStore: CoverRefStore { container.getCoverRefStore() }
@@ -49,13 +44,6 @@ final class OnboardingInterviewCoordinator {
     var currentPhase: InterviewPhase {
         get async { await state.phase }
     }
-    func currentApplicantProfile() -> ApplicantProfile {
-        applicantProfileStore.currentProfile()
-    }
-    var artifacts: OnboardingArtifacts {
-        get async { await state.artifacts }
-    }
-
     /// Typed artifacts for the current session (SwiftData models)
     var sessionArtifacts: [ArtifactRecord] {
         guard let session = sessionPersistenceHandler.currentSession else { return [] }
@@ -99,11 +87,6 @@ final class OnboardingInterviewCoordinator {
         container.todoStore
     }
 
-    /// Returns the card merge service for merging document inventories
-    var cardMergeService: CardMergeService {
-        container.cardMergeService
-    }
-
     /// Returns the LLM facade for AI operations
     var llmFacade: LLMFacade? {
         container.llmFacade
@@ -119,9 +102,6 @@ final class OnboardingInterviewCoordinator {
 
     /// Queue drain coordinator for processing queued actions
     private var queueDrainCoordinator: QueueDrainCoordinator { container.queueDrainCoordinator }
-
-    /// Guidance services
-    var voiceProfileService: VoiceProfileService { container.voiceProfileService }
 
     // MARK: - UI State Properties (from ToolRouter)
     var pendingUploadRequests: [OnboardingUploadRequest] {
@@ -217,24 +197,6 @@ final class OnboardingInterviewCoordinator {
     /// Check if there's an active session that can be resumed
     func hasActiveSession() -> Bool {
         container.sessionPersistenceHandler.hasActiveSession()
-    }
-
-    // MARK: - UI Tool Interruption
-
-    /// Whether any UI tool is currently blocked awaiting user input
-    var hasPendingUITools: Bool {
-        uiToolContinuationManager.hasPendingTools
-    }
-
-    /// Names of tools currently blocked awaiting user input
-    var pendingUIToolNames: [String] {
-        uiToolContinuationManager.pendingToolNames
-    }
-
-    /// Interrupt all pending UI tools, dismissing their UIs and returning cancelled results.
-    /// Called when user presses interrupt button or escape key.
-    func interruptPendingUITools() {
-        uiResponseCoordinator.interruptPendingUITools()
     }
 
     /// Check if there's any existing onboarding data (session, ResRefs, CoverRefs, or ExperienceDefaults)
@@ -467,31 +429,6 @@ final class OnboardingInterviewCoordinator {
         await eventBus.publish(.llm(.enqueueUserMessage(payload: userMessage, isSystemGenerated: true)))
     }
 
-    // MARK: - Evidence Handling
-    func handleEvidenceUpload(url: URL, requirementId: String) async {
-        await container.artifactIngestionCoordinator.handleEvidenceUpload(url: url, requirementId: requirementId)
-    }
-    // MARK: - Objective Management
-    func updateObjectiveStatus(
-        objectiveId: String,
-        status: String,
-        notes: String? = nil,
-        details: [String: String]? = nil
-    ) async throws -> JSON {
-        await eventBus.publish(.objective(.statusUpdateRequested(
-            id: objectiveId,
-            status: status.lowercased(),
-            source: "tool",
-            notes: notes,
-            details: details
-        )))
-        var result = JSON()
-        result["status"].string = "completed"
-        result["success"].boolValue = true
-        result["objectiveId"].stringValue = objectiveId
-        result["newStatus"].stringValue = status.lowercased()
-        return result
-    }
     // MARK: - Timeline Management
     func applyUserTimelineUpdate(cards: [TimelineCard], meta: JSON?, diff: TimelineDiff) async {
         await uiResponseCoordinator.applyUserTimelineUpdate(cards: cards, meta: meta, diff: diff)
@@ -565,20 +502,6 @@ final class OnboardingInterviewCoordinator {
         Task {
             await eventBus.publish(.toolpane(.uploadRequestPresented(request: request)))
         }
-    }
-
-    func submitValidationResponse(
-        status: String,
-        updatedData: JSON?,
-        changes: JSON?,
-        notes: String?
-    ) async -> JSON? {
-        await uiResponseCoordinator.submitValidationResponse(
-            status: status,
-            updatedData: updatedData,
-            changes: changes,
-            notes: notes
-        )
     }
 
     // MARK: - Applicant Profile Intake Facade Methods
@@ -837,11 +760,6 @@ final class OnboardingInterviewCoordinator {
 
     // MARK: - Archived Artifacts Management
 
-    /// Get archived artifacts for UI display (directly from SwiftData).
-    func getArchivedArtifacts() -> [ArtifactRecord] {
-        container.artifactArchiveManager.archivedArtifacts
-    }
-
     /// Get current session artifacts for UI display (directly from SwiftData).
     func getCurrentSessionArtifacts() -> [ArtifactRecord] {
         container.artifactArchiveManager.currentSessionArtifacts()
@@ -945,13 +863,6 @@ final class OnboardingInterviewCoordinator {
         await eventBus.publish(.artifact(.doneWithUploadsClicked))
     }
 
-    // MARK: - Data Store Management
-    func clearArtifacts() {
-        lifecycleController.clearArtifacts()
-    }
-    func resetStore() async {
-        await lifecycleController.resetStore()
-    }
     // MARK: - Utility
     func clearModelAvailabilityMessage() {
         ui.modelAvailabilityMessage = nil
@@ -976,11 +887,6 @@ final class OnboardingInterviewCoordinator {
         container.debugRegenerationService.setSessionArtifactsProvider { [weak self] in
             self?.sessionArtifacts ?? []
         }
-    }
-
-    /// Clear all summaries and card inventories and regenerate them, then trigger merge
-    func regenerateCardInventoriesAndMerge() async {
-        await container.debugRegenerationService.regenerateCardInventoriesAndMerge()
     }
 
     /// Selective regeneration based on user choices from RegenOptionsDialog

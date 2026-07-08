@@ -106,11 +106,7 @@ struct NextPhaseTool: InterviewTool {
             if let script = await MainActor.run(body: { registry.script(for: nextPhase) }),
                let firstObjectiveId = script.requiredObjectives.first,
                let workflow = script.workflow(for: firstObjectiveId) {
-                let context = ObjectiveWorkflowContext(
-                    completedObjectives: [],
-                    status: .inProgress,
-                    details: [:]
-                )
+                let context = ObjectiveWorkflowContext(details: [:])
                 let outputs = workflow.outputs(for: .inProgress, context: context)
                 for output in outputs {
                     if case .coordinatorMessage(let title, let details, _) = output {

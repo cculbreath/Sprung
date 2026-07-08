@@ -38,16 +38,11 @@ struct UIToolCompletionResult {
 /// 1. Tool calls `awaitUserAction(toolName:)` which suspends until resumed
 /// 2. UIResponseCoordinator calls `complete(toolName:result:)` when user acts
 /// 3. Tool receives result and returns it as tool response (single API turn)
-///
-/// Interrupt:
-/// - Call `interruptAll()` to cancel all pending UI tools
-/// - Each pending tool receives a cancelled result
 @MainActor
 final class UIToolContinuationRegistry {
 
     /// Pending continuation for a UI tool
     private struct PendingContinuation {
-        let toolName: String
         let continuation: CheckedContinuation<UIToolCompletionResult, Never>
         let startTime: Date
     }
@@ -58,21 +53,6 @@ final class UIToolContinuationRegistry {
 
     /// Callback when pending count changes (for UI updates)
     var onPendingCountChanged: ((Int) -> Void)?
-
-    /// Number of pending UI tools
-    var pendingCount: Int {
-        pendingContinuations.count
-    }
-
-    /// Whether any UI tool is currently blocked awaiting user input
-    var hasPendingTools: Bool {
-        !pendingContinuations.isEmpty
-    }
-
-    /// Names of currently pending tools
-    var pendingToolNames: [String] {
-        Array(pendingContinuations.keys)
-    }
 
     // MARK: - Await User Action
 
@@ -91,7 +71,6 @@ final class UIToolContinuationRegistry {
 
         let result = await withCheckedContinuation { continuation in
             pendingContinuations[toolName] = PendingContinuation(
-                toolName: toolName,
                 continuation: continuation,
                 startTime: Date()
             )
@@ -130,50 +109,4 @@ final class UIToolContinuationRegistry {
         return true
     }
 
-    // MARK: - Interrupt
-
-    /// Interrupt all pending UI tools.
-    /// Each pending tool receives a cancelled result.
-    /// Called when user presses interrupt button.
-    func interruptAll() {
-        guard !pendingContinuations.isEmpty else {
-            Logger.info("🛑 Interrupt requested but no pending UI tools", category: .ai)
-            return
-        }
-
-        let count = pendingContinuations.count
-        let cancelledResult = UIToolCompletionResult.cancelled()
-
-        for (toolName, pending) in pendingContinuations {
-            pending.continuation.resume(returning: cancelledResult)
-            Logger.info("🛑 Interrupted UI tool: \(toolName)", category: .ai)
-        }
-
-        pendingContinuations.removeAll()
-        onPendingCountChanged?(0)
-        Logger.info("🛑 Interrupted \(count) pending UI tool(s)", category: .ai)
-    }
-
-    /// Interrupt a specific tool by name.
-    /// - Parameter toolName: The tool to interrupt
-    /// - Returns: True if the tool was found and interrupted
-    @discardableResult
-    func interrupt(toolName: String) -> Bool {
-        guard let pending = pendingContinuations.removeValue(forKey: toolName) else {
-            return false
-        }
-
-        pending.continuation.resume(returning: .cancelled())
-        onPendingCountChanged?(pendingContinuations.count)
-        Logger.info("🛑 Interrupted UI tool: \(toolName)", category: .ai)
-        return true
-    }
-
-    // MARK: - Reset
-
-    /// Cancel all pending continuations and reset state.
-    /// Called during session reset.
-    func reset() {
-        interruptAll()
-    }
 }

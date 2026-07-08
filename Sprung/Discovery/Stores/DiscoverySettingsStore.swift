@@ -66,14 +66,6 @@ final class DiscoverySettingsStore {
         case daily
         case weekly
 
-        var displayName: String {
-            switch self {
-            case .off: return "Off"
-            case .daily: return "Daily"
-            case .weekly: return "Weekly"
-            }
-        }
-
         /// Days that must have passed since the last successful run before an
         /// auto-run fires again. Nil = never auto-runs.
         var minimumDaysBetweenRuns: Int? {

@@ -165,23 +165,6 @@ final class PhaseTransitionService {
         }
     }
 
-    /// Re-export a single artifact to the existing filesystem root (for incremental updates).
-    /// Called when artifacts are added or updated during Phase 3.
-    func updateArtifactInFilesystem(_ artifact: ArtifactRecord) async {
-        guard let rootURL = await artifactFilesystemContext.rootURL else {
-            // Filesystem not initialized yet, nothing to update
-            return
-        }
-
-        do {
-            try ArtifactExporter.exportSingleArtifact(artifact, to: rootURL)
-            Logger.info("📁 Updated artifact in filesystem: \(artifact.filename)", category: .ai)
-        } catch {
-            Logger.warning("📁 Failed to update artifact in filesystem: \(error)", category: .ai)
-            ToastCenter.shared.show(.error("Couldn't sync \"\(artifact.filename)\" to the analysis workspace — the AI may see stale data."))
-        }
-    }
-
     /// Export a single KnowledgeCard to the filesystem (for incremental updates when cards are created/modified).
     /// Called when knowledge cards are persisted during Phase 3+.
     func updateKnowledgeCardInFilesystem(_ knowledgeCard: KnowledgeCard) async {

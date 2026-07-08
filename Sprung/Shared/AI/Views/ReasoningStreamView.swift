@@ -296,10 +296,6 @@ class ReasoningStreamState {
     /// Ordered by first appearance so sections stay stable.
     private var taskBuffers: [(id: UUID, name: String, text: String)] = []
 
-    /// Stop the current stream
-    func stopStream() {
-        isStreaming = false
-    }
     /// Clear all reasoning state
     func clear() {
         reasoningText = ""
@@ -307,11 +303,6 @@ class ReasoningStreamState {
         isStreaming = false
         errorMessage = nil
         taskBuffers = []
-    }
-    /// Hides the reasoning interface and clears any accumulated state.
-    func hideAndClear() {
-        clear()
-        isVisible = false
     }
     /// Start a new reasoning session with model information
     func startReasoning(modelName: String) {
@@ -329,27 +320,4 @@ class ReasoningStreamState {
         self.isVisible = true
     }
 
-    /// Append reasoning text from a single-stream (non-parallel) context.
-    /// Safe to call from any async context — hops to MainActor.
-    func appendReasoning(_ text: String) {
-        reasoningText += text
-    }
-
-    /// Append reasoning text from a parallel task, keeping per-task sections separate.
-    /// Each task's reasoning appears under its own header to prevent interleaving.
-    func appendReasoning(_ text: String, taskId: UUID, taskName: String) {
-        if let index = taskBuffers.firstIndex(where: { $0.id == taskId }) {
-            taskBuffers[index].text += text
-        } else {
-            taskBuffers.append((id: taskId, name: taskName, text: text))
-        }
-        rebuildReasoningText()
-    }
-
-    /// Recompose the display text from per-task buffers with section headers.
-    private func rebuildReasoningText() {
-        reasoningText = taskBuffers.map { buffer in
-            "**\(buffer.name)**\n\(buffer.text)"
-        }.joined(separator: "\n\n")
-    }
 }

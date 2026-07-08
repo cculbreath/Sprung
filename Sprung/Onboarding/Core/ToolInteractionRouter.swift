@@ -182,9 +182,6 @@ final class ToolInteractionRouter {
     func completeUpload(id: UUID, fileURLs: [URL]) async -> JSON? {
         await uploadHandler.completeUpload(id: id, fileURLs: fileURLs)
     }
-    func completeUpload(id: UUID, link: URL) async -> JSON? {
-        await uploadHandler.completeUpload(id: id, link: link)
-    }
     func skipUpload(id: UUID) async -> JSON? {
         await uploadHandler.skipUpload(id: id)
     }

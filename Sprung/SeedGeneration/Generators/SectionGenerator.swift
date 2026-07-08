@@ -37,10 +37,6 @@ struct GeneratorExecutionConfig {
         self.experienceDefaultsStore = experienceDefaultsStore
         self.options = options
     }
-
-    var usesAnthropicCaching: Bool {
-        backend == .anthropic && anthropicSystemContent != nil
-    }
 }
 
 /// Protocol for section-specific content generation.
@@ -97,15 +93,6 @@ protocol SectionGenerator {
         context: SeedGenerationContext,
         config: GeneratorExecutionConfig
     ) async throws -> GeneratedContent
-}
-
-// MARK: - Default Implementations
-
-extension SectionGenerator {
-    /// Default display name derived from section key
-    var displayName: String {
-        sectionKey.rawValue.capitalized
-    }
 }
 
 // MARK: - Generator Errors

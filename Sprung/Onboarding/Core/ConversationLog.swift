@@ -118,14 +118,6 @@ actor ConversationLog {
         return toolCalls.filter { !$0.isResolved }.map { $0.callId }
     }
 
-    /// Get count of entries
-    var count: Int { entries.count }
-
-    /// Get all entries (for serialization)
-    func getAllEntries() -> [ConversationEntry] {
-        entries
-    }
-
     // MARK: - User Message (Gated)
 
     /// Append user message - fills pending tool slots first if needed
@@ -322,14 +314,6 @@ actor ConversationLog {
             await eventBus.publish(.llm(.toolResultFilled(callId: callId, status: status.rawValue)))
         }
         return true
-    }
-
-    /// Check if all tool calls in last entry are resolved
-    var allToolCallsResolved: Bool {
-        guard case .assistant(_, _, let toolCalls?, _) = entries.last else {
-            return true  // No tools means resolved
-        }
-        return toolCalls.allSatisfy { $0.isResolved }
     }
 
     // MARK: - Wire-Text Capture (Prompt-Cache Byte Stability)

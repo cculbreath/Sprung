@@ -25,9 +25,7 @@ struct LLMStreamingHandle {
 /// ## Public API
 /// - `executeText(...)` - Simple text prompts
 /// - `executeTextWithImages(...)` - Vision capabilities
-/// - `executeStructured(...)` - Structured JSON responses
-/// - `startConversation(...)` / `continueConversation(...)` - Multi-turn conversations
-/// - `startConversationStreaming(...)` / `continueConversationStreaming(...)` - Streaming
+/// - `startConversationStreaming(...)` - Streaming
 /// - `registerClient(_:for:)` - Register custom backend implementations
 @Observable
 @MainActor
@@ -154,53 +152,6 @@ final class LLMFacade {
 
     // MARK: - Structured Execution
 
-    func executeStructured<T: Codable & Sendable>(
-        prompt: String,
-        modelId: String,
-        as type: T.Type,
-        backend: Backend = .openRouter
-    ) async throws -> T {
-        let start = ContinuousClock.now
-        let result: T
-        if backend == .openRouter {
-            try await capabilityValidator.validate(modelId: modelId, requires: [.structuredOutput])
-            result = try await client.executeStructured(prompt: prompt, modelId: modelId, as: type)
-        } else {
-            let altClient = try resolveClient(for: backend)
-            result = try await altClient.executeStructured(prompt: prompt, modelId: modelId, as: type)
-        }
-        let jsonString = Self.jsonLogString(result)
-        LLMTranscriptLogger.logStructuredCall(
-            method: "executeStructured", modelId: modelId, backend: backend.displayName,
-            prompt: prompt, responseType: String(describing: T.self), responseJSON: jsonString, durationMs: elapsedMs(from: start)
-        )
-        return result
-    }
-
-    func executeStructuredWithImages<T: Codable & Sendable>(
-        prompt: String,
-        modelId: String,
-        images: [Data],
-        as type: T.Type,
-        backend: Backend = .openRouter
-    ) async throws -> T {
-        let start = ContinuousClock.now
-        let result: T
-        if backend == .openRouter {
-            try await capabilityValidator.validate(modelId: modelId, requires: [.vision, .structuredOutput])
-            result = try await client.executeStructuredWithImages(prompt: prompt, modelId: modelId, images: images, as: type)
-        } else {
-            let altClient = try resolveClient(for: backend)
-            result = try await altClient.executeStructuredWithImages(prompt: prompt, modelId: modelId, images: images, as: type)
-        }
-        let jsonString = Self.jsonLogString(result)
-        LLMTranscriptLogger.logStructuredCall(
-            method: "executeStructuredWithImages", modelId: modelId, backend: backend.displayName,
-            prompt: "[+\(images.count) images] \(prompt)", responseType: String(describing: T.self), responseJSON: jsonString, durationMs: elapsedMs(from: start)
-        )
-        return result
-    }
-
     func executeStructuredWithSchema<T: Codable & Sendable>(
         prompt: String,
         modelId: String,
@@ -307,36 +258,6 @@ final class LLMFacade {
         return result
     }
 
-    func executeStructuredStreaming<T: Codable & Sendable>(
-        prompt: String,
-        modelId: String,
-        as type: T.Type,
-        reasoning: OpenRouterReasoning? = nil,
-        jsonSchema: JSONSchema? = nil,
-        backend: Backend = .openRouter,
-        systemPrompt: String? = nil
-    ) async throws -> LLMStreamingHandle {
-        guard backend == .openRouter else {
-            throw LLMError.clientError("Structured streaming is not supported for backend \(backend.displayName)")
-        }
-        var required: [ModelCapability] = [.structuredOutput]
-        if reasoning != nil { required.append(.reasoning) }
-        try await capabilityValidator.validate(modelId: modelId, requires: required)
-
-        let sourceStream = llmService.executeStructuredStreaming(
-            prompt: prompt,
-            modelId: modelId,
-            responseType: type,
-            reasoning: reasoning,
-            jsonSchema: jsonSchema,
-            systemPrompt: systemPrompt
-        )
-        LLMTranscriptLogger.logStreamingRequest(
-            method: "executeStructuredStreaming", modelId: modelId,
-            backend: backend.displayName, prompt: prompt
-        )
-        return streamingManager.makeStreamingHandle(conversationId: nil, sourceStream: sourceStream)
-    }
     // MARK: - Conversation Streaming
 
     /// The provider-reported maximum output (completion) token limit for a model,
@@ -397,132 +318,9 @@ final class LLMFacade {
         return handle
     }
 
-    func continueConversationStreaming(
-        userMessage: String,
-        modelId: String,
-        conversationId: UUID,
-        images: [Data] = [],
-        reasoning: OpenRouterReasoning? = nil,
-        jsonSchema: JSONSchema? = nil,
-        backend: Backend = .openRouter
-    ) async throws -> LLMStreamingHandle {
-        guard backend == .openRouter else {
-            throw LLMError.clientError("Streaming conversations are not supported for backend \(backend.displayName)")
-        }
-        var required: [ModelCapability] = images.isEmpty ? [] : [.vision]
-        if reasoning != nil { required.append(.reasoning) }
-        if jsonSchema != nil { required.append(.structuredOutput) }
-        try await capabilityValidator.validate(modelId: modelId, requires: required)
-        let sourceStream = llmService.continueConversationStreaming(
-            userMessage: userMessage,
-            modelId: modelId,
-            conversationId: conversationId,
-            images: images,
-            reasoning: reasoning,
-            jsonSchema: jsonSchema
-        )
-        let handle = streamingManager.makeStreamingHandle(conversationId: conversationId, sourceStream: sourceStream)
-        LLMTranscriptLogger.logStreamingRequest(
-            method: "continueConversationStreaming", modelId: modelId, backend: backend.displayName,
-            prompt: "ConversationId: \(conversationId)\nUser: \(userMessage)"
-        )
-        return handle
-    }
-
-    // MARK: - Conversation (Non-Streaming)
-
-    func continueConversation(
-        userMessage: String,
-        modelId: String,
-        conversationId: UUID,
-        images: [Data] = [],
-        backend: Backend = .openRouter
-    ) async throws -> String {
-        let start = ContinuousClock.now
-        guard backend == .openRouter else {
-            throw LLMError.clientError("Conversations are only supported via OpenRouter at this time")
-        }
-        let required: [ModelCapability] = images.isEmpty ? [] : [.vision]
-        try await capabilityValidator.validate(modelId: modelId, requires: required)
-        let result = try await llmService.continueConversation(
-            userMessage: userMessage,
-            modelId: modelId,
-            conversationId: conversationId,
-            images: images
-        )
-        LLMTranscriptLogger.logTextCall(
-            method: "continueConversation", modelId: modelId, backend: backend.displayName,
-            prompt: "ConversationId: \(conversationId)\nUser: \(userMessage)", response: result, durationMs: elapsedMs(from: start)
-        )
-        return result
-    }
-
-    func continueConversationStructured<T: Codable & Sendable>(
-        userMessage: String,
-        modelId: String,
-        conversationId: UUID,
-        as type: T.Type,
-        images: [Data] = [],
-        jsonSchema: JSONSchema? = nil,
-        backend: Backend = .openRouter
-    ) async throws -> T {
-        let start = ContinuousClock.now
-        guard backend == .openRouter else {
-            throw LLMError.clientError("Conversations are only supported via OpenRouter at this time")
-        }
-        var required: [ModelCapability] = [.structuredOutput]
-        if !images.isEmpty { required.append(.vision) }
-        try await capabilityValidator.validate(modelId: modelId, requires: required)
-        let result = try await llmService.continueConversationStructured(
-            userMessage: userMessage,
-            modelId: modelId,
-            conversationId: conversationId,
-            responseType: type,
-            images: images,
-            jsonSchema: jsonSchema
-        )
-        let jsonString = Self.jsonLogString(result)
-        LLMTranscriptLogger.logStructuredCall(
-            method: "continueConversationStructured", modelId: modelId, backend: backend.displayName,
-            prompt: "ConversationId: \(conversationId)\nUser: \(userMessage)", responseType: String(describing: T.self), responseJSON: jsonString, durationMs: elapsedMs(from: start)
-        )
-        return result
-    }
-
-    func startConversation(
-        systemPrompt: String? = nil,
-        userMessage: String,
-        modelId: String,
-        backend: Backend = .openRouter
-    ) async throws -> (UUID, String) {
-        let start = ContinuousClock.now
-        guard backend == .openRouter else {
-            throw LLMError.clientError("Conversations are only supported via OpenRouter at this time")
-        }
-        try await capabilityValidator.validate(modelId: modelId, requires: [])
-        let result = try await llmService.startConversation(
-            systemPrompt: systemPrompt,
-            userMessage: userMessage,
-            modelId: modelId
-        )
-        LLMTranscriptLogger.logTextCall(
-            method: "startConversation", modelId: modelId, backend: backend.displayName,
-            prompt: "System: \(systemPrompt ?? "(none)")\nUser: \(userMessage)", response: result.1, durationMs: elapsedMs(from: start)
-        )
-        return result
-    }
-
     func cancelAllRequests() {
         streamingManager.cancelAllTasks()
         llmService.cancelAllRequests()
-    }
-
-    // MARK: - OpenAI Responses API (Specialized)
-
-    func responseCreateStream(
-        parameters: ModelResponseParameter
-    ) async throws -> AsyncThrowingStream<ResponseStreamEvent, Error> {
-        try await specializedAPIs.responseCreateStream(parameters: parameters)
     }
 
     // MARK: - Anthropic Messages API (Specialized)

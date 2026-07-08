@@ -31,10 +31,6 @@ struct RecordedStreamEvent: Codable, Sendable {
     /// decodes from (snake_case keys, discriminated by `type`).
     let sseJSON: String
 
-    init(sseJSON: String) {
-        self.sseJSON = sseJSON
-    }
-
     /// Capture: project a live, decoded event back to its SSE JSON.
     init(capturing event: AnthropicStreamEvent) {
         let object = RecordedStreamEvent.sseObject(for: event)

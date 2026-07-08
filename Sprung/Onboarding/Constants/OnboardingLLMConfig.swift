@@ -17,36 +17,4 @@ enum OnboardingLLMConfig {
     /// (8K headroom for synthesis-heavy interview turns; streaming is always on)
     static let maxTokens = 8192
 
-    /// Maximum context tokens for the model
-    static let maxContextTokens = 100_000
-
-    // MARK: - Retry Configuration
-
-    /// Maximum number of retry attempts for transient errors
-    static let maxRetries = 3
-
-    /// Initial delay before first retry (seconds)
-    static let initialRetryDelay: TimeInterval = 2.0
-
-    /// Maximum delay between retries (seconds)
-    static let maxRetryDelay: TimeInterval = 30.0
-
-    // MARK: - Timeouts
-
-    /// Timeout for LLM stream operations (seconds)
-    static let streamTimeout: TimeInterval = 120.0
-
-    /// Timeout for tool execution (seconds)
-    static let toolExecutionTimeout: TimeInterval = 60.0
-
-    // MARK: - Agent Limits
-
-    /// Maximum turns for multi-turn agent loops
-    static let maxAgentTurns = 50
-
-    // MARK: - Concurrency
-
-    /// Default maximum concurrent extractions
-    static let defaultMaxConcurrentExtractions = 5
-
 }

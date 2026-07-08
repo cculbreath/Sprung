@@ -61,11 +61,6 @@ final class ToastCenter {
             }
         }
     }
-
-    func dismiss() {
-        dismissTask?.cancel()
-        currentToast = nil
-    }
 }
 
 /// Overlay view that displays toasts

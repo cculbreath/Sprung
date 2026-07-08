@@ -33,12 +33,6 @@ actor GateBlockEventHandler {
         Logger.info("GateBlockEventHandler started listening", category: .ai)
     }
 
-    /// Stop listening to events
-    func stopListening() {
-        subscriptionTask?.cancel()
-        subscriptionTask = nil
-    }
-
     private func handleEvent(_ event: OnboardingEvent) async {
         switch event {
         // MARK: - Streaming Events

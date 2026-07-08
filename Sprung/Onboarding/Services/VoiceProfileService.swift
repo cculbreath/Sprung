@@ -25,10 +25,6 @@ final class VoiceProfileService {
         self.reasoningStreamManager = reasoningStreamManager
     }
 
-    func updateLLMFacade(_ facade: LLMFacade?) {
-        self.llmFacade = facade
-    }
-
     /// Extract voice profile from writing samples
     func extractVoiceProfile(from samples: [String]) async throws -> VoiceProfile {
         guard let facade = llmFacade else {

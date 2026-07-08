@@ -83,18 +83,6 @@ actor DocumentArtifactMessenger: OnboardingEventEmitter {
         Logger.info("▶️ DocumentArtifactMessenger started", category: .ai)
     }
 
-    func stop() {
-        guard isActive else { return }
-        isActive = false
-        artifactSubscriptionTask?.cancel()
-        artifactSubscriptionTask = nil
-        processingSubscriptionTask?.cancel()
-        processingSubscriptionTask = nil
-        pendingBatch?.timeoutTask?.cancel()
-        pendingBatch = nil
-        Logger.info("⏹️ DocumentArtifactMessenger stopped", category: .ai)
-    }
-
     // MARK: - Event Handling
     private func handleEvent(_ event: OnboardingEvent) async {
         switch event {

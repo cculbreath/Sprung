@@ -28,16 +28,6 @@ struct BackgroundAgentStatusBar: View {
         tracker.isAnyRunning || !backgroundTools.isEmpty
     }
 
-    /// Running agents to display (limited to maxVisibleItems)
-    private var visibleAgents: [TrackedAgent] {
-        Array(tracker.runningAgents.prefix(maxVisibleItems))
-    }
-
-    /// Number of agents not shown
-    private var hiddenAgentCount: Int {
-        max(0, tracker.runningAgentCount - maxVisibleItems)
-    }
-
     /// Total count of all activities (agents + tools)
     private var totalActivityCount: Int {
         tracker.runningAgentCount + backgroundTools.count

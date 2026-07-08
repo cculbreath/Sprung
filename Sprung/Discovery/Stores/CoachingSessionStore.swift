@@ -37,11 +37,6 @@ final class CoachingSessionStore: EntityStore {
         }
     }
 
-    /// Check if there's a completed session for today
-    var hasCompletedSessionToday: Bool {
-        todaysSession()?.isComplete ?? false
-    }
-
     /// Get recent sessions (excluding today)
     func recentSessions(count: Int = 5) -> [CoachingSession] {
         let calendar = Calendar.current

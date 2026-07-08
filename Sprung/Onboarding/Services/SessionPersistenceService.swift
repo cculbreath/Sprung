@@ -52,21 +52,6 @@ final class SessionPersistenceService {
         return session
     }
 
-    /// End the current session
-    func endSession(markComplete: Bool = false) {
-        guard let session = currentSession else { return }
-
-        if markComplete {
-            sessionStore.completeSession(session)
-            Logger.info("Session completed: \(session.id)", category: .ai)
-        } else {
-            sessionStore.touchSession(session)
-            Logger.info("Session paused: \(session.id)", category: .ai)
-        }
-
-        currentSession = nil
-    }
-
     /// Delete a session and clear current session reference if it matches
     func deleteSession(_ session: OnboardingSession) {
         if currentSession?.id == session.id {
@@ -164,19 +149,6 @@ final class SessionPersistenceService {
         subscriptionTasks.append(timelineTask)
 
         Logger.info("SessionPersistenceService started", category: .ai)
-    }
-
-    /// Stop listening to events
-    func stop() {
-        guard isActive else { return }
-        isActive = false
-
-        for task in subscriptionTasks {
-            task.cancel()
-        }
-        subscriptionTasks.removeAll()
-
-        Logger.info("SessionPersistenceService stopped", category: .ai)
     }
 
     // MARK: - Event Handlers
@@ -501,47 +473,6 @@ final class SessionPersistenceService {
         sessionStore.getEnabledSections(session)
     }
 
-    /// Get restored aggregated narrative cards by aggregating from all session artifacts
-    /// Note: Skills and narrative cards are stored per-document in artifacts
-    func getRestoredAggregatedNarrativeCards(_ session: OnboardingSession) -> [KnowledgeCard] {
-        var allCards: [KnowledgeCard] = []
-
-        for artifact in artifactRecordStore.artifacts(for: session) {
-            if let cards = artifact.narrativeCards {
-                allCards.append(contentsOf: cards)
-            }
-        }
-
-        if !allCards.isEmpty {
-            Logger.info("📥 Restored \(allCards.count) narrative cards from \(artifactRecordStore.artifacts(for: session).count) artifacts", category: .ai)
-        }
-
-        return allCards
-    }
-
-    /// Get restored aggregated skill bank by aggregating skills from all session artifacts
-    func getRestoredAggregatedSkillBank(_ session: OnboardingSession) -> SkillBank? {
-        var allSkills: [Skill] = []
-        var sourceDocumentIds: [String] = []
-
-        for artifact in artifactRecordStore.artifacts(for: session) {
-            if let skills = artifact.skills, !skills.isEmpty {
-                allSkills.append(contentsOf: skills)
-                sourceDocumentIds.append(artifact.id.uuidString)
-            }
-        }
-
-        guard !allSkills.isEmpty else { return nil }
-
-        Logger.info("📥 Restored \(allSkills.count) skills from \(sourceDocumentIds.count) artifacts", category: .ai)
-
-        return SkillBank(
-            skills: allSkills,
-            generatedAt: Date(),
-            sourceDocumentIds: sourceDocumentIds
-        )
-    }
-
     /// Get restored document collection active state
     func getRestoredDocumentCollectionActive(_ session: OnboardingSession) -> Bool {
         sessionStore.getDocumentCollectionActive(session)
@@ -607,13 +538,6 @@ final class SessionPersistenceService {
             return nil
         }
         return prompt
-    }
-
-    // MARK: - Archived Artifacts
-
-    /// Get archived artifacts count (for UI visibility decisions)
-    func getArchivedArtifactsCount() -> Int {
-        artifactRecordStore.archivedArtifacts.count
     }
 
     /// Convert an ArtifactRecord to JSON format

@@ -106,11 +106,6 @@ final class ArtifactRecord {
         ArtifactRecordService.folderName(for: self)
     }
 
-    /// True if this is a PDF document
-    var isPDF: Bool {
-        contentType == "application/pdf"
-    }
-
     /// True if this is a writing sample (should not have card inventory)
     var isWritingSample: Bool {
         ArtifactRecordService.isWritingSample(self)
@@ -133,11 +128,6 @@ final class ArtifactRecord {
     }
 
     // MARK: - Token Estimation
-
-    /// Estimate token count from text (approximately 4 characters per token for English)
-    static func estimateTokens(_ text: String) -> Int {
-        ArtifactRecordService.estimateTokens(for: text)
-    }
 
     /// Estimated tokens in extracted content
     var extractedContentTokens: Int {

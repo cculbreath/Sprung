@@ -20,12 +20,6 @@ struct GenerationTask: Identifiable, Equatable {
     let generatorType: String
     /// Current task status
     var status: TaskStatus
-    /// Generated content result (nil until completed)
-    var result: GeneratedContent?
-    /// Error message if failed
-    var error: String?
-    /// Token usage statistics
-    var tokenUsage: TokenUsage?
 
     init(
         id: UUID = UUID(),
@@ -33,10 +27,7 @@ struct GenerationTask: Identifiable, Equatable {
         targetId: String? = nil,
         displayName: String,
         generatorType: String = "",
-        status: TaskStatus = .pending,
-        result: GeneratedContent? = nil,
-        error: String? = nil,
-        tokenUsage: TokenUsage? = nil
+        status: TaskStatus = .pending
     ) {
         self.id = id
         self.section = section
@@ -44,9 +35,6 @@ struct GenerationTask: Identifiable, Equatable {
         self.displayName = displayName
         self.generatorType = generatorType
         self.status = status
-        self.result = result
-        self.error = error
-        self.tokenUsage = tokenUsage
     }
 
     /// Task execution status
@@ -66,9 +54,4 @@ struct TokenUsage: Equatable, Codable {
     let outputTokens: Int
 
     var totalTokens: Int { inputTokens + outputTokens }
-
-    init(inputTokens: Int = 0, outputTokens: Int = 0) {
-        self.inputTokens = inputTokens
-        self.outputTokens = outputTokens
-    }
 }

@@ -37,10 +37,6 @@ final class ModuleNavigationService {
         }
     }
 
-    /// Track module visit history for back navigation (optional future feature)
-    private var moduleHistory: [AppModule] = []
-    private let maxHistorySize = 10
-
     // MARK: - Initialization
 
     init() {
@@ -77,9 +73,6 @@ final class ModuleNavigationService {
     func selectModule(_ module: AppModule) {
         guard module != selectedModule else { return }
 
-        // Add current module to history before changing
-        addToHistory(selectedModule)
-
         withAnimation(.easeInOut(duration: 0.2)) {
             selectedModule = module
         }
@@ -99,14 +92,6 @@ final class ModuleNavigationService {
         selectModule(AppModule.allCases[currentIndex + 1])
     }
 
-    /// Go back to the previously selected module
-    func goBack() {
-        guard let previousModule = moduleHistory.popLast() else { return }
-        withAnimation(.easeInOut(duration: 0.2)) {
-            selectedModule = previousModule
-        }
-    }
-
     /// Toggle icon bar expansion
     func toggleIconBarExpansion() {
         withAnimation(.easeInOut(duration: 0.2)) {
@@ -114,38 +99,4 @@ final class ModuleNavigationService {
         }
     }
 
-    /// Expand the icon bar
-    func expandIconBar() {
-        guard !isIconBarExpanded else { return }
-        withAnimation(.easeInOut(duration: 0.2)) {
-            isIconBarExpanded = true
-        }
-    }
-
-    /// Collapse the icon bar
-    func collapseIconBar() {
-        guard isIconBarExpanded else { return }
-        withAnimation(.easeInOut(duration: 0.2)) {
-            isIconBarExpanded = false
-        }
-    }
-
-    // MARK: - History
-
-    private func addToHistory(_ module: AppModule) {
-        // Don't add duplicates consecutively
-        if moduleHistory.last != module {
-            moduleHistory.append(module)
-
-            // Trim history if too long
-            if moduleHistory.count > maxHistorySize {
-                moduleHistory.removeFirst()
-            }
-        }
-    }
-
-    /// Whether back navigation is available
-    var canGoBack: Bool {
-        !moduleHistory.isEmpty
-    }
 }

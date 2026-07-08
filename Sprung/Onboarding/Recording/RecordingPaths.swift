@@ -32,16 +32,6 @@ enum RecordingPaths {
         return base.appendingPathComponent("Sprung/Recordings", isDirectory: true)
     }
 
-    /// Per-session directory (default recordings root).
-    static func sessionDirectory(_ sessionId: String) -> URL {
-        sessionDirectory(sessionId, in: recordingsRoot)
-    }
-
-    /// Per-session append-only tape file (default recordings root).
-    static func tapeFile(_ sessionId: String) -> URL {
-        tapeFile(sessionId, in: recordingsRoot)
-    }
-
     /// Per-session directory under an explicit root (injected for testing).
     static func sessionDirectory(_ sessionId: String, in root: URL) -> URL {
         root.appendingPathComponent(sessionId, isDirectory: true)

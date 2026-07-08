@@ -11,16 +11,6 @@ actor ConversationCoordinator {
     init(store: LLMConversationStore? = nil) {
         self.store = store
     }
-    func messages(for conversationId: UUID) async -> [LLMMessageDTO] {
-        if let cached = cache[conversationId] {
-            return cached
-        }
-        let persisted = await store?.loadMessages(conversationId: conversationId) ?? []
-        if !persisted.isEmpty {
-            cache[conversationId] = persisted
-        }
-        return persisted
-    }
     func persist(
         conversationId: UUID,
         messages: [LLMMessageDTO],

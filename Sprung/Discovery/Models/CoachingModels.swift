@@ -90,11 +90,6 @@ class CoachingSession: Identifiable {
         }
     }
 
-    /// Check if this session is for today
-    var isToday: Bool {
-        Calendar.current.isDateInToday(sessionDate)
-    }
-
     /// Check if session is complete (has recommendations)
     var isComplete: Bool {
         !recommendations.isEmpty && completedAt != nil

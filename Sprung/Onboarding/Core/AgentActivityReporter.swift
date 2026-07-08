@@ -27,12 +27,6 @@ actor AgentActivityReporter {
         }
     }
 
-    /// Get count of running agents
-    func getRunningAgentCount() async -> Int {
-        guard let tracker = agentActivityTracker else { return 0 }
-        return await MainActor.run { tracker.runningAgentCount }
-    }
-
     /// Get recently completed agents (within last 30 seconds) for inclusion in interview context
     func getRecentlyCompletedAgents() async -> [(type: String, name: String, succeeded: Bool, duration: String)]? {
         guard let tracker = agentActivityTracker else { return nil }

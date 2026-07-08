@@ -154,7 +154,6 @@ struct Applicant {
     var address: String { profile.address }
     var city: String { profile.city }
     var state: String { profile.state }
-    var zip: String { profile.zip }
     var websites: String { profile.websites }
     var email: String { profile.email }
     var phone: String { profile.phone }

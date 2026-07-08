@@ -148,30 +148,6 @@ struct LLMErrorHandler {
         return nil
     }
 
-    /// Show alert for conversation sync error when auto-recovery fails
-    @MainActor
-    func showConversationSyncErrorAlert(callId: String?) {
-        let alert = NSAlert()
-        alert.alertStyle = .critical
-        alert.messageText = "Conversation Recovery Failed"
-        alert.informativeText = """
-        The AI conversation could not be recovered automatically.
-
-        Your interview data (profile, knowledge cards, timeline) is safely saved.
-
-        You may need to restart the interview. Your collected data will be preserved.
-        """
-
-        if let callId = callId {
-            alert.informativeText += "\n\nTechnical: call_id: \(callId)"
-        }
-
-        alert.addButton(withTitle: "OK")
-        _ = alert.runModal()
-
-        Logger.error("🔧 Conversation sync error alert shown - auto-recovery failed (callId: \(callId ?? "unknown"))", category: .ai)
-    }
-
     /// Log detailed error information for Anthropic API errors
     func logAnthropicError(_ error: Error, context: String) {
         Logger.error("❌ Anthropic API error in \(context)", category: .ai)

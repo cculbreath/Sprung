@@ -36,13 +36,6 @@ enum DiscoveryStatus: Equatable {
         case .error(let msg): return msg
         }
     }
-
-    var isActive: Bool {
-        switch self {
-        case .idle, .complete, .error: return false
-        default: return true
-        }
-    }
 }
 
 // MARK: - Discovery State (reusable across tabs)

@@ -32,32 +32,6 @@ struct PublicationCard: Identifiable, Equatable, Codable {
     var authors: [String]?
     var doi: String?
 
-    init(
-        id: String = UUID().uuidString,
-        name: String = "",
-        publisher: String = "",
-        releaseDate: String = "",
-        url: String = "",
-        summary: String = "",
-        sourceType: PublicationSourceType = .interview,
-        bibtexKey: String? = nil,
-        bibtexType: String? = nil,
-        authors: [String]? = nil,
-        doi: String? = nil
-    ) {
-        self.id = id
-        self.name = name
-        self.publisher = publisher
-        self.releaseDate = releaseDate
-        self.url = url
-        self.summary = summary
-        self.sourceType = sourceType
-        self.bibtexKey = bibtexKey
-        self.bibtexType = bibtexType
-        self.authors = authors
-        self.doi = doi
-    }
-
     /// Initialize from JSON
     init?(json: JSON) {
         guard let idString = json["id"].string, !idString.isEmpty else {
@@ -74,22 +48,6 @@ struct PublicationCard: Identifiable, Equatable, Codable {
         self.bibtexType = json["bibtexType"].string
         self.authors = json["authors"].array?.compactMap { $0.string }
         self.doi = json["doi"].string
-    }
-
-    /// Initialize with fields JSON for tool-based creation
-    init(id: String = UUID().uuidString, fields: JSON, sourceType: PublicationSourceType = .interview) {
-        self.id = id
-        self.name = fields["name"].stringValue
-        self.publisher = fields["publisher"].stringValue
-        self.releaseDate = fields["releaseDate"].stringValue
-        self.url = fields["url"].stringValue
-        self.summary = fields["summary"].stringValue
-        self.sourceType = sourceType
-        self.bibtexKey = fields["bibtexKey"].string
-        // Support both bibtexType (internal) and publicationType (from LLM tool)
-        self.bibtexType = fields["publicationType"].string ?? fields["bibtexType"].string
-        self.authors = fields["authors"].array?.compactMap { $0.string }
-        self.doi = fields["doi"].string
     }
 
     /// Apply partial field updates (PATCH semantics)

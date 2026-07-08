@@ -25,18 +25,4 @@ extension ChatCompletionParameters.Message {
             content: .text(content)
         )
     }
-    /// Get text content from message (helper for existing code compatibility)
-    var textContent: String {
-        switch content {
-        case .text(let text):
-            return text
-        case .contentArray(let contents):
-            return contents.compactMap { content in
-                if case let .text(text) = content {
-                    return text
-                }
-                return nil
-            }.joined(separator: " ")
-        }
-    }
 }

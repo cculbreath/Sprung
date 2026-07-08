@@ -27,11 +27,6 @@ final class InterviewLifecycleService {
     private let todoStore: InterviewTodoStore
     private let budgetPauseGate: BudgetPauseGate
 
-    // MARK: - Lifecycle State
-    private(set) var orchestrator: InterviewOrchestrator?
-    private(set) var workflowEngine: ObjectiveWorkflowEngine?
-    private(set) var transcriptPersistenceHandler: TranscriptPersistenceService?
-
     // Event subscription tracking
     private var eventSubscriptionTask: Task<Void, Never>?
     private var stateUpdateTasks: [Task<Void, Never>] = []
@@ -395,7 +390,6 @@ final class InterviewLifecycleService {
         let phase = await state.phase
         let baseSystemPrompt = phaseRegistry.buildSystemPrompt(for: phase)
         let orchestrator = makeOrchestrator(llmFacade: facade, baseSystemPrompt: baseSystemPrompt)
-        self.orchestrator = orchestrator
 
         // Publish phase transition BEFORE orchestrator sends initial message
         // This ensures the phase intro is queued and can be bundled with
@@ -425,7 +419,6 @@ final class InterviewLifecycleService {
             phaseRegistry: phaseRegistry,
             state: state
         )
-        workflowEngine = engine
         await engine.start()
 
         // Start transcript persistence handler
@@ -433,7 +426,6 @@ final class InterviewLifecycleService {
             eventBus: eventBus,
             dataStore: dataStore
         )
-        transcriptPersistenceHandler = transcriptHandler
         await transcriptHandler.start()
 
         return true

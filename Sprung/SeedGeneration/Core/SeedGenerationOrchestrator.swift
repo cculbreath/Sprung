@@ -131,14 +131,6 @@ final class SeedGenerationOrchestrator {
 
         var id: String { section.rawValue }
 
-        /// Non-nil when the section finished with at least one failure; use in UI to show a per-section error label.
-        var failureMessage: String? {
-            guard failedTasks > 0 else { return nil }
-            return failedTasks == 1
-                ? "1 item failed to generate"
-                : "\(failedTasks) items failed to generate"
-        }
-
         enum Status {
             case pending
             case running

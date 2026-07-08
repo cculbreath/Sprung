@@ -244,12 +244,6 @@ final class ArtifactRecordStore {
         saveContext()
     }
 
-    /// Update artifact metadata JSON
-    func updateMetadata(_ artifact: ArtifactRecord, metadataJSON: String?) {
-        artifact.metadataJSON = metadataJSON
-        saveContext()
-    }
-
     /// Update artifact's skills
     func updateSkills(_ artifact: ArtifactRecord, skillsJSON: String?) {
         artifact.skillsJSON = skillsJSON
@@ -259,21 +253,6 @@ final class ArtifactRecordStore {
     /// Update artifact's narrative cards
     func updateNarrativeCards(_ artifact: ArtifactRecord, narrativeCardsJSON: String?) {
         artifact.narrativeCardsJSON = narrativeCardsJSON
-        saveContext()
-    }
-
-    /// Update artifact summary
-    func updateSummary(_ artifact: ArtifactRecord, summary: String?, briefDescription: String? = nil) {
-        artifact.summary = summary
-        if let brief = briefDescription {
-            artifact.briefDescription = brief
-        }
-        saveContext()
-    }
-
-    /// Update artifact extracted content
-    func updateExtractedContent(_ artifact: ArtifactRecord, content: String) {
-        artifact.extractedContent = content
         saveContext()
     }
 
@@ -345,25 +324,6 @@ final class ArtifactRecordStore {
 
     // MARK: - Query Operations
 
-    /// Get artifact summaries (lightweight list for display)
-    func artifactSummaries(for session: OnboardingSession) -> [ArtifactSummary] {
-        artifacts(for: session).map { ArtifactSummary(artifact: $0) }
-    }
-
-    /// Find artifacts by source type
-    func artifacts(bySourceType sourceType: String, in session: OnboardingSession? = nil) -> [ArtifactRecord] {
-        if let session {
-            return session.artifacts.filter { $0.sourceType == sourceType }
-        } else {
-            guard let modelContext else { return [] }
-            let descriptor = FetchDescriptor<ArtifactRecord>(
-                predicate: #Predicate { $0.sourceType == sourceType },
-                sortBy: [SortDescriptor(\.ingestedAt, order: .reverse)]
-            )
-            return (try? modelContext.fetch(descriptor)) ?? []
-        }
-    }
-
     /// Get artifacts with knowledge extraction (skills or narrative cards)
     func artifactsWithKnowledgeExtraction(in session: OnboardingSession? = nil) -> [ArtifactRecord] {
         if let session {
@@ -394,51 +354,4 @@ final class ArtifactRecordStore {
         }
     }
 
-    /// Get artifacts with narrative cards
-    func artifactsWithNarrativeCards(in session: OnboardingSession? = nil) -> [ArtifactRecord] {
-        if let session {
-            return session.artifacts.filter { $0.hasNarrativeCards }
-        } else {
-            guard let modelContext else { return [] }
-            let descriptor = FetchDescriptor<ArtifactRecord>(
-                sortBy: [SortDescriptor(\.ingestedAt, order: .reverse)]
-            )
-            let all = (try? modelContext.fetch(descriptor)) ?? []
-            return all.filter { $0.hasNarrativeCards }
-        }
-    }
-
-}
-
-// MARK: - Artifact Summary (Lightweight DTO)
-
-/// Lightweight summary for artifact display without full content
-struct ArtifactSummary: Identifiable {
-    let id: UUID
-    let filename: String
-    let displayName: String
-    let sourceType: String
-    let contentType: String?
-    let sizeInBytes: Int
-    let briefDescription: String?
-    let hasSkills: Bool
-    let hasNarrativeCards: Bool
-    let hasKnowledgeExtraction: Bool
-    let ingestedAt: Date
-    let isArchived: Bool
-
-    init(artifact: ArtifactRecord) {
-        self.id = artifact.id
-        self.filename = artifact.filename
-        self.displayName = artifact.displayName
-        self.sourceType = artifact.sourceType
-        self.contentType = artifact.contentType
-        self.sizeInBytes = artifact.sizeInBytes
-        self.briefDescription = artifact.briefDescription
-        self.hasSkills = artifact.hasSkills
-        self.hasNarrativeCards = artifact.hasNarrativeCards
-        self.hasKnowledgeExtraction = artifact.hasKnowledgeExtraction
-        self.ingestedAt = artifact.ingestedAt
-        self.isArchived = artifact.isArchived
-    }
 }

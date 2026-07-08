@@ -49,37 +49,9 @@ final class UploadInteractionHandler {
     func completeUpload(id: UUID, fileURLs: [URL]) async -> JSON? {
         await handleUploadCompletion(id: id, fileURLs: fileURLs, originalURL: nil, cancelReason: nil)
     }
-    /// Completes an upload by processing a remote URL.
-    /// If the URL points to a file (pdf, docx), it downloads it.
-    /// If the URL is a web resource (GitHub, LinkedIn, website), it captures it directly as a URL artifact.
-    func completeUpload(id: UUID, link: URL) async -> JSON? {
-        // Simple heuristic: If it has a file extension we recognize, download it.
-        // Otherwise, treat it as a web resource artifact.
-        let fileExtensions = ["pdf", "docx", "txt", "rtf", "jpg", "png"]
-        let ext = link.pathExtension.lowercased()
-        let isFile = !ext.isEmpty && fileExtensions.contains(ext)
-        if isFile {
-            do {
-                let temporaryURL = try await uploadFileService.downloadRemoteFile(from: link)
-                defer { uploadFileService.cleanupTemporaryFile(at: temporaryURL) }
-                return await handleUploadCompletion(id: id, fileURLs: [temporaryURL], originalURL: link, cancelReason: nil)
-            } catch {
-                return await resumeUpload(id: id, withError: error.localizedDescription)
-            }
-        } else {
-            // Treat as a web resource (URL artifact)
-            // We pass an empty file list, but provide the originalURL.
-            // handleUploadCompletion needs to be updated to handle this case (files empty but originalURL present).
-            return await handleUploadCompletion(id: id, fileURLs: [], originalURL: link, cancelReason: nil)
-        }
-    }
     /// Skips an upload request (user chose not to upload).
     func skipUpload(id: UUID) async -> JSON? {
         await handleUploadCompletion(id: id, fileURLs: [], originalURL: nil, cancelReason: nil)
-    }
-    /// Cancels an upload request (assistant dismissed the card).
-    func cancelUpload(id: UUID, reason: String?) async -> JSON? {
-        await handleUploadCompletion(id: id, fileURLs: [], originalURL: nil, cancelReason: reason)
     }
     // MARK: - Private Helpers
     private func handleUploadCompletion(
@@ -285,15 +257,6 @@ final class UploadInteractionHandler {
                 "durationMs": "\(totalMs)"
             ]
         )
-        return payload
-    }
-    private func resumeUpload(id: UUID, withError message: String) async -> JSON? {
-        guard pendingUploadRequests.contains(where: { $0.id == id }) else { return nil }
-        removeUploadRequest(id: id)
-        var payload = JSON()
-        payload["status"].string = "failed"
-        payload["error"].string = message
-        Logger.error("❌ Upload failed: \(message)", category: .ai)
         return payload
     }
     private func handleTargetedUpload(target: String, processed: [OnboardingProcessedUpload]) async throws {

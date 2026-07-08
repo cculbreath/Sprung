@@ -53,7 +53,6 @@ struct SkillsBankBrowser: View {
         case atsExpansion
         case refine
         case curation
-        case extraction
     }
 
     /// All skills from the store

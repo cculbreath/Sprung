@@ -9,8 +9,6 @@ import Foundation
 import SwiftyJSON
 /// Context passed to workflow closures when objectives change state.
 struct ObjectiveWorkflowContext {
-    let completedObjectives: Set<String>
-    let status: ObjectiveStatus  // From InterviewPhase.swift file
     let details: [String: String]
 }
 /// Actions a workflow may request when an objective transitions.

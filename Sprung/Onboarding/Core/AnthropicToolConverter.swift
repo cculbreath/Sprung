@@ -71,13 +71,4 @@ struct AnthropicToolConverter {
         AnthropicSchemaConverter.convertToAnthropicTool(funcTool)
     }
 
-    /// Convert JSONSchema to dictionary representation
-    func convertJSONSchemaToDictionary(_ schema: JSONSchema) -> [String: Any] {
-        AnthropicSchemaConverter.convertJSONSchemaToDictionary(schema)
-    }
-
-    /// Convert JSONSchemaType to its string representation
-    func jsonSchemaTypeToString(_ type: JSONSchemaType) -> String {
-        AnthropicSchemaConverter.jsonSchemaTypeToString(type)
-    }
 }

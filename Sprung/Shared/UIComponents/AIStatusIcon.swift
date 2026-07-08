@@ -323,11 +323,6 @@ struct AIIconModeResolver {
         return .unset
     }
 
-    /// Check if a node should show an icon at all
-    static func shouldShowIcon(for node: TreeNode) -> Bool {
-        guard node.parent != nil else { return false }
-        return true
-    }
 }
 
 // MARK: - String Formatting

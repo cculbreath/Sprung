@@ -427,7 +427,6 @@ struct RevisionMaterialExporter {
     /// the same selection the workspace contains.
     struct VoiceExportSummary {
         let samplesExported: Int
-        let voiceProfileExported: Bool
     }
 
     /// Export the user's voice materials: the writing samples selected by the
@@ -462,7 +461,7 @@ struct RevisionMaterialExporter {
                 + (profileExported ? " and the voice profile" : ""),
             category: .ai
         )
-        return VoiceExportSummary(samplesExported: samples.count, voiceProfileExported: profileExported)
+        return VoiceExportSummary(samplesExported: samples.count)
     }
 
     /// Render the analyzed voice profile as readable Markdown.

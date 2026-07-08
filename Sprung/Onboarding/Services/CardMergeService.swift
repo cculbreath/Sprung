@@ -120,8 +120,6 @@ actor CardMergeService {
 
             let collection = NarrativeCardCollection(
                 documentId: artifact.id,
-                filename: artifact.filename,
-                documentType: artifact.sourceType,
                 cards: cards
             )
             collections.append(collection)
@@ -175,40 +173,10 @@ actor CardMergeService {
         return try await service.deduplicateCards(allCards, parentAgentId: parentAgentId)
     }
 
-    /// Deduplicate an arbitrary list of narrative cards
-    /// Useful for manual deduplication triggers
-    func deduplicateCards(_ cards: [KnowledgeCard]) async throws -> DeduplicationResult {
-        guard cards.count > 1 else {
-            return DeduplicationResult(cards: cards, mergeLog: [])
-        }
-
-        Logger.info("🔀 Manual deduplication requested: \(cards.count) cards", category: .ai)
-        let service = await getDeduplicationService()
-        return try await service.deduplicateCards(cards)
-    }
-
-    enum CardMergeError: Error, LocalizedError {
-        case llmNotConfigured
-        case noSkillsFound
-        case noCardsFound
-
-        var errorDescription: String? {
-            switch self {
-            case .llmNotConfigured:
-                return "LLM facade is not configured"
-            case .noSkillsFound:
-                return "No skills found in artifacts"
-            case .noCardsFound:
-                return "No narrative cards found in artifacts"
-            }
-        }
-    }
 }
 
 /// Collection of narrative cards from a single document
 struct NarrativeCardCollection {
     let documentId: String
-    let filename: String
-    let documentType: String
     let cards: [KnowledgeCard]
 }

@@ -145,13 +145,6 @@ final class JobScoutService {
         }
     }
 
-    /// Cancel the in-flight run. Cooperative: the loop stops between turns
-    /// (the runner checks Task.checkCancellation before every turn) — nothing
-    /// is discarded on a deadline because there is none.
-    func cancel() {
-        runTask?.cancel()
-    }
-
     // MARK: - Run Execution
 
     private func performRun(config: ScoutRunConfig) async {

@@ -85,36 +85,6 @@ struct SeedGenerationContext {
         timelineEntries(for: "work")
     }
 
-    /// Get all education entries
-    var educationEntries: [JSON] {
-        timelineEntries(for: "education")
-    }
-
-    /// Get all volunteer entries
-    var volunteerEntries: [JSON] {
-        timelineEntries(for: "volunteer")
-    }
-
-    /// Get all project entries from timeline
-    var projectEntries: [JSON] {
-        timelineEntries(for: "project")
-    }
-
-    /// Get all award entries
-    var awardEntries: [JSON] {
-        timelineEntries(for: "award")
-    }
-
-    /// Get all certificate entries
-    var certificateEntries: [JSON] {
-        timelineEntries(for: "certificate")
-    }
-
-    /// Get all publication entries
-    var publicationEntries: [JSON] {
-        timelineEntries(for: "publication")
-    }
-
     // MARK: - Knowledge Card Relevance
 
     /// Get knowledge cards relevant to a specific timeline entry
@@ -162,38 +132,11 @@ struct SeedGenerationContext {
         }
     }
 
-    /// Get knowledge cards by type
-    func knowledgeCards(ofType type: CardType) -> [KnowledgeCard] {
-        knowledgeCards.filter { $0.cardType == type }
-    }
-
-    /// Get all project-related knowledge cards
-    var projectKnowledgeCards: [KnowledgeCard] {
-        knowledgeCards(ofType: .project)
-    }
-
-    /// Get all achievement-related knowledge cards
-    var achievementKnowledgeCards: [KnowledgeCard] {
-        knowledgeCards(ofType: .achievement)
-    }
-
     // MARK: - Section Enablement
-
-    /// Check if a section is enabled
-    func isEnabled(_ section: ExperienceSectionKey) -> Bool {
-        sectionConfig.isEnabled(section)
-    }
 
     /// Get all enabled section keys
     var enabledSections: [ExperienceSectionKey] {
         sectionConfig.enabledStandardSections
-    }
-
-    /// Get custom field definitions for enabled custom fields
-    var enabledCustomFields: [CustomFieldDefinition] {
-        sectionConfig.customFields.filter { field in
-            sectionConfig.enabledSections.contains(field.key)
-        }
     }
 
     // MARK: - Private Helpers

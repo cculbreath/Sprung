@@ -84,16 +84,6 @@ final class SkillStore: EntityStore {
         Logger.info("✅ Approved \(skillsToApprove.count) Skills", category: .ai)
     }
 
-    /// Deletes skills that have evidence from a specific artifact
-    /// - Parameter artifactId: The artifact ID to match against evidence
-    func deleteSkillsFromArtifact(_ artifactId: String) {
-        let skillsToDelete = skills.filter { skill in
-            skill.evidence.contains { $0.documentId == artifactId }
-        }
-        deleteAll(skillsToDelete)
-        Logger.info("🗑️ Deleted \(skillsToDelete.count) skills from artifact \(artifactId)", category: .ai)
-    }
-
     // MARK: - Query Helpers
 
     /// Find a skill by ID
@@ -118,16 +108,4 @@ final class SkillStore: EntityStore {
         }
     }
 
-    /// Find skills matching any of the given ATS terms
-    func matchingSkills(for terms: [String]) -> [Skill] {
-        let normalizedTerms = terms.map { $0.lowercased() }
-        return skills.filter { skill in
-            let allVariants = skill.allVariants.map { $0.lowercased() }
-            return normalizedTerms.contains { term in
-                allVariants.contains { variant in
-                    variant.contains(term) || term.contains(variant)
-                }
-            }
-        }
-    }
 }

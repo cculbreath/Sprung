@@ -6,12 +6,10 @@ import SwiftyJSON
 struct ArtifactDisplayInfo: Identifiable {
     let id: String
     let filename: String
-    let title: String?
 
     init(from record: ArtifactRecord) {
         self.id = record.id.uuidString
         self.filename = record.filename
-        self.title = record.title
     }
 }
 

@@ -29,18 +29,6 @@ final class NarrativeDeduplicationService {
         Logger.info("🔀 NarrativeDeduplicationService initialized", category: .ai)
     }
 
-    func updateLLMFacade(_ facade: LLMFacade?) {
-        self.llmFacade = facade
-    }
-
-    func setEventBus(_ eventBus: EventBus) {
-        self.eventBus = eventBus
-    }
-
-    func setAgentActivityTracker(_ tracker: AgentActivityTracker) {
-        self.agentActivityTracker = tracker
-    }
-
     // MARK: - Public API
 
     /// Deduplicate narrative cards using a multi-turn agent.
@@ -204,20 +192,10 @@ struct MergeLogEntry {
     let action: Action
     let inputCardIds: [String]
     let outputCardId: String?
-    let reasoning: String
 
     init(action: Action, inputCardIds: [String], outputCardId: String?, reasoning: String) {
         self.inputCardIds = inputCardIds
         self.outputCardId = outputCardId
         self.action = action
-        self.reasoning = reasoning
-    }
-
-    // Convenience init for backward compatibility
-    init(action: Action, inputCards: [String], outputCard: String?, reasoning: String) {
-        self.inputCardIds = inputCards
-        self.outputCardId = outputCard
-        self.action = action
-        self.reasoning = reasoning
     }
 }

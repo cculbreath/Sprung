@@ -167,7 +167,6 @@ actor SessionUIState: OnboardingEventEmitter {
     private(set) var waitingState: WaitingState?
     // MARK: - Pending UI Prompts
     private(set) var pendingExtraction: OnboardingPendingExtraction?
-    private(set) var pendingStreamingStatus: String?
 
     // MARK: - Phase 4 Title Set Curation State
     /// True if custom.jobTitles was enabled and title sets need to be curated
@@ -318,12 +317,6 @@ actor SessionUIState: OnboardingEventEmitter {
         Logger.info("🏷️ Title sets required: \(required)", category: .ai)
     }
 
-    /// Mark title sets as curated (called when user saves their selections)
-    func setTitleSetsCurated(_ curated: Bool) {
-        titleSetsCurated = curated
-        Logger.info("🏷️ Title sets curated: \(curated)", category: .ai)
-    }
-
     /// Get Phase 4 UI context for tool gating
     func getPhase4UIContext() -> ToolBundlePolicy.Phase4UIContext {
         ToolBundlePolicy.Phase4UIContext(
@@ -423,7 +416,6 @@ actor SessionUIState: OnboardingEventEmitter {
         isProcessing = false
         waitingState = nil
         pendingExtraction = nil
-        pendingStreamingStatus = nil
         excludedTools = []
         Logger.info("🔄 SessionUIState reset", category: .ai)
     }

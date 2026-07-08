@@ -141,9 +141,6 @@ class BackgroundMergeAgent {
             tracker?.markCompleted(agentId: agentId)
 
             return BackgroundMergeResult(
-                mergeId: agentId,
-                sourceCardIds: cardFiles.map { extractCardId(from: $0) },
-                newCardId: newCardId,
                 success: true
             )
 
@@ -352,8 +349,5 @@ class BackgroundMergeAgent {
 
 /// Result of a background merge operation
 struct BackgroundMergeResult {
-    let mergeId: String
-    let sourceCardIds: [String]
-    let newCardId: String
     let success: Bool
 }

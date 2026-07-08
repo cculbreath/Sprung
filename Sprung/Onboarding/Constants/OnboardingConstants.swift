@@ -246,11 +246,6 @@ struct DocumentTypePolicy {
         "png", "jpg", "jpeg", "gif", "webp", "heic", "tiff", "bmp"
     ])
 
-    /// Check if a file extension is accepted for drops.
-    static func isAccepted(_ ext: String) -> Bool {
-        acceptedExtensions.contains(ext.lowercased())
-    }
-
     /// Check if a file extension can have text extracted.
     static func isExtractable(_ ext: String) -> Bool {
         extractableExtensions.contains(ext.lowercased())
@@ -272,18 +267,6 @@ extension OnboardingToolName {
         OnboardingToolName.updateTimelineCard,
         OnboardingToolName.deleteTimelineCard,
         OnboardingToolName.reorderTimelineCards
-    ].map(\.rawValue))
-
-    /// Section card tools for non-chronological sections (awards, languages, references, publications).
-    /// Used by ToolGating to allow these tools during section cards collection.
-    static let sectionCardTools: Set<String> = Set([
-        OnboardingToolName.createSectionCard,
-        OnboardingToolName.updateSectionCard,
-        OnboardingToolName.deleteSectionCard,
-        OnboardingToolName.createPublicationCard,
-        OnboardingToolName.updatePublicationCard,
-        OnboardingToolName.deletePublicationCard,
-        OnboardingToolName.displaySectionCardsForReview
     ].map(\.rawValue))
 
     /// Tools RE-EXECUTED (rather than served verbatim) during session replay so
@@ -313,31 +296,9 @@ extension OnboardingToolName {
 }
 
 // MARK: - Convenience Extensions
-extension OnboardingToolName {
-    /// Convert an array of tool name enums to their raw string values.
-    static func rawValues(_ tools: [OnboardingToolName]) -> [String] {
-        tools.map { $0.rawValue }
-    }
-    /// Convert a set of tool name enums to a set of raw string values.
-    static func rawValues(_ tools: Set<OnboardingToolName>) -> Set<String> {
-        Set(tools.map { $0.rawValue })
-    }
-}
 extension OnboardingObjectiveId {
     /// Convert an array of objective ID enums to their raw string values.
     static func rawValues(_ objectives: [OnboardingObjectiveId]) -> [String] {
         objectives.map { $0.rawValue }
-    }
-    /// Get the parent objective ID (for sub-objectives).
-    /// Returns nil if this is a root objective.
-    var parentId: OnboardingObjectiveId? {
-        let parts = rawValue.split(separator: ".")
-        guard parts.count > 1 else { return nil }
-        let parentRaw = parts.dropLast().joined(separator: ".")
-        return OnboardingObjectiveId(rawValue: parentRaw)
-    }
-    /// Check if this is a sub-objective (contains a dot).
-    var isSubObjective: Bool {
-        rawValue.contains(".")
     }
 }

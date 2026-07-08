@@ -12,12 +12,9 @@ import SwiftyJSON
 struct GeneratedContent: Equatable {
     /// The generated content type and value
     let type: ContentType
-    /// Raw JSON response from LLM (for debugging/inspection)
-    let rawJSON: JSON
 
-    init(type: ContentType, rawJSON: JSON = JSON()) {
+    init(type: ContentType) {
         self.type = type
-        self.rawJSON = rawJSON
     }
 
     /// Types of generated content
@@ -129,62 +126,3 @@ extension SkillGroup {
     }
 }
 
-// MARK: - Content Extraction Helpers
-
-extension GeneratedContent {
-    /// Extract the target ID from the content type if present
-    var targetId: String? {
-        switch type {
-        case .workHighlights(let id, _),
-             .volunteerDescription(let id, _, _),
-             .projectDescription(let id, _, _, _):
-            return id
-        default:
-            return nil
-        }
-    }
-
-    /// Extract highlights as string array (for work/volunteer/project)
-    var highlights: [String] {
-        switch type {
-        case .workHighlights(_, let highlights):
-            return highlights
-        case .volunteerDescription(_, _, let highlights):
-            return highlights
-        case .projectDescription(_, _, let highlights, _):
-            return highlights
-        default:
-            return []
-        }
-    }
-
-    /// Extract summary/description text
-    var summaryText: String? {
-        switch type {
-        case .volunteerDescription(_, let summary, _):
-            return summary
-        case .projectDescription(_, let description, _, _):
-            return description
-        case .objective(let text):
-            return text
-        default:
-            return nil
-        }
-    }
-
-    /// Get the section key this content belongs to
-    var section: ExperienceSectionKey? {
-        switch type {
-        case .workHighlights:
-            return .work
-        case .volunteerDescription:
-            return .volunteer
-        case .projectDescription:
-            return .projects
-        case .skillGroups:
-            return .skills
-        case .objective, .titleSets:
-            return nil
-        }
-    }
-}

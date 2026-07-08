@@ -102,9 +102,6 @@ final class OpenRouterServiceBackend {
         }
     }
     // MARK: - Helpers
-    private func loadMessages(conversationId: UUID) async -> [LLMMessageDTO] {
-        await conversationCoordinator.messages(for: conversationId)
-    }
     private func persistConversation(
         conversationId: UUID,
         messages: [LLMMessageDTO],
@@ -127,49 +124,6 @@ final class OpenRouterServiceBackend {
     }
     private func assistantMessage(from text: String) -> LLMMessageDTO {
         LLMMessageDTO(role: .assistant, text: text, attachments: [])
-    }
-    private func parseResponseText(from response: LLMResponseDTO) throws -> String {
-        guard let text = response.choices.first?.message?.text else {
-            throw LLMError.unexpectedResponseFormat
-        }
-        return text
-    }
-    // MARK: - Core Operations
-    func executeStructuredStreaming<T: Codable & Sendable>(
-        prompt: String,
-        modelId: String,
-        responseType: T.Type,
-        reasoning: OpenRouterReasoning? = nil,
-        jsonSchema: JSONSchema? = nil,
-        systemPrompt: String? = nil
-    ) -> AsyncThrowingStream<LLMStreamChunkDTO, Error> {
-        AsyncThrowingStream { continuation in
-            Task {
-                do {
-                    try await self.ensureInitialized()
-                    var parameters = LLMRequestBuilder.buildStructuredRequest(
-                        prompt: prompt,
-                        modelId: modelId,
-                        responseType: responseType,
-                        jsonSchema: jsonSchema,
-                        systemPrompt: systemPrompt
-                    )
-                    self.streamingExecutor.applyReasoning(reasoning, to: &parameters)
-                    parameters.stream = true
-                    let stream = self.streamingExecutor.stream(
-                        parameters: parameters,
-                        accumulateContent: false
-                    ) { _ in }
-                    for try await chunk in stream {
-                        if Task.isCancelled { break }
-                        continuation.yield(chunk)
-                    }
-                    continuation.finish()
-                } catch {
-                    continuation.finish(throwing: error)
-                }
-            }
-        }
     }
     // MARK: - Conversation Streaming
     func startConversationStreaming(
@@ -227,143 +181,6 @@ final class OpenRouterServiceBackend {
         }
         Logger.info("🗣️ Started streaming conversation: \(conversationId) with model: \(modelId)")
         return (conversationId: conversationId, stream: stream)
-    }
-    func continueConversationStreaming(
-        userMessage: String,
-        modelId: String,
-        conversationId: UUID,
-        images: [Data] = [],
-        reasoning: OpenRouterReasoning? = nil,
-        jsonSchema: JSONSchema? = nil
-    ) -> AsyncThrowingStream<LLMStreamChunkDTO, Error> {
-        AsyncThrowingStream { continuation in
-            Task {
-                do {
-                    try await self.ensureInitialized()
-                    var messages = await self.loadMessages(conversationId: conversationId)
-                    messages.append(self.makeUserMessage(userMessage, images: images))
-                    await self.persistConversation(conversationId: conversationId, messages: messages)
-                    let seededMessages = messages
-                    var parameters = LLMRequestBuilder.buildConversationRequest(
-                        messages: messages,
-                        modelId: modelId
-                    )
-                    if let jsonSchema = jsonSchema {
-                        let responseFormatSchema = JSONSchemaResponseFormat(
-                            name: "structured_response",
-                            strict: true,
-                            schema: jsonSchema
-                        )
-                        parameters.responseFormat = .jsonSchema(responseFormatSchema)
-                        Logger.debug("📝 Streaming conversation using structured output with JSON Schema enforcement")
-                    }
-                    self.streamingExecutor.applyReasoning(reasoning, to: &parameters)
-                    parameters.stream = true
-                    let stream = self.streamingExecutor.stream(
-                        parameters: parameters,
-                        accumulateContent: true
-                    ) { [weak self] result in
-                        guard let self else { return }
-                        Task {
-                            switch result {
-                            case .success(let content?):
-                                var updatedMessages = seededMessages
-                                updatedMessages.append(self.assistantMessage(from: content))
-                                await self.persistConversation(conversationId: conversationId, messages: updatedMessages)
-                            case .success:
-                                break
-                            case .failure(let error):
-                                Logger.error("Failed to persist conversation \(conversationId) during streaming: \(error.localizedDescription)", category: .ai)
-                            }
-                        }
-                    }
-                    for try await chunk in stream {
-                        if Task.isCancelled { break }
-                        continuation.yield(chunk)
-                    }
-                    continuation.finish()
-                } catch {
-                    continuation.finish(throwing: error)
-                }
-            }
-        }
-    }
-    // MARK: - Conversation (non-streaming)
-    func startConversation(
-        systemPrompt: String? = nil,
-        userMessage: String,
-        modelId: String
-    ) async throws -> (UUID, String) {
-        try await ensureInitialized()
-        var messages: [LLMMessageDTO] = []
-        if let systemPrompt {
-            messages.append(.text(systemPrompt, role: .system))
-        }
-        messages.append(makeUserMessage(userMessage, images: []))
-        let parameters = LLMRequestBuilder.buildConversationRequest(
-            messages: messages,
-            modelId: modelId
-        )
-        let response = try await requestExecutor.execute(parameters: parameters)
-        let dto = LLMVendorMapper.responseDTO(from: response)
-        let responseText = try parseResponseText(from: dto)
-        messages.append(assistantMessage(from: responseText))
-        let conversationId = UUID()
-        await persistConversation(conversationId: conversationId, messages: messages)
-        Logger.info("✅ Conversation started successfully: \(conversationId)")
-        return (conversationId, responseText)
-    }
-    func continueConversation(
-        userMessage: String,
-        modelId: String,
-        conversationId: UUID,
-        images: [Data] = []
-    ) async throws -> String {
-        try await ensureInitialized()
-        var messages = await loadMessages(conversationId: conversationId)
-        messages.append(self.makeUserMessage(userMessage, images: images))
-        let parameters = LLMRequestBuilder.buildConversationRequest(
-            messages: messages,
-            modelId: modelId
-        )
-        let response = try await requestExecutor.execute(parameters: parameters)
-        let dto = LLMVendorMapper.responseDTO(from: response)
-        let responseText = try parseResponseText(from: dto)
-        messages.append(self.assistantMessage(from: responseText))
-        await persistConversation(conversationId: conversationId, messages: messages)
-        Logger.info("✅ Conversation continued successfully: \(conversationId)")
-        return responseText
-    }
-    func continueConversationStructured<T: Codable>(
-        userMessage: String,
-        modelId: String,
-        conversationId: UUID,
-        responseType: T.Type,
-        images: [Data] = [],
-        jsonSchema: JSONSchema? = nil
-    ) async throws -> T {
-        try await ensureInitialized()
-        var messages = await loadMessages(conversationId: conversationId)
-        messages.append(self.makeUserMessage(userMessage, images: images))
-        let parameters = LLMRequestBuilder.buildStructuredConversationRequest(
-            messages: messages,
-            modelId: modelId,
-            responseType: responseType,
-            jsonSchema: jsonSchema
-        )
-        let response = try await requestExecutor.execute(parameters: parameters)
-        let dto = LLMVendorMapper.responseDTO(from: response)
-        let result = try JSONResponseParser.parseStructured(dto, as: responseType)
-        let responseText: String
-        if let data = try? JSONEncoder().encode(result) {
-            responseText = String(data: data, encoding: .utf8) ?? "Structured response"
-        } else {
-            responseText = "Structured response"
-        }
-        messages.append(self.assistantMessage(from: responseText))
-        await persistConversation(conversationId: conversationId, messages: messages)
-        Logger.info("✅ Structured conversation continued successfully: \(conversationId)")
-        return result
     }
     /// Request with flexible JSON output - uses structured output when available, basic JSON mode otherwise
     func executeFlexibleJSON<T: Codable>(

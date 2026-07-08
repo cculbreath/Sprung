@@ -110,40 +110,4 @@ class OnboardingSession {
         self.dossierNotesJSON = dossierNotesJSON
     }
 
-    // MARK: - Tool Coordination Computed Properties
-
-    /// Current batch call IDs as a Set
-    var currentBatchCallIds: Set<String> {
-        get {
-            guard let csv = currentBatchCallIdsCSV, !csv.isEmpty else { return [] }
-            return Set(csv.split(separator: ",").map { String($0) })
-        }
-        set {
-            currentBatchCallIdsCSV = newValue.isEmpty ? nil : newValue.sorted().joined(separator: ",")
-        }
-    }
-
-    /// Pending UI tool call IDs as a Set
-    var pendingUIToolCallIds: Set<String> {
-        get {
-            guard let csv = pendingUIToolCallIdsCSV, !csv.isEmpty else { return [] }
-            return Set(csv.split(separator: ",").map { String($0) })
-        }
-        set {
-            pendingUIToolCallIdsCSV = newValue.isEmpty ? nil : newValue.sorted().joined(separator: ",")
-        }
-    }
-
-    /// Check if there's a pending UI tool in the current batch
-    var hasPendingUIToolInBatch: Bool {
-        !currentBatchCallIds.intersection(pendingUIToolCallIds).isEmpty
-    }
-
-    /// Reset transient tool coordination state (called on session load)
-    func resetTransientToolState() {
-        expectedToolResponseCount = 0
-        currentBatchCallIdsCSV = nil
-        // Note: pendingUIToolCallIds and pendingToolResponses may need to persist
-        // depending on whether we want to resume mid-tool-batch
-    }
 }

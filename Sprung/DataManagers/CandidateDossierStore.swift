@@ -242,11 +242,6 @@ final class CandidateDossierStore: SwiftDataStore {
     func exportForResumeCustomization() -> String? {
         dossier?.exportForResumeCustomization()
     }
-
-    /// Export full dossier including private fields
-    func exportFull() -> String? {
-        dossier?.exportFull()
-    }
 }
 
 // MARK: - Dossier Section Enum

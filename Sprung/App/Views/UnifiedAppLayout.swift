@@ -17,10 +17,8 @@ import SwiftUI
 /// ResumeEditorModuleView and silently died whenever another module was up.)
 struct UnifiedAppLayout: View {
     @Environment(ModuleNavigationService.self) private var navigation
-    @Environment(WindowCoordinator.self) private var windowCoordinator
     @Environment(AppEnvironment.self) private var appEnvironment
     @Environment(ReasoningStreamState.self) private var reasoningStreamManager
-    @Environment(AppState.self) private var appState
     @Environment(EnabledLLMStore.self) private var enabledLLMStore
     @Environment(JobAppStore.self) private var jobAppStore
     @Environment(CoverLetterStore.self) private var coverLetterStore

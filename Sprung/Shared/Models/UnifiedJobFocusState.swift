@@ -41,29 +41,6 @@ final class UnifiedJobFocusState {
         focusedJob != nil
     }
 
-    /// Summary text for the focused job
-    var focusedJobSummary: String? {
-        guard let job = focusedJob else { return nil }
-        return "\(job.companyName) \u{2022} \(job.jobPosition)"
-    }
-
-    /// Location text for the focused job
-    var focusedJobLocation: String? {
-        guard let job = focusedJob else { return nil }
-        return job.jobLocation.isEmpty ? nil : job.jobLocation
-    }
-
-    /// Days since the job was identified
-    var focusedJobDaysAgo: Int? {
-        guard let job = focusedJob else { return nil }
-        return Calendar.current.dateComponents([.day], from: job.createdAt, to: Date()).day
-    }
-
-    /// Current stage of the focused job
-    var focusedJobStatus: Statuses? {
-        focusedJob?.status
-    }
-
     // MARK: - Initialization
 
     init() {
@@ -87,22 +64,4 @@ final class UnifiedJobFocusState {
         Logger.info("Restored focus to: \(job.jobPosition)", category: .appLifecycle)
     }
 
-    // MARK: - Stage Actions
-
-    /// Move focused job to next stage
-    func advanceFocusedJobStage() {
-        guard let job = focusedJob,
-              let nextStatus = job.status.next else { return }
-
-        job.status = nextStatus
-        Logger.info("Advanced job to: \(nextStatus.displayName)", category: .appLifecycle)
-    }
-
-    /// Archive the focused job
-    func archiveFocusedJob() {
-        guard let job = focusedJob else { return }
-        job.status = .withdrawn
-        focusedJob = nil
-        Logger.info("Archived job: \(job.jobPosition)", category: .appLifecycle)
-    }
 }

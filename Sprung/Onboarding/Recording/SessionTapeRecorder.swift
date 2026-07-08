@@ -263,15 +263,6 @@ actor SessionTapeRecorder {
         )))
     }
 
-    /// Record an end-of-step structural fingerprint (advisory tripwire).
-    func recordFingerprint(hash: String) {
-        guard isRecording else { return }
-        append(.stateFingerprint(TapeStateFingerprint(
-            turnIndex: currentTurnIndex,
-            hash: hash
-        )))
-    }
-
     // MARK: - Private helpers
 
     /// Encode one event and append it as a single `<json>\n` line. Best-effort:

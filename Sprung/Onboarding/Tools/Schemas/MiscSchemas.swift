@@ -18,13 +18,6 @@ enum MiscSchemas {
         ["cover_letter", "email", "essay", "proposal", "report", "blog_post", "documentation", "other"]
     }
 
-    // MARK: - Evidence Category Schemas
-
-    /// Evidence category enum values
-    static var evidenceCategories: [String] {
-        ["paper", "code", "website", "portfolio", "degree", "other"]
-    }
-
     // MARK: - IngestWritingSampleTool Schemas
 
     /// Writing sample name schema

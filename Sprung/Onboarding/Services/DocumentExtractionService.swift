@@ -48,11 +48,6 @@ actor DocumentExtractionService {
         let metadata: [String: Any]
     }
 
-    struct Quality {
-        let confidence: Double
-        let issues: [String]
-    }
-
     struct ExtractionResult {
         enum Status: String {
             case ok
@@ -61,10 +56,6 @@ actor DocumentExtractionService {
         }
         let status: Status
         let artifact: ExtractedArtifact?
-        let quality: Quality
-        let derivedApplicantProfile: JSON?
-        let derivedSkeletonTimeline: JSON?
-        let persisted: Bool
     }
 
     enum ExtractionError: Error {
@@ -163,8 +154,6 @@ actor DocumentExtractionService {
             .replacingOccurrences(of: "_", with: " ")
             .replacingOccurrences(of: "-", with: " ")
 
-        let confidence = estimateConfidence(for: extractedText, issues: initialIssues)
-
         var metadata: [String: Any] = [
             "character_count": extractedText.count,
             "source_format": contentType,
@@ -190,8 +179,6 @@ actor DocumentExtractionService {
 
         let status: ExtractionResult.Status = initialIssues.contains("textExtractionWarning") ? .partial : .ok
 
-        let quality = Quality(confidence: confidence, issues: initialIssues)
-
         let totalMs = Int(Date().timeIntervalSince(extractionStart) * 1000)
         Logger.info(
             "📄 Text extraction finished",
@@ -205,11 +192,7 @@ actor DocumentExtractionService {
 
         return ExtractionResult(
             status: status,
-            artifact: artifact,
-            quality: quality,
-            derivedApplicantProfile: nil,
-            derivedSkeletonTimeline: nil,
-            persisted: false
+            artifact: artifact
         )
     }
 

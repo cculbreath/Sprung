@@ -44,24 +44,6 @@ actor InterviewDataStore {
         }
         return identifier
     }
-    func list(dataType: String) -> [JSON] {
-        let prefix = "\(dataType)_"
-        guard let files = try? FileManager.default.contentsOfDirectory(at: baseURL, includingPropertiesForKeys: nil) else {
-            return []
-        }
-        return files
-            .filter { $0.lastPathComponent.hasPrefix(prefix) }
-            .sorted { $0.lastPathComponent < $1.lastPathComponent }
-            .compactMap { url in
-                guard
-                    let data = try? Data(contentsOf: url),
-                    let jsonObject = try? JSON(data: data)
-                else {
-                    return nil
-                }
-                return jsonObject
-            }
-    }
     func reset() async {
         guard let files = try? FileManager.default.contentsOfDirectory(at: baseURL, includingPropertiesForKeys: nil) else {
             return

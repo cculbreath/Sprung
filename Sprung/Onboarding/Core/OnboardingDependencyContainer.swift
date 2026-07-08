@@ -32,7 +32,6 @@ private struct DocumentComponents {
 /// Groups tool routing components for initialization
 private struct ToolRouterComponents {
     let toolRouter: ToolInteractionRouter
-    let toolExecutor: ToolExecutor
     let toolExecutionCoordinator: ToolExecutionCoordinator
 }
 
@@ -72,32 +71,22 @@ final class OnboardingDependencyContainer {
     let extractionManagementService: ExtractionManagementService
     let timelineManagementService: TimelineManagementService
     let sectionCardManagementService: SectionCardManagementService
-    let dataPersistenceService: DataPersistenceService
     let voiceProfileService: VoiceProfileService
     let dataResetService: OnboardingDataResetService
     let artifactArchiveManager: ArtifactArchiveService
 
     // MARK: - Artifact Ingestion Infrastructure
-    let documentIngestionKernel: DocumentIngestionKernel
     let gitIngestionKernel: GitIngestionKernel
     let artifactIngestionCoordinator: ArtifactIngestionCoordinator
     // MARK: - Document Processing
-    let uploadStorage: OnboardingUploadStorage
     let documentProcessingService: DocumentProcessingService
-    let documentArtifactHandler: DocumentArtifactHandler
-    let documentArtifactMessenger: DocumentArtifactMessenger
     let profilePersistenceHandler: ProfilePersistenceService
     let uiResponseCoordinator: UIResponseCoordinator
     let voiceProfileExtractionHandler: VoiceProfileExtractionHandler
     // MARK: - Stores
-    let objectiveStore: ObjectiveStore
-    let artifactRepository: ArtifactRepository
-    let streamingBuffer: StreamingMessageBuffer
     let sessionUIState: SessionUIState
     // MARK: - Session Persistence
     let sessionPersistenceHandler: SessionPersistenceService
-    // MARK: - Tool Execution
-    let toolExecutor: ToolExecutor
     // MARK: - Artifact Store (SwiftData)
     let artifactRecordStore: ArtifactRecordStore
     // MARK: - Transcription Checkpoint Store (SwiftData)
@@ -233,9 +222,6 @@ final class OnboardingDependencyContainer {
 
         // 3. Initialize state stores
         let stores = Self.createStateStores(eventBus: core.eventBus, phasePolicy: core.phasePolicy)
-        self.objectiveStore = stores.objectiveStore
-        self.artifactRepository = stores.artifactRepository
-        self.streamingBuffer = stores.streamingBuffer
         self.sessionUIState = stores.sessionUIState
 
         // 4. Initialize state coordinator
@@ -293,10 +279,7 @@ final class OnboardingDependencyContainer {
             timeoutPauseGate: timeoutPauseGate, checkpointStore: transcriptionCheckpointStore,
             artifactRecordStore: artifactRecordStore
         )
-        self.uploadStorage = docs.uploadStorage
         self.documentProcessingService = docs.documentProcessingService
-        self.documentArtifactHandler = docs.documentArtifactHandler
-        self.documentArtifactMessenger = docs.documentArtifactMessenger
 
         // 6. Initialize tool router components
         let tools = Self.createToolRouterComponents(
@@ -305,7 +288,6 @@ final class OnboardingDependencyContainer {
             ui: ui
         )
         self.toolRouter = tools.toolRouter
-        self.toolExecutor = tools.toolExecutor
         self.toolExecutionCoordinator = tools.toolExecutionCoordinator
 
         // 7. Initialize session persistence handler (needed by phase transition controller)
@@ -365,7 +347,6 @@ final class OnboardingDependencyContainer {
         self.extractionManagementService = services.extractionManagementService
         self.timelineManagementService = services.timelineManagementService
         self.sectionCardManagementService = services.sectionCardManagementService
-        self.dataPersistenceService = services.dataPersistenceService
 
         // 9a. Initialize data reset service (needs dataPersistenceService from step 9)
         self.dataResetService = OnboardingDataResetService(
@@ -406,7 +387,6 @@ final class OnboardingDependencyContainer {
         let ingestion = Self.createArtifactIngestionComponents(
             eventBus: core.eventBus, documentProcessingService: docs.documentProcessingService, llmFacade: llmFacade
         )
-        self.documentIngestionKernel = ingestion.documentIngestionKernel
         self.gitIngestionKernel = ingestion.gitIngestionKernel
         self.artifactIngestionCoordinator = ingestion.artifactIngestionCoordinator
 
@@ -633,7 +613,7 @@ final class OnboardingDependencyContainer {
             profileHandler: ProfileInteractionHandler(contactsImportService: ContactsImportService(), eventBus: eventBus),
             sectionHandler: SectionToggleHandler(), eventBus: eventBus
         )
-        return ToolRouterComponents(toolRouter: toolRouter, toolExecutor: toolExecutor,
+        return ToolRouterComponents(toolRouter: toolRouter,
                                     toolExecutionCoordinator: toolExecutionCoordinator)
     }
 
@@ -739,9 +719,6 @@ final class OnboardingDependencyContainer {
         Logger.info("🏗️ OnboardingDependencyContainer late initialization completed", category: .ai)
     }
     // MARK: - Accessors for External Dependencies
-    func getApplicantProfileStore() -> ApplicantProfileStore {
-        applicantProfileStore
-    }
     func getKnowledgeCardStore() -> KnowledgeCardStore {
         knowledgeCardStore
     }

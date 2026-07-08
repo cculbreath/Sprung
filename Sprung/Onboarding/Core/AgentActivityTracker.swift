@@ -196,11 +196,7 @@ struct TrackedAgent: Identifiable, Codable {
 
 /// Summary of a completed agent for notification purposes
 struct AgentCompletionSummary {
-    let agentType: AgentType
-    let name: String
     let succeeded: Bool
-    let duration: TimeInterval?
-    let errorMessage: String?
 }
 
 // MARK: - Agent Activity Tracker
@@ -333,16 +329,6 @@ class AgentActivityTracker {
         Logger.info("🔀 Child agent tracked: [\(type.displayName)] \(name) (parent: \(parentAgentId.prefix(8)))", category: .ai)
 
         return id
-    }
-
-    /// Get child agents for a parent
-    func childAgents(for parentAgentId: String) -> [TrackedAgent] {
-        agents.filter { $0.parentAgentId == parentAgentId }
-    }
-
-    /// Check if a parent agent has any running children
-    func hasRunningChildren(agentId: String) -> Bool {
-        childAgents(for: agentId).contains { $0.status == .running }
     }
 
     /// Mark an agent as running — transitions from pending on first start, or flips a
@@ -545,13 +531,6 @@ class AgentActivityTracker {
         }
     }
 
-    // MARK: - Query Methods
-
-    /// Get a specific agent by ID
-    func getAgent(id: String) -> TrackedAgent? {
-        agents.first { $0.id == id }
-    }
-
     // MARK: - Private Helpers
 
     /// Check if all agents completed and fire callback if so
@@ -566,11 +545,7 @@ class AgentActivityTracker {
         let summaries: [AgentCompletionSummary] = recentlyCompletedAgentIds.compactMap { agentId in
             guard let agent = agents.first(where: { $0.id == agentId }) else { return nil }
             return AgentCompletionSummary(
-                agentType: agent.agentType,
-                name: agent.name,
-                succeeded: agent.status == .completed,
-                duration: agent.duration,
-                errorMessage: agent.error
+                succeeded: agent.status == .completed
             )
         }
 

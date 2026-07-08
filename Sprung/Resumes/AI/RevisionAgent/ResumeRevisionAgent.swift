@@ -97,8 +97,6 @@ class ResumeRevisionAgent {
     /// reviews this session. The completion gate matches the real workspace
     /// diff against this ledger to flag writes that bypassed review.
     private struct AcceptedChangeRecord {
-        let section: String
-        let type: String
         let beforeText: String
         let afterText: String
     }
@@ -1387,8 +1385,6 @@ class ResumeRevisionAgent {
     private func recordAcceptedChanges(from proposal: ChangeProposal, response: ProposalResponse) {
         func record(_ change: ProposeChangesTool.ChangeDetail, editedText: String? = nil) {
             acceptedChangeLedger.append(AcceptedChangeRecord(
-                section: change.section,
-                type: change.type,
                 beforeText: change.beforePreview ?? "",
                 afterText: editedText ?? change.afterPreview ?? ""
             ))

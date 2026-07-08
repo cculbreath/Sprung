@@ -161,15 +161,6 @@ final class OnboardingSessionStore {
         return record
     }
 
-    /// Update a message (for streaming finalization)
-    func updateMessage(_ record: OnboardingMessageRecord, text: String, toolCallsJSON: String? = nil) {
-        record.text = text
-        if let json = toolCallsJSON {
-            record.toolCallsJSON = json
-        }
-        // Don't save on every update during streaming
-    }
-
     /// Get messages for a session (sorted by timestamp)
     func getMessages(_ session: OnboardingSession) -> [OnboardingMessageRecord] {
         session.messages.sorted { $0.timestamp < $1.timestamp }
@@ -185,46 +176,7 @@ final class OnboardingSessionStore {
         saveContext()
     }
 
-    /// Update a message's toolCallsJSON by message ID (for tool result pairing)
-    func updateMessageToolCalls(_ session: OnboardingSession, messageId: UUID, toolCallsJSON: String) {
-        guard let record = session.messages.first(where: { $0.id == messageId }) else {
-            Logger.warning("Cannot update message toolCalls: message \(messageId) not found in session", category: .ai)
-            return
-        }
-        record.toolCallsJSON = toolCallsJSON
-        saveContext()
-        Logger.debug("💾 Updated toolCallsJSON for message \(messageId)", category: .ai)
-    }
-
     // MARK: - Restore Helpers
-
-    /// Convert stored messages to OnboardingMessage models
-    func restoreMessages(_ session: OnboardingSession) -> [OnboardingMessage] {
-        getMessages(session).map { record in
-            let role: OnboardingMessageRole
-            switch record.role {
-            case "user": role = .user
-            case "assistant": role = .assistant
-            default: role = .system
-            }
-
-            var toolCalls: [OnboardingMessage.ToolCallInfo]?
-            if let json = record.toolCallsJSON,
-               let data = json.data(using: .utf8),
-               let decoded = try? JSONDecoder().decode([OnboardingMessage.ToolCallInfo].self, from: data) {
-                toolCalls = decoded
-            }
-
-            return OnboardingMessage(
-                id: record.id,
-                role: role,
-                text: record.text,
-                timestamp: record.timestamp,
-                isSystemGenerated: record.isSystemGenerated,
-                toolCalls: toolCalls
-            )
-        }
-    }
 
     /// Convert stored objectives to dictionary
     func restoreObjectiveStatuses(_ session: OnboardingSession) -> [String: String] {
@@ -299,21 +251,6 @@ final class OnboardingSessionStore {
     /// Get enabled sections (convenience method)
     func getEnabledSections(_ session: OnboardingSession) -> Set<String> {
         getSectionConfig(session).enabledSections
-    }
-
-    // MARK: - Merged Inventory Management
-
-    /// Update merged card inventory JSON (expensive Gemini call result)
-    func updateMergedInventory(_ session: OnboardingSession, inventoryJSON: String?) {
-        session.mergedInventoryJSON = inventoryJSON
-        session.lastActiveAt = Date()
-        saveContext()
-        Logger.info("Persisted merged card inventory (\(inventoryJSON?.count ?? 0) chars)", category: .ai)
-    }
-
-    /// Get merged inventory JSON
-    func getMergedInventory(_ session: OnboardingSession) -> String? {
-        session.mergedInventoryJSON
     }
 
     // MARK: - Todo List Management

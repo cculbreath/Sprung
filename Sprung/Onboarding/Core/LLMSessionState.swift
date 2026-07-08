@@ -5,9 +5,6 @@ import SwiftyJSON
 actor LLMSessionState {
     // MARK: - State
 
-    /// Currently allowed tool names for LLM calls
-    private var allowedToolNames: Set<String> = []
-
     /// Current model ID being used (set via setModelId when interview starts)
     private var currentModelId: String = ""
 
@@ -41,16 +38,10 @@ actor LLMSessionState {
 
     /// Update the allowed tool names
     func setAllowedToolNames(_ tools: Set<String>) {
-        allowedToolNames = tools
         Logger.info("🔧 Allowed tools updated: \(tools.count) tools", category: .ai)
     }
 
     // MARK: - Model Configuration
-
-    /// Get the current model ID
-    func getCurrentModelId() -> String {
-        currentModelId
-    }
 
     /// Set the model ID
     func setModelId(_ modelId: String) {
@@ -58,20 +49,10 @@ actor LLMSessionState {
         Logger.info("🔧 Model ID set to: \(modelId)", category: .ai)
     }
 
-    /// Get whether flex processing is enabled
-    func getUseFlexProcessing() -> Bool {
-        useFlexProcessing
-    }
-
     /// Set whether to use flex processing tier
     func setUseFlexProcessing(_ enabled: Bool) {
         useFlexProcessing = enabled
         Logger.info("🔧 Flex processing \(enabled ? "enabled" : "disabled")", category: .ai)
-    }
-
-    /// Get the default reasoning effort level
-    func getDefaultReasoningEffort() -> String {
-        defaultReasoningEffort
     }
 
     /// Set the default reasoning effort level (none, low, medium, high)
@@ -166,7 +147,6 @@ actor LLMSessionState {
 
     /// Reset all LLM state to initial values
     func reset() {
-        allowedToolNames = []
         currentModelId = ""
         currentToolPaneCard = .none
         pendingToolResponsePayloads = []

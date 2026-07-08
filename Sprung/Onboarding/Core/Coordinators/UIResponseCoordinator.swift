@@ -879,39 +879,6 @@ final class UIResponseCoordinator {
         }
     }
 
-    // MARK: - UI Tool Interruption
-
-    /// Interrupt all pending UI tools, dismissing their UIs and returning cancelled results.
-    /// Called when user presses interrupt button or escape key.
-    func interruptPendingUITools() {
-        guard continuationManager.hasPendingTools else {
-            Logger.info("🛑 Interrupt requested but no pending UI tools", category: .ai)
-            return
-        }
-
-        // Clear any visible UI prompts
-        toolRouter.clearChoicePrompt()
-        toolRouter.clearValidationPrompt()
-        toolRouter.clearPendingUploadRequests()
-        toolRouter.clearSectionToggle()
-
-        // Emit events to update UI state
-        // Note: uploadRequestCancelled requires an ID but handler ignores it for clearing state
-        Task {
-            await eventBus.publish(.toolpane(.choicePromptCleared))
-            await eventBus.publish(.toolpane(.validationPromptCleared))
-            for request in toolRouter.pendingUploadRequests {
-                await eventBus.publish(.toolpane(.uploadRequestCancelled(id: request.id)))
-            }
-            await eventBus.publish(.toolpane(.sectionToggleCleared))
-            await eventBus.publish(.toolpane(.applicantProfileIntakeCleared))
-        }
-
-        // Resume all continuations with cancelled result
-        continuationManager.interruptAll()
-        Logger.info("🛑 Pending UI tools interrupted by user", category: .ai)
-    }
-
     // MARK: - Timeline Handling
     func applyUserTimelineUpdate(cards: [TimelineCard], meta: JSON?, diff: TimelineDiff) async {
         // Reconstruct the full JSON

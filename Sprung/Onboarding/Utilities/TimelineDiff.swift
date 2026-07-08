@@ -1,7 +1,6 @@
 import Foundation
 struct TimelineDiff {
     struct FieldChange {
-        let field: String
     }
     struct HighlightChange {
         let added: [String]
@@ -11,7 +10,6 @@ struct TimelineDiff {
         }
     }
     struct CardChange {
-        let title: String
         let fieldChanges: [FieldChange]
         let highlightChange: HighlightChange?
         var isEmpty: Bool {
@@ -38,7 +36,6 @@ enum TimelineDiffBuilder {
             let fieldChanges = collectFieldChanges(old: originalCard, new: updatedCard)
             let highlightChange = collectHighlightChange(old: originalCard.highlights, new: updatedCard.highlights)
             let change = TimelineDiff.CardChange(
-                title: bestTitle(for: updatedCard, fallback: originalCard),
                 fieldChanges: fieldChanges,
                 highlightChange: highlightChange
             )
@@ -77,17 +74,13 @@ enum TimelineDiffBuilder {
         )
     }
     private static func compareField(
-        _ name: String,
+        _: String,
         old: String,
         new: String,
         changes: inout [TimelineDiff.FieldChange]
     ) {
         if old != new {
-            changes.append(
-                TimelineDiff.FieldChange(
-                    field: name
-                )
-            )
+            changes.append(TimelineDiff.FieldChange())
         }
     }
     private static func didReorder(original: [TimelineCard], updated: [TimelineCard]) -> Bool {
@@ -100,22 +93,6 @@ enum TimelineDiffBuilder {
             return sharedOriginal != sharedUpdated
         }
         return originalIds != updatedIds
-    }
-    private static func bestTitle(for card: TimelineCard, fallback: TimelineCard) -> String {
-        func summary(from card: TimelineCard) -> String {
-            if !card.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                return card.title
-            }
-            if !card.organization.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                return card.organization
-            }
-            return "Card \(card.id)"
-        }
-        let preferred = summary(from: card)
-        if preferred.starts(with: "Card ") {
-            return summary(from: fallback)
-        }
-        return preferred
     }
 }
 

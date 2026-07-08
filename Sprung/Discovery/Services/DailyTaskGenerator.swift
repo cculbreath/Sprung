@@ -48,7 +48,6 @@ struct DailyTaskGenerationOutcome: Equatable {
     let retirements: [Retirement]
     let droppedTasks: [DroppedTask]
     let summary: String
-    let generatedAt: Date
 
     var hasNotes: Bool {
         !retirements.isEmpty || !droppedTasks.isEmpty || !summary.isEmpty
@@ -370,8 +369,7 @@ final class DailyTaskGenerator {
             carriedOverCount: carriedOverCount,
             retirements: retirements,
             droppedTasks: dropped,
-            summary: response.summary,
-            generatedAt: Date()
+            summary: response.summary
         )
     }
 

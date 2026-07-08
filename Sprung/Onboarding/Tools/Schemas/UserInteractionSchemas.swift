@@ -134,24 +134,4 @@ enum UserInteractionSchemas {
         items: JSONSchema(type: .string)
     )
 
-    // MARK: - Evidence Request Schemas
-
-    /// Schema for timelineEntryId field (evidence request)
-    static let timelineEntryId = JSONSchema(
-        type: .string,
-        description: "ID of the timeline entry this evidence relates to."
-    )
-
-    /// Schema for evidence description field
-    static let evidenceDescription = JSONSchema(
-        type: .string,
-        description: "Clear description of what evidence is needed (e.g., 'Upload your PhD dissertation PDF')."
-    )
-
-    /// Schema for evidence category field
-    static let evidenceCategory = JSONSchema(
-        type: .string,
-        description: "Type of evidence: 'paper', 'code', 'website', 'portfolio', 'degree', or 'other'.",
-        enum: MiscSchemas.evidenceCategories
-    )
 }

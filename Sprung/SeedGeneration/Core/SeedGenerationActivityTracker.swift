@@ -25,7 +25,6 @@ struct TrackedGenerationTask: Identifiable {
     var statusMessage: String?
     let startTime: Date
     var endTime: Date?
-    var error: String?
 
     /// Duration in seconds (nil if still running)
     var duration: TimeInterval? {
@@ -45,8 +44,7 @@ struct TrackedGenerationTask: Identifiable {
         status: GenerationTaskStatus = .pending,
         statusMessage: String? = nil,
         startTime: Date = Date(),
-        endTime: Date? = nil,
-        error: String? = nil
+        endTime: Date? = nil
     ) {
         self.id = id
         self.displayName = displayName
@@ -54,7 +52,6 @@ struct TrackedGenerationTask: Identifiable {
         self.statusMessage = statusMessage
         self.startTime = startTime
         self.endTime = endTime
-        self.error = error
     }
 }
 
@@ -87,11 +84,6 @@ final class SeedGenerationActivityTracker {
         activeTasks.filter { $0.status == .failed }.count
     }
 
-    /// Total number of tasks
-    var totalCount: Int {
-        activeTasks.count
-    }
-
     /// Whether any task is currently running
     var isAnyRunning: Bool {
         runningCount > 0
@@ -100,21 +92,6 @@ final class SeedGenerationActivityTracker {
     /// Running tasks only
     var runningTasks: [TrackedGenerationTask] {
         activeTasks.filter { $0.status == .running }
-    }
-
-    /// Pending tasks only
-    var pendingTasks: [TrackedGenerationTask] {
-        activeTasks.filter { $0.status == .pending }
-    }
-
-    /// Completed tasks only
-    var completedTasks: [TrackedGenerationTask] {
-        activeTasks.filter { $0.status == .completed }
-    }
-
-    /// Failed tasks only
-    var failedTasks: [TrackedGenerationTask] {
-        activeTasks.filter { $0.status == .failed }
     }
 
     /// Whether there are any completed or failed tasks
@@ -182,7 +159,6 @@ final class SeedGenerationActivityTracker {
 
         activeTasks[index].status = .failed
         activeTasks[index].endTime = Date()
-        activeTasks[index].error = error
         activeTasks[index].statusMessage = nil
 
         Logger.error("❌ Task failed: \(activeTasks[index].displayName) - \(error)", category: .ai)
@@ -190,41 +166,11 @@ final class SeedGenerationActivityTracker {
         checkAllTasksCompleted()
     }
 
-    /// Update the status message for a running task
-    func updateStatus(id: String, message: String) {
-        guard let index = activeTasks.firstIndex(where: { $0.id == id }) else {
-            return // Silent fail - status updates are non-critical
-        }
-
-        activeTasks[index].statusMessage = message
-    }
-
-    /// Get a task by ID
-    func task(for id: String) -> TrackedGenerationTask? {
-        activeTasks.first { $0.id == id }
-    }
-
-    /// Clear all tasks
-    func clear() {
-        activeTasks.removeAll()
-    }
-
-    /// Reset all tasks to pending
-    func reset() {
-        for index in activeTasks.indices {
-            activeTasks[index].status = .pending
-            activeTasks[index].statusMessage = nil
-            activeTasks[index].error = nil
-            activeTasks[index].endTime = nil
-        }
-    }
-
     /// Cancel all running tasks
     func cancelAll() {
         for index in activeTasks.indices where activeTasks[index].status == .running {
             activeTasks[index].status = .failed
             activeTasks[index].endTime = Date()
-            activeTasks[index].error = "Cancelled"
         }
         Logger.info("🛑 All running tasks cancelled", category: .ai)
     }

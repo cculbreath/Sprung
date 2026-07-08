@@ -31,33 +31,7 @@ enum ArtifactExporter {
         return tempDir
     }
 
-    /// Export specific artifacts to a temporary filesystem directory.
-    /// - Parameters:
-    ///   - artifacts: The artifacts to export
-    /// - Returns: URL to the temporary directory containing exported artifacts
-    static func exportArtifacts(_ artifacts: [ArtifactRecord]) throws -> URL {
-        let tempDir = FileManager.default.temporaryDirectory
-            .appendingPathComponent("sprung-artifacts-\(UUID().uuidString)")
-
-        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
-
-        for artifact in artifacts {
-            try exportArtifact(artifact, to: tempDir)
-        }
-
-        Logger.info("Exported \(artifacts.count) artifacts to \(tempDir.path)", category: .ai)
-        return tempDir
-    }
-
     // MARK: - Single Artifact Export
-
-    /// Export a single artifact to an existing directory root (for incremental updates).
-    /// - Parameters:
-    ///   - artifact: The artifact to export
-    ///   - directory: The root directory to export into
-    static func exportSingleArtifact(_ artifact: ArtifactRecord, to directory: URL) throws {
-        try exportArtifact(artifact, to: directory)
-    }
 
     /// Export a single artifact to a directory
     private static func exportArtifact(_ artifact: ArtifactRecord, to directory: URL) throws {
@@ -254,19 +228,6 @@ enum ArtifactExporter {
         }
 
         try content.write(to: filePath, atomically: true, encoding: .utf8)
-    }
-
-    // MARK: - Cleanup
-
-    /// Clean up an exported artifact directory
-    /// - Parameter url: The directory to remove
-    static func cleanupExportedArtifacts(at url: URL) {
-        do {
-            try FileManager.default.removeItem(at: url)
-            Logger.info("Cleaned up exported artifacts", category: .ai)
-        } catch {
-            Logger.warning("Failed to cleanup exported artifacts: \(error)", category: .ai)
-        }
     }
 
     // MARK: - Helpers

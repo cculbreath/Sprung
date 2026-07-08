@@ -65,9 +65,6 @@ final class BudgetPauseGate {
     @ObservationIgnored
     private var continuation: CheckedContinuation<BudgetPauseResolution, Never>?
 
-    /// Whether the modal is currently shown for any reason.
-    var isPaused: Bool { pendingPause != nil }
-
     // MARK: - Suspend (chat loop)
 
     /// Show the modal and suspend until the user resolves it. Supersedes any

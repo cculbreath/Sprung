@@ -23,10 +23,6 @@ actor SkillBankService {
         Logger.info("🔧 SkillBankService initialized", category: .ai)
     }
 
-    func updateLLMFacade(_ facade: LLMFacade?) {
-        self.llmFacade = facade
-    }
-
     /// Extract skills from raw document text.
     /// Text documents are capped at 200K characters upstream and go in one pass.
     func extractSkills(

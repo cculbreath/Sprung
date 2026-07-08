@@ -44,14 +44,4 @@ enum ModelConfigurationError: LocalizedError {
             return key
         }
     }
-
-    /// Human-readable name of the operation that requires the model
-    var operationName: String {
-        switch self {
-        case let .modelNotConfigured(_, name):
-            return name
-        case let .modelUnavailable(_, _, name):
-            return name
-        }
-    }
 }

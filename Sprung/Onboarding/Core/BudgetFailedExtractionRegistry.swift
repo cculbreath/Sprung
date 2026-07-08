@@ -28,8 +28,6 @@ final class BudgetFailedExtractionRegistry {
 
     private var entries: [String: Entry] = [:]
 
-    var isEmpty: Bool { entries.isEmpty }
-
     /// Record (OR-merging) the passes that failed for a filename.
     func record(filename: String, passes: AnthropicDocumentAnalysisService.PassSelection) {
         if var existing = entries[filename] {

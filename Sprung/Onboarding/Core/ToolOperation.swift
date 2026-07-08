@@ -41,12 +41,6 @@ actor ToolOperation {
 
     // MARK: - State Queries
 
-    /// Check if operation was cancelled (tools should check this periodically)
-    var isCancelled: Bool {
-        if case .cancelled = state { return true }
-        return false
-    }
-
     /// Check if operation has reached a terminal state
     var isTerminal: Bool {
         switch state {
@@ -58,17 +52,6 @@ actor ToolOperation {
     }
 
     // MARK: - State Transitions
-
-    /// Set state to running with a cancellable task
-    func setRunning(task: Task<String, Error>) {
-        guard !isTerminal else {
-            Logger.warning("ToolOperation[\(callId.prefix(8))]: Cannot set running, already terminal", category: .ai)
-            return
-        }
-        self.task = task
-        self.state = .running
-        Logger.debug("ToolOperation[\(callId.prefix(8))]: State -> running", category: .ai)
-    }
 
     /// Complete the operation successfully
     func complete(output: String) {

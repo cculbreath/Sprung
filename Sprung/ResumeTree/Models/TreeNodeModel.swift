@@ -210,24 +210,4 @@ enum LeafStatus: String, Codable, Hashable {
         context.delete(node)
         // Note: save() is not called here to allow for batch operations
     }
-    /// Builds the hierarchical path string for this node.
-    /// Example: "Resume > Skills and Expertise > Software > Swift"
-    func buildTreePath() -> String {
-        var pathComponents: [String] = []
-        var currentNode: TreeNode? = self
-        while let node = currentNode {
-            var componentName = "Unnamed Node"
-            if !node.name.isEmpty {
-                componentName = node.name
-            } else if !node.value.isEmpty {
-                componentName = String(node.value.prefix(20)) + (node.value.count > 20 ? "..." : "")
-            }
-            if node.parent == nil && node.name.lowercased() == "root" { // Check for root specifically
-                componentName = "Resume"
-            }
-            pathComponents.insert(componentName, at: 0)
-            currentNode = node.parent
-        }
-        return pathComponents.joined(separator: " > ")
-    }
 }

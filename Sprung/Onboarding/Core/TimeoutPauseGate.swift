@@ -51,9 +51,6 @@ final class TimeoutPauseGate {
     @ObservationIgnored
     private var continuation: CheckedContinuation<TimeoutPauseResolution, Never>?
 
-    /// Whether the modal is currently shown.
-    var isPaused: Bool { pendingPause != nil }
-
     // MARK: - Suspend
 
     /// Show the modal and suspend until the user resolves it. Supersedes any prior

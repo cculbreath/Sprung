@@ -91,17 +91,6 @@ actor DocumentArtifactHandler: OnboardingEventEmitter {
         }
         Logger.info("▶️ DocumentArtifactHandler started", category: .ai)
     }
-    func stop() {
-        guard isActive else { return }
-        isActive = false
-        subscriptionTask?.cancel()
-        subscriptionTask = nil
-        // A timeout pause suspends on a (cancellation-unaware) continuation, so a
-        // plain task cancel can't unblock it — interrupt the gate to resolve .abort.
-        let gate = timeoutPauseGate
-        Task { @MainActor in gate.interrupt() }
-        Logger.info("⏹️ DocumentArtifactHandler stopped", category: .ai)
-    }
     // MARK: - Event Handling
 
     /// Handle upload event by quickly queueing files and starting processing.

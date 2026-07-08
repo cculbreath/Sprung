@@ -125,13 +125,6 @@ final class OnboardingDataResetService {
         }
     }
 
-    /// Clear only session-specific data (keep skills/cards for reuse)
-    func clearSessionData() {
-        Logger.info("🗑️ Clearing session data only", category: .ai)
-        deleteCurrentSession()
-        Logger.debug("🗑️ Session data cleared", category: .ai)
-    }
-
     // MARK: - Full Debug Reset
 
     #if DEBUG

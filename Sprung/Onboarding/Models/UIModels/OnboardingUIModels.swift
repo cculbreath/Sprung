@@ -47,11 +47,6 @@ enum OnboardingToolPaneCard: String, Codable {
 struct OnboardingApplicantProfileRequest {
     var proposedProfile: JSON
     var sources: [String]
-
-    init(proposedProfile: JSON, sources: [String] = []) {
-        self.proposedProfile = proposedProfile
-        self.sources = sources
-    }
 }
 
 /// Request to configure enabled sections
@@ -85,26 +80,7 @@ struct OnboardingSectionToggleRequest {
 struct OnboardingPendingExtraction: Identifiable {
     var id: UUID
     var title: String
-    var summary: String
-    var rawExtraction: JSON
-    var uncertainties: [String]
     var progressItems: [ExtractionProgressItem]
-
-    init(
-        id: UUID = UUID(),
-        title: String,
-        summary: String,
-        rawExtraction: JSON = JSON(),
-        uncertainties: [String] = [],
-        progressItems: [ExtractionProgressItem] = ExtractionProgressStage.defaultItems()
-    ) {
-        self.id = id
-        self.title = title
-        self.summary = summary
-        self.rawExtraction = rawExtraction
-        self.uncertainties = uncertainties
-        self.progressItems = progressItems.isEmpty ? ExtractionProgressStage.defaultItems() : progressItems
-    }
 
     mutating func ensureProgressItems() {
         if progressItems.isEmpty {

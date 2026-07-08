@@ -36,9 +36,7 @@ struct RevisionGroundTruth {
                     if original.value != node.value {
                         entries.append(RevisionNodeDiff(
                             kind: .modified,
-                            sectionSlug: slug,
                             nodePath: node.path,
-                            nodeId: node.id,
                             oldValue: original.value,
                             newValue: node.value
                         ))
@@ -46,9 +44,7 @@ struct RevisionGroundTruth {
                 } else if !node.value.isEmpty {
                     entries.append(RevisionNodeDiff(
                         kind: .added,
-                        sectionSlug: slug,
                         nodePath: node.path,
-                        nodeId: node.id,
                         oldValue: nil,
                         newValue: node.value
                     ))
@@ -58,9 +54,7 @@ struct RevisionGroundTruth {
             for node in snapshot where !currentIDs.contains(node.id) && !node.value.isEmpty {
                 entries.append(RevisionNodeDiff(
                     kind: .removed,
-                    sectionSlug: slug,
                     nodePath: node.path,
-                    nodeId: node.id,
                     oldValue: node.value,
                     newValue: nil
                 ))
@@ -109,7 +103,7 @@ struct RevisionGroundTruth {
             let segment = name.isEmpty ? "[\(index)]" : name
             let path = "\(parentPath) › \(segment)"
             if !id.isEmpty {
-                result.append(WorkspaceNodeSnapshot(id: id, name: name, value: value, path: path))
+                result.append(WorkspaceNodeSnapshot(id: id, value: value, path: path))
             }
             if let children = node["children"] as? [[String: Any]] {
                 flatten(nodes: children, parentPath: path, into: &result)
@@ -324,7 +318,6 @@ struct RevisionGroundTruth {
 /// A flattened treenode read from a workspace or snapshot JSON file.
 struct WorkspaceNodeSnapshot {
     let id: String
-    let name: String
     let value: String
     /// Human-readable location, e.g. "work › [0] › highlights › [2]".
     let path: String
@@ -341,9 +334,7 @@ struct RevisionNodeDiff: Identifiable {
 
     let id = UUID()
     let kind: Kind
-    let sectionSlug: String
     let nodePath: String
-    let nodeId: String
     let oldValue: String?
     let newValue: String?
 }

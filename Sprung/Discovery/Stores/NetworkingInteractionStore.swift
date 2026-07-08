@@ -26,12 +26,6 @@ final class NetworkingInteractionStore: EntityStore {
         fetchAll(sortBy: [SortDescriptor(\.date, order: .reverse)])
     }
 
-    // MARK: - Contact-based Queries
-
-    func interactions(forContactId contactId: UUID) -> [NetworkingInteraction] {
-        allInteractions.filter { $0.contactId == contactId }
-    }
-
     // MARK: - Follow-up Management
 
     var pendingFollowUps: [NetworkingInteraction] {

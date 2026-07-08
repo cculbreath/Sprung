@@ -9,16 +9,11 @@ actor ArtifactRepository: OnboardingEventEmitter {
     private var artifacts = OnboardingArtifacts()
 
     // MARK: - Synchronous Caches (for SwiftUI)
-    /// Sync cache for SwiftUI access. Safe because:
+    /// Sync cache for skeleton timeline. Safe because:
     /// 1. Only mutated from actor-isolated methods (this actor's methods)
     /// 2. Only read from @MainActor SwiftUI views
     /// 3. Writes complete before reads occur due to event sequencing
-    nonisolated(unsafe) private(set) var artifactRecordsSync: [JSON] = []
-    /// Sync cache for skeleton timeline. Safe for same reasons as artifactRecordsSync.
     nonisolated(unsafe) private(set) var skeletonTimelineSync: JSON?
-    /// Archived artifacts (from previous sessions, available for reuse).
-    /// Sync cache for SwiftUI access. Safe for same reasons as artifactRecordsSync.
-    nonisolated(unsafe) private(set) var archivedArtifactsSync: [JSON] = []
     // MARK: - Initialization
     init(eventBus: EventBus) {
         self.eventBus = eventBus
@@ -68,14 +63,6 @@ actor ArtifactRepository: OnboardingEventEmitter {
         await emit(.state(.enabledSectionsUpdated(config.enabledSections)))
     }
 
-    /// Get section configuration
-    func getSectionConfig() -> SectionConfig {
-        SectionConfig(
-            enabledSections: artifacts.enabledSections,
-            customFields: artifacts.customFieldDefinitions
-        )
-    }
-
     /// Set enabled sections (convenience method that preserves custom fields)
     func setEnabledSections(_ sections: Set<String>) async {
         artifacts.enabledSections = sections
@@ -89,12 +76,6 @@ actor ArtifactRepository: OnboardingEventEmitter {
         artifacts.enabledSections
     }
 
-    /// Set custom field definitions (convenience method that preserves enabled sections)
-    func setCustomFieldDefinitions(_ definitions: [CustomFieldDefinition]) async {
-        artifacts.customFieldDefinitions = definitions
-        Logger.info("📋 Custom field definitions updated: \(definitions.count) fields", category: .ai)
-    }
-
     /// Get custom field definitions
     func getCustomFieldDefinitions() -> [CustomFieldDefinition] {
         artifacts.customFieldDefinitions
@@ -104,13 +85,11 @@ actor ArtifactRepository: OnboardingEventEmitter {
     /// Set artifact records (bulk restore)
     func setArtifactRecords(_ records: [JSON]) {
         artifacts.artifactRecords = records
-        artifactRecordsSync = records
         Logger.info("📦 Artifact records restored: \(records.count)", category: .ai)
     }
     /// Add a new artifact record
     func addArtifactRecord(_ artifact: JSON) {
         artifacts.artifactRecords.append(artifact)
-        artifactRecordsSync = artifacts.artifactRecords
         Logger.info("📦 Artifact record added: \(artifact["id"].stringValue)", category: .ai)
     }
     /// Get artifact record by ID or SHA256
@@ -143,7 +122,6 @@ actor ArtifactRepository: OnboardingEventEmitter {
         if !replaced {
             artifacts.artifactRecords.append(record)
         }
-        artifactRecordsSync = artifacts.artifactRecords
     }
     /// Update artifact metadata (field-level merge)
     func updateArtifactMetadata(artifactId: String, updates: JSON) async {
@@ -163,7 +141,6 @@ actor ArtifactRepository: OnboardingEventEmitter {
         // Update artifact with new metadata
         artifact["metadata"] = metadata
         artifacts.artifactRecords[index] = artifact
-        artifactRecordsSync = artifacts.artifactRecords
         Logger.info("✅ Artifact metadata updated: \(artifactId) (\(updates.dictionaryValue.keys.count) fields)", category: .ai)
         // Emit confirmation event for persistence
         await emit(.artifact(.metadataUpdated(artifact: artifact)))
@@ -210,32 +187,8 @@ actor ArtifactRepository: OnboardingEventEmitter {
             return nil
         }
         let deleted = artifacts.artifactRecords.remove(at: index)
-        artifactRecordsSync = artifacts.artifactRecords
         Logger.info("🗑️ Artifact record deleted: \(deleted["filename"].stringValue)", category: .ai)
         return deleted
-    }
-
-    // MARK: - Archived Artifacts Management
-
-    /// Set archived artifacts (loaded from SwiftData)
-    /// Called by coordinator to populate the cache on startup
-    func setArchivedArtifacts(_ records: [JSON]) {
-        archivedArtifactsSync = records
-        Logger.info("📦 Archived artifacts loaded: \(records.count)", category: .ai)
-    }
-
-    /// Refresh archived artifacts cache
-    /// Called after promotion or deletion to update UI
-    func refreshArchivedArtifacts(_ records: [JSON]) {
-        archivedArtifactsSync = records
-        Logger.debug("📦 Archived artifacts refreshed: \(records.count)", category: .ai)
-    }
-
-    /// Remove an artifact from the archived cache
-    /// Called after promotion (artifact moves to current session)
-    func removeFromArchivedCache(id: String) {
-        archivedArtifactsSync.removeAll { $0["id"].stringValue == id }
-        Logger.debug("📦 Removed from archived cache: \(id)", category: .ai)
     }
 
     // MARK: - Timeline Card Management
@@ -312,11 +265,6 @@ actor ArtifactRepository: OnboardingEventEmitter {
         artifacts.knowledgeCards.append(card)
         Logger.info("🃏 Knowledge card added (total: \(artifacts.knowledgeCards.count))", category: .ai)
     }
-    /// Set knowledge cards (bulk restore)
-    func setKnowledgeCards(_ cards: [JSON]) async {
-        artifacts.knowledgeCards = cards
-        Logger.info("🃏 Knowledge cards loaded (total: \(artifacts.knowledgeCards.count))", category: .ai)
-    }
     /// Get all knowledge cards
     func getKnowledgeCards() -> [JSON] {
         artifacts.knowledgeCards
@@ -332,7 +280,6 @@ actor ArtifactRepository: OnboardingEventEmitter {
     /// Reset all artifacts
     func reset() {
         artifacts = OnboardingArtifacts()
-        artifactRecordsSync = []
         skeletonTimelineSync = nil
         Logger.info("🔄 ArtifactRepository reset", category: .ai)
     }

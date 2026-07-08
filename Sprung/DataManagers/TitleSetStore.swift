@@ -201,13 +201,6 @@ final class TitleSetStore: SwiftDataStore {
         Logger.info("Added title set: \(titleSet.compactDisplayString)", category: .data)
     }
 
-    func update(_ titleSet: TitleSetRecord) {
-        titleSet.updatedAt = Date()
-        saveContext()
-        refreshCache()
-        Logger.info("Updated title set: \(titleSet.compactDisplayString)", category: .data)
-    }
-
     func delete(_ titleSet: TitleSetRecord) {
         modelContext.delete(titleSet)
         saveContext()

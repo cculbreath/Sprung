@@ -47,26 +47,6 @@ enum PromptLibrary {
     /// Phase 4 introductory prompt (Strategic Synthesis)
     static let phase4Intro: String = { prompt(named: "phase4_intro_prompt") }()
 
-    // MARK: - Fact-Based Knowledge Card Prompts
-
-    /// System prompt for fact-based KC extraction
-    /// Contains placeholders: {CARD_ID}, {CARD_TYPE}, {TITLE}
-    static let kcFactExtractionSystem: String = { prompt(named: "kc_fact_extraction_system") }()
-
-    /// Initial prompt template for fact-based KC extraction
-    /// Contains placeholders: {CARD_ID}, {CARD_TYPE}, {TITLE}, {TIMELINE_ENTRY}, {NOTES},
-    /// {CARD_INVENTORY_JSON}, {ASSIGNED_ARTIFACTS}, {OTHER_ARTIFACTS}, {EXTRACTION_CHECKLIST}
-    static let kcFactExtractionInitial: String = { prompt(named: "kc_fact_extraction_initial") }()
-
-    /// System prompt for expanding existing KC with new evidence
-    static let kcExpandSystem: String = { prompt(named: "kc_expand_system") }()
-
-    /// Initial prompt template for KC expansion
-    /// Contains placeholders: {CARD_ID}, {CARD_TYPE}, {TITLE}, {ORGANIZATION}, {TIME_PERIOD},
-    /// {FACT_COUNT}, {EXISTING_FACTS_JSON}, {EXISTING_BULLETS_JSON}, {EXISTING_TECHNOLOGIES},
-    /// {EXISTING_SOURCES}, {NEW_ARTIFACTS}
-    static let kcExpandInitial: String = { prompt(named: "kc_expand_initial") }()
-
     // MARK: - Document Extraction Prompts
 
     /// Document summarization prompt template.
@@ -88,16 +68,6 @@ enum PromptLibrary {
     /// Agent ready tool workflow summary
     static let agentReadyWorkflow: String = { prompt(named: "agent_ready_workflow") }()
 
-    // MARK: - Strategic Synthesis Prompts
-
-    /// Strengths synthesis prompt template
-    /// Contains placeholders: {TIMELINE}, {KC_SUMMARIES}, {DOSSIER_ENTRIES}
-    static let strengthsSynthesis: String = { prompt(named: "strengths_synthesis_prompt") }()
-
-    /// Pitfalls analysis prompt template
-    /// Contains placeholders: {TIMELINE}, {KC_SUMMARIES}, {DOSSIER_ENTRIES}
-    static let pitfallsAnalysis: String = { prompt(named: "pitfalls_analysis_prompt") }()
-
     // MARK: - Skill Bank + Narrative KC Prompts
 
     /// Skill bank extraction prompt template
@@ -111,14 +81,6 @@ enum PromptLibrary {
     static let kcExtractionTemplate: String = { prompt(named: "kc_extraction") }()
 
     // MARK: - Inference Guidance Prompts
-
-    /// Identity vocabulary extraction prompt template
-    /// Contains placeholder: {NARRATIVE_CARDS}
-    static let identityVocabularyTemplate: String = { prompt(named: "identity_vocabulary_extraction") }()
-
-    /// Title set generation prompt template
-    /// Contains placeholder: {VOCABULARY_JSON}
-    static let titleSetGenerationTemplate: String = { prompt(named: "title_set_generation") }()
 
     /// Voice profile extraction prompt template
     /// Contains placeholder: {WRITING_SAMPLES}
