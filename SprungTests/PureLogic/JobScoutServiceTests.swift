@@ -535,6 +535,7 @@ final class JobScoutServiceTests: XCTestCase {
             guidance: "favor clinical roles",
             knowledgeContext: "[experience] Linac Commissioning:\nDid the work.",
             dossierContext: "Seeking senior clinical roles.",
+            outcomeContext: "",
             today: Date(timeIntervalSince1970: 1_782_000_000)
         )
 
@@ -559,11 +560,74 @@ final class JobScoutServiceTests: XCTestCase {
             guidance: "   ",
             knowledgeContext: "",
             dossierContext: "",
+            outcomeContext: "",
             today: Date()
         )
         XCTAssertFalse(message.contains("## GUIDANCE FROM THE USER"))
         XCTAssertFalse(message.contains("## CANDIDATE KNOWLEDGE CARDS"))
         XCTAssertFalse(message.contains("## CANDIDATE DOSSIER"))
+        XCTAssertFalse(message.contains("## RECENT SCOUT OUTCOMES"))
+    }
+
+    func testScoutUserMessageIncludesOutcomeBlockWhenPresent() {
+        let message = JobScoutService.scoutUserMessage(
+            boards: [.dice],
+            keywords: ["Physicist"],
+            location: "Austin, TX",
+            preferences: SearchPreferences(),
+            recommendationCount: 5,
+            guidance: "",
+            knowledgeContext: "",
+            dossierContext: "",
+            outcomeContext: "Applied to or advanced — the strongest signal:\n- Staff Physicist — Acme (Submitted)",
+            today: Date()
+        )
+        XCTAssertTrue(message.contains("## RECENT SCOUT OUTCOMES"))
+        XCTAssertTrue(message.contains("Staff Physicist — Acme (Submitted)"))
+    }
+
+    // MARK: - Outcome-feedback context builder
+
+    func testOutcomeFeedbackContextOrdersTiersAndKeepsReasons() {
+        let context = JobScoutService.outcomeFeedbackContext(
+            appliedOrBeyond: [JobScoutService.ScoutOutcomePick(title: "Staff Physicist", company: "Acme", statusLabel: "Submitted")],
+            importedPending: [JobScoutService.ScoutOutcomePick(title: "Physicist II", company: "Beta", statusLabel: nil)],
+            dismissed: [dismissedPosting(url: "https://x", title: "Contract QA", company: "Gamma", reason: "contract, not permanent")]
+        )
+        // Applied section comes first, imported second, dismissed last.
+        let appliedIndex = try? XCTUnwrap(context.range(of: "Applied to or advanced"))
+        let importedIndex = try? XCTUnwrap(context.range(of: "Imported, not yet acted on"))
+        let dismissedIndex = try? XCTUnwrap(context.range(of: "Dismissed"))
+        XCTAssertNotNil(appliedIndex)
+        XCTAssertNotNil(importedIndex)
+        XCTAssertNotNil(dismissedIndex)
+        if let a = appliedIndex, let i = importedIndex, let d = dismissedIndex {
+            XCTAssertTrue(a.lowerBound < i.lowerBound)
+            XCTAssertTrue(i.lowerBound < d.lowerBound)
+        }
+        XCTAssertTrue(context.contains("Staff Physicist — Acme (Submitted)"))
+        XCTAssertTrue(context.contains("Physicist II — Beta"),
+                      "an imported-not-acted pick carries no status suffix")
+        XCTAssertFalse(context.contains("Physicist II — Beta ("), "no status parenthetical when statusLabel is nil")
+        XCTAssertTrue(context.contains("Contract QA — Gamma — reason: contract, not permanent"))
+    }
+
+    func testOutcomeFeedbackContextOmitsEmptySectionsAndReturnsEmptyWhenNothing() {
+        XCTAssertEqual(
+            JobScoutService.outcomeFeedbackContext(appliedOrBeyond: [], importedPending: [], dismissed: []),
+            "",
+            "no history → empty string so the caller drops the block entirely"
+        )
+        let onlyDismissed = JobScoutService.outcomeFeedbackContext(
+            appliedOrBeyond: [],
+            importedPending: [],
+            dismissed: [dismissedPosting(url: "https://x", title: "T", company: "C", reason: nil)]
+        )
+        XCTAssertFalse(onlyDismissed.contains("Applied to or advanced"))
+        XCTAssertFalse(onlyDismissed.contains("Imported, not yet acted on"))
+        XCTAssertTrue(onlyDismissed.contains("Dismissed"))
+        XCTAssertTrue(onlyDismissed.contains("- T — C"), "a dismissal with no reason still lists the posting")
+        XCTAssertFalse(onlyDismissed.contains("reason:"), "no reason clause when none was given")
     }
 
     // MARK: - Report building (JobScoutRunState)

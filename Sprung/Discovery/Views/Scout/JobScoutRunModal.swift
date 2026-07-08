@@ -29,9 +29,15 @@ struct JobScoutRunModal: View {
     @State private var guidance = ""
     @State private var recommendationCount = 5
     @State private var showingLinkedInConsent = false
-    @State private var showingLastReport = false
+    /// The run whose review sheet is open, if any (a past run selected from the
+    /// history list). Identifiable-wrapped so `.sheet(item:)` can drive it.
+    @State private var reviewTarget: ReviewTarget?
     /// Sheet state survives SwiftUI re-presentation; only seed the fields once.
     @State private var hasLoadedDefaults = false
+
+    private struct ReviewTarget: Identifiable {
+        let id: Date
+    }
 
     private var parsedKeywords: [String] {
         ScoutKeywordsParser.parse(keywordsText)
@@ -57,7 +63,7 @@ struct JobScoutRunModal: View {
 
             Stepper("Recommendations: \(recommendationCount)", value: $recommendationCount, in: 1...10)
 
-            lastRunLine
+            runHistorySection
 
             HStack {
                 Button("Cancel") {
@@ -98,10 +104,8 @@ struct JobScoutRunModal: View {
                 }
             )
         }
-        .sheet(isPresented: $showingLastReport) {
-            if let startedAt = coordinator.jobScout.lastReport?.startedAt {
-                JobScoutReviewSheet(service: coordinator.jobScout, runStartedAt: startedAt)
-            }
+        .sheet(item: $reviewTarget) { target in
+            JobScoutReviewSheet(service: coordinator.jobScout, runStartedAt: target.id)
         }
     }
 
@@ -142,24 +146,41 @@ struct JobScoutRunModal: View {
     }
 
     @ViewBuilder
-    private var lastRunLine: some View {
-        if let report = coordinator.jobScout.lastReport {
-            let pending = JobScoutService.pendingCount(in: report)
-            HStack(spacing: 8) {
-                Text(
-                    "Last run \(report.startedAt.formatted(date: .abbreviated, time: .shortened)) — "
-                    + "found \(report.resultsFound), recommended \(report.recommendations.count)"
-                    + (pending > 0 ? " (\(pending) to review)" : "")
-                )
+    private var runHistorySection: some View {
+        let runs = Array(coordinator.jobScout.runHistory.prefix(5))
+        if !runs.isEmpty {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Recent runs")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                ForEach(runs, id: \.startedAt) { report in
+                    runHistoryRow(report)
+                }
+            }
+        }
+    }
+
+    private func runHistoryRow(_ report: JobScoutService.ScoutRunReport) -> some View {
+        let pending = JobScoutService.pendingCount(in: report)
+        return HStack(spacing: 8) {
+            Text(report.startedAt.formatted(date: .abbreviated, time: .shortened))
+                .font(.caption)
+            Text("found \(report.resultsFound) · recommended \(report.recommendations.count)")
                 .font(.caption)
                 .foregroundStyle(.secondary)
-
-                Button(pending > 0 ? "Review" : "View Report") {
-                    showingLastReport = true
-                }
-                .buttonStyle(.link)
-                .font(.caption)
+            if pending > 0 {
+                Text("\(pending) to review")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.orange)
             }
+
+            Spacer()
+
+            Button(pending > 0 ? "Review" : "View") {
+                reviewTarget = ReviewTarget(id: report.startedAt)
+            }
+            .buttonStyle(.link)
+            .font(.caption)
         }
     }
 

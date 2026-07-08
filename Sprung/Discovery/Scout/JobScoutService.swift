@@ -101,6 +101,15 @@ final class JobScoutService {
         let reason: String?
     }
 
+    /// A past scout pick and where it ended up in the pipeline, for the
+    /// outcome-feedback context. `statusLabel` names the stage it reached
+    /// (applied and beyond); nil for a pick still sitting as an unactioned lead.
+    struct ScoutOutcomePick: Equatable {
+        let title: String
+        let company: String
+        let statusLabel: String?
+    }
+
     // MARK: - Observable State
 
     private(set) var isActive = false
@@ -263,6 +272,7 @@ final class JobScoutService {
             guidance: config.guidance,
             knowledgeContext: knowledgeContext(),
             dossierContext: dossierContext(),
+            outcomeContext: outcomeFeedbackContext(),
             today: Date()
         )
 
@@ -555,6 +565,44 @@ final class JobScoutService {
         candidateDossierStore.dossier?.exportForJobMatching() ?? ""
     }
 
+    /// Outcome-feedback context: what the user actually did with past scout
+    /// picks. Scout-sourced pipeline leads partition by how far they
+    /// progressed (applied-and-beyond = strong signal; still-a-lead = mild),
+    /// and the dismissed set supplies the negatives with their reasons. Empty
+    /// string when there's no history yet.
+    private func outcomeFeedbackContext() -> String {
+        let scoutApps = jobAppStore.jobApps
+            .filter { $0.source == "Scout" }
+            .sorted { ($0.identifiedDate ?? .distantPast) > ($1.identifiedDate ?? .distantPast) }
+
+        var applied: [ScoutOutcomePick] = []
+        var imported: [ScoutOutcomePick] = []
+        for app in scoutApps {
+            switch app.status {
+            case .submitted, .interview, .offer, .accepted:
+                applied.append(ScoutOutcomePick(
+                    title: app.jobPosition, company: app.companyName, statusLabel: app.status.displayName
+                ))
+            case .new, .queued, .inProgress:
+                imported.append(ScoutOutcomePick(
+                    title: app.jobPosition, company: app.companyName, statusLabel: nil
+                ))
+            case .rejected, .withdrawn:
+                break   // terminal/ambiguous — a poor calibration signal
+            }
+        }
+
+        let recentDismissed = settingsStore.scoutDismissedPostings
+            .sorted { $0.dismissedAt > $1.dismissedAt }
+            .prefix(Self.outcomeFeedbackMaxPerSection)
+
+        return Self.outcomeFeedbackContext(
+            appliedOrBeyond: Array(applied.prefix(Self.outcomeFeedbackMaxPerSection)),
+            importedPending: Array(imported.prefix(Self.outcomeFeedbackMaxPerSection)),
+            dismissed: Array(recentDismissed)
+        )
+    }
+
     // MARK: - Pure Helpers (static — covered by JobScoutServiceTests)
 
     /// Drop LinkedIn from the run's boards when the one-time risk consent has
@@ -709,6 +757,53 @@ final class JobScoutService {
     /// How many of a run's recommendations still await the user's decision.
     static func pendingCount(in report: ScoutRunReport?) -> Int {
         report?.recommendations.filter { $0.disposition == .pending }.count ?? 0
+    }
+
+    /// Cap per section of the outcome-feedback block — recent decisions are the
+    /// calibration signal; the whole history would just be noise.
+    static let outcomeFeedbackMaxPerSection = 10
+
+    /// Compose the `## RECENT SCOUT OUTCOMES` block from the user's real
+    /// decisions: what they applied to or advanced (the strongest fit signal),
+    /// what they imported but haven't acted on, and what they dismissed (with
+    /// reasons). Sections with nothing are omitted; an entirely empty history
+    /// returns "" so the caller drops the block. Deterministic (no dates, no
+    /// ordering surprises) to keep the cached prefix byte-stable.
+    static func outcomeFeedbackContext(
+        appliedOrBeyond: [ScoutOutcomePick],
+        importedPending: [ScoutOutcomePick],
+        dismissed: [ScoutDismissedPosting]
+    ) -> String {
+        func pickLine(_ pick: ScoutOutcomePick) -> String {
+            let base = "- \(pick.title) — \(pick.company)"
+            if let status = pick.statusLabel, !status.isEmpty { return "\(base) (\(status))" }
+            return base
+        }
+        var sections: [String] = []
+        if !appliedOrBeyond.isEmpty {
+            sections.append(
+                "Applied to or advanced — the strongest signal of what fits this candidate:\n"
+                + appliedOrBeyond.map(pickLine).joined(separator: "\n")
+            )
+        }
+        if !importedPending.isEmpty {
+            sections.append(
+                "Imported, not yet acted on — a milder positive:\n"
+                + importedPending.map(pickLine).joined(separator: "\n")
+            )
+        }
+        if !dismissed.isEmpty {
+            sections.append(
+                "Dismissed — do not surface these or close matches again:\n"
+                + dismissed.map { entry in
+                    let base = "- \(entry.title) — \(entry.company)"
+                    guard let reason = entry.reason?.trimmingCharacters(in: .whitespacesAndNewlines),
+                          !reason.isEmpty else { return base }
+                    return "\(base) — reason: \(reason)"
+                }.joined(separator: "\n")
+            )
+        }
+        return sections.joined(separator: "\n\n")
     }
 
     /// Order recommendations strongest verdict first (strong > promising >
@@ -882,6 +977,7 @@ final class JobScoutService {
         guidance: String,
         knowledgeContext: String,
         dossierContext: String,
+        outcomeContext: String,
         today: Date
     ) -> String {
         let formatter = DateFormatter()
@@ -912,6 +1008,9 @@ final class JobScoutService {
         }
         if !dossierContext.isEmpty {
             message += "\n\n## CANDIDATE DOSSIER\n\(dossierContext)"
+        }
+        if !outcomeContext.isEmpty {
+            message += "\n\n## RECENT SCOUT OUTCOMES\n\(outcomeContext)"
         }
         let trimmedGuidance = guidance.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmedGuidance.isEmpty {
