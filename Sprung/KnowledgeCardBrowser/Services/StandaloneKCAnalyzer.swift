@@ -17,7 +17,6 @@ class StandaloneKCAnalyzer {
 
     private var skillBankService: SkillBankService?
     private var kcExtractionService: KnowledgeCardExtractionService?
-    private var metadataService: MetadataExtractionService?
     private var deduplicationService: NarrativeDeduplicationService?
     private weak var knowledgeCardStore: KnowledgeCardStore?
 
@@ -27,7 +26,6 @@ class StandaloneKCAnalyzer {
         self.knowledgeCardStore = knowledgeCardStore
         self.skillBankService = SkillBankService(llmFacade: llmFacade)
         self.kcExtractionService = KnowledgeCardExtractionService(llmFacade: llmFacade)
-        self.metadataService = MetadataExtractionService(llmFacade: llmFacade)
         self.deduplicationService = NarrativeDeduplicationService(llmFacade: llmFacade)
     }
 
@@ -145,27 +143,6 @@ class StandaloneKCAnalyzer {
         return try? decoder.decode([KnowledgeCard].self, from: data)
     }
 
-    /// Match narrative cards against existing KnowledgeCards to determine new vs enhancement.
-    /// - Parameter analysisResult: Analysis result with skills and narrative cards
-    /// - Returns: Tuple of new cards and enhancement proposals
-    func matchAgainstExisting(
-        _ analysisResult: AnalysisResult
-    ) -> (newCards: [KnowledgeCard], enhancements: [(proposal: KnowledgeCard, existing: KnowledgeCard)]) {
-        let existingCards = knowledgeCardStore?.knowledgeCards ?? []
-        var newCards: [KnowledgeCard] = []
-        var enhancements: [(proposal: KnowledgeCard, existing: KnowledgeCard)] = []
-
-        for card in analysisResult.narrativeCards {
-            if let match = findMatchingKnowledgeCard(card, in: existingCards) {
-                enhancements.append((card, match))
-            } else {
-                newCards.append(card)
-            }
-        }
-
-        return (newCards, enhancements)
-    }
-
     /// Match a flat array of cards against existing knowledge cards.
     /// Used when cards are pre-analyzed (e.g. from GitAnalysisAgent) and don't come from AnalysisResult.
     func matchCardsAgainstExisting(
@@ -184,18 +161,6 @@ class StandaloneKCAnalyzer {
         }
 
         return (newCards, enhancements)
-    }
-
-    /// Extract metadata from artifacts for single-card generation.
-    /// - Parameter artifacts: Extracted artifact JSON objects
-    /// - Returns: Card metadata
-    func extractMetadata(from artifacts: [JSON]) async throws -> CardMetadata {
-        guard let service = metadataService else {
-            let filename = artifacts.first?["filename"].stringValue ?? "Document"
-            return CardMetadata.defaults(fromFilename: filename)
-        }
-
-        return try await service.extract(from: artifacts)
     }
 
     /// Enhance an existing KnowledgeCard with new evidence from a proposal card.
