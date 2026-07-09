@@ -93,7 +93,12 @@ class MenuNotificationHandler {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            self?.sheets?.wrappedValue.showResumeReview = true
+            // Navigate-then-act: surface the Résumé workspace before the sheet so
+            // the command works (and lands the user in context) from any module.
+            Task { @MainActor in
+                self?.showResumeEditor(tab: .resume)
+                self?.sheets?.wrappedValue.showResumeReview = true
+            }
         }
         // Cover Letter Commands
         NotificationCenter.default.addObserver(
@@ -153,7 +158,12 @@ class MenuNotificationHandler {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            self?.sheets?.wrappedValue.showApplicationReview = true
+            // Navigate-then-act: the application review covers the whole packet,
+            // so surface the Submit tab before presenting it.
+            Task { @MainActor in
+                self?.showResumeEditor(tab: .submitApp)
+                self?.sheets?.wrappedValue.showApplicationReview = true
+            }
         }
         NotificationCenter.default.addObserver(
             forName: .preprocessAllPendingJobs,
@@ -210,7 +220,12 @@ class MenuNotificationHandler {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            self?.sheets?.wrappedValue.showCreateResume = true
+            // Navigate-then-act: land in the Résumé workspace so creating a resume
+            // from any module drops the user where the new resume will appear.
+            Task { @MainActor in
+                self?.showResumeEditor(tab: .resume)
+                self?.sheets?.wrappedValue.showCreateResume = true
+            }
         }
         // Setup Wizard: observed by UnifiedAppLayout (the single presenter,
         // which also owns the hasCompletedSetupWizard bookkeeping) — no
