@@ -84,6 +84,8 @@ extension Notification.Name {
     static let navigateToReferencesTab = Notification.Name("navigateToReferencesTab")
     /// The active module changed — drives the module-contextual toolbar to swap its item set.
     static let activeModuleChanged = Notification.Name("activeModuleChanged")
+    /// The Customizer phase (TabList) changed — keeps the toolbar phase segmented control in sync.
+    static let selectedTabChanged = Notification.Name("selectedTabChanged")
     // URL Scheme Notifications
     static let captureJobFromURL = Notification.Name("captureJobFromURL")
     // Secondary Window Notifications

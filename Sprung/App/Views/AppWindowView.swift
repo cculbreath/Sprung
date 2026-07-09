@@ -36,29 +36,11 @@ struct AppWindowView: View {
         .id($tabRefresh.wrappedValue)
     }
     private var tabView: some View {
-        VStack(spacing: 0) {
-            tabPickerBar
-            tabContent
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
-    }
-
-    private var tabPickerBar: some View {
-        HStack {
-            Spacer()
-            Picker("", selection: $selectedTab) {
-                ForEach(TabList.visibleCases, id: \.self) { tab in
-                    Text(tab.rawValue).tag(tab)
-                }
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .fixedSize()
-            .controlSize(.small)
-            .font(.system(size: 11))
-            Spacer()
-        }
-        .padding(.vertical, 4)
+        // The phase switcher (Listing/Résumé/Cover Letter/Submit) now lives in the
+        // window toolbar as a native segmented control (see ToolbarCoordinator),
+        // freeing this pane's vertical space. `selectedTab` is driven from there.
+        tabContent
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     @ViewBuilder

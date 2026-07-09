@@ -17,6 +17,10 @@ final class NavigationStateService {
     var selectedTab: TabList {
         didSet {
             UserDefaults.standard.set(selectedTab.rawValue, forKey: StorageKeys.selectedTab)
+            guard selectedTab != oldValue else { return }
+            // Keep the toolbar phase segmented control in sync with phase changes
+            // driven from elsewhere (ReadinessCards, navigate-then-act commands).
+            NotificationCenter.default.post(name: .selectedTabChanged, object: nil)
         }
     }
     init(defaultTab: TabList = .listing) {

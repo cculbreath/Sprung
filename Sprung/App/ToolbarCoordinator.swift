@@ -93,6 +93,7 @@ extension NSToolbarItem.Identifier {
     static let ttsReadAloud = NSToolbarItem.Identifier("ttsReadAloud")
     static let customize = NSToolbarItem.Identifier("customize")
     static let optimize = NSToolbarItem.Identifier("optimize")
+    static let phaseControl = NSToolbarItem.Identifier("phaseControl")
 }
 
 // MARK: - Toolbar Coordinator
@@ -113,6 +114,7 @@ final class ToolbarCoordinator: NSObject, NSToolbarDelegate, NSToolbarItemValida
     weak var navigationState: NavigationStateService?
     weak var moduleNavigation: ModuleNavigationService?
     private weak var toolbar: NSToolbar?
+    private weak var phaseSegmentedControl: NSSegmentedControl?
 
     override init() {
         super.init()
@@ -134,6 +136,12 @@ final class ToolbarCoordinator: NSObject, NSToolbarDelegate, NSToolbarItemValida
             name: .activeModuleChanged,
             object: nil
         )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(syncPhaseControl),
+            name: .selectedTabChanged,
+            object: nil
+        )
     }
 
     deinit {
@@ -146,6 +154,29 @@ final class ToolbarCoordinator: NSObject, NSToolbarDelegate, NSToolbarItemValida
 
     @objc private func refreshValidation() {
         toolbar?.validateVisibleItems()
+        updatePhaseControlEnabled()
+    }
+
+    /// The phase switcher is only meaningful once a job is selected (its content
+    /// pane, AppWindowView, mounts only then), so disable it otherwise.
+    private func updatePhaseControlEnabled() {
+        phaseSegmentedControl?.isEnabled = jobAppStore?.selectedApp != nil
+    }
+
+    /// Mirror an external phase change (e.g. ReadinessCards, navigate-then-act
+    /// commands) back onto the toolbar segmented control.
+    @objc private func syncPhaseControl() {
+        guard let control = phaseSegmentedControl,
+              let current = navigationState?.selectedTab,
+              let index = TabList.visibleCases.firstIndex(of: current),
+              control.selectedSegment != index else { return }
+        control.selectedSegment = index
+    }
+
+    @objc private func phaseControlChanged(_ sender: NSSegmentedControl) {
+        let index = sender.selectedSegment
+        guard index >= 0, index < TabList.visibleCases.count else { return }
+        navigationState?.selectedTab = TabList.visibleCases[index]
     }
 
     /// Rebuild the toolbar's items for the active module. The delegate's
@@ -176,11 +207,12 @@ final class ToolbarCoordinator: NSObject, NSToolbarDelegate, NSToolbarItemValida
             return [
                 .newListing,
                 .flexibleSpace,
+                .phaseControl,
+                .flexibleSpace,
                 .createResume,
                 .customize,
                 .coverLetter,
                 .analyze,
-                .flexibleSpace,
                 .inspector,
             ]
         default:
@@ -215,6 +247,32 @@ final class ToolbarCoordinator: NSObject, NSToolbarDelegate, NSToolbarItemValida
         itemForItemIdentifier itemIdentifier: NSToolbarItem.Identifier,
         willBeInsertedIntoToolbar flag: Bool
     ) -> NSToolbarItem? {
+        // The phase switcher is a view-based item (native segmented control),
+        // built before the shared button configuration below.
+        if itemIdentifier == .phaseControl {
+            let segmented = NSSegmentedControl(
+                labels: TabList.visibleCases.map { $0.rawValue },
+                trackingMode: .selectOne,
+                target: self,
+                action: #selector(phaseControlChanged(_:))
+            )
+            segmented.segmentStyle = .texturedRounded
+            if let current = navigationState?.selectedTab,
+               let index = TabList.visibleCases.firstIndex(of: current) {
+                segmented.selectedSegment = index
+            }
+            segmented.isEnabled = jobAppStore?.selectedApp != nil
+            self.phaseSegmentedControl = segmented
+
+            let item = NSToolbarItem(itemIdentifier: itemIdentifier)
+            item.view = segmented
+            item.label = "Phase"
+            item.paletteLabel = "Application Phase"
+            item.toolTip = "Switch between Listing, Résumé, Cover Letter, and Submit"
+            item.visibilityPriority = .high
+            return item
+        }
+
         let item = NSToolbarItem(itemIdentifier: itemIdentifier)
         item.target = self
         item.isBordered = true
