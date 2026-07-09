@@ -25,8 +25,11 @@ final class ModuleNavigationService {
     /// Currently selected module
     var selectedModule: AppModule {
         didSet {
+            guard selectedModule != oldValue else { return }
             UserDefaults.standard.set(selectedModule.rawValue, forKey: StorageKeys.selectedModule)
             Logger.debug("Module changed to: \(selectedModule.label)", category: .ui)
+            // Drive the module-contextual toolbar to swap its item set.
+            NotificationCenter.default.post(name: .activeModuleChanged, object: nil)
         }
     }
 

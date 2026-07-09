@@ -86,14 +86,10 @@ import Foundation
 extension NSToolbarItem.Identifier {
     static let newListing = NSToolbarItem.Identifier("newListing")
     static let bestJob = NSToolbarItem.Identifier("bestJob")
-    static let onboardingInterview = NSToolbarItem.Identifier("onboardingInterview")
     static let createResume = NSToolbarItem.Identifier("createResume")
     static let coverLetter = NSToolbarItem.Identifier("coverLetter")
-    static let experienceEditor = NSToolbarItem.Identifier("experienceEditor")
     static let analyze = NSToolbarItem.Identifier("analyze")
     static let inspector = NSToolbarItem.Identifier("inspector")
-    static let settingsItem = NSToolbarItem.Identifier("settings")
-    static let applicantProfile = NSToolbarItem.Identifier("applicantProfile")
     static let ttsReadAloud = NSToolbarItem.Identifier("ttsReadAloud")
     static let customize = NSToolbarItem.Identifier("customize")
     static let optimize = NSToolbarItem.Identifier("optimize")
@@ -115,6 +111,7 @@ final class ToolbarCoordinator: NSObject, NSToolbarDelegate, NSToolbarItemValida
 
     weak var jobAppStore: JobAppStore?
     weak var navigationState: NavigationStateService?
+    weak var moduleNavigation: ModuleNavigationService?
     private weak var toolbar: NSToolbar?
 
     override init() {
@@ -131,6 +128,12 @@ final class ToolbarCoordinator: NSObject, NSToolbarDelegate, NSToolbarItemValida
             name: .selectJobApp,
             object: nil
         )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(reconfigureForActiveModule),
+            name: .activeModuleChanged,
+            object: nil
+        )
     }
 
     deinit {
@@ -145,36 +148,62 @@ final class ToolbarCoordinator: NSObject, NSToolbarDelegate, NSToolbarItemValida
         toolbar?.validateVisibleItems()
     }
 
+    /// Rebuild the toolbar's items for the active module. The delegate's
+    /// `toolbarDefaultItemIdentifiers` is only consulted at build/reset time,
+    /// so a live module switch must explicitly remove and re-insert items.
+    @objc private func reconfigureForActiveModule() {
+        guard let toolbar else { return }
+        let ids = itemIdentifiers(for: moduleNavigation?.selectedModule)
+        for index in stride(from: toolbar.items.count - 1, through: 0, by: -1) {
+            toolbar.removeItem(at: index)
+        }
+        for (index, id) in ids.enumerated() {
+            toolbar.insertItem(withItemIdentifier: id, at: index)
+        }
+        toolbar.validateVisibleItems()
+    }
+
+    // MARK: - Module-contextual item sets
+
+    /// The toolbar's item set for a given module. Only the Resume Editor
+    /// (Customizer workspace) carries a window-toolbar command cluster; every
+    /// other module surfaces its actions in its own L1 header, so its toolbar
+    /// is empty. App-global commands (Settings, Onboarding) and pure navigation
+    /// (Experience, Profile) live in the menu bar / icon bar, not here.
+    private func itemIdentifiers(for module: AppModule?) -> [NSToolbarItem.Identifier] {
+        switch module {
+        case .resumeEditor:
+            return [
+                .newListing,
+                .flexibleSpace,
+                .createResume,
+                .customize,
+                .coverLetter,
+                .analyze,
+                .flexibleSpace,
+                .inspector,
+            ]
+        default:
+            return []
+        }
+    }
+
     // MARK: - NSToolbarDelegate
 
     func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        [
-            .newListing,
-            .flexibleSpace,
-            .createResume,
-            .customize,
-            .coverLetter,
-            .experienceEditor,
-            .analyze,
-            .flexibleSpace,
-            .inspector,
-        ]
+        itemIdentifiers(for: moduleNavigation?.selectedModule)
     }
 
     func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
         [
             .newListing,
             .bestJob,
-            .onboardingInterview,
             .createResume,
             .customize,
             .optimize,
             .coverLetter,
-            .experienceEditor,
             .analyze,
             .inspector,
-            .settingsItem,
-            .applicantProfile,
             .ttsReadAloud,
             .flexibleSpace,
             .space,
@@ -204,13 +233,6 @@ final class ToolbarCoordinator: NSObject, NSToolbarDelegate, NSToolbarItemValida
             item.toolTip = "Find best job match based on your qualifications"
             item.image = NSImage(systemSymbolName: "medal", accessibilityDescription: "Best Job")
             item.action = #selector(bestJobAction)
-
-        case .onboardingInterview:
-            item.label = "Onboarding"
-            item.paletteLabel = "Onboarding Interview"
-            item.toolTip = "Launch onboarding interview"
-            item.image = NSImage(systemSymbolName: "bubble.left.and.text.bubble.right", accessibilityDescription: "Onboarding")
-            item.action = #selector(onboardingInterviewAction)
 
         case .createResume:
             item.label = "Create Resume"
@@ -242,13 +264,6 @@ final class ToolbarCoordinator: NSObject, NSToolbarDelegate, NSToolbarItemValida
                 ?? NSImage(systemSymbolName: "envelope", accessibilityDescription: "Cover Letter")
             item.action = #selector(coverLetterAction)
 
-        case .experienceEditor:
-            item.label = "Experience"
-            item.paletteLabel = "Experience Editor"
-            item.toolTip = "Open Experience Editor"
-            item.image = NSImage(systemSymbolName: "building.columns", accessibilityDescription: "Experience")
-            item.action = #selector(experienceEditorAction)
-
         case .analyze:
             item.label = "Analyze"
             item.paletteLabel = "Analyze Application"
@@ -262,20 +277,6 @@ final class ToolbarCoordinator: NSObject, NSToolbarDelegate, NSToolbarItemValida
             item.toolTip = "Toggle Cover Letter Inspector"
             item.image = NSImage(systemSymbolName: "sidebar.right", accessibilityDescription: "Inspector")
             item.action = #selector(inspectorAction)
-
-        case .settingsItem:
-            item.label = "Settings"
-            item.paletteLabel = "Settings"
-            item.toolTip = "Open Settings"
-            item.image = NSImage(systemSymbolName: "gear", accessibilityDescription: "Settings")
-            item.action = #selector(settingsAction)
-
-        case .applicantProfile:
-            item.label = "Profile"
-            item.paletteLabel = "Applicant Profile"
-            item.toolTip = "Open Applicant Profile"
-            item.image = NSImage(systemSymbolName: "person.text.rectangle", accessibilityDescription: "Profile")
-            item.action = #selector(applicantProfileAction)
 
         case .ttsReadAloud:
             item.label = "Read Aloud"
@@ -326,10 +327,6 @@ final class ToolbarCoordinator: NSObject, NSToolbarDelegate, NSToolbarItemValida
         NotificationCenter.default.post(name: .bestJob, object: nil)
     }
 
-    @objc private func onboardingInterviewAction() {
-        NotificationCenter.default.post(name: .startOnboardingInterview, object: nil)
-    }
-
     @objc private func createResumeAction() {
         NotificationCenter.default.post(name: .createNewResume, object: nil)
     }
@@ -346,30 +343,12 @@ final class ToolbarCoordinator: NSObject, NSToolbarDelegate, NSToolbarItemValida
         NotificationCenter.default.post(name: .generateCoverLetter, object: nil)
     }
 
-    @objc private func experienceEditorAction() {
-        NotificationCenter.default.post(
-            name: .navigateToModule, object: nil,
-            userInfo: ["module": AppModule.experience.rawValue]
-        )
-    }
-
     @objc private func analyzeAction() {
         NotificationCenter.default.post(name: .analyzeApplication, object: nil)
     }
 
     @objc private func inspectorAction() {
         NotificationCenter.default.post(name: .showCoverLetterInspector, object: nil)
-    }
-
-    @objc private func settingsAction() {
-        NotificationCenter.default.post(name: .showSettings, object: nil)
-    }
-
-    @objc private func applicantProfileAction() {
-        NotificationCenter.default.post(
-            name: .navigateToModule, object: nil,
-            userInfo: ["module": AppModule.profile.rawValue]
-        )
     }
 
     @objc private func ttsReadAloudAction() {

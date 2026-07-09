@@ -82,6 +82,8 @@ extension Notification.Name {
     static let navigateToModule = Notification.Name("navigateToModule")
     /// Navigate to a specific tab in the References module (userInfo: ["tab": String (ReferencesModuleView.Tab.rawValue)])
     static let navigateToReferencesTab = Notification.Name("navigateToReferencesTab")
+    /// The active module changed — drives the module-contextual toolbar to swap its item set.
+    static let activeModuleChanged = Notification.Name("activeModuleChanged")
     // URL Scheme Notifications
     static let captureJobFromURL = Notification.Name("captureJobFromURL")
     // Secondary Window Notifications

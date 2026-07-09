@@ -109,6 +109,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let coordinator = ToolbarCoordinator()
         coordinator.jobAppStore = windowManager.deps?.jobAppStore
         coordinator.navigationState = windowManager.deps?.appEnvironment.navigationState
+        coordinator.moduleNavigation = windowManager.deps?.moduleNavigation
         self.toolbarCoordinator = coordinator
 
         // Delay slightly so the SwiftUI Window scene has finished creating the NSWindow
@@ -124,7 +125,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             let toolbar = NSToolbar(identifier: "sprungMainToolbar")
             toolbar.delegate = coordinator
             toolbar.allowsUserCustomization = true
-            toolbar.autosavesConfiguration = true
+            // The item set is driven by the active module (see ToolbarCoordinator),
+            // so persisting/restoring a saved configuration would fight the
+            // module-contextual reconfiguration on launch.
+            toolbar.autosavesConfiguration = false
             toolbar.displayMode = .iconAndLabel
             coordinator.attach(to: toolbar)
 
